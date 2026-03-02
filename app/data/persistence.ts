@@ -1,8 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { UserSignal, ReadingState } from './types';
+import { UserSignal, ReadingState, ConceptState } from './types';
 
 const SIGNALS_KEY = '@petrarca/signals';
 const READING_STATES_KEY = '@petrarca/reading_states';
+const CONCEPT_STATES_KEY = '@petrarca/concept_states';
 
 export async function loadSignals(): Promise<UserSignal[]> {
   try {
@@ -41,5 +42,26 @@ export async function saveReadingStates(states: Map<string, ReadingState>): Prom
     await AsyncStorage.setItem(READING_STATES_KEY, JSON.stringify(entries));
   } catch (e) {
     console.warn('[persistence] failed to save reading states:', e);
+  }
+}
+
+export async function loadConceptStates(): Promise<Map<string, ConceptState>> {
+  try {
+    const raw = await AsyncStorage.getItem(CONCEPT_STATES_KEY);
+    if (!raw) return new Map();
+    const entries: [string, ConceptState][] = JSON.parse(raw);
+    return new Map(entries);
+  } catch (e) {
+    console.warn('[persistence] failed to load concept states:', e);
+    return new Map();
+  }
+}
+
+export async function saveConceptStates(states: Map<string, ConceptState>): Promise<void> {
+  try {
+    const entries = Array.from(states.entries());
+    await AsyncStorage.setItem(CONCEPT_STATES_KEY, JSON.stringify(entries));
+  } catch (e) {
+    console.warn('[persistence] failed to save concept states:', e);
   }
 }

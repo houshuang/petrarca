@@ -30,4 +30,5 @@ Master index of all research documents. **Always update this file when adding ne
 ## Experiments
 | Document | Description | Status |
 |----------|-------------|--------|
+| [design-experiments-plan.md](design-experiments-plan.md) | Comprehensive plan: content expansion, reader experiments, triage, knowledge model | Active |
 | [experiment-log.md](experiment-log.md) | Append-only log of all experiments and prototypes | Active |

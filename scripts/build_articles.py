@@ -1,25 +1,29 @@
 #!/usr/bin/env python3
-"""Build articles.json from Twitter bookmarks.
+"""Build articles.json from Twitter bookmarks and Readwise Reader.
 
 Pipeline:
-  1. Load bookmarks from otak cache
-  2. Filter for relevance
-  3. Collect all article URLs (from tweet URLs + quoted tweet URLs)
-  4. Fetch article content with 3-tier extraction
-  5. Deduplicate
-  6. LLM processing: generate sections, summaries, claims per article
-  7. Output articles.json
+  1. Load items from sources (Twitter bookmarks, Readwise Reader)
+  2. Filter and select candidates
+  3. Fetch article content with 3-tier extraction
+  4. Deduplicate by URL
+  5. LLM processing: generate sections, summaries, claims per article
+  6. Output articles.json
 
 Usage:
-    python3 scripts/build_articles.py
-    python3 scripts/build_articles.py --from articles   # skip to LLM step
-    python3 scripts/build_articles.py --dry-run          # skip LLM calls
+    python3 scripts/build_articles.py                          # all sources
+    python3 scripts/build_articles.py --source twitter         # Twitter only
+    python3 scripts/build_articles.py --source readwise        # Readwise only
+    python3 scripts/build_articles.py --source all             # all sources (default)
+    python3 scripts/build_articles.py --from articles          # skip to LLM step
+    python3 scripts/build_articles.py --dry-run                # skip LLM calls
+    python3 scripts/build_articles.py --limit 50               # max articles to process
 """
 
 import argparse
 import hashlib
 import json
 import os
+import random
 import re
 import subprocess
 import sys
@@ -41,115 +45,15 @@ PROJECT_DIR = SCRIPT_DIR.parent
 DATA_DIR = PROJECT_DIR / "data"
 APP_DATA_DIR = PROJECT_DIR / "app" / "data"
 OTAK_BOOKMARKS = Path.home() / "src" / "otak" / "data" / "twitter_bookmarks.json"
+OTAK_READWISE = Path.home() / "src" / "otak" / "data" / "readwise_reader.json"
 
 FILTERED_PATH = DATA_DIR / "bookmarks_filtered.json"
 FETCHED_PATH = DATA_DIR / "articles_fetched.json"
 ARTICLES_PATH = DATA_DIR / "articles.json"
+CONCEPTS_PATH = DATA_DIR / "concepts.json"
 
 # ---------------------------------------------------------------------------
-# Step 1: Filter (reused from existing pipeline)
-# ---------------------------------------------------------------------------
-
-STRONG_PATTERNS = [
-    r"\bclaude\s+code\b", r"\bclaude\s+cli\b", r"\bclaude\s+-p\b",
-    r"\bclaude\.ai\b", r"\b@claudeai\b", r"\banthrop(?:ic|ics)\b",
-    r"\bclaude\s+(?:sonnet|haiku|opus)\b", r"\bclaude\s+agent\b",
-    r"\bclaude\s+desktop\b", r"\bclaude\s+(?:3|4)\b",
-    r"\bmodel\s*context\s*protocol\b", r"\bmcp\s+server\b", r"\bmcp\s+tool\b",
-    r"\bclaude(?:code|_code)\b", r"\bCLAUDE\.md\b", r"\bAGENTS\.md\b",
-]
-
-MEDIUM_PATTERNS = [
-    r"\bclaude\b", r"\bmcp\b", r"\bagentic\s+cod(?:ing|er|e)\b",
-    r"\bai\s+cod(?:ing|er|e)\b", r"\bcoding\s+agent\b", r"\bcode\s+agent\b",
-    r"\bvibe\s*cod(?:ing|er|e)\b", r"\bllm\s+(?:cod(?:ing|er|e)|agent)\b",
-]
-
-CODING_CONTEXT = [
-    r"\bgithub\b", r"\bprompt\b", r"\bterminal\b", r"\beditor\b", r"\bvscode\b",
-    r"\bcursor\b", r"\bcopilot\b", r"\bwindsurf\b", r"\bcodebase\b", r"\brefactor\b",
-    r"\bdebug\b", r"\bpull\s+request\b", r"\bcommit\b", r"\bbranch\b", r"\brepo\b",
-    r"\bdev\s+tool\b", r"\btool\s+use\b", r"\btool\s+calling\b",
-    r"\bprogramm(?:ing|er)\b", r"\bdevelop(?:er|ment)\b",
-    r"\bapi\b", r"\bsdk\b", r"\bopen\s*source\b",
-]
-
-NEGATIVE_PATTERNS = [
-    r"\bclaude\s+(?:monet|debussy|shannon|bernard|rains|giroux|levi.?strauss)\b",
-    r"\bvan\s+damme\b",
-]
-
-KNOWN_AUTHORS = {
-    "trq212", "alexalbert__", "birch_labs", "aaborovkov",
-    "simonw", "swyx", "karpathy", "nateberkopec", "arvidkahl",
-}
-
-
-def _get_full_text(bookmark: dict) -> str:
-    parts = [bookmark.get("text", "")]
-    qt = bookmark.get("quoted_tweet")
-    if qt and isinstance(qt, dict):
-        parts.append(qt.get("text", ""))
-    for u in bookmark.get("urls", []):
-        if isinstance(u, dict):
-            parts.append(u.get("display_url", ""))
-            parts.append(u.get("expanded_url", ""))
-        elif isinstance(u, str):
-            parts.append(u)
-    return " ".join(parts)
-
-
-def _score_relevance(bookmark: dict) -> tuple[float, list[str]]:
-    text = _get_full_text(bookmark).lower()
-    matched = []
-    for pat in NEGATIVE_PATTERNS:
-        if re.search(pat, text, re.IGNORECASE):
-            return 0.0, ["negative_match"]
-    score = 0.0
-    for pat in STRONG_PATTERNS:
-        if re.search(pat, text, re.IGNORECASE):
-            score += 1.0
-            matched.append(f"strong:{pat}")
-    for pat in MEDIUM_PATTERNS:
-        if re.search(pat, text, re.IGNORECASE):
-            score += 0.4
-            matched.append(f"medium:{pat}")
-    for pat in CODING_CONTEXT:
-        if re.search(pat, text, re.IGNORECASE):
-            score += 0.15
-            matched.append(f"context:{pat}")
-    if bookmark.get("author_username", "").lower() in KNOWN_AUTHORS:
-        score += 0.3
-        matched.append("known_author")
-    return score, matched
-
-
-def filter_bookmarks(bookmarks: list[dict], days: int = 60, min_score: float = 0.8) -> list[dict]:
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-    results = []
-    for bm in bookmarks:
-        try:
-            dt = datetime.strptime(bm["created_at"], "%a %b %d %H:%M:%S %z %Y")
-        except (KeyError, ValueError):
-            continue
-        if dt < cutoff:
-            continue
-        score, matched = _score_relevance(bm)
-        if score < min_score:
-            continue
-        bm_copy = dict(bm)
-        bm_copy["_relevance_score"] = round(score, 2)
-        bm_copy["_matched_patterns"] = matched
-        bm_copy["_parsed_date"] = dt.isoformat()
-        results.append(bm_copy)
-
-    results.sort(key=lambda x: (-x["_relevance_score"], x["_parsed_date"]))
-    print(f"  Filtered: {len(results)} relevant bookmarks", file=sys.stderr)
-    return results
-
-
-# ---------------------------------------------------------------------------
-# Step 2: Extract article URLs and content
+# Step 1: Collect candidates from sources
 # ---------------------------------------------------------------------------
 
 _BROWSER_HEADERS = {
@@ -164,6 +68,7 @@ SKIP_DOMAINS = {
     "instagram.com", "tiktok.com",
     "imgur.com", "giphy.com",
     "open.spotify.com",
+    "read.readwise.io",
 }
 
 SKIP_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".mp4", ".mp3", ".pdf", ".zip"}
@@ -180,6 +85,150 @@ def _is_article_url(url: str) -> bool:
     return True
 
 
+def _get_full_text(bookmark: dict) -> str:
+    parts = [bookmark.get("text", "")]
+    qt = bookmark.get("quoted_tweet")
+    if qt and isinstance(qt, dict):
+        parts.append(qt.get("text", ""))
+    for u in bookmark.get("urls", []):
+        if isinstance(u, dict):
+            parts.append(u.get("display_url", ""))
+            parts.append(u.get("expanded_url", ""))
+        elif isinstance(u, str):
+            parts.append(u)
+    return " ".join(parts)
+
+
+def collect_twitter_candidates(days: int = 365) -> list[dict]:
+    """Load all Twitter bookmarks with fetchable URLs (no topic filtering)."""
+    if not OTAK_BOOKMARKS.exists():
+        print(f"  WARNING: No bookmarks at {OTAK_BOOKMARKS}", file=sys.stderr)
+        return []
+
+    bookmarks = json.loads(OTAK_BOOKMARKS.read_text())
+    print(f"  Loaded {len(bookmarks)} raw Twitter bookmarks", file=sys.stderr)
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    results = []
+
+    for bm in bookmarks:
+        try:
+            dt = datetime.strptime(bm["created_at"], "%a %b %d %H:%M:%S %z %Y")
+        except (KeyError, ValueError):
+            continue
+        if dt < cutoff:
+            continue
+
+        # Collect article URLs from this bookmark
+        urls = _collect_urls_from_bookmark(bm)
+        tweet_words = len(bm.get("text", "").split())
+
+        # Keep if it has fetchable URLs OR is a long tweet
+        if not urls and tweet_words < 100:
+            continue
+
+        results.append({
+            "_source_type": "twitter",
+            "_urls": urls,
+            "_date": dt.isoformat(),
+            "_title": f"@{bm.get('author_username', '?')}: {bm.get('text', '')[:80]}",
+            "_tweet_data": bm,
+        })
+
+    print(f"  Twitter candidates: {len(results)} bookmarks with fetchable content", file=sys.stderr)
+    return results
+
+
+def collect_readwise_candidates() -> list[dict]:
+    """Load Readwise Reader items that have been engaged with."""
+    if not OTAK_READWISE.exists():
+        print(f"  WARNING: No Readwise data at {OTAK_READWISE}", file=sys.stderr)
+        return []
+
+    items = json.loads(OTAK_READWISE.read_text())
+    print(f"  Loaded {len(items)} Readwise Reader items", file=sys.stderr)
+
+    # Filter: article/rss, has source_url, has reading_progress > 0
+    engaged = [
+        item for item in items
+        if item.get("category") in ("article", "rss")
+        and item.get("source_url")
+        and _is_article_url(item["source_url"])
+        and (item.get("reading_progress") or 0) > 0
+    ]
+    print(f"  Readwise engaged article/rss with valid URLs: {len(engaged)}", file=sys.stderr)
+
+    results = []
+    for item in engaged:
+        results.append({
+            "_source_type": "readwise",
+            "_urls": [item["source_url"]],
+            "_date": item.get("saved_at", "") or item.get("created_at", ""),
+            "_title": item.get("title", "Untitled"),
+            "_reading_progress": item.get("reading_progress", 0),
+            "_readwise_data": {
+                "id": item.get("id", ""),
+                "title": item.get("title", ""),
+                "author": item.get("author", ""),
+                "site_name": item.get("site_name", ""),
+                "word_count": item.get("word_count", 0),
+                "reading_progress": item.get("reading_progress", 0),
+                "category": item.get("category", ""),
+                "saved_at": item.get("saved_at", ""),
+                "summary": item.get("summary", ""),
+            },
+        })
+
+    return results
+
+
+def _sample_readwise_diverse(candidates: list[dict], n: int, seed: int = 42) -> list[dict]:
+    """Sample Readwise candidates for topic diversity.
+
+    Strategy: sort by reading_progress (highest engagement first), then sample
+    across different site_names to get topic diversity.
+    """
+    if len(candidates) <= n:
+        return candidates
+
+    # Group by site_name for diversity
+    by_site: dict[str, list[dict]] = {}
+    for c in candidates:
+        site = c.get("_readwise_data", {}).get("site_name", "unknown")
+        by_site.setdefault(site, []).append(c)
+
+    # Sort each group by reading_progress descending
+    for site in by_site:
+        by_site[site].sort(key=lambda x: -(x.get("_reading_progress") or 0))
+
+    # Round-robin sampling from sites, taking highest-engagement first
+    selected = []
+    rng = random.Random(seed)
+    sites = list(by_site.keys())
+    rng.shuffle(sites)
+
+    idx_per_site = {site: 0 for site in sites}
+    while len(selected) < n:
+        added_any = False
+        for site in sites:
+            if len(selected) >= n:
+                break
+            items = by_site[site]
+            idx = idx_per_site[site]
+            if idx < len(items):
+                selected.append(items[idx])
+                idx_per_site[site] = idx + 1
+                added_any = True
+        if not added_any:
+            break
+
+    return selected
+
+
+# ---------------------------------------------------------------------------
+# Step 2: Extract article content
+# ---------------------------------------------------------------------------
+
 def _resolve_tco(url: str) -> str | None:
     """Resolve t.co shortlinks to final URL."""
     try:
@@ -193,6 +242,35 @@ def _resolve_tco(url: str) -> str | None:
             return final
         except Exception:
             return None
+
+
+def _collect_urls_from_bookmark(bookmark: dict) -> list[str]:
+    """Collect all article URLs from a Twitter bookmark."""
+    urls = []
+
+    for u in bookmark.get("urls", []):
+        if isinstance(u, dict):
+            expanded = u.get("expanded_url", "")
+        else:
+            expanded = u
+        if expanded:
+            if "t.co/" in expanded or "bit.ly/" in expanded:
+                resolved = _resolve_tco(expanded)
+                if resolved:
+                    expanded = resolved
+            if _is_article_url(expanded):
+                urls.append(expanded)
+
+    qt = bookmark.get("quoted_tweet")
+    if qt and isinstance(qt, dict):
+        qt_text = qt.get("text", "")
+        tco_links = re.findall(r'https?://t\.co/\w+', qt_text)
+        for tco in tco_links:
+            resolved = _resolve_tco(tco)
+            if resolved and _is_article_url(resolved):
+                urls.append(resolved)
+
+    return list(dict.fromkeys(urls))
 
 
 def _fetch_html_requests(url: str) -> str:
@@ -276,144 +354,91 @@ def fetch_article(url: str) -> dict | None:
     }
 
 
-def _collect_urls(bookmark: dict) -> list[str]:
-    """Collect all article URLs from a bookmark, including quoted tweets."""
-    urls = []
-
-    # Direct URLs
-    for u in bookmark.get("urls", []):
-        if isinstance(u, dict):
-            expanded = u.get("expanded_url", "")
-        else:
-            expanded = u
-        if expanded:
-            if "t.co/" in expanded or "bit.ly/" in expanded:
-                resolved = _resolve_tco(expanded)
-                if resolved:
-                    expanded = resolved
-            if _is_article_url(expanded):
-                urls.append(expanded)
-
-    # Quoted tweet URLs (t.co links in quoted text)
-    qt = bookmark.get("quoted_tweet")
-    if qt and isinstance(qt, dict):
-        qt_text = qt.get("text", "")
-        tco_links = re.findall(r'https?://t\.co/\w+', qt_text)
-        for tco in tco_links:
-            resolved = _resolve_tco(tco)
-            if resolved and _is_article_url(resolved):
-                urls.append(resolved)
-
-    return list(dict.fromkeys(urls))  # dedupe preserving order
-
-
-def fetch_all_articles(bookmarks: list[dict]) -> list[dict]:
-    """For each bookmark, collect URLs and fetch article content."""
+def fetch_all_candidates(candidates: list[dict], existing_urls: set[str]) -> list[dict]:
+    """Fetch article content for each candidate. Skip URLs already processed."""
     results = []
-    for i, bm in enumerate(bookmarks):
-        bm_copy = dict(bm)
-        bm_copy["_fetched_articles"] = []
+    skipped = 0
 
-        urls = _collect_urls(bm)
+    for i, cand in enumerate(candidates):
+        urls = cand.get("_urls", [])
+
+        # Skip if all URLs already exist
+        if urls and all(u in existing_urls for u in urls):
+            skipped += 1
+            continue
+
+        cand_copy = dict(cand)
+        cand_copy["_fetched_articles"] = []
+
         for url in urls:
-            print(f"  [{i+1}/{len(bookmarks)}] Fetching: {url[:80]}...", file=sys.stderr)
+            if url in existing_urls:
+                skipped += 1
+                continue
+            print(f"  [{i+1}/{len(candidates)}] Fetching: {url[:80]}...", file=sys.stderr)
             article = fetch_article(url)
             if article:
-                bm_copy["_fetched_articles"].append(article)
+                cand_copy["_fetched_articles"].append(article)
+                existing_urls.add(url)
                 print(f"    OK: {article['word_count']} words via {article['fetch_method']}: {article['title'][:60]}", file=sys.stderr)
             else:
                 print(f"    FAIL: no content extracted", file=sys.stderr)
             time.sleep(0.5)
 
-        # Long-form tweets (>100 words) become articles themselves
-        tweet_words = len(bm["text"].split())
-        if not bm_copy["_fetched_articles"] and tweet_words > 100:
-            print(f"  [{i+1}/{len(bookmarks)}] Long tweet ({tweet_words} words) → article: @{bm['author_username']}", file=sys.stderr)
-            bm_copy["_fetched_articles"].append({
-                "title": f"Thread by @{bm['author_username']}",
-                "author": bm.get("author_name", bm["author_username"]),
-                "date": bm.get("_parsed_date", ""),
-                "text": bm["text"],
-                "word_count": tweet_words,
-                "source_url": bm.get("url", ""),
-                "hostname": "twitter.com",
-                "fetch_method": "tweet_text",
-            })
+        # Long-form tweets become articles themselves
+        if cand["_source_type"] == "twitter":
+            bm = cand.get("_tweet_data", {})
+            tweet_words = len(bm.get("text", "").split())
+            if not cand_copy["_fetched_articles"] and tweet_words > 100:
+                print(f"  [{i+1}/{len(candidates)}] Long tweet ({tweet_words} words) -> article: @{bm.get('author_username', '?')}", file=sys.stderr)
+                cand_copy["_fetched_articles"].append({
+                    "title": f"Thread by @{bm['author_username']}",
+                    "author": bm.get("author_name", bm.get("author_username", "")),
+                    "date": cand.get("_date", ""),
+                    "text": bm["text"],
+                    "word_count": tweet_words,
+                    "source_url": bm.get("url", ""),
+                    "hostname": "twitter.com",
+                    "fetch_method": "tweet_text",
+                })
 
-        results.append(bm_copy)
+        if cand_copy["_fetched_articles"]:
+            results.append(cand_copy)
 
-    fetched = sum(1 for r in results if r["_fetched_articles"])
-    print(f"  Fetched articles for {fetched}/{len(results)} bookmarks", file=sys.stderr)
+    fetched_count = len(results)
+    print(f"  Fetched: {fetched_count} items with content, {skipped} URLs skipped (already processed)", file=sys.stderr)
     return results
 
 
 # ---------------------------------------------------------------------------
-# Step 3: Deduplicate (reused from existing pipeline)
+# Step 3: Deduplicate
 # ---------------------------------------------------------------------------
 
-def _normalize_text(text: str) -> str:
-    text = text.lower()
-    text = re.sub(r"https?://\S+", "", text)
-    text = re.sub(r"@\w+", "", text)
-    text = re.sub(r"#\w+", "", text)
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
+def _normalize_url(url: str) -> str:
+    """Normalize URL for dedup comparison."""
+    url = url.rstrip("/")
+    url = re.sub(r"\?utm_\w+=[^&]*", "", url)
+    url = re.sub(r"[&?]$", "", url)
+    return url.lower()
 
 
-def _text_similarity(a: str, b: str) -> float:
-    words_a = set(_normalize_text(a).split())
-    words_b = set(_normalize_text(b).split())
-    if not words_a or not words_b:
-        return 0.0
-    return len(words_a & words_b) / len(words_a | words_b)
-
-
-def _same_article_url(bm_a: dict, bm_b: dict) -> bool:
-    urls_a = set()
-    urls_b = set()
-    for art in bm_a.get("_fetched_articles", []):
-        urls_a.add(art.get("source_url", ""))
-    for art in bm_b.get("_fetched_articles", []):
-        urls_b.add(art.get("source_url", ""))
-    urls_a.discard("")
-    urls_b.discard("")
-    return bool(urls_a & urls_b) if urls_a and urls_b else False
-
-
-def deduplicate(bookmarks: list[dict]) -> list[dict]:
-    n = len(bookmarks)
-    assigned = set()
-    groups = []
-    for i in range(n):
-        if i in assigned:
-            continue
-        group = [i]
-        assigned.add(i)
-        for j in range(i + 1, n):
-            if j in assigned:
-                continue
-            if _same_article_url(bookmarks[i], bookmarks[j]):
-                group.append(j)
-                assigned.add(j)
-                continue
-            if _text_similarity(_get_full_text(bookmarks[i]), _get_full_text(bookmarks[j])) > 0.5:
-                group.append(j)
-                assigned.add(j)
-        groups.append(group)
-
+def deduplicate_fetched(fetched: list[dict]) -> list[dict]:
+    """Deduplicate fetched items by article URL."""
+    seen_urls: set[str] = set()
     results = []
-    for group in groups:
-        group.sort(key=lambda idx: -bookmarks[idx].get("_relevance_score", 0))
-        primary = dict(bookmarks[group[0]])
-        if len(group) > 1:
-            primary["_related_tweets"] = [
-                {"id": bookmarks[idx]["id"], "author_username": bookmarks[idx]["author_username"],
-                 "text": bookmarks[idx]["text"][:280]}
-                for idx in group[1:]
-            ]
-        results.append(primary)
 
-    print(f"  Deduped: {n} → {len(results)} groups", file=sys.stderr)
+    for item in fetched:
+        dominated = False
+        for art in item.get("_fetched_articles", []):
+            norm = _normalize_url(art.get("source_url", ""))
+            if norm in seen_urls:
+                dominated = True
+                break
+            seen_urls.add(norm)
+
+        if not dominated:
+            results.append(item)
+
+    print(f"  Deduped: {len(fetched)} -> {len(results)}", file=sys.stderr)
     return results
 
 
@@ -447,7 +472,6 @@ def _article_id(url: str, fallback: str = "") -> str:
 
 
 def _build_article_prompt(content: str, title: str) -> str:
-    # Truncate very long content
     if len(content) > 12000:
         content = content[:12000] + "\n\n[... truncated ...]"
 
@@ -483,41 +507,51 @@ If the article has clear sections/headings, use them. If not, divide into 2-5 lo
 Return ONLY valid JSON."""
 
 
-def build_articles(bookmarks: list[dict], dry_run: bool = False) -> list[dict]:
-    """Transform bookmark data into article-centric format with LLM processing."""
-    articles = []
-
-    for i, bm in enumerate(bookmarks):
-        fetched = bm.get("_fetched_articles", [])
-
-        # Skip items with no content at all
-        if not fetched:
-            tweet_words = len(bm.get("text", "").split())
-            if tweet_words < 50:
-                print(f"  [{i+1}/{len(bookmarks)}] Skipping short tweet: @{bm['author_username']} ({tweet_words} words)", file=sys.stderr)
-                continue
-
-        # Use the best fetched article, or the tweet itself
-        if fetched:
-            best = max(fetched, key=lambda a: a.get("word_count", 0))
-        else:
-            # This shouldn't happen given the skip above, but just in case
-            continue
-
-        article_id = _article_id(best["source_url"], bm.get("id", ""))
-
-        # Build the source reference
-        source = {
+def _build_source_ref(candidate: dict, article: dict) -> dict:
+    """Build source reference depending on source type."""
+    if candidate["_source_type"] == "twitter":
+        bm = candidate.get("_tweet_data", {})
+        return {
             "type": "twitter_bookmark",
             "tweet_id": bm.get("id", ""),
             "author_username": bm.get("author_username", ""),
             "tweet_text": bm.get("text", "")[:500],
-            "bookmarked_at": bm.get("_parsed_date", ""),
+            "bookmarked_at": candidate.get("_date", ""),
         }
+    elif candidate["_source_type"] == "readwise":
+        rw = candidate.get("_readwise_data", {})
+        return {
+            "type": "readwise",
+            "readwise_id": rw.get("id", ""),
+            "reading_progress": rw.get("reading_progress", 0),
+            "saved_at": rw.get("saved_at", ""),
+            "category": rw.get("category", ""),
+        }
+    return {"type": "unknown"}
+
+
+def build_articles(candidates: list[dict], existing_articles: list[dict],
+                   dry_run: bool = False) -> list[dict]:
+    """Transform fetched candidates into article-centric format with LLM processing."""
+    articles = list(existing_articles)  # start with existing
+
+    for i, cand in enumerate(candidates):
+        fetched = cand.get("_fetched_articles", [])
+        if not fetched:
+            continue
+
+        best = max(fetched, key=lambda a: a.get("word_count", 0))
+        article_id = _article_id(best["source_url"], cand.get("_date", ""))
+
+        # Skip if article ID already exists
+        if any(a["id"] == article_id for a in articles):
+            continue
+
+        source = _build_source_ref(cand, best)
 
         # LLM processing
         if dry_run:
-            print(f"  [{i+1}/{len(bookmarks)}] Would process: {best['title'][:60]} ({best['word_count']} words)", file=sys.stderr)
+            print(f"  [{i+1}/{len(candidates)}] Would process: {best['title'][:60]} ({best['word_count']} words)", file=sys.stderr)
             llm = {
                 "title": best["title"],
                 "one_line_summary": "[dry run]",
@@ -529,8 +563,9 @@ def build_articles(bookmarks: list[dict], dry_run: bool = False) -> list[dict]:
                 "content_type": "unknown",
             }
         else:
-            print(f"  [{i+1}/{len(bookmarks)}] Processing: {best['title'][:60]} ({best['word_count']} words)", file=sys.stderr)
-            prompt = _build_article_prompt(best["text"], best["title"])
+            title_hint = best["title"] or cand.get("_title", "Untitled")
+            print(f"  [{i+1}/{len(candidates)}] Processing: {title_hint[:60]} ({best['word_count']} words)", file=sys.stderr)
+            prompt = _build_article_prompt(best["text"], title_hint)
             response = _call_claude(prompt)
 
             if response:
@@ -543,40 +578,27 @@ def build_articles(bookmarks: list[dict], dry_run: bool = False) -> list[dict]:
                     print(f"    OK: {llm.get('content_type', '?')}, {len(llm.get('sections', []))} sections", file=sys.stderr)
                 except json.JSONDecodeError:
                     print(f"    JSON parse failed, using fallback", file=sys.stderr)
-                    llm = {
-                        "title": best["title"],
-                        "one_line_summary": best["text"][:120],
-                        "full_summary": best["text"][:500],
-                        "sections": [],
-                        "key_claims": [],
-                        "topics": [],
-                        "estimated_read_minutes": max(1, best["word_count"] // 200),
-                        "content_type": "unknown",
-                    }
+                    llm = _llm_fallback(best)
             else:
-                llm = {
-                    "title": best["title"],
-                    "one_line_summary": best["text"][:120],
-                    "full_summary": best["text"][:500],
-                    "sections": [],
-                    "key_claims": [],
-                    "topics": [],
-                    "estimated_read_minutes": max(1, best["word_count"] // 200),
-                    "content_type": "unknown",
-                }
+                llm = _llm_fallback(best)
 
             time.sleep(1)
 
-        # Split content into sections for the reader
         section_contents = _split_into_sections(best["text"], llm.get("sections", []))
+
+        fallback_author = ""
+        if cand["_source_type"] == "twitter":
+            fallback_author = cand.get("_tweet_data", {}).get("author_name", "")
+        elif cand["_source_type"] == "readwise":
+            fallback_author = cand.get("_readwise_data", {}).get("author", "")
 
         article = {
             "id": article_id,
-            "title": llm.get("title", best["title"]) or best["title"] or f"Post by @{bm.get('author_username', '?')}",
-            "author": best.get("author", "") or bm.get("author_name", ""),
+            "title": llm.get("title", best["title"]) or best["title"] or cand.get("_title", "Untitled"),
+            "author": best.get("author", "") or fallback_author,
             "source_url": best["source_url"],
             "hostname": best.get("hostname", urlparse(best["source_url"]).netloc),
-            "date": best.get("date", "") or bm.get("_parsed_date", "")[:10],
+            "date": best.get("date", "") or cand.get("_date", "")[:10],
             "content_markdown": best["text"],
             "sections": section_contents,
             "one_line_summary": llm.get("one_line_summary", ""),
@@ -597,11 +619,22 @@ def build_articles(bookmarks: list[dict], dry_run: bool = False) -> list[dict]:
     return articles
 
 
+def _llm_fallback(best: dict) -> dict:
+    return {
+        "title": best["title"],
+        "one_line_summary": best["text"][:120],
+        "full_summary": best["text"][:500],
+        "sections": [],
+        "key_claims": [],
+        "topics": [],
+        "estimated_read_minutes": max(1, best["word_count"] // 200),
+        "content_type": "unknown",
+    }
+
+
 def _split_into_sections(content: str, llm_sections: list[dict]) -> list[dict]:
     """Split article content into sections, using LLM headings if available."""
-    # If LLM provided sections with headings, try to match them to content
     if llm_sections and len(llm_sections) > 1:
-        # Try to split by markdown headings first
         heading_pattern = re.compile(r'^(#{1,3})\s+(.+)$', re.MULTILINE)
         headings = list(heading_pattern.finditer(content))
 
@@ -613,7 +646,6 @@ def _split_into_sections(content: str, llm_sections: list[dict]) -> list[dict]:
                 section_content = content[start:end].strip()
                 heading = match.group(2).strip()
 
-                # Find matching LLM section for summary/claims
                 llm_match = None
                 for ls in llm_sections:
                     if ls.get("heading", "").lower() in heading.lower() or heading.lower() in ls.get("heading", "").lower():
@@ -634,7 +666,6 @@ def _split_into_sections(content: str, llm_sections: list[dict]) -> list[dict]:
 def _fallback_sections(content: str, llm_sections: list[dict]) -> list[dict]:
     """Split content into roughly equal sections using LLM headings."""
     if not llm_sections:
-        # Single section with all content
         return [{
             "heading": "Full Article",
             "content": content,
@@ -642,7 +673,6 @@ def _fallback_sections(content: str, llm_sections: list[dict]) -> list[dict]:
             "key_claims": [],
         }]
 
-    # Split content roughly evenly among LLM sections
     paragraphs = content.split("\n\n")
     per_section = max(1, len(paragraphs) // len(llm_sections))
     sections = []
@@ -677,46 +707,239 @@ def _load_json(path: Path):
 
 
 # ---------------------------------------------------------------------------
+# Step 5: Extract concepts across articles
+# ---------------------------------------------------------------------------
+
+def _build_concept_extraction_prompt(articles_batch: list[dict]) -> str:
+    """Build prompt for extracting and deduplicating concepts across articles."""
+    articles_info = []
+    for a in articles_batch:
+        claims = a.get("key_claims", [])
+        topics = a.get("topics", [])
+        articles_info.append(
+            f"Article ID: {a['id']}\n"
+            f"Title: {a['title']}\n"
+            f"Topics: {', '.join(topics)}\n"
+            f"Key Claims:\n" + "\n".join(f"  - {c}" for c in claims)
+        )
+
+    return f"""Extract distinct concepts/ideas from these articles. A concept is a specific idea, technique, finding, or claim that a reader might already know or learn.
+
+IMPORTANT:
+- Deduplicate: if two articles express the same idea differently, produce ONE concept referencing both articles
+- Each concept should be a concise statement (1-2 sentences max)
+- Assign each concept ONE primary topic tag
+- Include the article IDs where each concept appears
+
+Articles:
+{"---".join(articles_info)}
+
+Return a JSON array:
+[
+  {{
+    "text": "concise description of the concept",
+    "topic": "primary topic tag",
+    "source_article_ids": ["article_id_1", "article_id_2"]
+  }}
+]
+
+Return ONLY valid JSON array. Extract 3-8 concepts per article, deduplicating across articles."""
+
+
+def extract_concepts(articles: list[dict], dry_run: bool = False) -> list[dict]:
+    """Extract and deduplicate concepts across all articles."""
+    if dry_run:
+        print("  (dry run -- skipping concept extraction)", file=sys.stderr)
+        return []
+
+    # Process in batches of 5 articles for better cross-article dedup
+    batch_size = 5
+    all_concepts = []
+    concept_id_counter = 0
+
+    for i in range(0, len(articles), batch_size):
+        batch = articles[i:i + batch_size]
+        # Skip articles with no claims
+        batch = [a for a in batch if a.get("key_claims")]
+        if not batch:
+            continue
+
+        batch_num = i // batch_size + 1
+        total_batches = (len(articles) + batch_size - 1) // batch_size
+        print(f"  [{batch_num}/{total_batches}] Extracting concepts from {len(batch)} articles...", file=sys.stderr)
+
+        prompt = _build_concept_extraction_prompt(batch)
+        response = _call_claude(prompt, timeout=120)
+
+        if response:
+            try:
+                cleaned = response
+                if cleaned.startswith("```"):
+                    cleaned = re.sub(r"^```(?:json)?\n?", "", cleaned)
+                    cleaned = re.sub(r"\n?```$", "", cleaned)
+                parsed = json.loads(cleaned)
+                if isinstance(parsed, list):
+                    for item in parsed:
+                        concept_id_counter += 1
+                        concept = {
+                            "id": f"c{concept_id_counter:04d}",
+                            "text": item.get("text", ""),
+                            "topic": item.get("topic", ""),
+                            "source_article_ids": item.get("source_article_ids", []),
+                        }
+                        if concept["text"]:
+                            all_concepts.append(concept)
+                    print(f"    Extracted {len(parsed)} concepts", file=sys.stderr)
+            except json.JSONDecodeError:
+                print(f"    JSON parse failed for concept batch", file=sys.stderr)
+        else:
+            print(f"    LLM call failed for concept batch", file=sys.stderr)
+
+        time.sleep(1)
+
+    # Second pass: deduplicate similar concepts across batches
+    if len(all_concepts) > 20:
+        print(f"  Deduplicating {len(all_concepts)} concepts...", file=sys.stderr)
+        all_concepts = _deduplicate_concepts(all_concepts)
+
+    # Re-number after dedup
+    for i, c in enumerate(all_concepts):
+        c["id"] = f"c{i+1:04d}"
+
+    print(f"  Final: {len(all_concepts)} concepts", file=sys.stderr)
+    return all_concepts
+
+
+def _deduplicate_concepts(concepts: list[dict]) -> list[dict]:
+    """Simple word-overlap deduplication of concepts."""
+    if not concepts:
+        return concepts
+
+    def _words(text: str) -> set[str]:
+        return set(text.lower().split())
+
+    deduped = []
+    for c in concepts:
+        c_words = _words(c["text"])
+        merged = False
+        for existing in deduped:
+            e_words = _words(existing["text"])
+            overlap = len(c_words & e_words)
+            union = len(c_words | e_words)
+            if union > 0 and overlap / union > 0.6:
+                # Merge: keep longer text, combine source articles
+                if len(c["text"]) > len(existing["text"]):
+                    existing["text"] = c["text"]
+                existing["source_article_ids"] = list(set(
+                    existing["source_article_ids"] + c["source_article_ids"]
+                ))
+                merged = True
+                break
+        if not merged:
+            deduped.append(c)
+
+    return deduped
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
-STEPS = ["filter", "fetch", "dedup", "articles"]
+STEPS = ["collect", "fetch", "dedup", "articles"]
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Build articles.json from Twitter bookmarks")
-    parser.add_argument("--fresh", action="store_true", help="Force fresh bookmark load")
+    parser = argparse.ArgumentParser(description="Build articles.json from Twitter bookmarks and Readwise Reader")
+    parser.add_argument("--source", choices=["twitter", "readwise", "all"], default="all",
+                        help="Source to process (default: all)")
+    parser.add_argument("--fresh", action="store_true", help="Ignore existing articles, start fresh")
     parser.add_argument("--from", dest="from_step", choices=STEPS,
-                        help="Start from this step")
-    parser.add_argument("--days", type=int, default=60, help="Days back to look (default: 60)")
-    parser.add_argument("--min-score", type=float, default=0.8, help="Min relevance score")
+                        help="Start from this step (using cached data)")
+    parser.add_argument("--days", type=int, default=365, help="Days back for Twitter bookmarks (default: 365)")
+    parser.add_argument("--limit", type=int, default=50, help="Max new articles to process (default: 50)")
+    parser.add_argument("--readwise-sample", type=int, default=40,
+                        help="Max Readwise items to sample (default: 40)")
     parser.add_argument("--dry-run", action="store_true", help="Skip LLM calls")
+    parser.add_argument("--concepts-only", action="store_true",
+                        help="Only run concept extraction on existing articles")
     args = parser.parse_args()
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Concepts-only mode: just extract concepts from existing articles
+    if args.concepts_only:
+        existing = _load_json(ARTICLES_PATH) or []
+        if not existing:
+            print("ERROR: No existing articles to extract concepts from", file=sys.stderr)
+            sys.exit(1)
+        print(f"  Extracting concepts from {len(existing)} existing articles", file=sys.stderr)
+        concepts = extract_concepts(existing, dry_run=args.dry_run)
+        _save_json(concepts, CONCEPTS_PATH)
+        APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
+        _save_json(concepts, APP_DATA_DIR / "concepts.json")
+        print(f"  {len(concepts)} concepts saved", file=sys.stderr)
+        return
+
     start_idx = STEPS.index(args.from_step) if args.from_step else 0
 
-    # Step 1: Filter
+    # Load existing articles for incremental mode
+    existing_articles = []
+    existing_urls: set[str] = set()
+    if not args.fresh and ARTICLES_PATH.exists():
+        existing_articles = _load_json(ARTICLES_PATH) or []
+        existing_urls = {a.get("source_url", "") for a in existing_articles}
+        existing_urls.discard("")
+        print(f"  Incremental mode: {len(existing_articles)} existing articles, {len(existing_urls)} URLs", file=sys.stderr)
+
+    # Step 1: Collect candidates
     if start_idx <= 0:
-        print("\n=== Step 1: Filter Bookmarks ===", file=sys.stderr)
-        if not OTAK_BOOKMARKS.exists():
-            print(f"ERROR: No bookmarks at {OTAK_BOOKMARKS}", file=sys.stderr)
-            sys.exit(1)
-        bookmarks = json.loads(OTAK_BOOKMARKS.read_text())
-        print(f"  Loaded {len(bookmarks)} raw bookmarks", file=sys.stderr)
-        filtered = filter_bookmarks(bookmarks, days=args.days, min_score=args.min_score)
-        _save_json(filtered, FILTERED_PATH)
+        print("\n=== Step 1: Collect Candidates ===", file=sys.stderr)
+        candidates = []
+
+        if args.source in ("twitter", "all"):
+            twitter_cands = collect_twitter_candidates(days=args.days)
+            candidates.extend(twitter_cands)
+
+        if args.source in ("readwise", "all"):
+            readwise_cands = collect_readwise_candidates()
+            # Sample for diversity
+            readwise_sampled = _sample_readwise_diverse(readwise_cands, args.readwise_sample)
+            print(f"  Readwise sampled: {len(readwise_sampled)} of {len(readwise_cands)}", file=sys.stderr)
+            candidates.extend(readwise_sampled)
+
+        # Filter out candidates whose URLs are all already processed
+        new_candidates = []
+        for c in candidates:
+            urls = c.get("_urls", [])
+            if not urls or not all(u in existing_urls for u in urls):
+                new_candidates.append(c)
+        print(f"  New candidates after URL dedup: {len(new_candidates)} (skipped {len(candidates) - len(new_candidates)} already processed)", file=sys.stderr)
+
+        # Limit total
+        if len(new_candidates) > args.limit:
+            # Prioritize: Twitter first (fewer), then Readwise
+            twitter_new = [c for c in new_candidates if c["_source_type"] == "twitter"]
+            readwise_new = [c for c in new_candidates if c["_source_type"] == "readwise"]
+            combined = twitter_new[:args.limit]
+            remaining = args.limit - len(combined)
+            if remaining > 0:
+                combined.extend(readwise_new[:remaining])
+            new_candidates = combined
+            print(f"  Limited to {len(new_candidates)} candidates", file=sys.stderr)
+
+        _save_json(new_candidates, FILTERED_PATH)
+        candidates = new_candidates
     else:
-        filtered = _load_json(FILTERED_PATH)
-        if not filtered:
+        candidates = _load_json(FILTERED_PATH)
+        if not candidates:
             print(f"ERROR: No cached data at {FILTERED_PATH}", file=sys.stderr)
             sys.exit(1)
-        print(f"\n=== Step 1: Loaded {len(filtered)} cached filtered ===", file=sys.stderr)
+        print(f"\n=== Step 1: Loaded {len(candidates)} cached candidates ===", file=sys.stderr)
 
-    # Step 2: Fetch articles
+    # Step 2: Fetch article content
     if start_idx <= 1:
         print(f"\n=== Step 2: Fetch Article Content ===", file=sys.stderr)
-        fetched = fetch_all_articles(filtered)
+        fetched = fetch_all_candidates(candidates, existing_urls)
         _save_json(fetched, FETCHED_PATH)
     else:
         fetched = _load_json(FETCHED_PATH)
@@ -728,25 +951,41 @@ def main():
     # Step 3: Deduplicate
     if start_idx <= 2:
         print(f"\n=== Step 3: Deduplicate ===", file=sys.stderr)
-        deduped = deduplicate(fetched)
+        deduped = deduplicate_fetched(fetched)
     else:
-        deduped = fetched  # If skipping to articles step, assume fetched = deduped
+        deduped = fetched
 
     # Step 4: Build articles with LLM
     print(f"\n=== Step 4: Build Articles ===", file=sys.stderr)
     if args.dry_run:
-        print("  (dry run — no LLM calls)", file=sys.stderr)
+        print("  (dry run -- no LLM calls)", file=sys.stderr)
 
-    articles = build_articles(deduped, dry_run=args.dry_run)
+    articles = build_articles(deduped, existing_articles, dry_run=args.dry_run)
 
-    # Copy to app
+    # Save final output
     _save_json(articles, ARTICLES_PATH)
     APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
     _save_json(articles, APP_DATA_DIR / "articles.json")
 
+    # Step 5: Extract concepts
+    print(f"\n=== Step 5: Extract Concepts ===", file=sys.stderr)
+    concepts = extract_concepts(articles, dry_run=args.dry_run)
+    _save_json(concepts, CONCEPTS_PATH)
+    _save_json(concepts, APP_DATA_DIR / "concepts.json")
+
+    # Summary
+    sources = {}
+    for a in articles:
+        src_type = a.get("sources", [{}])[0].get("type", "unknown")
+        sources[src_type] = sources.get(src_type, 0) + 1
+
     print(f"\n=== Done ===", file=sys.stderr)
-    print(f"  {len(articles)} articles", file=sys.stderr)
+    print(f"  {len(articles)} total articles", file=sys.stderr)
+    for src, count in sorted(sources.items()):
+        print(f"    {src}: {count}", file=sys.stderr)
+    print(f"  {len(concepts)} concepts extracted", file=sys.stderr)
     print(f"  Output: {ARTICLES_PATH}", file=sys.stderr)
+    print(f"  Concepts: {CONCEPTS_PATH}", file=sys.stderr)
     print(f"  App data: {APP_DATA_DIR / 'articles.json'}", file=sys.stderr)
 
 

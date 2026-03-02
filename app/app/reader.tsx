@@ -1,58 +1,98 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Linking, Dimensions } from 'react-native';
+import {
+  View, Text, StyleSheet, ScrollView, Pressable, Linking,
+  NativeSyntheticEvent, NativeScrollEvent, LayoutChangeEvent,
+} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getArticleById, getReadingState, updateReadingState, addSignal } from '../data/store';
-import { ReadingDepth, ArticleSection } from '../data/types';
+import { getArticleById, getReadingState, updateReadingState, addSignal, processClaimSignalForConcepts } from '../data/store';
+import { ReadingDepth } from '../data/types';
 import { logEvent } from '../data/logger';
 
-const { width } = Dimensions.get('window');
+// --- Local types for claim signal tracking ---
 
-const DEPTHS: ReadingDepth[] = ['summary', 'claims', 'sections', 'full'];
-const DEPTH_LABELS: Record<string, string> = {
+type ClaimSignalType = 'knew_it' | 'interesting' | 'save';
+
+interface ClaimSignalState {
+  [claimIndex: number]: ClaimSignalType;
+}
+
+// --- Depth zone definitions ---
+
+const DEPTH_ZONES = ['summary', 'claims', 'sections', 'full'] as const;
+type DepthZone = typeof DEPTH_ZONES[number];
+
+const DEPTH_LABELS: Record<DepthZone, string> = {
   summary: 'Summary',
   claims: 'Claims',
   sections: 'Sections',
-  full: 'Full',
+  full: 'Full Article',
 };
 
-function DepthIndicator({ depth, onChangeDepth, sectionCount }: {
-  depth: ReadingDepth;
-  onChangeDepth: (d: ReadingDepth) => void;
-  sectionCount: number;
-}) {
+// --- Implicit tracking constants ---
+
+const PAUSE_THRESHOLD_MS = 3000;
+const VELOCITY_SAMPLE_INTERVAL_MS = 200;
+const REVISIT_SCROLL_BACK_PX = 150;
+
+// --- Floating Depth Indicator ---
+
+function FloatingDepthIndicator({ currentZone }: { currentZone: DepthZone }) {
   return (
-    <View style={styles.depthBar}>
-      {DEPTHS.map(d => {
-        const active = d === depth;
-        const idx = DEPTHS.indexOf(d);
-        const currentIdx = DEPTHS.indexOf(depth);
+    <View style={styles.depthIndicator}>
+      {DEPTH_ZONES.map((zone, i) => {
+        const active = zone === currentZone;
+        const idx = DEPTH_ZONES.indexOf(zone);
+        const currentIdx = DEPTH_ZONES.indexOf(currentZone);
         const reached = idx <= currentIdx;
-
-        // Skip sections tab if article has <= 1 section
-        if (d === 'sections' && sectionCount <= 1) return null;
-
         return (
-          <Pressable
-            key={d}
-            style={[styles.depthTab, active && styles.depthTabActive]}
-            onPress={() => onChangeDepth(d)}
-          >
+          <View key={zone} style={styles.depthIndicatorItem}>
+            {i > 0 && <Text style={styles.depthDot}>·</Text>}
             <Text style={[
-              styles.depthTabText,
-              active && styles.depthTabTextActive,
-              reached && !active && styles.depthTabTextReached,
+              styles.depthLabel,
+              active && styles.depthLabelActive,
+              reached && !active && styles.depthLabelReached,
             ]}>
-              {DEPTH_LABELS[d]}
+              {DEPTH_LABELS[zone]}
             </Text>
-          </Pressable>
+          </View>
         );
       })}
     </View>
   );
 }
 
-function MarkdownText({ content }: { content: string }) {
+// --- Claim signal pill (floating over inline claims) ---
+
+function ClaimSignalPill({ onSignal, onDismiss }: {
+  onSignal: (s: ClaimSignalType) => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <Pressable style={styles.pillBackdrop} onPress={onDismiss}>
+      <View style={styles.pillContainer}>
+        <Pressable style={styles.pillBtn} onPress={() => onSignal('knew_it')}>
+          <Text style={styles.pillBtnText}>Knew this</Text>
+        </Pressable>
+        <Pressable style={[styles.pillBtn, styles.pillBtnNew]} onPress={() => onSignal('interesting')}>
+          <Text style={[styles.pillBtnText, { color: '#34d399' }]}>New to me</Text>
+        </Pressable>
+        <Pressable style={[styles.pillBtn, styles.pillBtnSave]} onPress={() => onSignal('save')}>
+          <Text style={[styles.pillBtnText, { color: '#60a5fa' }]}>Save</Text>
+        </Pressable>
+      </View>
+    </Pressable>
+  );
+}
+
+// --- Simple markdown renderer ---
+
+function MarkdownText({ content, claimHighlights, claimSignals, onClaimTap }: {
+  content: string;
+  claimHighlights?: string[];
+  claimSignals?: ClaimSignalState;
+  onClaimTap?: (claimIndex: number) => void;
+}) {
   if (!content) return null;
 
   const paragraphs = content.split('\n\n').filter(Boolean);
@@ -69,9 +109,9 @@ function MarkdownText({ content }: { content: string }) {
           return (
             <Text key={i} style={[
               styles.markdownHeading,
-              level === 1 && { fontSize: 20 },
-              level === 2 && { fontSize: 18 },
-              level === 3 && { fontSize: 16 },
+              level === 1 && { fontSize: 22 },
+              level === 2 && { fontSize: 19 },
+              level === 3 && { fontSize: 17 },
             ]}>
               {headingMatch[2]}
             </Text>
@@ -85,7 +125,7 @@ function MarkdownText({ content }: { content: string }) {
             <View key={i} style={styles.markdownList}>
               {items.map((item, j) => (
                 <View key={j} style={styles.markdownListItem}>
-                  <Text style={styles.markdownBullet}>•</Text>
+                  <Text style={styles.markdownBullet}>·</Text>
                   <Text style={styles.markdownText}>{item.replace(/^[-*]\s+/, '')}</Text>
                 </View>
               ))}
@@ -103,6 +143,30 @@ function MarkdownText({ content }: { content: string }) {
           );
         }
 
+        // Check for claim highlighting
+        if (claimHighlights && claimHighlights.length > 0) {
+          const matchedClaimIndex = findMatchingClaim(trimmed, claimHighlights);
+          if (matchedClaimIndex >= 0) {
+            const signal = claimSignals?.[matchedClaimIndex];
+            const highlightStyle = signal === 'knew_it'
+              ? styles.claimHighlightKnew
+              : signal === 'interesting'
+              ? styles.claimHighlightNew
+              : signal === 'save'
+              ? styles.claimHighlightSave
+              : styles.claimHighlightUnsignaled;
+
+            return (
+              <Pressable
+                key={i}
+                onPress={() => onClaimTap?.(matchedClaimIndex)}
+              >
+                <Text style={[styles.markdownText, highlightStyle]}>{trimmed}</Text>
+              </Pressable>
+            );
+          }
+        }
+
         // Regular paragraph
         return (
           <Text key={i} style={styles.markdownText}>{trimmed}</Text>
@@ -112,8 +176,24 @@ function MarkdownText({ content }: { content: string }) {
   );
 }
 
-function SectionView({ section, index, expanded, onToggle }: {
-  section: ArticleSection;
+// Find if a paragraph contains text matching a claim (fuzzy substring match)
+function findMatchingClaim(paragraph: string, claims: string[]): number {
+  const normalizedParagraph = paragraph.toLowerCase().replace(/[^\w\s]/g, '');
+  for (let i = 0; i < claims.length; i++) {
+    const normalizedClaim = claims[i].toLowerCase().replace(/[^\w\s]/g, '');
+    // Use first 60 chars of claim for matching to handle partial overlaps
+    const matchFragment = normalizedClaim.slice(0, 60);
+    if (matchFragment.length > 10 && normalizedParagraph.includes(matchFragment)) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+// --- Section card (expandable) ---
+
+function SectionCard({ section, index, expanded, onToggle }: {
+  section: { heading: string; content: string; summary: string; key_claims: string[] };
   index: number;
   expanded: boolean;
   onToggle: () => void;
@@ -136,8 +216,8 @@ function SectionView({ section, index, expanded, onToggle }: {
             <View style={styles.sectionClaims}>
               {section.key_claims.map((c, i) => (
                 <View key={i} style={styles.claimRow}>
-                  <Text style={styles.claimBullet}>→</Text>
-                  <Text style={styles.claimText}>{c}</Text>
+                  <Text style={styles.claimArrow}>→</Text>
+                  <Text style={styles.claimRowText}>{c}</Text>
                 </View>
               ))}
             </View>
@@ -149,24 +229,52 @@ function SectionView({ section, index, expanded, onToggle }: {
   );
 }
 
+// ============================================================
+// Main Reader Screen
+// ============================================================
+
 export default function ReaderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const article = getArticleById(id || '');
-  const [depth, setDepth] = useState<ReadingDepth>('summary');
-  const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set());
-  const enterTime = useRef(Date.now());
-  const scrollRef = useRef<ScrollView>(null);
 
+  // --- State ---
+  const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set());
+  const [currentZone, setCurrentZone] = useState<DepthZone>('summary');
+  const [claimSignals, setClaimSignals] = useState<ClaimSignalState>({});
+  const [activeClaimPill, setActiveClaimPill] = useState<number | null>(null);
+  const [signaledClaimCount, setSignaledClaimCount] = useState(0);
+
+  // --- Refs ---
+  const scrollRef = useRef<ScrollView>(null);
+  const enterTime = useRef(Date.now());
+
+  // Section layout positions for depth zone tracking
+  const zonePositions = useRef<Record<DepthZone, number>>({
+    summary: 0,
+    claims: 0,
+    sections: 0,
+    full: 0,
+  });
+
+  // Implicit tracking refs
+  const lastScrollY = useRef(0);
+  const lastScrollTime = useRef(Date.now());
+  const maxScrollY = useRef(0);
+  const currentZoneRef = useRef<DepthZone>('summary');
+  const zoneEnterTime = useRef<Record<string, number>>({});
+  const pauseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastVelocityLog = useRef(Date.now());
+
+  // --- Initialize reading state ---
   useEffect(() => {
     if (!article) return;
     const state = getReadingState(article.id);
-    if (state.depth !== 'unread') {
-      setDepth(state.depth);
-    } else {
+    if (state.depth === 'unread') {
       updateReadingState(article.id, { depth: 'summary', started_at: Date.now(), last_read_at: Date.now() });
     }
     logEvent('reader_open', { article_id: article.id, title: article.title, previous_depth: state.depth });
+    zoneEnterTime.current = { summary: Date.now() };
 
     return () => {
       const elapsed = Date.now() - enterTime.current;
@@ -175,18 +283,125 @@ export default function ReaderScreen() {
         time_spent_ms: (currentState.time_spent_ms || 0) + elapsed,
         last_read_at: Date.now(),
       });
-      logEvent('reader_close', { article_id: article.id, time_spent_ms: elapsed, depth });
+      // Log final zone exit
+      const zone = currentZoneRef.current;
+      if (zoneEnterTime.current[zone]) {
+        const zoneTime = Date.now() - zoneEnterTime.current[zone];
+        logEvent('reader_section_exit', { article_id: article.id, section: zone, time_ms: zoneTime });
+      }
+      logEvent('reader_close', { article_id: article.id, time_spent_ms: elapsed, final_depth: currentZoneRef.current });
+      if (pauseTimer.current) clearTimeout(pauseTimer.current);
     };
   }, []);
 
-  const changeDepth = useCallback((newDepth: ReadingDepth) => {
+  // --- Compute which depth zone the user is in based on scroll position ---
+  const updateDepthZone = useCallback((scrollY: number) => {
     if (!article) return;
-    logEvent('reader_depth_change', { article_id: article.id, from: depth, to: newDepth });
-    setDepth(newDepth);
-    updateReadingState(article.id, { depth: newDepth, last_read_at: Date.now() });
-    scrollRef.current?.scrollTo({ y: 0, animated: true });
-  }, [article, depth]);
+    const positions = zonePositions.current;
+    let zone: DepthZone = 'summary';
+    // Walk through zones in order; last one whose position we've passed is current
+    for (const z of DEPTH_ZONES) {
+      if (positions[z] > 0 && scrollY >= positions[z] - 80) {
+        zone = z;
+      }
+    }
+    if (zone !== currentZoneRef.current) {
+      const prevZone = currentZoneRef.current;
+      const now = Date.now();
 
+      // Log exit from previous zone
+      if (zoneEnterTime.current[prevZone]) {
+        const zoneTime = now - zoneEnterTime.current[prevZone];
+        logEvent('reader_section_exit', { article_id: article.id, section: prevZone, time_ms: zoneTime });
+      }
+
+      // Log enter new zone
+      logEvent('reader_section_enter', { article_id: article.id, section: zone });
+      zoneEnterTime.current[zone] = now;
+
+      currentZoneRef.current = zone;
+      setCurrentZone(zone);
+
+      // Update reading state depth
+      const depthMap: Record<DepthZone, ReadingDepth> = {
+        summary: 'summary',
+        claims: 'claims',
+        sections: 'sections',
+        full: 'full',
+      };
+      const currentDepthIdx = DEPTH_ZONES.indexOf(zone);
+      const savedState = getReadingState(article.id);
+      const savedDepthIdx = DEPTH_ZONES.indexOf(savedState.depth as DepthZone);
+      // Only advance depth, never go backwards
+      if (currentDepthIdx > savedDepthIdx || savedState.depth === 'unread') {
+        updateReadingState(article.id, { depth: depthMap[zone], last_read_at: now });
+      }
+
+      logEvent('reader_scroll_depth', { article_id: article.id, depth: zone, scroll_y: scrollY });
+    }
+  }, [article]);
+
+  // --- Scroll handler with implicit tracking ---
+  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (!article) return;
+    const scrollY = event.nativeEvent.contentOffset.y;
+    const now = Date.now();
+
+    // Update depth zone
+    updateDepthZone(scrollY);
+
+    // --- Scroll velocity tracking ---
+    const dt = now - lastScrollTime.current;
+    if (dt > VELOCITY_SAMPLE_INTERVAL_MS && now - lastVelocityLog.current > 1000) {
+      const dy = Math.abs(scrollY - lastScrollY.current);
+      const velocity = dy / (dt / 1000); // px/sec
+      if (velocity > 50) {
+        logEvent('reader_scroll_velocity', {
+          article_id: article.id,
+          velocity: Math.round(velocity),
+          direction: scrollY > lastScrollY.current ? 'down' : 'up',
+          section: currentZoneRef.current,
+        });
+        lastVelocityLog.current = now;
+      }
+    }
+
+    // --- Revisit detection ---
+    if (scrollY < lastScrollY.current - REVISIT_SCROLL_BACK_PX && scrollY < maxScrollY.current - REVISIT_SCROLL_BACK_PX) {
+      logEvent('reader_revisit', {
+        article_id: article.id,
+        from_y: Math.round(lastScrollY.current),
+        to_y: Math.round(scrollY),
+        section: currentZoneRef.current,
+      });
+    }
+
+    // Track max scroll position
+    if (scrollY > maxScrollY.current) {
+      maxScrollY.current = scrollY;
+    }
+
+    // --- Pause detection ---
+    if (pauseTimer.current) clearTimeout(pauseTimer.current);
+    pauseTimer.current = setTimeout(() => {
+      logEvent('reader_pause', {
+        article_id: article.id,
+        scroll_y: Math.round(scrollY),
+        section: currentZoneRef.current,
+        pause_duration_ms: PAUSE_THRESHOLD_MS,
+      });
+    }, PAUSE_THRESHOLD_MS);
+
+    lastScrollY.current = scrollY;
+    lastScrollTime.current = now;
+  }, [article, updateDepthZone]);
+
+  // --- Zone layout tracking ---
+  const onZoneLayout = useCallback((zone: DepthZone) => (event: LayoutChangeEvent) => {
+    zonePositions.current[zone] = event.nativeEvent.layout.y;
+  }, []);
+
+  // --- Section toggle ---
   const toggleSection = useCallback((index: number) => {
     if (!article) return;
     setExpandedSections(prev => {
@@ -204,15 +419,59 @@ export default function ReaderScreen() {
       });
       return next;
     });
-    updateReadingState(article.id, { current_section_index: index });
   }, [article]);
 
+  // --- Claim signals (in claims list) ---
+  const handleClaimSignal = useCallback((claimIndex: number, signal: ClaimSignalType) => {
+    if (!article) return;
+    setClaimSignals(prev => {
+      const wasSignaled = prev[claimIndex] !== undefined;
+      const next = { ...prev, [claimIndex]: signal };
+      if (!wasSignaled) {
+        setSignaledClaimCount(c => c + 1);
+      }
+      return next;
+    });
+    const mappedSignal = signal === 'interesting' ? 'interesting' : signal === 'save' ? 'save' : 'knew_it';
+    addSignal({ article_id: article.id, signal: mappedSignal, timestamp: Date.now(), depth: 'claims' });
+    processClaimSignalForConcepts(article.id, article.key_claims[claimIndex] || '', mappedSignal);
+    logEvent('reader_claim_signal_inline', {
+      article_id: article.id,
+      claim_index: claimIndex,
+      claim_text: article.key_claims[claimIndex],
+      signal,
+      context: 'claims_list',
+    });
+  }, [article]);
+
+  // --- Inline claim tap (in full article text) ---
+  const handleInlineClaimTap = useCallback((claimIndex: number) => {
+    setActiveClaimPill(claimIndex);
+  }, []);
+
+  const handleInlineClaimSignal = useCallback((signal: ClaimSignalType) => {
+    if (!article || activeClaimPill === null) return;
+    handleClaimSignal(activeClaimPill, signal);
+    logEvent('reader_claim_signal_inline', {
+      article_id: article.id,
+      claim_index: activeClaimPill,
+      claim_text: article.key_claims[activeClaimPill],
+      signal,
+      context: 'full_text_inline',
+    });
+    setActiveClaimPill(null);
+  }, [article, activeClaimPill, handleClaimSignal]);
+
+  // --- Computed values ---
+  const totalClaims = article?.key_claims.length || 0;
+
+  // --- Error state ---
   if (!article) {
     return (
       <View style={styles.container}>
         <Text style={styles.errorText}>Article not found</Text>
         <Pressable onPress={() => router.back()}>
-          <Text style={styles.backLink}>← Back to feed</Text>
+          <Text style={styles.backLink}>Back to feed</Text>
         </Pressable>
       </View>
     );
@@ -234,98 +493,95 @@ export default function ReaderScreen() {
         </Pressable>
       </View>
 
-      {/* Depth indicator */}
-      <DepthIndicator
-        depth={depth}
-        onChangeDepth={changeDepth}
-        sectionCount={article.sections.length}
-      />
+      {/* Sticky floating depth indicator */}
+      <FloatingDepthIndicator currentZone={currentZone} />
 
+      {/* Main scrollable content */}
       <ScrollView
         ref={scrollRef}
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={handleScroll}
       >
-        {/* Always show title */}
-        <Text style={styles.articleTitle}>{article.title}</Text>
-        <View style={styles.metaRow}>
-          {article.author ? <Text style={styles.metaText}>{article.author}</Text> : null}
-          <Text style={styles.metaText}>{article.hostname}</Text>
-          {article.date ? <Text style={styles.metaText}>{article.date}</Text> : null}
-          <Text style={styles.metaText}>{article.estimated_read_minutes} min · {article.word_count} words</Text>
-        </View>
-
-        {/* Topics */}
-        <View style={styles.topicsRow}>
-          {article.topics.map(t => (
-            <View key={t} style={styles.topicPill}>
-              <Text style={styles.topicText}>{t}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* SUMMARY depth */}
-        {depth === 'summary' && (
-          <View style={styles.depthContent}>
-            <Text style={styles.fullSummary}>{article.full_summary}</Text>
-
-            {article.key_claims.length > 0 && (
-              <View style={styles.previewClaims}>
-                <Text style={styles.previewLabel}>{article.key_claims.length} key claims</Text>
-              </View>
-            )}
-
-            <Pressable style={styles.goDeeper} onPress={() => changeDepth('claims')}>
-              <Text style={styles.goDeeperText}>Go deeper</Text>
-              <Ionicons name="arrow-forward" size={16} color="#60a5fa" />
-            </Pressable>
+        {/* ═══════════ HEADER ZONE ═══════════ */}
+        <View onLayout={onZoneLayout('summary')}>
+          <Text style={styles.articleTitle}>{article.title}</Text>
+          <View style={styles.metaRow}>
+            {article.author ? <Text style={styles.metaText}>{article.author}</Text> : null}
+            <Text style={styles.metaText}>{article.hostname}</Text>
+            {article.date ? <Text style={styles.metaText}>{article.date}</Text> : null}
+            <Text style={styles.metaText}>{article.estimated_read_minutes} min · {article.word_count} words</Text>
           </View>
-        )}
 
-        {/* CLAIMS depth */}
-        {depth === 'claims' && (
-          <View style={styles.depthContent}>
-            <Text style={styles.summaryCollapsed} numberOfLines={2}>{article.full_summary}</Text>
+          {/* Topics */}
+          <View style={styles.topicsRow}>
+            {article.topics.map(t => (
+              <View key={t} style={styles.topicPill}>
+                <Text style={styles.topicText}>{t}</Text>
+              </View>
+            ))}
+          </View>
 
-            <Text style={styles.claimsHeader}>Key Claims</Text>
-            {article.key_claims.map((claim, i) => (
-              <View key={i} style={styles.claimCard}>
+          {/* Summary */}
+          <Text style={styles.fullSummary}>{article.full_summary}</Text>
+        </View>
+
+        {/* ═══════════ CLAIMS ZONE ═══════════ */}
+        <View onLayout={onZoneLayout('claims')}>
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>Key Claims</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Claims progress */}
+          {totalClaims > 0 && (
+            <Text style={styles.claimsProgress}>
+              {signaledClaimCount} of {totalClaims} claims reviewed
+            </Text>
+          )}
+
+          {article.key_claims.map((claim, i) => {
+            const signal = claimSignals[i];
+            return (
+              <View key={i} style={[
+                styles.claimCard,
+                signal === 'knew_it' && styles.claimCardKnew,
+                signal === 'interesting' && styles.claimCardNew,
+                signal === 'save' && styles.claimCardSave,
+              ]}>
                 <Text style={styles.claimCardText}>{claim}</Text>
                 <View style={styles.claimActions}>
                   <Pressable
-                    style={styles.claimBtn}
-                    onPress={() => {
-                      addSignal({ article_id: article.id, signal: 'knew_it', timestamp: Date.now(), depth: 'claims' });
-                      logEvent('claim_signal', { article_id: article.id, claim_index: i, signal: 'knew_it' });
-                    }}
+                    style={[styles.claimBtn, signal === 'knew_it' && styles.claimBtnActiveKnew]}
+                    onPress={() => handleClaimSignal(i, 'knew_it')}
                   >
-                    <Text style={styles.claimBtnText}>Knew this</Text>
+                    <Text style={[styles.claimBtnText, signal === 'knew_it' && { color: '#94a3b8' }]}>Knew this</Text>
                   </Pressable>
                   <Pressable
-                    style={[styles.claimBtn, styles.claimBtnNew]}
-                    onPress={() => {
-                      addSignal({ article_id: article.id, signal: 'interesting', timestamp: Date.now(), depth: 'claims' });
-                      logEvent('claim_signal', { article_id: article.id, claim_index: i, signal: 'interesting' });
-                    }}
+                    style={[styles.claimBtn, styles.claimBtnNewBorder, signal === 'interesting' && styles.claimBtnActiveNew]}
+                    onPress={() => handleClaimSignal(i, 'interesting')}
                   >
-                    <Text style={[styles.claimBtnText, { color: '#10b981' }]}>New to me</Text>
+                    <Text style={[styles.claimBtnText, { color: '#34d399' }, signal === 'interesting' && { color: '#ffffff' }]}>New to me</Text>
                   </Pressable>
                 </View>
               </View>
-            ))}
+            );
+          })}
+        </View>
 
-            <Pressable style={styles.goDeeper} onPress={() => changeDepth(article.sections.length > 1 ? 'sections' : 'full')}>
-              <Text style={styles.goDeeperText}>Read more</Text>
-              <Ionicons name="arrow-forward" size={16} color="#60a5fa" />
-            </Pressable>
-          </View>
-        )}
+        {/* ═══════════ SECTIONS ZONE ═══════════ */}
+        {article.sections.length > 1 && (
+          <View onLayout={onZoneLayout('sections')}>
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>Sections</Text>
+              <View style={styles.dividerLine} />
+            </View>
 
-        {/* SECTIONS depth */}
-        {depth === 'sections' && (
-          <View style={styles.depthContent}>
             {article.sections.map((section, i) => (
-              <SectionView
+              <SectionCard
                 key={i}
                 section={section}
                 index={i}
@@ -333,20 +589,24 @@ export default function ReaderScreen() {
                 onToggle={() => toggleSection(i)}
               />
             ))}
-
-            <Pressable style={styles.goDeeper} onPress={() => changeDepth('full')}>
-              <Text style={styles.goDeeperText}>Read full article</Text>
-              <Ionicons name="arrow-forward" size={16} color="#60a5fa" />
-            </Pressable>
           </View>
         )}
 
-        {/* FULL depth */}
-        {depth === 'full' && (
-          <View style={styles.depthContent}>
-            <MarkdownText content={article.content_markdown} />
+        {/* ═══════════ FULL ARTICLE ZONE ═══════════ */}
+        <View onLayout={onZoneLayout('full')}>
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>Full Article</Text>
+            <View style={styles.dividerLine} />
           </View>
-        )}
+
+          <MarkdownText
+            content={article.content_markdown}
+            claimHighlights={article.key_claims}
+            claimSignals={claimSignals}
+            onClaimTap={handleInlineClaimTap}
+          />
+        </View>
 
         {/* Source attribution */}
         {article.sources.length > 0 && article.sources[0].tweet_text && (
@@ -360,80 +620,172 @@ export default function ReaderScreen() {
           </View>
         )}
 
-        <View style={{ height: 60 }} />
+        <View style={{ height: 80 }} />
       </ScrollView>
+
+      {/* Floating claim signal pill */}
+      {activeClaimPill !== null && (
+        <ClaimSignalPill
+          onSignal={handleInlineClaimSignal}
+          onDismiss={() => setActiveClaimPill(null)}
+        />
+      )}
     </View>
   );
 }
 
+// ============================================================
+// Styles
+// ============================================================
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0f172a' },
-  topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 56, paddingBottom: 8, gap: 12 },
+  topBar: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingTop: 56, paddingBottom: 8, gap: 12,
+  },
   backButton: { padding: 4 },
-  scroll: { flex: 1, paddingHorizontal: 16 },
+  scroll: { flex: 1, paddingHorizontal: 20 },
   errorText: { color: '#ef4444', fontSize: 16, textAlign: 'center', marginTop: 100 },
   backLink: { color: '#60a5fa', fontSize: 14, textAlign: 'center', marginTop: 12 },
 
-  // Depth bar
-  depthBar: { flexDirection: 'row', paddingHorizontal: 16, paddingBottom: 8, gap: 4 },
-  depthTab: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16, backgroundColor: '#1e293b' },
-  depthTabActive: { backgroundColor: '#2563eb' },
-  depthTabText: { color: '#475569', fontSize: 13, fontWeight: '500' },
-  depthTabTextActive: { color: '#f8fafc' },
-  depthTabTextReached: { color: '#94a3b8' },
+  // Floating depth indicator
+  depthIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: '#0f172aee',
+  },
+  depthIndicatorItem: { flexDirection: 'row', alignItems: 'center' },
+  depthDot: { color: '#334155', fontSize: 14, marginHorizontal: 8 },
+  depthLabel: { color: '#475569', fontSize: 12, fontWeight: '500' },
+  depthLabelActive: { color: '#f8fafc', fontWeight: '700' },
+  depthLabelReached: { color: '#94a3b8' },
 
   // Article header
-  articleTitle: { color: '#f8fafc', fontSize: 24, fontWeight: '700', lineHeight: 32, marginBottom: 8 },
-  metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
+  articleTitle: {
+    color: '#f8fafc', fontSize: 26, fontWeight: '700',
+    lineHeight: 34, marginBottom: 10, letterSpacing: -0.3,
+  },
+  metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
   metaText: { color: '#64748b', fontSize: 13 },
-  topicsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 16 },
-  topicPill: { backgroundColor: '#334155', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 12 },
+  topicsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 20 },
+  topicPill: { backgroundColor: '#334155', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   topicText: { color: '#94a3b8', fontSize: 12 },
 
-  // Depth content
-  depthContent: { marginBottom: 16 },
+  // Summary
+  fullSummary: {
+    color: '#e2e8f0', fontSize: 17, lineHeight: 28,
+    marginBottom: 24, letterSpacing: 0.1,
+  },
 
-  // Summary depth
-  fullSummary: { color: '#e2e8f0', fontSize: 16, lineHeight: 26, marginBottom: 16 },
-  previewClaims: { backgroundColor: '#1e293b', borderRadius: 8, padding: 12, marginBottom: 16 },
-  previewLabel: { color: '#94a3b8', fontSize: 13 },
+  // Dividers between zones
+  divider: {
+    flexDirection: 'row', alignItems: 'center',
+    marginTop: 28, marginBottom: 20, gap: 12,
+  },
+  dividerLine: { flex: 1, height: 1, backgroundColor: '#1e293b' },
+  dividerText: { color: '#64748b', fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1 },
 
-  // Claims depth
-  summaryCollapsed: { color: '#94a3b8', fontSize: 14, lineHeight: 20, marginBottom: 16 },
-  claimsHeader: { color: '#f8fafc', fontSize: 16, fontWeight: '600', marginBottom: 12 },
-  claimCard: { backgroundColor: '#1e293b', borderRadius: 10, padding: 14, marginBottom: 8 },
-  claimCardText: { color: '#e2e8f0', fontSize: 15, lineHeight: 22, marginBottom: 8 },
+  // Claims progress
+  claimsProgress: {
+    color: '#64748b', fontSize: 12, marginBottom: 12,
+    textAlign: 'center',
+  },
+
+  // Claims list
+  claimCard: {
+    backgroundColor: '#1e293b', borderRadius: 12, padding: 16,
+    marginBottom: 10, borderLeftWidth: 3, borderLeftColor: '#334155',
+  },
+  claimCardKnew: { borderLeftColor: '#64748b', opacity: 0.7 },
+  claimCardNew: { borderLeftColor: '#34d399' },
+  claimCardSave: { borderLeftColor: '#60a5fa' },
+  claimCardText: { color: '#e2e8f0', fontSize: 15, lineHeight: 23, marginBottom: 10 },
   claimActions: { flexDirection: 'row', gap: 8 },
-  claimBtn: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8, backgroundColor: '#334155' },
-  claimBtnNew: { borderColor: '#10b981', borderWidth: 1, backgroundColor: 'transparent' },
-  claimBtnText: { color: '#94a3b8', fontSize: 12 },
+  claimBtn: {
+    paddingHorizontal: 14, paddingVertical: 6,
+    borderRadius: 8, backgroundColor: '#334155',
+  },
+  claimBtnNewBorder: { borderColor: '#34d399', borderWidth: 1, backgroundColor: 'transparent' },
+  claimBtnActiveKnew: { backgroundColor: '#475569' },
+  claimBtnActiveNew: { backgroundColor: '#065f46', borderColor: '#34d399' },
+  claimBtnText: { color: '#94a3b8', fontSize: 12, fontWeight: '500' },
 
-  // Sections depth
-  sectionCard: { backgroundColor: '#1e293b', borderRadius: 10, marginBottom: 8, overflow: 'hidden' },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 8 },
+  // Section cards
+  sectionCard: { backgroundColor: '#1e293b', borderRadius: 12, marginBottom: 10, overflow: 'hidden' },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 8 },
   sectionHeading: { color: '#f8fafc', fontSize: 15, fontWeight: '600' },
-  sectionSummary: { color: '#94a3b8', fontSize: 13, lineHeight: 18, marginTop: 2 },
-  sectionContent: { paddingHorizontal: 14, paddingBottom: 14 },
+  sectionSummary: { color: '#94a3b8', fontSize: 13, lineHeight: 18, marginTop: 4 },
+  sectionContent: { paddingHorizontal: 16, paddingBottom: 16 },
   sectionClaims: { marginBottom: 12, paddingLeft: 4 },
-  claimRow: { flexDirection: 'row', marginBottom: 4 },
-  claimBullet: { color: '#60a5fa', marginRight: 8, fontSize: 13 },
-  claimText: { color: '#94a3b8', fontSize: 13, lineHeight: 18, flex: 1 },
-
-  // Go deeper
-  goDeeper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, marginTop: 8 },
-  goDeeperText: { color: '#60a5fa', fontSize: 15, fontWeight: '500' },
+  claimRow: { flexDirection: 'row', marginBottom: 6 },
+  claimArrow: { color: '#60a5fa', marginRight: 8, fontSize: 13 },
+  claimRowText: { color: '#94a3b8', fontSize: 13, lineHeight: 19, flex: 1 },
 
   // Markdown rendering
-  markdownHeading: { color: '#f8fafc', fontWeight: '700', marginTop: 16, marginBottom: 8 },
-  markdownText: { color: '#cbd5e1', fontSize: 15, lineHeight: 24, marginBottom: 12 },
-  markdownList: { marginBottom: 12 },
-  markdownListItem: { flexDirection: 'row', marginBottom: 4, paddingRight: 8 },
-  markdownBullet: { color: '#60a5fa', marginRight: 8, fontSize: 14 },
-  codeBlock: { backgroundColor: '#0f172a', borderRadius: 8, padding: 12, marginBottom: 12 },
+  markdownHeading: {
+    color: '#f8fafc', fontWeight: '700',
+    marginTop: 20, marginBottom: 10, lineHeight: 28,
+  },
+  markdownText: {
+    color: '#cbd5e1', fontSize: 16, lineHeight: 26,
+    marginBottom: 14, letterSpacing: 0.15,
+  },
+  markdownList: { marginBottom: 14 },
+  markdownListItem: { flexDirection: 'row', marginBottom: 6, paddingRight: 8 },
+  markdownBullet: { color: '#60a5fa', marginRight: 10, fontSize: 16 },
+  codeBlock: { backgroundColor: '#1e293b', borderRadius: 8, padding: 14, marginBottom: 14 },
   codeText: { color: '#94a3b8', fontSize: 13, fontFamily: 'monospace' },
 
-  // Source
-  sourceBox: { backgroundColor: '#1e293b', borderRadius: 10, padding: 14, marginTop: 16, borderLeftWidth: 3, borderLeftColor: '#334155' },
-  sourceLabel: { color: '#60a5fa', fontSize: 12, marginBottom: 4 },
-  sourceText: { color: '#64748b', fontSize: 13, lineHeight: 18 },
+  // Inline claim highlights in full text
+  claimHighlightUnsignaled: {
+    backgroundColor: '#1e3a5f20', borderRadius: 4,
+    paddingHorizontal: 4, paddingVertical: 2,
+    borderLeftWidth: 3, borderLeftColor: '#3b82f680',
+  },
+  claimHighlightKnew: {
+    backgroundColor: '#47556920', borderRadius: 4,
+    paddingHorizontal: 4, paddingVertical: 2,
+    borderLeftWidth: 3, borderLeftColor: '#64748b',
+  },
+  claimHighlightNew: {
+    backgroundColor: '#065f4620', borderRadius: 4,
+    paddingHorizontal: 4, paddingVertical: 2,
+    borderLeftWidth: 3, borderLeftColor: '#34d399',
+  },
+  claimHighlightSave: {
+    backgroundColor: '#1e40af20', borderRadius: 4,
+    paddingHorizontal: 4, paddingVertical: 2,
+    borderLeftWidth: 3, borderLeftColor: '#60a5fa',
+  },
+
+  // Floating signal pill
+  pillBackdrop: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: '#00000060', justifyContent: 'center', alignItems: 'center',
+  },
+  pillContainer: {
+    flexDirection: 'row', backgroundColor: '#1e293b',
+    borderRadius: 16, padding: 6, gap: 4,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 12, elevation: 8,
+  },
+  pillBtn: {
+    paddingHorizontal: 16, paddingVertical: 10,
+    borderRadius: 12, backgroundColor: '#334155',
+  },
+  pillBtnNew: { backgroundColor: '#065f46' },
+  pillBtnSave: { backgroundColor: '#1e3a5f' },
+  pillBtnText: { color: '#e2e8f0', fontSize: 13, fontWeight: '600' },
+
+  // Source attribution
+  sourceBox: {
+    backgroundColor: '#1e293b', borderRadius: 12, padding: 16,
+    marginTop: 24, borderLeftWidth: 3, borderLeftColor: '#334155',
+  },
+  sourceLabel: { color: '#60a5fa', fontSize: 12, marginBottom: 6 },
+  sourceText: { color: '#64748b', fontSize: 13, lineHeight: 19 },
 });

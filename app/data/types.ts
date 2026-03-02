@@ -55,3 +55,21 @@ export interface UserSignal {
   section_index?: number;
   depth?: ReadingDepth;
 }
+
+// --- Knowledge Model ---
+
+export interface Concept {
+  id: string;
+  text: string;
+  topic: string;
+  source_article_ids: string[];
+}
+
+export type ConceptKnowledgeLevel = 'unknown' | 'encountered' | 'known';
+
+export interface ConceptState {
+  concept_id: string;
+  state: ConceptKnowledgeLevel;
+  last_seen: number;
+  signal_count: number;
+}

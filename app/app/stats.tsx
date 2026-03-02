@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getStats, getSignals, getArticles, getByTopic, getReadingState } from '../data/store';
+import { getStats, getSignals, getArticles, getByTopic, getReadingState, getTopicKnowledgeStats, getConcepts } from '../data/store';
 import { logEvent, getLogFiles, exportAllLogs, getLogDirectory } from '../data/logger';
 
 function EventLogSection() {
@@ -40,6 +40,70 @@ function EventLogSection() {
             <Ionicons name="share-outline" size={16} color="#60a5fa" />
             <Text style={styles.refreshText}>Export all logs</Text>
           </Pressable>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function KnowledgeDashboard() {
+  const concepts = getConcepts();
+  const stats = getStats();
+  const topicStats = getTopicKnowledgeStats();
+
+  if (concepts.length === 0) {
+    return (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Knowledge Map</Text>
+        <Text style={styles.sectionSubtitle}>Concept tracking will appear here as you read and signal on claims</Text>
+      </View>
+    );
+  }
+
+  const sortedTopics = [...topicStats.entries()]
+    .sort((a, b) => b[1].total - a[1].total);
+
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>Knowledge Map</Text>
+      <Text style={styles.sectionSubtitle}>
+        {stats.knownConcepts} known · {stats.encounteredConcepts} encountered · {concepts.length} total concepts
+      </Text>
+
+      {/* Overall progress */}
+      <View style={[styles.progressBar, { marginTop: 8, marginBottom: 16 }]}>
+        <View style={[styles.progressFill, {
+          width: `${Math.round(((stats.knownConcepts + stats.encounteredConcepts) / Math.max(1, concepts.length)) * 100)}%`,
+          backgroundColor: '#10b981',
+        }]} />
+      </View>
+
+      {/* Per-topic breakdown */}
+      {sortedTopics.map(([topic, counts]) => {
+        const knownPct = counts.total > 0 ? (counts.known / counts.total) * 100 : 0;
+        const encounteredPct = counts.total > 0 ? (counts.encountered / counts.total) * 100 : 0;
+        return (
+          <View key={topic} style={styles.topicRow}>
+            <Text style={styles.topicName} numberOfLines={1}>{topic}</Text>
+            <View style={styles.topicBar}>
+              {counts.known > 0 && <View style={[styles.topicSegment, { width: `${knownPct}%`, backgroundColor: '#10b981' }]} />}
+              {counts.encountered > 0 && <View style={[styles.topicSegment, { width: `${encounteredPct}%`, backgroundColor: '#f59e0b' }]} />}
+            </View>
+            <Text style={styles.topicCount}>{counts.known + counts.encountered}/{counts.total}</Text>
+          </View>
+        );
+      })}
+
+      {sortedTopics.length > 0 && (
+        <View style={{ flexDirection: 'row', gap: 16, marginTop: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10b981' }} />
+            <Text style={{ color: '#64748b', fontSize: 11 }}>Known</Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#f59e0b' }} />
+            <Text style={{ color: '#64748b', fontSize: 11 }}>Encountered</Text>
+          </View>
         </View>
       )}
     </View>
@@ -157,6 +221,9 @@ export default function StatsScreen() {
               </View>
             ))}
         </View>
+
+        {/* Knowledge dashboard */}
+        <KnowledgeDashboard />
 
         {/* Refresh */}
         <Pressable style={styles.refreshBtn} onPress={() => { logEvent('stats_refresh'); forceUpdate(n => n + 1); }}>

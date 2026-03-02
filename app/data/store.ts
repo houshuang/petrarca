@@ -1,12 +1,17 @@
-import { Article, ReadingState, UserSignal, ReadingDepth } from './types';
+import { Article, ReadingState, UserSignal, ReadingDepth, Concept, ConceptState, ConceptKnowledgeLevel } from './types';
 import { logEvent } from './logger';
-import { loadSignals, saveSignals, loadReadingStates, saveReadingStates } from './persistence';
+import { loadSignals, saveSignals, loadReadingStates, saveReadingStates, loadConceptStates, saveConceptStates } from './persistence';
 
 let articles: Article[] = [];
+let concepts: Concept[] = [];
 let readingStates = new Map<string, ReadingState>();
+let conceptStates = new Map<string, ConceptState>();
 let signals: UserSignal[] = [];
 let initialized = false;
 let initPromise: Promise<void> | null = null;
+
+// Precomputed: article_id -> concept_ids
+let articleConceptIndex = new Map<string, string[]>();
 
 export async function initStore(): Promise<void> {
   if (initialized) return;
@@ -24,14 +29,34 @@ export async function initStore(): Promise<void> {
     // Sort by date descending
     articles.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
+    // Load concepts
+    try {
+      const conceptData = require('./concepts.json');
+      concepts = (Array.isArray(conceptData) ? conceptData : []) as Concept[];
+    } catch {
+      concepts = [];
+    }
+
+    // Build article->concept index
+    articleConceptIndex.clear();
+    for (const c of concepts) {
+      for (const aid of c.source_article_ids) {
+        if (!articleConceptIndex.has(aid)) articleConceptIndex.set(aid, []);
+        articleConceptIndex.get(aid)!.push(c.id);
+      }
+    }
+
     signals = await loadSignals();
     readingStates = await loadReadingStates();
+    conceptStates = await loadConceptStates();
     initialized = true;
 
     logEvent('store_initialized', {
       total_articles: articles.length,
+      total_concepts: concepts.length,
       loaded_signals: signals.length,
       loaded_reading_states: readingStates.size,
+      loaded_concept_states: conceptStates.size,
     });
   })();
 
@@ -161,5 +186,129 @@ export function getStats() {
     ...depthCounts,
     totalTimeMs,
     signals: signals.length,
+    totalConcepts: concepts.length,
+    knownConcepts: [...conceptStates.values()].filter(s => s.state === 'known').length,
+    encounteredConcepts: [...conceptStates.values()].filter(s => s.state === 'encountered').length,
   };
+}
+
+// --- Concepts & Knowledge Model ---
+
+export function getConcepts(): Concept[] {
+  return concepts;
+}
+
+export function getConceptState(conceptId: string): ConceptState {
+  return conceptStates.get(conceptId) || {
+    concept_id: conceptId,
+    state: 'unknown' as ConceptKnowledgeLevel,
+    last_seen: 0,
+    signal_count: 0,
+  };
+}
+
+export function updateConceptState(conceptId: string, state: ConceptKnowledgeLevel) {
+  const current = getConceptState(conceptId);
+  const updated: ConceptState = {
+    ...current,
+    concept_id: conceptId,
+    state,
+    last_seen: Date.now(),
+    signal_count: current.signal_count + 1,
+  };
+  conceptStates.set(conceptId, updated);
+  saveConceptStates(conceptStates);
+
+  logEvent('concept_state_update', {
+    concept_id: conceptId,
+    state,
+    signal_count: updated.signal_count,
+  });
+}
+
+/**
+ * When a user signals on a claim, find matching concepts and update their state.
+ * "knew_it" -> concept becomes "known"
+ * "interesting" -> concept becomes "encountered"
+ */
+export function processClaimSignalForConcepts(articleId: string, claimText: string, signal: string) {
+  const articleConcepts = articleConceptIndex.get(articleId) || [];
+  const normalizedClaim = claimText.toLowerCase().replace(/[^\w\s]/g, '');
+
+  for (const cid of articleConcepts) {
+    const concept = concepts.find(c => c.id === cid);
+    if (!concept) continue;
+
+    const normalizedConcept = concept.text.toLowerCase().replace(/[^\w\s]/g, '');
+    // Match if claim text overlaps significantly with concept text
+    const claimWords = new Set(normalizedClaim.split(/\s+/));
+    const conceptWords = normalizedConcept.split(/\s+/);
+    const overlap = conceptWords.filter(w => claimWords.has(w)).length;
+    const overlapRatio = conceptWords.length > 0 ? overlap / conceptWords.length : 0;
+
+    if (overlapRatio > 0.4) {
+      if (signal === 'knew_it') {
+        updateConceptState(cid, 'known');
+      } else if (signal === 'interesting') {
+        updateConceptState(cid, 'encountered');
+      }
+    }
+  }
+}
+
+/**
+ * Compute novelty score for an article.
+ * Returns 0.0-1.0 where 1.0 = completely novel, 0.0 = all concepts known.
+ * Falls back to claim-based estimation when concepts aren't available.
+ */
+export function getNoveltyScore(articleId: string): number {
+  const conceptIds = articleConceptIndex.get(articleId);
+
+  if (conceptIds && conceptIds.length > 0) {
+    const unknownCount = conceptIds.filter(cid => {
+      const state = conceptStates.get(cid);
+      return !state || state.state === 'unknown';
+    }).length;
+    return unknownCount / conceptIds.length;
+  }
+
+  // Fallback: use claim signals from the article
+  const article = articles.find(a => a.id === articleId);
+  if (!article || article.key_claims.length === 0) return 1.0; // assume novel if no data
+
+  const articleSignals = signals.filter(s => s.article_id === articleId);
+  if (articleSignals.length === 0) return 1.0; // not yet interacted
+
+  const knewCount = articleSignals.filter(s => s.signal === 'knew_it').length;
+  const totalSignaled = articleSignals.length;
+  if (totalSignaled === 0) return 1.0;
+
+  return 1.0 - (knewCount / totalSignaled);
+}
+
+/**
+ * Get knowledge stats per topic for the dashboard.
+ */
+export function getTopicKnowledgeStats(): Map<string, { known: number; encountered: number; unknown: number; total: number }> {
+  const topicStats = new Map<string, { known: number; encountered: number; unknown: number; total: number }>();
+
+  for (const concept of concepts) {
+    const topic = concept.topic;
+    if (!topicStats.has(topic)) {
+      topicStats.set(topic, { known: 0, encountered: 0, unknown: 0, total: 0 });
+    }
+    const stats = topicStats.get(topic)!;
+    stats.total++;
+
+    const state = conceptStates.get(concept.id);
+    if (!state || state.state === 'unknown') {
+      stats.unknown++;
+    } else if (state.state === 'encountered') {
+      stats.encountered++;
+    } else if (state.state === 'known') {
+      stats.known++;
+    }
+  }
+
+  return topicStats;
 }

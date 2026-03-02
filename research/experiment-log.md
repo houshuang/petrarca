@@ -4,6 +4,37 @@
 
 ---
 
+## 2026-03-03 — Deep Design Experiments (Phase 1-3)
+
+**What**: Major redesign cycle implementing 5 design experiments with specific hypotheses, building on the article-first foundation. Expanded content pipeline from 12 to ~50 articles across diverse topics (history, literature, AI/tech, policy). Built three experimental reader/feed modes.
+
+**Hypotheses & Experiments**:
+
+1. **Experiment 1A — Fluid Depth Transitions**: Replaced 4 discrete tabs with single scrollable document (Summary → Claims → Sections → Full Article). Hypothesis: continuous scrolling reduces friction and produces deeper reading than tab switching. Sticky floating depth indicator tracks position.
+
+2. **Experiment 1B — Inline Claim Signals**: Claims highlighted in full article text with tap-to-signal floating pill. Hypothesis: in-context claim evaluation produces richer signals than isolated claim list. Color-coded: unsignaled=blue, knew_it=slate, interesting=green, save=blue.
+
+3. **Experiment 1C — Implicit Time Tracking**: Silent instrumentation logging section_enter/exit timestamps, scroll_velocity, pause_duration (>3s), revisit events. Hypothesis: dwell time correlates with explicit interest signals (r>0.5).
+
+4. **Experiment 2A — Card-Stack Triage**: Tinder-style swipe cards (right=save, left=skip, up=read now) with spring physics, rotation, stacked card depth. Hypothesis: forced binary choices produce >3x faster triage than list browsing.
+
+5. **Experiment 2B — Topic Clustering**: Articles grouped by primary topic with collapsible headers. Hypothesis: clustering helps users engage with ≥3 topics per session vs 1-2.
+
+**Pipeline Changes**:
+- Removed Claude Code topic filter — processes ALL Twitter bookmarks with fetchable URLs
+- Added Readwise Reader as second source (11,598 items, filtered to engaged articles with reading_progress > 0)
+- Diversity sampling: round-robin across site_names to ensure topic breadth
+- Incremental mode: skip URLs already in articles.json
+- Target: ~50 articles across history, AI/tech, policy, literature, cultural theory
+
+**UI Changes**:
+- `reader.tsx` — Complete rewrite: fluid scrollable document, zone-based depth tracking, inline claim highlights with floating signal pill, implicit scroll/pause/velocity/revisit tracking
+- `index.tsx` — Complete rewrite: 3 view modes (List/Topics/Triage), PanResponder card stack with Animated spring physics, LayoutAnimation topic clusters, AsyncStorage triage state persistence
+
+**Measurement**: All interactions logged via logEvent() to JSONL. Events: reader_scroll_depth, reader_section_enter/exit, reader_scroll_velocity, reader_pause, reader_revisit, reader_claim_signal_inline, triage_swipe, cluster_expand/collapse, feed_view_mode.
+
+---
+
 ## 2026-03-02 — Article-First Redesign
 
 **What**: Complete redesign from tweet-triage app to article-first progressive reader. New data pipeline fetches actual article content, LLM processes it into sections/summaries/claims, and the app presents content at four progressive depth levels.

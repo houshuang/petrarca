@@ -1,0 +1,562 @@
+[
+  {
+    "id": "c0001",
+    "text": "AGENTS.md files provide structured navigation context that helps AI coding agents understand and work within complex codebases.",
+    "topic": "context-engineering",
+    "source_article_ids": [
+      "31b2ba4bbb6f"
+    ]
+  },
+  {
+    "id": "c0002",
+    "text": "Codified context (checked-in files in the repo) scales better than ad-hoc prompting for guiding AI agents in large projects.",
+    "topic": "context-engineering",
+    "source_article_ids": [
+      "31b2ba4bbb6f"
+    ]
+  },
+  {
+    "id": "c0003",
+    "text": "Infrastructure and tooling for AI coding agents should be treated as a first-class engineering concern, including workspace organization and session management.",
+    "topic": "developer-tools",
+    "source_article_ids": [
+      "31b2ba4bbb6f",
+      "24cce8f5c6be"
+    ]
+  },
+  {
+    "id": "c0004",
+    "text": "Running 10-15 Claude Code sessions simultaneously across terminal and browser can dramatically increase throughput beyond single-session use.",
+    "topic": "productivity",
+    "source_article_ids": [
+      "24cce8f5c6be"
+    ]
+  },
+  {
+    "id": "c0005",
+    "text": "Most developers underutilize AI coding tools by treating them as simple chatbots rather than autonomous agents capable of sustained independent work.",
+    "topic": "ai-coding",
+    "source_article_ids": [
+      "24cce8f5c6be",
+      "3d6edb8f1271"
+    ]
+  },
+  {
+    "id": "c0006",
+    "text": "LLM agent capabilities crossed a coherence threshold around December 2025, causing a rapid phase shift from mostly-manual to mostly-agent coding within weeks.",
+    "topic": "ai-impact",
+    "source_article_ids": [
+      "3d6edb8f1271"
+    ]
+  },
+  {
+    "id": "c0007",
+    "text": "AI coding agents primarily expand what's possible rather than just speeding up existing work — enabling developers to build functional tools in unfamiliar languages and domains.",
+    "topic": "ai-impact",
+    "source_article_ids": [
+      "3d6edb8f1271",
+      "cbd6d28cc760"
+    ]
+  },
+  {
+    "id": "c0008",
+    "text": "Agent errors have shifted from syntax mistakes to subtle conceptual errors: wrong assumptions, overcomplication, and misunderstanding of intent.",
+    "topic": "code-quality",
+    "source_article_ids": [
+      "3d6edb8f1271"
+    ]
+  },
+  {
+    "id": "c0009",
+    "text": "Declarative prompting with explicit success criteria dramatically outperforms imperative step-by-step instructions for directing AI coding agents.",
+    "topic": "ai-coding",
+    "source_article_ids": [
+      "3d6edb8f1271",
+      "eac8bdfbd2d6"
+    ]
+  },
+  {
+    "id": "c0010",
+    "text": "Human stamina and endurance is a core work bottleneck that AI agents dramatically reduce, enabling sustained effort on complex tasks.",
+    "topic": "productivity",
+    "source_article_ids": [
+      "3d6edb8f1271"
+    ]
+  },
+  {
+    "id": "c0011",
+    "text": "2026 will bring both genuine productivity gains and a 'slopacolypse' of AI-generated low-quality content flooding the ecosystem.",
+    "topic": "ai-impact",
+    "source_article_ids": [
+      "3d6edb8f1271"
+    ]
+  },
+  {
+    "id": "c0012",
+    "text": "Autonomous agentic loops that iterate until a verifiable goal condition is met can handle tasks ranging from minutes to a full day of execution.",
+    "topic": "agents",
+    "source_article_ids": [
+      "eac8bdfbd2d6"
+    ]
+  },
+  {
+    "id": "c0013",
+    "text": "Failure-centric learning — iterating through failures rather than trying to succeed on the first attempt — is an effective pattern for autonomous AI agents.",
+    "topic": "agents",
+    "source_article_ids": [
+      "eac8bdfbd2d6"
+    ]
+  },
+  {
+    "id": "c0014",
+    "text": "Existing developer knowledge and toolchain setup remain prerequisites for effective AI-assisted coding; AI amplifies expertise rather than replacing it.",
+    "topic": "ai-coding",
+    "source_article_ids": [
+      "cbd6d28cc760",
+      "3d6edb8f1271"
+    ]
+  },
+  {
+    "id": "c0015",
+    "text": "Vibe coding can produce functional, production-quality native applications in under an hour when the developer has sufficient domain knowledge.",
+    "topic": "vibe-coding",
+    "source_article_ids": [
+      "cbd6d28cc760"
+    ]
+  },
+  {
+    "id": "c0016",
+    "text": "The 'linear walkthrough' pattern helps developers understand and maintain AI-generated codebases after creation by reconstructing the logical flow.",
+    "topic": "developer-workflow",
+    "source_article_ids": [
+      "cbd6d28cc760"
+    ]
+  },
+  {
+    "id": "c0017",
+    "text": "Native platforms (Swift/SwiftUI) can produce dramatically smaller applications (76KB) compared to web-based alternatives for the same functionality.",
+    "topic": "software-engineering",
+    "source_article_ids": [
+      "cbd6d28cc760"
+    ]
+  },
+  {
+    "id": "c0018",
+    "text": "AI coding agents can implement sophisticated low-level solutions (like raw socket HTTP servers) without external libraries, sometimes choosing unconventional but functional approaches.",
+    "topic": "ai-coding",
+    "source_article_ids": [
+      "cbd6d28cc760"
+    ]
+  },
+  {
+    "id": "c0019",
+    "text": "Claude Code supports remote control sessions accessible from web, iOS, and desktop interfaces, enabling interaction beyond the local terminal.",
+    "topic": "claude-code",
+    "source_article_ids": [
+      "e3bd27735f37"
+    ]
+  },
+  {
+    "id": "c0020",
+    "text": "Remote control mode in Claude Code limits usage to one session per machine and disables the --dangerously-skip-permissions flag for security.",
+    "topic": "claude-code",
+    "source_article_ids": [
+      "e3bd27735f37"
+    ]
+  },
+  {
+    "id": "c0021",
+    "text": "Cowork (Claude Code's agent sibling) supports scheduled recurring tasks, but they only run while the computer is awake and the desktop app is open.",
+    "topic": "agentic-tools",
+    "source_article_ids": [
+      "e3bd27735f37"
+    ]
+  },
+  {
+    "id": "c0022",
+    "text": "AI coding agents occasionally execute catastrophic commands (e.g., git reset --hard, rm -rf) that can destroy hours of uncommitted work.",
+    "topic": "ai-safety",
+    "source_article_ids": [
+      "cd8ee8d2ebf2"
+    ]
+  },
+  {
+    "id": "c0023",
+    "text": "dcg (Destructive Command Guard) intercepts dangerous commands before execution with sub-millisecond latency using SIMD-accelerated filtering and 49+ modular security packs.",
+    "topic": "developer-tools",
+    "source_article_ids": [
+      "cd8ee8d2ebf2"
+    ]
+  },
+  {
+    "id": "c0024",
+    "text": "Smart context detection can distinguish between referencing destructive commands in data (e.g., strings, docs) versus actually executing them, including scanning heredocs and inline scripts.",
+    "topic": "security",
+    "source_article_ids": [
+      "cd8ee8d2ebf2"
+    ]
+  },
+  {
+    "id": "c0025",
+    "text": "Fail-open design in safety tooling ensures the guard never blocks developer workflow due to its own errors or timeouts.",
+    "topic": "security",
+    "source_article_ids": [
+      "cd8ee8d2ebf2"
+    ]
+  },
+  {
+    "id": "c0026",
+    "text": "Per-agent trust levels allow different AI coding tools to have different security policies for command execution.",
+    "topic": "ai-safety",
+    "source_article_ids": [
+      "cd8ee8d2ebf2"
+    ]
+  },
+  {
+    "id": "c0027",
+    "text": "cmux is a native macOS terminal (Swift + AppKit) that uses libghostty as a rendering library, designed specifically for AI agent multitasking.",
+    "topic": "terminal-emulator",
+    "source_article_ids": [
+      "b8662afa1c19"
+    ]
+  },
+  {
+    "id": "c0028",
+    "text": "Notification rings and badges using standard OSC escape sequences can alert developers when background AI agents need attention in a multiplexed terminal.",
+    "topic": "developer-tools",
+    "source_article_ids": [
+      "b8662afa1c19"
+    ]
+  },
+  {
+    "id": "c0029",
+    "text": "Embedding a scriptable browser alongside a terminal enables automation workflows that combine web interaction with command-line tools.",
+    "topic": "automation",
+    "source_article_ids": [
+      "b8662afa1c19"
+    ]
+  },
+  {
+    "id": "c0030",
+    "text": "Claude Code combined with Obsidian's markdown folder as a knowledge base creates an effective original research workflow.",
+    "topic": "research-workflow",
+    "source_article_ids": [
+      "30edf86fcbd8"
+    ]
+  },
+  {
+    "id": "c0031",
+    "text": "Voice mode enables stream-of-consciousness ideation that an AI can then structure and synthesize into organized research notes.",
+    "topic": "voice-input",
+    "source_article_ids": [
+      "30edf86fcbd8"
+    ]
+  },
+  {
+    "id": "c0032",
+    "text": "Active recall (answering questions about material) is more effective for retention than passive note-taking or re-reading.",
+    "topic": "spaced-repetition",
+    "source_article_ids": [
+      "30edf86fcbd8"
+    ]
+  },
+  {
+    "id": "c0033",
+    "text": "Claude.ai's Research feature has no API or CLI access; it only exists in the web UI but produces dramatically more comprehensive results than standard web search by running dozens of searches and cross-referencing sources.",
+    "topic": "claude-research",
+    "source_article_ids": [
+      "5f96539044ea"
+    ]
+  },
+  {
+    "id": "c0034",
+    "text": "Background agents in Claude Code (v2.0.60+) can be chained with browser automation to bridge gaps where features lack API access, without blocking the developer's main session.",
+    "topic": "agentic-tools",
+    "source_article_ids": [
+      "5f96539044ea",
+      "e3bd27735f37"
+    ]
+  },
+  {
+    "id": "c0035",
+    "text": "A native messaging conflict between Claude Desktop and Claude Code must be manually resolved when using Chrome extensions that communicate with both.",
+    "topic": "developer-tools",
+    "source_article_ids": [
+      "5f96539044ea"
+    ]
+  },
+  {
+    "id": "c0036",
+    "text": "Certain developer tool categories show near-monopoly conditions in LLM recommendations, with GitHub Actions at 93.8% for CI/CD and Stripe at 91.4% for payments.",
+    "topic": "llm-preferences",
+    "source_article_ids": [
+      "45bb389f0310"
+    ]
+  },
+  {
+    "id": "c0037",
+    "text": "Different LLM models produce different tool selection preferences, revealing recency biases and training data composition effects in their recommendations.",
+    "topic": "llm-preferences",
+    "source_article_ids": [
+      "45bb389f0310"
+    ]
+  },
+  {
+    "id": "c0038",
+    "text": "Large-scale LLM preference surveys (thousands of responses across dozens of tools and categories) can map developer tool ecosystem market share.",
+    "topic": "market-analysis",
+    "source_article_ids": [
+      "45bb389f0310"
+    ]
+  },
+  {
+    "id": "c0039",
+    "text": "AGENTS.md is a standardized, cross-tool instruction format for AI coding agents — a 'README for agents' — adopted by over 60,000 open-source projects on GitHub.",
+    "topic": "ai-agents",
+    "source_article_ids": [
+      "0e77e7f08ea4"
+    ]
+  },
+  {
+    "id": "c0040",
+    "text": "AI agent instruction files are intentionally separated from human-facing README.md to keep human documentation concise while providing detailed agent guidance.",
+    "topic": "ai-agents",
+    "source_article_ids": [
+      "0e77e7f08ea4"
+    ]
+  },
+  {
+    "id": "c0041",
+    "text": "The AGENTS.md format is governed by the Agentic AI Foundation under the Linux Foundation, having emerged from cross-industry collaboration rather than a single vendor.",
+    "topic": "open-standards",
+    "source_article_ids": [
+      "0e77e7f08ea4"
+    ]
+  },
+  {
+    "id": "c0042",
+    "text": "AGENTS.md supports monorepo structures through nested files and has no required fields, maximizing flexibility across project types.",
+    "topic": "ai-agents",
+    "source_article_ids": [
+      "0e77e7f08ea4"
+    ]
+  },
+  {
+    "id": "c0043",
+    "text": "LLM SEO — optimizing content to rank well in AI model responses — is an emerging discipline analogous to traditional search engine optimization.",
+    "topic": "llm-seo",
+    "source_article_ids": [
+      "1f606de64fc1"
+    ]
+  },
+  {
+    "id": "c0044",
+    "text": "Complex functional applications (e.g., a multi-model search ranking platform) can be built in a single AI prompt session using computer-use agents like Perplexity Computer.",
+    "topic": "ai-tools",
+    "source_article_ids": [
+      "1f606de64fc1"
+    ]
+  },
+  {
+    "id": "c0045",
+    "text": "AI agent orchestration dashboards can run with zero external dependencies using only SQLite, eliminating the need for Redis, Postgres, or Docker.",
+    "topic": "devtools",
+    "source_article_ids": [
+      "e0d8e9f5e16b"
+    ]
+  },
+  {
+    "id": "c0046",
+    "text": "Local AI coding sessions (e.g., Claude Code) can be auto-discovered and tracked by periodically scanning filesystem directories like ~/.claude/projects/.",
+    "topic": "monitoring",
+    "source_article_ids": [
+      "e0d8e9f5e16b"
+    ]
+  },
+  {
+    "id": "c0047",
+    "text": "Quality review gates that block AI agent task completion without human sign-off provide a governance mechanism for agent-driven workflows.",
+    "topic": "ai-agents",
+    "source_article_ids": [
+      "e0d8e9f5e16b"
+    ]
+  },
+  {
+    "id": "c0048",
+    "text": "A single AI agent can unify personal knowledge management, life planning, content creation, and software development into one integrated workflow.",
+    "topic": "personal-knowledge-management",
+    "source_article_ids": [
+      "509d538e9b2a"
+    ]
+  },
+  {
+    "id": "c0049",
+    "text": "The PARA method (Projects, Areas, Resources, Archives) can be operationalized through an AI agent acting on a PKM backend like LogSeq.",
+    "topic": "personal-knowledge-management",
+    "source_article_ids": [
+      "509d538e9b2a"
+    ]
+  },
+  {
+    "id": "c0050",
+    "text": "A hierarchical goal system (5/3/1-year goals with daily and weekly check-ins) forms a practical AI-assisted life operating system.",
+    "topic": "productivity",
+    "source_article_ids": [
+      "509d538e9b2a"
+    ]
+  },
+  {
+    "id": "c0051",
+    "text": "AI agents can learn to replicate a user's personal writing voice for content creation.",
+    "topic": "content-creation",
+    "source_article_ids": [
+      "509d538e9b2a"
+    ]
+  },
+  {
+    "id": "c0052",
+    "text": "Single-file agent instructions (like AGENTS.md) don't scale beyond modest codebases; a tiered memory architecture (hot/warm/cold) is needed to maintain agent effectiveness on large projects.",
+    "topic": "agent-memory",
+    "source_article_ids": [
+      "62de2004e6b4"
+    ]
+  },
+  {
+    "id": "c0053",
+    "text": "Most AI coding agent workflows lack strategic memory, optimizing only for local task completion. A persistent 'theory document' or codified context layer can maintain decision coherence across sessions.",
+    "topic": "agent-memory",
+    "source_article_ids": [
+      "62de2004e6b4",
+      "fbd42875bc6a"
+    ]
+  },
+  {
+    "id": "c0054",
+    "text": "Documentation in agentic workflows becomes load-bearing infrastructure — functioning as memory rather than reference material, with a knowledge-to-code ratio that can reach ~24%.",
+    "topic": "knowledge-management",
+    "source_article_ids": [
+      "62de2004e6b4"
+    ]
+  },
+  {
+    "id": "c0055",
+    "text": "Effective agent context infrastructure tends to emerge from real failures rather than upfront design; the best architectures are discovered iteratively.",
+    "topic": "software-architecture",
+    "source_article_ids": [
+      "62de2004e6b4"
+    ]
+  },
+  {
+    "id": "c0056",
+    "text": "For living documents tracking understanding, holistic rewrites preserve narrative coherence better than append-only logs. Updates should be triggered by shifts in understanding, not by code churn.",
+    "topic": "knowledge-management",
+    "source_article_ids": [
+      "fbd42875bc6a"
+    ]
+  },
+  {
+    "id": "c0057",
+    "text": "A structured theory document should separate problem thesis, operating theory, strategy, key discoveries, and open questions — and use sticky session activation to stay current throughout a work session.",
+    "topic": "agent-memory",
+    "source_article_ids": [
+      "fbd42875bc6a"
+    ]
+  },
+  {
+    "id": "c0058",
+    "text": "AI-written code creates 'cognitive debt' — when developers lose understanding of how their codebase works — which slows progress similarly to technical debt.",
+    "topic": "agentic-coding",
+    "source_article_ids": [
+      "b9968822e019"
+    ]
+  },
+  {
+    "id": "c0059",
+    "text": "Interactive and animated explanations build algorithmic intuition more effectively than linear walkthroughs, which convey structure but not deep understanding.",
+    "topic": "code-understanding",
+    "source_article_ids": [
+      "b9968822e019"
+    ]
+  },
+  {
+    "id": "c0060",
+    "text": "Coding agents can generate rich visual output — interactive explanations, styled HTML pages, Mermaid diagrams — on demand, replacing ASCII art and text tables with browser-rendered content requiring no build step.",
+    "topic": "developer-tooling",
+    "source_article_ids": [
+      "9d4f5c9b2707",
+      "b9968822e019"
+    ]
+  },
+  {
+    "id": "c0061",
+    "text": "Agent skills can auto-trigger based on output characteristics (e.g., tables exceeding 4 rows or 3 columns) to transparently upgrade output quality without explicit user requests.",
+    "topic": "agent-skills",
+    "source_article_ids": [
+      "9d4f5c9b2707"
+    ]
+  },
+  {
+    "id": "c0062",
+    "text": "Abliteration is a technique that removes LLM refusal behaviors without using TransformerLens, significantly reducing safety filtering in open-weight models.",
+    "topic": "ai-safety",
+    "source_article_ids": [
+      "7c3550a5c409"
+    ]
+  },
+  {
+    "id": "c0063",
+    "text": "Mixture-of-experts architectures enable large effective model sizes (e.g., 35B parameters) with much smaller active compute (e.g., 3B active parameters), making powerful models runnable on consumer hardware via tools like Ollama.",
+    "topic": "open-weights-models",
+    "source_article_ids": [
+      "7c3550a5c409"
+    ]
+  },
+  {
+    "id": "c0064",
+    "text": "Custom chat templates can fix tool-calling errors in open-weight model serving infrastructure (e.g., llama-server), enabling capabilities not available with default configurations.",
+    "topic": "open-weights-models",
+    "source_article_ids": [
+      "7c3550a5c409"
+    ]
+  },
+  {
+    "id": "c0065",
+    "text": "LLMs like Opus tend toward simpler, more elegant solutions when the system prompt doesn't over-constrain their behavior with excessive instructions",
+    "topic": "agentic-coding",
+    "source_article_ids": [
+      "7708389c320c"
+    ]
+  },
+  {
+    "id": "c0066",
+    "text": "Using a persistent external document (e.g. a markdown file) as the source of truth for plans is superior to in-conversation planning mode, because it survives context window limits and can be referenced across sessions",
+    "topic": "planning-workflows",
+    "source_article_ids": [
+      "7708389c320c"
+    ]
+  },
+  {
+    "id": "c0067",
+    "text": "In-conversation planning in agentic coding tools is limited by context window size, causing plans to degrade or be forgotten in long sessions",
+    "topic": "planning-workflows",
+    "source_article_ids": [
+      "7708389c320c"
+    ]
+  },
+  {
+    "id": "c0068",
+    "text": "Claude Code can modify its own configuration and documentation files (like CLAUDE.md), enabling self-referential workflow improvements",
+    "topic": "claude-code",
+    "source_article_ids": [
+      "7708389c320c"
+    ]
+  },
+  {
+    "id": "c0069",
+    "text": "Claude Code's open mono-repo design allows users to inspect and understand the tool's internals, building trust and enabling power-user workflows",
+    "topic": "developer-tools",
+    "source_article_ids": [
+      "7708389c320c"
+    ]
+  }
+]
