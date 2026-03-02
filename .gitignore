@@ -43,8 +43,8 @@ __pycache__/
 *.pyc
 .venv/
 
-# Data
-data/
+# Data (root level only, not app/data/)
+/data/
 
 # Temp files
 stderr.tmp
