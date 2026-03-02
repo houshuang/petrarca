@@ -1,1 +1,3 @@
 trafilatura>=2.0.0
+requests>=2.31.0
+lxml>=5.0.0

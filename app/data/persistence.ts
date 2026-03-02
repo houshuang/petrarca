@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { UserSignal } from './types';
+import { UserSignal, ReadingState } from './types';
 
 const SIGNALS_KEY = '@petrarca/signals';
+const READING_STATES_KEY = '@petrarca/reading_states';
 
 export async function loadSignals(): Promise<UserSignal[]> {
   try {
@@ -19,5 +20,26 @@ export async function saveSignals(signals: UserSignal[]): Promise<void> {
     await AsyncStorage.setItem(SIGNALS_KEY, JSON.stringify(signals));
   } catch (e) {
     console.warn('[persistence] failed to save signals:', e);
+  }
+}
+
+export async function loadReadingStates(): Promise<Map<string, ReadingState>> {
+  try {
+    const raw = await AsyncStorage.getItem(READING_STATES_KEY);
+    if (!raw) return new Map();
+    const entries: [string, ReadingState][] = JSON.parse(raw);
+    return new Map(entries);
+  } catch (e) {
+    console.warn('[persistence] failed to load reading states:', e);
+    return new Map();
+  }
+}
+
+export async function saveReadingStates(states: Map<string, ReadingState>): Promise<void> {
+  try {
+    const entries = Array.from(states.entries());
+    await AsyncStorage.setItem(READING_STATES_KEY, JSON.stringify(entries));
+  } catch (e) {
+    console.warn('[persistence] failed to save reading states:', e);
   }
 }

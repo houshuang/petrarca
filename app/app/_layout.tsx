@@ -43,22 +43,15 @@ export default function Layout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Triage',
-          tabBarIcon: ({ color, size }) => <Ionicons name="layers-outline" size={size} color={color} />,
+          title: 'Feed',
+          tabBarIcon: ({ color, size }) => <Ionicons name="newspaper-outline" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="briefing"
+        name="library"
         options={{
-          title: 'Briefing',
-          tabBarIcon: ({ color, size }) => <Ionicons name="document-text-outline" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="claims"
-        options={{
-          title: 'Claims',
-          tabBarIcon: ({ color, size }) => <Ionicons name="bulb-outline" size={size} color={color} />,
+          title: 'Library',
+          tabBarIcon: ({ color, size }) => <Ionicons name="library-outline" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -66,6 +59,13 @@ export default function Layout() {
         options={{
           title: 'Progress',
           tabBarIcon: ({ color, size }) => <Ionicons name="analytics-outline" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="reader"
+        options={{
+          href: null, // hidden from tab bar
+          headerShown: false,
         }}
       />
     </Tabs>

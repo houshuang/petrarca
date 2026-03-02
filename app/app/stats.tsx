@@ -1,15 +1,15 @@
 import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getStats, getSignals, getBookmarks, getByTopic } from '../data/store';
+import { getStats, getSignals, getArticles, getByTopic, getReadingState } from '../data/store';
 import { logEvent, getLogFiles, exportAllLogs, getLogDirectory } from '../data/logger';
 
 function EventLogSection() {
-  const [logFiles, setLogFiles] = useState<string[]>([]);
+  const [logFileList, setLogFileList] = useState<string[]>([]);
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
-    getLogFiles().then(setLogFiles);
+    getLogFiles().then(setLogFileList);
   }, [expanded]);
 
   const handleExport = async () => {
@@ -28,13 +28,13 @@ function EventLogSection() {
         <Text style={styles.sectionTitle}>Event Log</Text>
       </Pressable>
       <Text style={styles.sectionSubtitle}>
-        {logFiles.length} log file{logFiles.length !== 1 ? 's' : ''} · {getLogDirectory()}
+        {logFileList.length} log file{logFileList.length !== 1 ? 's' : ''} · {getLogDirectory()}
       </Text>
 
       {expanded && (
         <View style={{ marginTop: 8 }}>
-          {logFiles.map(f => (
-            <Text key={f} style={styles.coverageTopic}>{f}</Text>
+          {logFileList.map(f => (
+            <Text key={f} style={{ color: '#cbd5e1', fontSize: 13, marginBottom: 2 }}>{f}</Text>
           ))}
           <Pressable style={[styles.refreshBtn, { marginTop: 8 }]} onPress={handleExport}>
             <Ionicons name="share-outline" size={16} color="#60a5fa" />
@@ -49,106 +49,122 @@ function EventLogSection() {
 export default function StatsScreen() {
   const [, forceUpdate] = useState(0);
   const stats = getStats();
+  const articles = getArticles();
   const signals = getSignals();
-  const bookmarks = getBookmarks();
   const topicMap = getByTopic();
 
-  // Count signals by topic
-  const signalsByTopic = new Map<string, { interesting: number; knewIt: number; deepDive: number }>();
-  for (const s of signals) {
-    const bm = bookmarks.find(b => b.id === s.bookmarkId);
-    if (!bm) continue;
-    const topics = bm._llm_summary?.topics ?? ['uncategorized'];
-    for (const t of topics) {
-      if (!signalsByTopic.has(t)) signalsByTopic.set(t, { interesting: 0, knewIt: 0, deepDive: 0 });
-      const entry = signalsByTopic.get(t)!;
-      if (s.signal === 'interesting') entry.interesting++;
-      else if (s.signal === 'knew_it') entry.knewIt++;
-      else if (s.signal === 'deep_dive') entry.deepDive++;
+  const totalTimeMin = Math.round(stats.totalTimeMs / 60000);
+
+  // Topic reading depth breakdown
+  const topicDepths = new Map<string, { summary: number; claims: number; sections: number; full: number }>();
+  for (const a of articles) {
+    const state = getReadingState(a.id);
+    if (state.depth === 'unread') continue;
+    for (const t of a.topics) {
+      if (!topicDepths.has(t)) topicDepths.set(t, { summary: 0, claims: 0, sections: 0, full: 0 });
+      topicDepths.get(t)![state.depth]++;
     }
   }
 
-  const pct = stats.total > 0 ? Math.round((stats.triaged / stats.total) * 100) : 0;
+  const pct = stats.total > 0 ? Math.round((stats.read / stats.total) * 100) : 0;
 
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Progress bar */}
+        {/* Reading progress */}
         <View style={styles.progressSection}>
-          <Text style={styles.sectionTitle}>Triage Progress</Text>
+          <Text style={styles.sectionTitle}>Reading Progress</Text>
           <View style={styles.progressBar}>
             <View style={[styles.progressFill, { width: `${pct}%` }]} />
           </View>
-          <Text style={styles.progressLabel}>{stats.triaged} / {stats.total} ({pct}%)</Text>
+          <Text style={styles.progressLabel}>{stats.read} / {stats.total} articles ({pct}%)</Text>
         </View>
 
-        {/* Signal breakdown */}
+        {/* Stats grid */}
         <View style={styles.statsGrid}>
+          <View style={[styles.statBox, { borderLeftColor: '#2563eb' }]}>
+            <Text style={styles.statNumber}>{stats.total}</Text>
+            <Text style={styles.statLabel}>Articles</Text>
+          </View>
           <View style={[styles.statBox, { borderLeftColor: '#10b981' }]}>
-            <Text style={styles.statNumber}>{stats.interesting}</Text>
-            <Text style={styles.statLabel}>Interesting</Text>
+            <Text style={styles.statNumber}>{stats.full}</Text>
+            <Text style={styles.statLabel}>Finished</Text>
           </View>
           <View style={[styles.statBox, { borderLeftColor: '#f59e0b' }]}>
-            <Text style={styles.statNumber}>{stats.deepDive}</Text>
-            <Text style={styles.statLabel}>Deep Dive</Text>
+            <Text style={styles.statNumber}>{stats.read - stats.full}</Text>
+            <Text style={styles.statLabel}>In Progress</Text>
           </View>
-          <View style={[styles.statBox, { borderLeftColor: '#64748b' }]}>
-            <Text style={styles.statNumber}>{stats.knewIt}</Text>
-            <Text style={styles.statLabel}>Knew It</Text>
-          </View>
-          <View style={[styles.statBox, { borderLeftColor: '#475569' }]}>
-            <Text style={styles.statNumber}>{stats.notRelevant}</Text>
-            <Text style={styles.statLabel}>Not Relevant</Text>
+          <View style={[styles.statBox, { borderLeftColor: '#8b5cf6' }]}>
+            <Text style={styles.statNumber}>{totalTimeMin}</Text>
+            <Text style={styles.statLabel}>Min Spent</Text>
           </View>
         </View>
 
-        {/* Knowledge map */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Your Knowledge Map</Text>
-          <Text style={styles.sectionSubtitle}>Topics where you marked "knew it" vs "new to me"</Text>
-
-          {[...signalsByTopic.entries()]
-            .sort((a, b) => (b[1].interesting + b[1].deepDive) - (a[1].interesting + a[1].deepDive))
-            .map(([topic, counts]) => {
-              const total = counts.interesting + counts.knewIt + counts.deepDive;
-              const knewPct = total > 0 ? Math.round((counts.knewIt / total) * 100) : 0;
-              const newPct = total > 0 ? Math.round((counts.interesting / total) * 100) : 0;
-              const deepPct = total > 0 ? Math.round((counts.deepDive / total) * 100) : 0;
-              return (
-                <View key={topic} style={styles.topicRow}>
-                  <Text style={styles.topicName}>{topic}</Text>
-                  <View style={styles.topicBar}>
-                    {knewPct > 0 && <View style={[styles.topicSegment, { width: `${knewPct}%`, backgroundColor: '#475569' }]} />}
-                    {newPct > 0 && <View style={[styles.topicSegment, { width: `${newPct}%`, backgroundColor: '#10b981' }]} />}
-                    {deepPct > 0 && <View style={[styles.topicSegment, { width: `${deepPct}%`, backgroundColor: '#f59e0b' }]} />}
+        {/* Depth breakdown */}
+        {stats.read > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Reading Depth</Text>
+            <Text style={styles.sectionSubtitle}>How deep you've gone into articles</Text>
+            <View style={styles.depthBreakdown}>
+              {([['Summary', stats.summary, '#3b82f6'], ['Claims', stats.claims, '#8b5cf6'],
+                ['Sections', stats.sections, '#f59e0b'], ['Full', stats.full, '#10b981']] as const).map(([label, count, color]) => (
+                count > 0 && (
+                  <View key={label} style={styles.depthRow}>
+                    <View style={[styles.depthDot, { backgroundColor: color }]} />
+                    <Text style={styles.depthLabel}>{label}</Text>
+                    <Text style={styles.depthCount}>{count}</Text>
                   </View>
-                  <Text style={styles.topicCount}>{total}</Text>
-                </View>
-              );
-            })}
-        </View>
+                )
+              ))}
+            </View>
+          </View>
+        )}
 
-        {/* Content coverage */}
+        {/* Topic coverage */}
+        {topicDepths.size > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Topics Explored</Text>
+            {[...topicDepths.entries()]
+              .sort((a, b) => Object.values(b[1]).reduce((s, n) => s + n, 0) - Object.values(a[1]).reduce((s, n) => s + n, 0))
+              .map(([topic, counts]) => {
+                const total = Object.values(counts).reduce((s, n) => s + n, 0);
+                return (
+                  <View key={topic} style={styles.topicRow}>
+                    <Text style={styles.topicName}>{topic}</Text>
+                    <View style={styles.topicBar}>
+                      {counts.summary > 0 && <View style={[styles.topicSegment, { width: `${(counts.summary / total) * 100}%`, backgroundColor: '#3b82f6' }]} />}
+                      {counts.claims > 0 && <View style={[styles.topicSegment, { width: `${(counts.claims / total) * 100}%`, backgroundColor: '#8b5cf6' }]} />}
+                      {counts.sections > 0 && <View style={[styles.topicSegment, { width: `${(counts.sections / total) * 100}%`, backgroundColor: '#f59e0b' }]} />}
+                      {counts.full > 0 && <View style={[styles.topicSegment, { width: `${(counts.full / total) * 100}%`, backgroundColor: '#10b981' }]} />}
+                    </View>
+                    <Text style={styles.topicCount}>{total}</Text>
+                  </View>
+                );
+              })}
+          </View>
+        )}
+
+        {/* Content sources */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Content Sources</Text>
           {[...topicMap.entries()]
             .sort((a, b) => b[1].length - a[1].length)
             .slice(0, 10)
-            .map(([topic, bms]) => (
+            .map(([topic, arts]) => (
               <View key={topic} style={styles.coverageRow}>
                 <Text style={styles.coverageTopic}>{topic}</Text>
-                <Text style={styles.coverageCount}>{bms.length} items</Text>
+                <Text style={styles.coverageCount}>{arts.length} articles</Text>
               </View>
             ))}
         </View>
 
-        {/* Refresh hint */}
+        {/* Refresh */}
         <Pressable style={styles.refreshBtn} onPress={() => { logEvent('stats_refresh'); forceUpdate(n => n + 1); }}>
           <Ionicons name="refresh" size={16} color="#60a5fa" />
           <Text style={styles.refreshText}>Refresh stats</Text>
         </Pressable>
 
-        {/* Event log section */}
+        {/* Event log */}
         <EventLogSection />
 
         <View style={{ height: 40 }} />
@@ -171,6 +187,11 @@ const styles = StyleSheet.create({
   statBox: { flex: 1, minWidth: '45%', backgroundColor: '#1e293b', borderRadius: 12, padding: 14, borderLeftWidth: 3 },
   statNumber: { color: '#f8fafc', fontSize: 28, fontWeight: '700' },
   statLabel: { color: '#94a3b8', fontSize: 13 },
+  depthBreakdown: { gap: 6 },
+  depthRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  depthDot: { width: 10, height: 10, borderRadius: 5 },
+  depthLabel: { color: '#cbd5e1', fontSize: 14, flex: 1 },
+  depthCount: { color: '#64748b', fontSize: 14, fontWeight: '600' },
   topicRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
   topicName: { color: '#cbd5e1', fontSize: 13, width: 100 },
   topicBar: { flex: 1, height: 12, backgroundColor: '#1e293b', borderRadius: 6, flexDirection: 'row', overflow: 'hidden' },

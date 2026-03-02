@@ -4,6 +4,32 @@
 
 ---
 
+## 2026-03-02 — Article-First Redesign
+
+**What**: Complete redesign from tweet-triage app to article-first progressive reader. New data pipeline fetches actual article content, LLM processes it into sections/summaries/claims, and the app presents content at four progressive depth levels.
+
+**Changes**:
+
+Pipeline:
+- New `scripts/build_articles.py` — 4-step pipeline: filter bookmarks → fetch articles (3-tier: trafilatura → requests+trafilatura → lxml) → deduplicate → LLM section/summary processing via `claude -p`
+- Follows URLs in quoted tweets, treats long-form tweets (>100 words) as articles themselves
+- Outputs `data/articles.json` with structured article data (sections, summaries, claims, topics)
+
+Data model:
+- `Article` replaces `Bookmark` as primary entity — includes content_markdown, sections[], key_claims[], reading state tracking
+- `ReadingState` tracks per-article depth (unread → summary → claims → sections → full), section position, time spent
+- `UserSignal` now references article_id with depth context
+
+UI:
+- **Feed** (index.tsx) — article list with title, source, summary, topics, read time
+- **Reader** (reader.tsx) — progressive depth: Summary → Claims → Sections → Full article, with depth indicator tabs
+- **Library** (library.tsx) — articles you've engaged with, by recency or topic
+- **Progress** (stats.tsx) — reading depth breakdown, time spent, topic coverage
+
+Results: 12 articles extracted from 41 filtered bookmarks. Simonwillison posts (previously failed) now extracted via 3-tier approach. Karpathy's 1125-word tweet treated as article.
+
+---
+
 ## 2026-03-02 — Add Comprehensive Interaction Logging
 
 **What**: Added JSONL-based interaction logging, persistent signal storage, and instrumented all screens. Modeled after ../alif's dual-layer logging system.
