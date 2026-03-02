@@ -4,6 +4,27 @@
 
 ---
 
+## 2026-03-03 — Bug Fixes + Voice Notes + Connection Prompting
+
+**What**: Fixed critical bugs in knowledge model (NoveltyBadge never rendered, weak concept matching). Added voice note recording, connection prompting, continue reading, and time-aware reading guidance.
+
+**Bug Fixes**:
+- NoveltyBadge: returned null when score >= 1.0, which was always true for uninteracted articles. Now returns null only when no concept data available.
+- Concept matching: replaced raw word overlap (40% threshold including stop words) with content-word matching (30% threshold, stop words removed). Significantly better matching accuracy.
+- Claim highlighting: added fallback word-overlap matching when substring match fails (handles paraphrased claims).
+- ClaimSignalPill: now shows current signal state so users know when they've already reviewed a claim.
+- triage_complete: moved from render body to useEffect to prevent logging on every render.
+
+**New Features**:
+- **Voice notes** (expo-av): mic button in reader top bar, records audio linked to article + reading depth context. VoiceNote type with transcription_status field for future Soniox integration. Voice notes summary in stats screen.
+- **Connection prompting**: Related articles section at end of reader shows articles sharing concepts. Uses concept graph to find connections ("Connects via: concept X · concept Y").
+- **Continue Reading**: horizontal scroll section at top of feed showing partially-read articles sorted by recency.
+- **Time guidance**: bar in reader header showing time budget per depth level (30s summary, 2m claims, Xm sections, Xm full).
+
+**Measurement events added**: `voice_note_start`, `voice_note_added`, `voice_note_permission_denied`, `continue_reading_tap`, `reader_related_tap`
+
+---
+
 ## 2026-03-03 — Deep Design Experiments (Phase 1-3)
 
 **What**: Major redesign cycle implementing 5 design experiments with specific hypotheses, building on the article-first foundation. Expanded content pipeline from 12 to ~50 articles across diverse topics (history, literature, AI/tech, policy). Built three experimental reader/feed modes.
