@@ -1,9 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { UserSignal, ReadingState, ConceptState } from './types';
+import { UserSignal, ReadingState, ConceptState, VoiceNote } from './types';
 
 const SIGNALS_KEY = '@petrarca/signals';
 const READING_STATES_KEY = '@petrarca/reading_states';
 const CONCEPT_STATES_KEY = '@petrarca/concept_states';
+const VOICE_NOTES_KEY = '@petrarca/voice_notes';
 
 export async function loadSignals(): Promise<UserSignal[]> {
   try {
@@ -63,5 +64,24 @@ export async function saveConceptStates(states: Map<string, ConceptState>): Prom
     await AsyncStorage.setItem(CONCEPT_STATES_KEY, JSON.stringify(entries));
   } catch (e) {
     console.warn('[persistence] failed to save concept states:', e);
+  }
+}
+
+export async function loadVoiceNotes(): Promise<VoiceNote[]> {
+  try {
+    const raw = await AsyncStorage.getItem(VOICE_NOTES_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw);
+  } catch (e) {
+    console.warn('[persistence] failed to load voice notes:', e);
+    return [];
+  }
+}
+
+export async function saveVoiceNotes(notes: VoiceNote[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(VOICE_NOTES_KEY, JSON.stringify(notes));
+  } catch (e) {
+    console.warn('[persistence] failed to save voice notes:', e);
   }
 }

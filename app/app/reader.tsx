@@ -2,11 +2,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Linking,
   NativeSyntheticEvent, NativeScrollEvent, LayoutChangeEvent,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getArticleById, getReadingState, updateReadingState, addSignal, processClaimSignalForConcepts } from '../data/store';
-import { ReadingDepth } from '../data/types';
+import { Audio } from 'expo-av';
+import { getArticleById, getReadingState, updateReadingState, addSignal, processClaimSignalForConcepts, getRelatedArticles, addVoiceNote, getVoiceNotes } from '../data/store';
+import { ReadingDepth, VoiceNote } from '../data/types';
 import { logEvent } from '../data/logger';
 
 // --- Local types for claim signal tracking ---
@@ -64,22 +66,30 @@ function FloatingDepthIndicator({ currentZone }: { currentZone: DepthZone }) {
 
 // --- Claim signal pill (floating over inline claims) ---
 
-function ClaimSignalPill({ onSignal, onDismiss }: {
+function ClaimSignalPill({ currentSignal, onSignal, onDismiss }: {
+  currentSignal?: ClaimSignalType;
   onSignal: (s: ClaimSignalType) => void;
   onDismiss: () => void;
 }) {
   return (
     <Pressable style={styles.pillBackdrop} onPress={onDismiss}>
       <View style={styles.pillContainer}>
-        <Pressable style={styles.pillBtn} onPress={() => onSignal('knew_it')}>
-          <Text style={styles.pillBtnText}>Knew this</Text>
-        </Pressable>
-        <Pressable style={[styles.pillBtn, styles.pillBtnNew]} onPress={() => onSignal('interesting')}>
-          <Text style={[styles.pillBtnText, { color: '#34d399' }]}>New to me</Text>
-        </Pressable>
-        <Pressable style={[styles.pillBtn, styles.pillBtnSave]} onPress={() => onSignal('save')}>
-          <Text style={[styles.pillBtnText, { color: '#60a5fa' }]}>Save</Text>
-        </Pressable>
+        {currentSignal && (
+          <Text style={{ color: '#64748b', fontSize: 11, marginBottom: 4 }}>
+            Already marked · tap to change
+          </Text>
+        )}
+        <View style={{ flexDirection: 'row', gap: 4 }}>
+          <Pressable style={[styles.pillBtn, currentSignal === 'knew_it' && { backgroundColor: '#334155' }]} onPress={() => onSignal('knew_it')}>
+            <Text style={styles.pillBtnText}>{currentSignal === 'knew_it' ? '✓ ' : ''}Knew this</Text>
+          </Pressable>
+          <Pressable style={[styles.pillBtn, styles.pillBtnNew, currentSignal === 'interesting' && { backgroundColor: '#064e3b' }]} onPress={() => onSignal('interesting')}>
+            <Text style={[styles.pillBtnText, { color: '#34d399' }]}>{currentSignal === 'interesting' ? '✓ ' : ''}New to me</Text>
+          </Pressable>
+          <Pressable style={[styles.pillBtn, styles.pillBtnSave, currentSignal === 'save' && { backgroundColor: '#1e3a5f' }]} onPress={() => onSignal('save')}>
+            <Text style={[styles.pillBtnText, { color: '#60a5fa' }]}>{currentSignal === 'save' ? '✓ ' : ''}Save</Text>
+          </Pressable>
+        </View>
       </View>
     </Pressable>
   );
@@ -176,14 +186,25 @@ function MarkdownText({ content, claimHighlights, claimSignals, onClaimTap }: {
   );
 }
 
-// Find if a paragraph contains text matching a claim (fuzzy substring match)
+// Find if a paragraph contains text matching a claim
 function findMatchingClaim(paragraph: string, claims: string[]): number {
   const normalizedParagraph = paragraph.toLowerCase().replace(/[^\w\s]/g, '');
+
   for (let i = 0; i < claims.length; i++) {
     const normalizedClaim = claims[i].toLowerCase().replace(/[^\w\s]/g, '');
-    // Use first 60 chars of claim for matching to handle partial overlaps
+
+    // Try exact substring first (most reliable)
     const matchFragment = normalizedClaim.slice(0, 60);
     if (matchFragment.length > 10 && normalizedParagraph.includes(matchFragment)) {
+      return i;
+    }
+
+    // Fallback: content word overlap (handles paraphrased claims)
+    const claimWords = normalizedClaim.split(/\s+/).filter(w => w.length > 3);
+    if (claimWords.length < 3) continue;
+    const paragraphWords = new Set(normalizedParagraph.split(/\s+/));
+    const overlap = claimWords.filter(w => paragraphWords.has(w)).length;
+    if (overlap / claimWords.length > 0.6) {
       return i;
     }
   }
@@ -226,6 +247,99 @@ function SectionCard({ section, index, expanded, onToggle }: {
         </View>
       )}
     </View>
+  );
+}
+
+// --- Voice recording button ---
+
+function VoiceRecordButton({ articleId, currentDepth }: {
+  articleId: string;
+  currentDepth: ReadingDepth;
+}) {
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [noteCount, setNoteCount] = useState(() => getVoiceNotes(articleId).length);
+
+  const startRecording = useCallback(async () => {
+    try {
+      if (Platform.OS === 'web') {
+        logEvent('voice_note_unavailable', { reason: 'web_platform' });
+        return;
+      }
+      const perm = await Audio.requestPermissionsAsync();
+      if (!perm.granted) {
+        logEvent('voice_note_permission_denied', { article_id: articleId });
+        return;
+      }
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      recordingRef.current = recording;
+      setIsRecording(true);
+      setRecordingDuration(0);
+      timerRef.current = setInterval(() => setRecordingDuration(d => d + 1), 1000);
+      logEvent('voice_note_start', { article_id: articleId, depth: currentDepth });
+    } catch (e) {
+      console.warn('[voice] failed to start recording:', e);
+    }
+  }, [articleId, currentDepth]);
+
+  const stopRecording = useCallback(async () => {
+    if (!recordingRef.current) return;
+    try {
+      if (timerRef.current) clearInterval(timerRef.current);
+      await recordingRef.current.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+
+      const uri = recordingRef.current.getURI();
+      const status = await recordingRef.current.getStatusAsync();
+      recordingRef.current = null;
+      setIsRecording(false);
+
+      if (uri) {
+        const noteId = `vn_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        const note: VoiceNote = {
+          id: noteId,
+          article_id: articleId,
+          depth: currentDepth,
+          recorded_at: Date.now(),
+          duration_ms: status.durationMillis || recordingDuration * 1000,
+          file_uri: uri,
+          transcription_status: 'pending',
+        };
+        addVoiceNote(note);
+        setNoteCount(n => n + 1);
+      }
+    } catch (e) {
+      console.warn('[voice] failed to stop recording:', e);
+      setIsRecording(false);
+    }
+  }, [articleId, currentDepth, recordingDuration]);
+
+  if (Platform.OS === 'web') return null;
+
+  return (
+    <Pressable
+      style={[styles.voiceBtn, isRecording && styles.voiceBtnRecording]}
+      onPress={isRecording ? stopRecording : startRecording}
+    >
+      <Ionicons
+        name={isRecording ? 'stop' : 'mic-outline'}
+        size={18}
+        color={isRecording ? '#ef4444' : '#60a5fa'}
+      />
+      {isRecording ? (
+        <Text style={styles.voiceTimer}>{recordingDuration}s</Text>
+      ) : noteCount > 0 ? (
+        <Text style={styles.voiceCount}>{noteCount}</Text>
+      ) : null}
+    </Pressable>
   );
 }
 
@@ -485,6 +599,7 @@ export default function ReaderScreen() {
           <Ionicons name="arrow-back" size={22} color="#f8fafc" />
         </Pressable>
         <View style={{ flex: 1 }} />
+        <VoiceRecordButton articleId={article.id} currentDepth={currentZone} />
         <Pressable onPress={() => {
           logEvent('reader_open_source', { article_id: article.id, url: article.source_url });
           Linking.openURL(article.source_url);
@@ -512,6 +627,28 @@ export default function ReaderScreen() {
             <Text style={styles.metaText}>{article.hostname}</Text>
             {article.date ? <Text style={styles.metaText}>{article.date}</Text> : null}
             <Text style={styles.metaText}>{article.estimated_read_minutes} min · {article.word_count} words</Text>
+          </View>
+
+          {/* Time guidance */}
+          <View style={styles.timeGuideRow}>
+            <View style={styles.timeGuideItem}>
+              <Ionicons name="flash-outline" size={12} color="#3b82f6" />
+              <Text style={styles.timeGuideText}>30s summary</Text>
+            </View>
+            <View style={styles.timeGuideItem}>
+              <Ionicons name="bulb-outline" size={12} color="#8b5cf6" />
+              <Text style={styles.timeGuideText}>2m claims</Text>
+            </View>
+            {article.sections.length > 1 && (
+              <View style={styles.timeGuideItem}>
+                <Ionicons name="document-text-outline" size={12} color="#f59e0b" />
+                <Text style={styles.timeGuideText}>{Math.ceil(article.estimated_read_minutes / 2)}m sections</Text>
+              </View>
+            )}
+            <View style={styles.timeGuideItem}>
+              <Ionicons name="book-outline" size={12} color="#10b981" />
+              <Text style={styles.timeGuideText}>{article.estimated_read_minutes}m full</Text>
+            </View>
           </View>
 
           {/* Topics */}
@@ -608,6 +745,40 @@ export default function ReaderScreen() {
           />
         </View>
 
+        {/* Related articles (connection prompting) */}
+        {(() => {
+          const related = getRelatedArticles(article.id);
+          if (related.length === 0) return null;
+          return (
+            <View style={styles.relatedSection}>
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>Related Reading</Text>
+                <View style={styles.dividerLine} />
+              </View>
+              {related.map(({ article: rel, sharedConcepts }) => (
+                <Pressable
+                  key={rel.id}
+                  style={styles.relatedCard}
+                  onPress={() => {
+                    logEvent('reader_related_tap', {
+                      from_article: article.id,
+                      to_article: rel.id,
+                      shared_concepts: sharedConcepts.length,
+                    });
+                    router.push({ pathname: '/reader', params: { id: rel.id } });
+                  }}
+                >
+                  <Text style={styles.relatedTitle} numberOfLines={2}>{rel.title}</Text>
+                  <Text style={styles.relatedConnection} numberOfLines={2}>
+                    Connects via: {sharedConcepts.slice(0, 2).join(' · ')}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          );
+        })()}
+
         {/* Source attribution */}
         {article.sources.length > 0 && article.sources[0].tweet_text && (
           <View style={styles.sourceBox}>
@@ -626,6 +797,7 @@ export default function ReaderScreen() {
       {/* Floating claim signal pill */}
       {activeClaimPill !== null && (
         <ClaimSignalPill
+          currentSignal={claimSignals[activeClaimPill]}
           onSignal={handleInlineClaimSignal}
           onDismiss={() => setActiveClaimPill(null)}
         />
@@ -788,4 +960,32 @@ const styles = StyleSheet.create({
   },
   sourceLabel: { color: '#60a5fa', fontSize: 12, marginBottom: 6 },
   sourceText: { color: '#64748b', fontSize: 13, lineHeight: 19 },
+
+  // Time guidance
+  timeGuideRow: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12,
+    paddingVertical: 8, paddingHorizontal: 12,
+    backgroundColor: '#1e293b', borderRadius: 8,
+  },
+  timeGuideItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  timeGuideText: { color: '#94a3b8', fontSize: 12 },
+
+  // Related articles
+  relatedSection: { marginTop: 16 },
+  relatedCard: {
+    backgroundColor: '#1e293b', borderRadius: 12, padding: 14,
+    marginBottom: 8, borderLeftWidth: 3, borderLeftColor: '#8b5cf6',
+  },
+  relatedTitle: { color: '#f8fafc', fontSize: 14, fontWeight: '600', marginBottom: 4 },
+  relatedConnection: { color: '#a78bfa', fontSize: 12, lineHeight: 16 },
+
+  // Voice recording
+  voiceBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 6,
+    borderRadius: 16, backgroundColor: '#1e293b', marginRight: 10,
+  },
+  voiceBtnRecording: { backgroundColor: '#7f1d1d' },
+  voiceTimer: { color: '#ef4444', fontSize: 12, fontWeight: '700' },
+  voiceCount: { color: '#64748b', fontSize: 11 },
 });

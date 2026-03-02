@@ -1,11 +1,12 @@
-import { Article, ReadingState, UserSignal, ReadingDepth, Concept, ConceptState, ConceptKnowledgeLevel } from './types';
+import { Article, ReadingState, UserSignal, ReadingDepth, Concept, ConceptState, ConceptKnowledgeLevel, VoiceNote } from './types';
 import { logEvent } from './logger';
-import { loadSignals, saveSignals, loadReadingStates, saveReadingStates, loadConceptStates, saveConceptStates } from './persistence';
+import { loadSignals, saveSignals, loadReadingStates, saveReadingStates, loadConceptStates, saveConceptStates, loadVoiceNotes, saveVoiceNotes } from './persistence';
 
 let articles: Article[] = [];
 let concepts: Concept[] = [];
 let readingStates = new Map<string, ReadingState>();
 let conceptStates = new Map<string, ConceptState>();
+let voiceNotes: VoiceNote[] = [];
 let signals: UserSignal[] = [];
 let initialized = false;
 let initPromise: Promise<void> | null = null;
@@ -49,6 +50,7 @@ export async function initStore(): Promise<void> {
     signals = await loadSignals();
     readingStates = await loadReadingStates();
     conceptStates = await loadConceptStates();
+    voiceNotes = await loadVoiceNotes();
     initialized = true;
 
     logEvent('store_initialized', {
@@ -57,6 +59,7 @@ export async function initStore(): Promise<void> {
       loaded_signals: signals.length,
       loaded_reading_states: readingStates.size,
       loaded_concept_states: conceptStates.size,
+      loaded_voice_notes: voiceNotes.length,
     });
   })();
 
@@ -95,6 +98,53 @@ export function getLibraryArticles(): Article[] {
       const sb = readingStates.get(b.id);
       return (sb?.last_read_at || 0) - (sa?.last_read_at || 0);
     });
+}
+
+export function getInProgressArticles(): Article[] {
+  return articles
+    .filter(a => {
+      const state = readingStates.get(a.id);
+      return state && state.depth !== 'unread' && state.depth !== 'full';
+    })
+    .sort((a, b) => {
+      const sa = readingStates.get(a.id);
+      const sb = readingStates.get(b.id);
+      return (sb?.last_read_at || 0) - (sa?.last_read_at || 0);
+    });
+}
+
+/**
+ * Find articles related to the given article through shared concepts.
+ */
+export function getRelatedArticles(articleId: string, limit: number = 3): Array<{ article: Article; sharedConcepts: string[] }> {
+  const conceptIds = articleConceptIndex.get(articleId) || [];
+  if (conceptIds.length === 0) return [];
+
+  const scores = new Map<string, { count: number; concepts: string[] }>();
+
+  for (const cid of conceptIds) {
+    const concept = concepts.find(c => c.id === cid);
+    if (!concept) continue;
+
+    for (const relatedArticleId of concept.source_article_ids) {
+      if (relatedArticleId === articleId) continue;
+      if (!scores.has(relatedArticleId)) {
+        scores.set(relatedArticleId, { count: 0, concepts: [] });
+      }
+      const entry = scores.get(relatedArticleId)!;
+      entry.count++;
+      entry.concepts.push(concept.text);
+    }
+  }
+
+  return [...scores.entries()]
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, limit)
+    .map(([id, { concepts: sharedConcepts }]) => {
+      const article = articles.find(a => a.id === id);
+      return article ? { article, sharedConcepts } : null;
+    })
+    .filter((x): x is { article: Article; sharedConcepts: string[] } => x !== null);
 }
 
 // --- Reading state ---
@@ -231,22 +281,39 @@ export function updateConceptState(conceptId: string, state: ConceptKnowledgeLev
  * "knew_it" -> concept becomes "known"
  * "interesting" -> concept becomes "encountered"
  */
+const STOP_WORDS = new Set([
+  'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+  'should', 'may', 'might', 'shall', 'can', 'need', 'must',
+  'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from', 'as',
+  'into', 'through', 'during', 'before', 'after', 'above', 'below',
+  'and', 'but', 'or', 'nor', 'not', 'so', 'yet', 'both', 'either',
+  'that', 'which', 'who', 'whom', 'this', 'these', 'those',
+  'it', 'its', 'they', 'them', 'their', 'we', 'our', 'you', 'your',
+  'than', 'more', 'most', 'very', 'also', 'just', 'about',
+]);
+
+function contentWords(text: string): Set<string> {
+  const words = text.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(Boolean);
+  return new Set(words.filter(w => w.length > 2 && !STOP_WORDS.has(w)));
+}
+
 export function processClaimSignalForConcepts(articleId: string, claimText: string, signal: string) {
   const articleConcepts = articleConceptIndex.get(articleId) || [];
-  const normalizedClaim = claimText.toLowerCase().replace(/[^\w\s]/g, '');
+  const claimContent = contentWords(claimText);
 
   for (const cid of articleConcepts) {
     const concept = concepts.find(c => c.id === cid);
     if (!concept) continue;
 
-    const normalizedConcept = concept.text.toLowerCase().replace(/[^\w\s]/g, '');
-    // Match if claim text overlaps significantly with concept text
-    const claimWords = new Set(normalizedClaim.split(/\s+/));
-    const conceptWords = normalizedConcept.split(/\s+/);
-    const overlap = conceptWords.filter(w => claimWords.has(w)).length;
-    const overlapRatio = conceptWords.length > 0 ? overlap / conceptWords.length : 0;
+    const conceptContent = contentWords(concept.text);
+    if (conceptContent.size === 0) continue;
 
-    if (overlapRatio > 0.4) {
+    const overlap = [...conceptContent].filter(w => claimContent.has(w)).length;
+    const overlapRatio = overlap / conceptContent.size;
+
+    // Lower threshold since we're matching content words only (stop words removed)
+    if (overlapRatio > 0.3) {
       if (signal === 'knew_it') {
         updateConceptState(cid, 'known');
       } else if (signal === 'interesting') {
@@ -258,10 +325,9 @@ export function processClaimSignalForConcepts(articleId: string, claimText: stri
 
 /**
  * Compute novelty score for an article.
- * Returns 0.0-1.0 where 1.0 = completely novel, 0.0 = all concepts known.
- * Falls back to claim-based estimation when concepts aren't available.
+ * Returns null if no data available, or 0.0-1.0 where 1.0 = completely novel.
  */
-export function getNoveltyScore(articleId: string): number {
+export function getNoveltyScore(articleId: string): number | null {
   const conceptIds = articleConceptIndex.get(articleId);
 
   if (conceptIds && conceptIds.length > 0) {
@@ -274,16 +340,42 @@ export function getNoveltyScore(articleId: string): number {
 
   // Fallback: use claim signals from the article
   const article = articles.find(a => a.id === articleId);
-  if (!article || article.key_claims.length === 0) return 1.0; // assume novel if no data
+  if (!article || article.key_claims.length === 0) return null;
 
   const articleSignals = signals.filter(s => s.article_id === articleId);
-  if (articleSignals.length === 0) return 1.0; // not yet interacted
+  if (articleSignals.length === 0) return null; // no signals yet, can't estimate
 
   const knewCount = articleSignals.filter(s => s.signal === 'knew_it').length;
   const totalSignaled = articleSignals.length;
-  if (totalSignaled === 0) return 1.0;
+  if (totalSignaled === 0) return null;
 
   return 1.0 - (knewCount / totalSignaled);
+}
+
+// --- Voice Notes ---
+
+export function getVoiceNotes(articleId?: string): VoiceNote[] {
+  if (articleId) return voiceNotes.filter(n => n.article_id === articleId);
+  return voiceNotes;
+}
+
+export function addVoiceNote(note: VoiceNote) {
+  voiceNotes.push(note);
+  saveVoiceNotes(voiceNotes);
+  logEvent('voice_note_added', {
+    article_id: note.article_id,
+    depth: note.depth,
+    duration_ms: note.duration_ms,
+  });
+}
+
+export function updateVoiceNoteTranscript(noteId: string, transcript: string) {
+  const note = voiceNotes.find(n => n.id === noteId);
+  if (!note) return;
+  note.transcript = transcript;
+  note.transcription_status = 'completed';
+  saveVoiceNotes(voiceNotes);
+  logEvent('voice_note_transcribed', { note_id: noteId, article_id: note.article_id });
 }
 
 /**

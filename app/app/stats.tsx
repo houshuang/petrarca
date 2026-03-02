@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getStats, getSignals, getArticles, getByTopic, getReadingState, getTopicKnowledgeStats, getConcepts } from '../data/store';
+import { getStats, getSignals, getArticles, getByTopic, getReadingState, getTopicKnowledgeStats, getConcepts, getVoiceNotes, getArticleById } from '../data/store';
 import { logEvent, getLogFiles, exportAllLogs, getLogDirectory } from '../data/logger';
 
 function EventLogSection() {
@@ -224,6 +224,38 @@ export default function StatsScreen() {
 
         {/* Knowledge dashboard */}
         <KnowledgeDashboard />
+
+        {/* Voice notes summary */}
+        {(() => {
+          const notes = getVoiceNotes();
+          if (notes.length === 0) return null;
+          const totalDuration = Math.round(notes.reduce((s, n) => s + n.duration_ms, 0) / 1000);
+          const transcribed = notes.filter(n => n.transcription_status === 'completed').length;
+          const uniqueArticles = new Set(notes.map(n => n.article_id)).size;
+          return (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Voice Notes</Text>
+              <Text style={styles.sectionSubtitle}>
+                {notes.length} note{notes.length !== 1 ? 's' : ''} · {totalDuration}s total · {uniqueArticles} article{uniqueArticles !== 1 ? 's' : ''}
+                {transcribed > 0 ? ` · ${transcribed} transcribed` : ''}
+              </Text>
+              {notes.slice(0, 5).map(n => {
+                const article = getArticleById(n.article_id);
+                return (
+                  <View key={n.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <Ionicons name="mic" size={14} color="#60a5fa" />
+                    <Text style={{ color: '#cbd5e1', fontSize: 13, flex: 1 }} numberOfLines={1}>
+                      {article?.title || n.article_id}
+                    </Text>
+                    <Text style={{ color: '#64748b', fontSize: 11 }}>
+                      {Math.round(n.duration_ms / 1000)}s
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          );
+        })()}
 
         {/* Refresh */}
         <Pressable style={styles.refreshBtn} onPress={() => { logEvent('stats_refresh'); forceUpdate(n => n + 1); }}>

@@ -73,3 +73,17 @@ export interface ConceptState {
   last_seen: number;
   signal_count: number;
 }
+
+// --- Voice Notes ---
+
+export interface VoiceNote {
+  id: string;
+  article_id: string;
+  depth: ReadingDepth;
+  section_index?: number;
+  recorded_at: number;
+  duration_ms: number;
+  file_uri: string;
+  transcript?: string;
+  transcription_status: 'pending' | 'processing' | 'completed' | 'failed';
+}

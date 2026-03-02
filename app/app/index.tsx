@@ -6,7 +6,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getArticles, getFeedArticles, getReadingState, getStats, getNoveltyScore } from '../data/store';
+import { getArticles, getFeedArticles, getInProgressArticles, getReadingState, getStats, getNoveltyScore } from '../data/store';
 import { Article, ReadingDepth } from '../data/types';
 import { logEvent } from '../data/logger';
 
@@ -83,10 +83,13 @@ const DEPTH_COLORS: Record<ReadingDepth, string> = {
 
 function NoveltyBadge({ articleId }: { articleId: string }) {
   const score = getNoveltyScore(articleId);
-  if (score >= 1.0) return null; // no data yet
+  if (score === null) return null;
   const pct = Math.round(score * 100);
-  const color = pct > 70 ? '#10b981' : pct > 40 ? '#f59e0b' : '#64748b';
-  const label = pct > 70 ? `${pct}% new` : pct > 40 ? 'Partly familiar' : 'Mostly known';
+  let color: string, label: string;
+  if (pct >= 90) { color = '#10b981'; label = 'Mostly new'; }
+  else if (pct > 60) { color = '#10b981'; label = `${pct}% new`; }
+  else if (pct > 30) { color = '#f59e0b'; label = 'Partly familiar'; }
+  else { color = '#64748b'; label = 'Mostly known'; }
   return (
     <View style={[styles.noveltyBadge, { borderColor: color }]}>
       <Text style={[styles.noveltyText, { color }]}>{label}</Text>
@@ -399,16 +402,22 @@ function TriageModeView() {
     setTriageStates({ ...triageCache });
   }, [untriagedArticles, router]);
 
+  // Log triage complete once
+  const triageCompleteLogged = useRef(false);
+  useEffect(() => {
+    if (totalUntriaged === 0 && !triageCompleteLogged.current) {
+      triageCompleteLogged.current = true;
+      const readLaterCount = articles.filter(a => getTriageState(a.id) === 'read_later').length;
+      const skippedCount = articles.filter(a => getTriageState(a.id) === 'skipped').length;
+      logEvent('triage_complete', { read_later: readLaterCount, skipped: skippedCount, total: articles.length });
+    }
+    if (totalUntriaged > 0) triageCompleteLogged.current = false;
+  }, [totalUntriaged]);
+
   // Completion state
   if (totalUntriaged === 0) {
     const readLaterCount = articles.filter(a => getTriageState(a.id) === 'read_later').length;
     const skippedCount = articles.filter(a => getTriageState(a.id) === 'skipped').length;
-
-    logEvent('triage_complete', {
-      read_later: readLaterCount,
-      skipped: skippedCount,
-      total: articles.length,
-    });
 
     return (
       <View style={styles.triageComplete}>
@@ -540,6 +549,7 @@ function TopicsModeView() {
 // --- Main Feed Screen ---
 
 export default function FeedScreen() {
+  const router = useRouter();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [showAll, setShowAll] = useState(false);
   const [, forceUpdate] = useState(0);
@@ -625,6 +635,38 @@ export default function FeedScreen() {
           )}
 
           <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+            {/* Continue Reading section */}
+            {(() => {
+              const inProgress = getInProgressArticles();
+              if (inProgress.length === 0) return null;
+              return (
+                <View style={styles.continueSection}>
+                  <Text style={styles.continueSectionTitle}>Continue Reading</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+                    {inProgress.map(a => {
+                      const state = getReadingState(a.id);
+                      return (
+                        <Pressable
+                          key={a.id}
+                          style={styles.continueCard}
+                          onPress={() => {
+                            logEvent('continue_reading_tap', { article_id: a.id, depth: state.depth });
+                            router.push({ pathname: '/reader', params: { id: a.id } });
+                          }}
+                        >
+                          <Text style={styles.continueCardTitle} numberOfLines={2}>{a.title}</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                            <View style={[styles.depthDot, { backgroundColor: DEPTH_COLORS[state.depth] }]} />
+                            <Text style={styles.continueCardDepth}>{DEPTH_LABELS[state.depth]}</Text>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              );
+            })()}
+
             {listArticles.length === 0 ? (
               <View style={styles.empty}>
                 <Ionicons name="checkmark-circle" size={48} color="#10b981" />
@@ -711,6 +753,14 @@ const styles = StyleSheet.create({
   depthText: { fontSize: 11, fontWeight: '500' },
   noveltyBadge: { borderWidth: 1, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, marginRight: 4 },
   noveltyText: { fontSize: 11, fontWeight: '500' },
+  // Continue Reading
+  continueSection: { marginBottom: 8, paddingHorizontal: 16 },
+  continueSectionTitle: { color: '#94a3b8', fontSize: 13, fontWeight: '600', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  continueCard: { width: 200, backgroundColor: '#1e293b', borderRadius: 12, padding: 12, marginRight: 10, borderLeftWidth: 3, borderLeftColor: '#f59e0b' },
+  continueCardTitle: { color: '#f8fafc', fontSize: 14, fontWeight: '600', lineHeight: 18 },
+  continueCardDepth: { color: '#94a3b8', fontSize: 11 },
+  depthDot: { width: 6, height: 6, borderRadius: 3 },
+
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 100, gap: 8 },
   emptyTitle: { color: '#f8fafc', fontSize: 20, fontWeight: '700' },
   emptySubtitle: { color: '#94a3b8', fontSize: 14 },
