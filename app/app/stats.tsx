@@ -1,7 +1,50 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getStats, getSignals, getBookmarks, getByTopic } from '../data/store';
+import { logEvent, getLogFiles, exportAllLogs, getLogDirectory } from '../data/logger';
+
+function EventLogSection() {
+  const [logFiles, setLogFiles] = useState<string[]>([]);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    getLogFiles().then(setLogFiles);
+  }, [expanded]);
+
+  const handleExport = async () => {
+    logEvent('logs_exported');
+    const allLogs = await exportAllLogs();
+    const lineCount = allLogs.split('\n').filter(Boolean).length;
+    await Share.share({
+      message: allLogs,
+      title: `Petrarca interaction logs (${lineCount} events)`,
+    });
+  };
+
+  return (
+    <View style={styles.section}>
+      <Pressable onPress={() => setExpanded(!expanded)}>
+        <Text style={styles.sectionTitle}>Event Log</Text>
+      </Pressable>
+      <Text style={styles.sectionSubtitle}>
+        {logFiles.length} log file{logFiles.length !== 1 ? 's' : ''} · {getLogDirectory()}
+      </Text>
+
+      {expanded && (
+        <View style={{ marginTop: 8 }}>
+          {logFiles.map(f => (
+            <Text key={f} style={styles.coverageTopic}>{f}</Text>
+          ))}
+          <Pressable style={[styles.refreshBtn, { marginTop: 8 }]} onPress={handleExport}>
+            <Ionicons name="share-outline" size={16} color="#60a5fa" />
+            <Text style={styles.refreshText}>Export all logs</Text>
+          </Pressable>
+        </View>
+      )}
+    </View>
+  );
+}
 
 export default function StatsScreen() {
   const [, forceUpdate] = useState(0);
@@ -100,10 +143,13 @@ export default function StatsScreen() {
         </View>
 
         {/* Refresh hint */}
-        <Pressable style={styles.refreshBtn} onPress={() => forceUpdate(n => n + 1)}>
+        <Pressable style={styles.refreshBtn} onPress={() => { logEvent('stats_refresh'); forceUpdate(n => n + 1); }}>
           <Ionicons name="refresh" size={16} color="#60a5fa" />
           <Text style={styles.refreshText}>Refresh stats</Text>
         </Pressable>
+
+        {/* Event log section */}
+        <EventLogSection />
 
         <View style={{ height: 40 }} />
       </ScrollView>

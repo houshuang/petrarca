@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-na
 import { Ionicons } from '@expo/vector-icons';
 import { getByTopic, getBookmarks, addSignal, getSignalForBookmark } from '../data/store';
 import { Bookmark } from '../data/types';
+import { logEvent } from '../data/logger';
 
 function BookmarkItem({ bookmark, depth = 0 }: { bookmark: Bookmark; depth?: number }) {
   const [expanded, setExpanded] = useState(false);
@@ -19,7 +20,10 @@ function BookmarkItem({ bookmark, depth = 0 }: { bookmark: Bookmark; depth?: num
 
   return (
     <View style={[styles.item, depth > 0 && styles.nestedItem]}>
-      <Pressable onPress={() => setExpanded(!expanded)} style={styles.itemHeader}>
+      <Pressable onPress={() => {
+        logEvent('briefing_item_toggle', { bookmark_id: bookmark.id, expanded: !expanded });
+        setExpanded(!expanded);
+      }} style={styles.itemHeader}>
         <View style={styles.itemLeft}>
           {signal && <View style={[styles.signalDot, { backgroundColor: signalColors[signal.signal] }]} />}
           <Text style={styles.itemAuthor}>@{bookmark.author_username}</Text>
@@ -57,17 +61,29 @@ function BookmarkItem({ bookmark, depth = 0 }: { bookmark: Bookmark; depth?: num
 
           {/* Action buttons */}
           <View style={styles.actions}>
-            <Pressable style={styles.actionBtn} onPress={() => addSignal({ bookmarkId: bookmark.id, signal: 'knew_it', timestamp: Date.now() })}>
+            <Pressable style={styles.actionBtn} onPress={() => {
+              logEvent('briefing_signal', { bookmark_id: bookmark.id, signal: 'knew_it' });
+              addSignal({ bookmarkId: bookmark.id, signal: 'knew_it', timestamp: Date.now() });
+            }}>
               <Text style={styles.actionText}>Knew it</Text>
             </Pressable>
-            <Pressable style={[styles.actionBtn, styles.actionInteresting]} onPress={() => addSignal({ bookmarkId: bookmark.id, signal: 'interesting', timestamp: Date.now() })}>
+            <Pressable style={[styles.actionBtn, styles.actionInteresting]} onPress={() => {
+              logEvent('briefing_signal', { bookmark_id: bookmark.id, signal: 'interesting' });
+              addSignal({ bookmarkId: bookmark.id, signal: 'interesting', timestamp: Date.now() });
+            }}>
               <Text style={[styles.actionText, { color: '#10b981' }]}>Interesting</Text>
             </Pressable>
-            <Pressable style={[styles.actionBtn, styles.actionDeep]} onPress={() => addSignal({ bookmarkId: bookmark.id, signal: 'deep_dive', timestamp: Date.now() })}>
+            <Pressable style={[styles.actionBtn, styles.actionDeep]} onPress={() => {
+              logEvent('briefing_signal', { bookmark_id: bookmark.id, signal: 'deep_dive' });
+              addSignal({ bookmarkId: bookmark.id, signal: 'deep_dive', timestamp: Date.now() });
+            }}>
               <Text style={[styles.actionText, { color: '#f59e0b' }]}>Deep dive</Text>
             </Pressable>
             {bookmark.urls?.[0] && (
-              <Pressable style={styles.actionBtn} onPress={() => Linking.openURL(bookmark.urls[0])}>
+              <Pressable style={styles.actionBtn} onPress={() => {
+                logEvent('link_open', { bookmark_id: bookmark.id, url: bookmark.urls[0], screen: 'briefing' });
+                Linking.openURL(bookmark.urls[0]);
+              }}>
                 <Ionicons name="open-outline" size={14} color="#60a5fa" />
               </Pressable>
             )}
@@ -83,7 +99,10 @@ function TopicSection({ topic, bookmarks }: { topic: string; bookmarks: Bookmark
 
   return (
     <View style={styles.section}>
-      <Pressable onPress={() => setCollapsed(!collapsed)} style={styles.sectionHeader}>
+      <Pressable onPress={() => {
+        logEvent('briefing_topic_toggle', { topic, collapsed: !collapsed, item_count: bookmarks.length });
+        setCollapsed(!collapsed);
+      }} style={styles.sectionHeader}>
         <View style={styles.sectionLeft}>
           <Text style={styles.sectionTitle}>{topic}</Text>
           <Text style={styles.sectionCount}>{bookmarks.length}</Text>
@@ -112,13 +131,13 @@ export default function BriefingScreen() {
       <View style={styles.toggleRow}>
         <Pressable
           style={[styles.toggleBtn, viewMode === 'topic' && styles.toggleActive]}
-          onPress={() => setViewMode('topic')}
+          onPress={() => { logEvent('briefing_view_mode', { mode: 'topic' }); setViewMode('topic'); }}
         >
           <Text style={[styles.toggleText, viewMode === 'topic' && styles.toggleTextActive]}>By Topic</Text>
         </Pressable>
         <Pressable
           style={[styles.toggleBtn, viewMode === 'all' && styles.toggleActive]}
-          onPress={() => setViewMode('all')}
+          onPress={() => { logEvent('briefing_view_mode', { mode: 'all' }); setViewMode('all'); }}
         >
           <Text style={[styles.toggleText, viewMode === 'all' && styles.toggleTextActive]}>All ({all.length})</Text>
         </Pressable>

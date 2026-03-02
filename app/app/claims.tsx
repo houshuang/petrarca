@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-na
 import { Ionicons } from '@expo/vector-icons';
 import { getBookmarks, addSignal, getSignalForBookmark } from '../data/store';
 import { Bookmark } from '../data/types';
+import { logEvent } from '../data/logger';
 
 interface ClaimWithSource {
   claim: string;
@@ -36,7 +37,10 @@ function ClaimCard({ item, onSignal }: { item: ClaimWithSource; onSignal: (signa
       <Text style={styles.claimText}>{item.claim}</Text>
 
       <View style={styles.sourceRow}>
-        <Pressable onPress={() => setShowSource(!showSource)}>
+        <Pressable onPress={() => {
+          logEvent('claim_source_toggle', { bookmark_id: item.bookmark.id, claim: item.claim.slice(0, 80), show: !showSource });
+          setShowSource(!showSource);
+        }}>
           <Text style={styles.sourceAuthor}>@{item.bookmark.author_username}</Text>
         </Pressable>
         <Text style={styles.topicBadge}>{item.topicGroup}</Text>
@@ -46,7 +50,10 @@ function ClaimCard({ item, onSignal }: { item: ClaimWithSource; onSignal: (signa
         <View style={styles.sourceExpanded}>
           <Text style={styles.sourceContext}>{item.bookmark._llm_summary?.summary ?? item.bookmark.text.slice(0, 300)}</Text>
           {item.bookmark.urls?.[0] && (
-            <Pressable onPress={() => Linking.openURL(item.bookmark.urls[0])}>
+            <Pressable onPress={() => {
+              logEvent('link_open', { bookmark_id: item.bookmark.id, url: item.bookmark.urls[0], screen: 'claims' });
+              Linking.openURL(item.bookmark.urls[0]);
+            }}>
               <Text style={styles.linkText}>Open source ↗</Text>
             </Pressable>
           )}
@@ -90,6 +97,7 @@ export default function ClaimsScreen() {
   }
 
   const handleSignal = (bookmarkId: string, signal: string) => {
+    logEvent('claim_signal', { bookmark_id: bookmarkId, signal, screen: 'claims' });
     addSignal({ bookmarkId, signal: signal as any, timestamp: Date.now() });
     forceUpdate(n => n + 1);
   };

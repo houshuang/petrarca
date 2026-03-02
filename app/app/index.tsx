@@ -5,6 +5,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { getUntriaged, addSignal, getStats, getBookmarks } from '../data/store';
 import { Bookmark } from '../data/types';
+import { logEvent } from '../data/logger';
 
 const { width, height } = Dimensions.get('window');
 const SWIPE_THRESHOLD = width * 0.25;
@@ -140,7 +141,10 @@ function TriageCard({ bookmark, onSwipe, expanded, onToggleExpand }: {
             <Text style={styles.originalLabel}>Original tweet:</Text>
             <Text style={styles.originalText}>{bookmark.text}</Text>
             {bookmark.urls?.length > 0 && (
-              <Pressable onPress={() => Linking.openURL(bookmark.urls[0])}>
+              <Pressable onPress={() => {
+                logEvent('link_open', { bookmark_id: bookmark.id, url: bookmark.urls[0], screen: 'triage' });
+                Linking.openURL(bookmark.urls[0]);
+              }}>
                 <Text style={styles.linkText}>Open link ↗</Text>
               </Pressable>
             )}
@@ -166,12 +170,26 @@ export default function TriageScreen() {
     const current = untriaged[0];
     if (!current) return;
     const signal = dir === 'right' ? 'interesting' : dir === 'up' ? 'deep_dive' : 'knew_it';
+    logEvent('triage_swipe', {
+      direction: dir,
+      signal,
+      bookmark_id: current.id,
+      card_position: cardIndex,
+      was_expanded: expanded,
+      remaining: untriaged.length - 1,
+    });
     addSignal({ bookmarkId: current.id, signal, timestamp: Date.now() });
     setCardIndex(i => i + 1);
     setExpanded(false);
   };
 
   if (untriaged.length === 0) {
+    logEvent('triage_complete', {
+      total: stats.total,
+      interesting: stats.interesting,
+      deep_dive: stats.deepDive,
+      knew_it: stats.knewIt,
+    });
     return (
       <View style={styles.container}>
         <View style={styles.doneCard}>
@@ -210,7 +228,14 @@ export default function TriageScreen() {
           bookmark={untriaged[0]}
           onSwipe={handleSwipe}
           expanded={expanded}
-          onToggleExpand={() => setExpanded(!expanded)}
+          onToggleExpand={() => {
+            logEvent('card_toggle_expand', {
+              bookmark_id: untriaged[0].id,
+              expanded: !expanded,
+              screen: 'triage',
+            });
+            setExpanded(!expanded);
+          }}
         />
       </View>
 

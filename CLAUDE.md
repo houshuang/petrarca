@@ -40,12 +40,20 @@ All research lives in `research/` directory:
 - Log BEFORE making changes, not after
 - Include: date, what was tried, results, conclusions
 
-### 3. Code & Development
+### 3. Interaction Logging
+- ALL user interactions must be logged via `logEvent()` from `app/data/logger.ts`
+- When adding new UI elements (buttons, gestures, toggles), always add a `logEvent()` call
+- Log files: `{documentDirectory}/logs/interactions_YYYY-MM-DD.jsonl` (daily, append-only)
+- Every event includes: timestamp, event name, session_id, plus context-specific fields
+- Signals are persisted to AsyncStorage via `app/data/persistence.ts` — never lose user decisions
+- Export logs via the Event Log section in Progress tab, or read JSONL files directly
+
+### 4. Code & Development
 - Branch prefix: `sh/` for all GitHub branches
 - No test plans or checklists in PR descriptions
 - Commit after every significant change
 
-### 4. Reference Projects
+### 5. Reference Projects
 - `../alif` — Arabic learning app with FSRS-based knowledge tracking, Expo mobile setup, good model for "modeling knowledge at granular level"
 - `interview.md` — Original brainstorm interview (language learning focus evolved into read-later concept)
 

@@ -1,7 +1,30 @@
+import { useEffect, useState } from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { initStore } from '../data/store';
+import { startNewSession, logEvent } from '../data/logger';
 
 export default function Layout() {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      startNewSession();
+      await initStore();
+      setReady(true);
+    })();
+  }, []);
+
+  if (!ready) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator color="#2563eb" size="large" />
+        <Text style={styles.loadingText}>Loading...</Text>
+      </View>
+    );
+  }
+
   return (
     <Tabs
       screenOptions={{
@@ -10,6 +33,11 @@ export default function Layout() {
         tabBarStyle: { backgroundColor: '#0f172a', borderTopColor: '#1e293b' },
         headerStyle: { backgroundColor: '#0f172a' },
         headerTintColor: '#f8fafc',
+      }}
+      screenListeners={{
+        tabPress: (e) => {
+          logEvent('tab_press', { tab: e.target?.split('-')[0] });
+        },
       }}
     >
       <Tabs.Screen
@@ -43,3 +71,8 @@ export default function Layout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  loading: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a', gap: 12 },
+  loadingText: { color: '#94a3b8', fontSize: 14 },
+});

@@ -1,13 +1,37 @@
 import bookmarksRaw from './bookmarks.json';
 import { Bookmark, UserSignal } from './types';
+import { logEvent } from './logger';
+import { loadSignals, saveSignals } from './persistence';
 
 const bookmarks = bookmarksRaw as Bookmark[];
 
 // Sort by relevance score descending
 const sorted = [...bookmarks].sort((a, b) => b._relevance_score - a._relevance_score);
 
-// In-memory signal store (persists across screens within session)
-const signals: UserSignal[] = [];
+// Signal store — loaded from disk on init, persisted on every change
+let signals: UserSignal[] = [];
+let initialized = false;
+let initPromise: Promise<void> | null = null;
+
+export async function initStore(): Promise<void> {
+  if (initialized) return;
+  if (initPromise) return initPromise;
+
+  initPromise = (async () => {
+    signals = await loadSignals();
+    initialized = true;
+    logEvent('store_initialized', {
+      total_bookmarks: sorted.length,
+      loaded_signals: signals.length,
+    });
+  })();
+
+  return initPromise;
+}
+
+export function isInitialized(): boolean {
+  return initialized;
+}
 
 export function getBookmarks(): Bookmark[] {
   return sorted;
@@ -24,6 +48,18 @@ export function getUntriaged(): Bookmark[] {
 
 export function addSignal(signal: UserSignal) {
   signals.push(signal);
+  saveSignals(signals);
+
+  const bookmark = getBookmarkById(signal.bookmarkId);
+  logEvent('signal', {
+    bookmark_id: signal.bookmarkId,
+    signal: signal.signal,
+    author: bookmark?.author_username,
+    topics: bookmark?._llm_summary?.topics,
+    relevance_score: bookmark?._relevance_score,
+    content_type: bookmark?._llm_summary?.content_type,
+    notes: signal.notes,
+  });
 }
 
 export function getSignals(): UserSignal[] {
