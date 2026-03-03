@@ -27,8 +27,11 @@ Master index of all research documents. **Always update this file when adding ne
 | [voice-processing.md](voice-processing.md) | Soniox API integration, multilingual STT, Expo patterns | Done |
 | [open-algorithms.md](open-algorithms.md) | Transparent, user-configurable ranking | TODO |
 
-## Experiments
+## Experiments & Development
 | Document | Description | Status |
 |----------|-------------|--------|
 | [design-experiments-plan.md](design-experiments-plan.md) | Comprehensive plan: content expansion, reader experiments, triage, knowledge model | Active |
 | [experiment-log.md](experiment-log.md) | Append-only log of all experiments and prototypes | Active |
+| [development-reference.md](development-reference.md) | **Complete dev reference** — architecture, all experiments, hypotheses, decisions, file index, event log | Active |
+| [user-journey-analysis.md](user-journey-analysis.md) | Assumptions vs. reality: expected user journey over weeks, gap analysis, prioritized recommendations | Done |
+| [content-refresh-design.md](content-refresh-design.md) | Architecture for scheduled pipeline on Hetzner + HTTP content serving + app sync | Done |

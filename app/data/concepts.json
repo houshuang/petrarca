@@ -1,7 +1,7 @@
 [
   {
     "id": "c0001",
-    "text": "AGENTS.md files provide structured navigation context that helps AI coding agents understand and work within complex codebases.",
+    "text": "AGENTS.md files and structured documentation provide codified context that helps AI agents navigate complex codebases, scaling far better than ad-hoc conversational prompting.",
     "topic": "context-engineering",
     "source_article_ids": [
       "31b2ba4bbb6f"
@@ -9,49 +9,41 @@
   },
   {
     "id": "c0002",
-    "text": "Codified context (checked-in files in the repo) scales better than ad-hoc prompting for guiding AI agents in large projects.",
-    "topic": "context-engineering",
-    "source_article_ids": [
-      "31b2ba4bbb6f"
-    ]
-  },
-  {
-    "id": "c0003",
-    "text": "Infrastructure and tooling for AI coding agents should be treated as a first-class engineering concern, including workspace organization and session management.",
-    "topic": "developer-tools",
+    "text": "Agent infrastructure—workspace organization, session management, documentation files—should be treated as a first-class engineering concern, not an afterthought.",
+    "topic": "agentic-engineering",
     "source_article_ids": [
       "31b2ba4bbb6f",
       "24cce8f5c6be"
     ]
   },
   {
-    "id": "c0004",
-    "text": "Running 10-15 Claude Code sessions simultaneously across terminal and browser can dramatically increase throughput beyond single-session use.",
+    "id": "c0003",
+    "text": "Running 10-15 concurrent AI coding sessions across terminal and browser multiplies developer throughput beyond what single-session usage provides.",
     "topic": "productivity",
     "source_article_ids": [
       "24cce8f5c6be"
     ]
   },
   {
-    "id": "c0005",
-    "text": "Most developers underutilize AI coding tools by treating them as simple chatbots rather than autonomous agents capable of sustained independent work.",
-    "topic": "ai-coding",
+    "id": "c0004",
+    "text": "Most developers underutilize AI coding tools by treating them as simple chatbots rather than leveraging multi-session, agentic, and autonomous capabilities.",
+    "topic": "developer-workflow",
     "source_article_ids": [
       "24cce8f5c6be",
       "3d6edb8f1271"
     ]
   },
   {
-    "id": "c0006",
-    "text": "LLM agent capabilities crossed a coherence threshold around December 2025, causing a rapid phase shift from mostly-manual to mostly-agent coding within weeks.",
+    "id": "c0005",
+    "text": "LLM agent capabilities crossed a coherence threshold around December 2025, triggering a rapid phase shift from mostly-manual to mostly-agent coding within weeks.",
     "topic": "ai-impact",
     "source_article_ids": [
       "3d6edb8f1271"
     ]
   },
   {
-    "id": "c0007",
-    "text": "AI coding agents primarily expand what's possible rather than just speeding up existing work — enabling developers to build functional tools in unfamiliar languages and domains.",
+    "id": "c0006",
+    "text": "AI coding agents primarily expand what developers can build—including unfamiliar languages and domains—rather than just speeding up existing work.",
     "topic": "ai-impact",
     "source_article_ids": [
       "3d6edb8f1271",
@@ -59,58 +51,65 @@
     ]
   },
   {
-    "id": "c0008",
-    "text": "Agent errors have shifted from syntax mistakes to subtle conceptual errors: wrong assumptions, overcomplication, and misunderstanding of intent.",
+    "id": "c0007",
+    "text": "Agent coding errors have shifted from syntax mistakes to subtle conceptual errors: wrong assumptions, overcomplicated solutions, and misunderstood intent.",
     "topic": "code-quality",
     "source_article_ids": [
       "3d6edb8f1271"
     ]
   },
   {
-    "id": "c0009",
-    "text": "Declarative prompting with explicit success criteria dramatically outperforms imperative step-by-step instructions for directing AI coding agents.",
-    "topic": "ai-coding",
+    "id": "c0008",
+    "text": "Declarative prompting with clear success criteria dramatically outperforms imperative step-by-step instructions when directing AI coding agents.",
+    "topic": "prompting",
     "source_article_ids": [
-      "3d6edb8f1271",
-      "eac8bdfbd2d6"
+      "3d6edb8f1271"
     ]
   },
   {
-    "id": "c0010",
-    "text": "Human stamina and endurance is a core work bottleneck that AI agents dramatically reduce, enabling sustained effort on complex tasks.",
+    "id": "c0009",
+    "text": "Human stamina and endurance were core work bottlenecks that LLM agents have dramatically reduced, enabling sustained effort on large tasks.",
     "topic": "productivity",
     "source_article_ids": [
       "3d6edb8f1271"
     ]
   },
   {
-    "id": "c0011",
-    "text": "2026 will bring both genuine productivity gains and a 'slopacolypse' of AI-generated low-quality content flooding the ecosystem.",
+    "id": "c0010",
+    "text": "2026 will see both genuine developer productivity gains and a 'slopacolypse' of AI-generated low-quality content flooding the software ecosystem.",
     "topic": "ai-impact",
     "source_article_ids": [
       "3d6edb8f1271"
     ]
   },
   {
+    "id": "c0011",
+    "text": "Autonomous agentic loops iterate through failures until a verifiable goal condition is met, with execution times ranging from minutes to a full day.",
+    "topic": "autonomous-agents",
+    "source_article_ids": [
+      "eac8bdfbd2d6"
+    ]
+  },
+  {
     "id": "c0012",
-    "text": "Autonomous agentic loops that iterate until a verifiable goal condition is met can handle tasks ranging from minutes to a full day of execution.",
-    "topic": "agents",
+    "text": "Failure-centric learning—embracing and iterating through errors rather than avoiding them—is an effective strategy for autonomous AI coding agents.",
+    "topic": "autonomous-agents",
     "source_article_ids": [
       "eac8bdfbd2d6"
     ]
   },
   {
     "id": "c0013",
-    "text": "Failure-centric learning — iterating through failures rather than trying to succeed on the first attempt — is an effective pattern for autonomous AI agents.",
-    "topic": "agents",
+    "text": "Autonomous agent loops require careful environment setup to prevent interruptions (permission prompts, missing tools) that break the iteration cycle.",
+    "topic": "autonomous-agents",
     "source_article_ids": [
       "eac8bdfbd2d6"
     ]
   },
   {
     "id": "c0014",
-    "text": "Existing developer knowledge and toolchain setup remain prerequisites for effective AI-assisted coding; AI amplifies expertise rather than replacing it.",
-    "topic": "ai-coding",
+    "text": "Existing developer expertise and toolchain setup remain prerequisites for effective 'vibe coding'—AI amplifies skill rather than replacing it.",
+    "topic": "vibe-coding",
     "source_article_ids": [
       "cbd6d28cc760",
       "3d6edb8f1271"
@@ -118,160 +117,160 @@
   },
   {
     "id": "c0015",
-    "text": "Vibe coding can produce functional, production-quality native applications in under an hour when the developer has sufficient domain knowledge.",
-    "topic": "vibe-coding",
-    "source_article_ids": [
-      "cbd6d28cc760"
-    ]
-  },
-  {
-    "id": "c0016",
-    "text": "The 'linear walkthrough' pattern helps developers understand and maintain AI-generated codebases after creation by reconstructing the logical flow.",
+    "text": "The 'linear walkthrough' pattern—reviewing AI-generated code as a narrative sequence—helps developers understand and maintain codebases they didn't manually write.",
     "topic": "developer-workflow",
     "source_article_ids": [
       "cbd6d28cc760"
     ]
   },
   {
-    "id": "c0017",
-    "text": "Native platforms (Swift/SwiftUI) can produce dramatically smaller applications (76KB) compared to web-based alternatives for the same functionality.",
+    "id": "c0016",
+    "text": "Native compiled apps (Swift/SwiftUI) built via AI-assisted coding can be dramatically smaller and more efficient than web-based alternatives for personal tools.",
     "topic": "software-engineering",
     "source_article_ids": [
       "cbd6d28cc760"
     ]
   },
   {
-    "id": "c0018",
-    "text": "AI coding agents can implement sophisticated low-level solutions (like raw socket HTTP servers) without external libraries, sometimes choosing unconventional but functional approaches.",
+    "id": "c0017",
+    "text": "AI coding agents can implement low-level solutions (e.g., raw socket HTTP servers) without external libraries, sometimes producing surprisingly unconventional implementations.",
     "topic": "ai-coding",
     "source_article_ids": [
       "cbd6d28cc760"
     ]
   },
   {
-    "id": "c0019",
-    "text": "Claude Code supports remote control sessions accessible from web, iOS, and desktop interfaces, enabling interaction beyond the local terminal.",
+    "id": "c0018",
+    "text": "Claude Code supports remote control sessions accessible from web, iOS, and desktop interfaces, enabling remote access to coding agents",
     "topic": "claude-code",
+    "source_article_ids": [
+      "e3bd27735f37"
+    ]
+  },
+  {
+    "id": "c0019",
+    "text": "Remote control mode in Claude Code limits sessions to one per machine and disables the --dangerously-skip-permissions flag for security",
+    "topic": "developer-tools",
     "source_article_ids": [
       "e3bd27735f37"
     ]
   },
   {
     "id": "c0020",
-    "text": "Remote control mode in Claude Code limits usage to one session per machine and disables the --dangerously-skip-permissions flag for security.",
-    "topic": "claude-code",
+    "text": "Anthropic's Cowork product supports scheduled recurring tasks, but they only run while the computer is awake and the desktop app is open",
+    "topic": "agentic-tools",
     "source_article_ids": [
       "e3bd27735f37"
     ]
   },
   {
     "id": "c0021",
-    "text": "Cowork (Claude Code's agent sibling) supports scheduled recurring tasks, but they only run while the computer is awake and the desktop app is open.",
-    "topic": "agentic-tools",
+    "text": "AI coding agents occasionally execute catastrophic commands that can destroy hours of uncommitted work, creating a need for safety guardrails",
+    "topic": "ai-agents",
     "source_article_ids": [
-      "e3bd27735f37"
+      "cd8ee8d2ebf2"
     ]
   },
   {
     "id": "c0022",
-    "text": "AI coding agents occasionally execute catastrophic commands (e.g., git reset --hard, rm -rf) that can destroy hours of uncommitted work.",
-    "topic": "ai-safety",
+    "text": "dcg (Destructive Command Guard) intercepts dangerous commands before execution using SIMD-accelerated filtering with sub-millisecond latency and 49+ modular security packs",
+    "topic": "devops-safety",
     "source_article_ids": [
       "cd8ee8d2ebf2"
     ]
   },
   {
     "id": "c0023",
-    "text": "dcg (Destructive Command Guard) intercepts dangerous commands before execution with sub-millisecond latency using SIMD-accelerated filtering and 49+ modular security packs.",
-    "topic": "developer-tools",
+    "text": "Smart context detection can distinguish between data references and actual destructive command execution, including scanning heredocs and inline scripts",
+    "topic": "security",
     "source_article_ids": [
       "cd8ee8d2ebf2"
     ]
   },
   {
     "id": "c0024",
-    "text": "Smart context detection can distinguish between referencing destructive commands in data (e.g., strings, docs) versus actually executing them, including scanning heredocs and inline scripts.",
-    "topic": "security",
+    "text": "Fail-open design in safety tools ensures they never block developer workflow due to their own errors or timeouts",
+    "topic": "devops-safety",
     "source_article_ids": [
       "cd8ee8d2ebf2"
     ]
   },
   {
     "id": "c0025",
-    "text": "Fail-open design in safety tooling ensures the guard never blocks developer workflow due to its own errors or timeouts.",
-    "topic": "security",
+    "text": "Per-agent trust levels allow different AI coding tools to have different security policies and permissions",
+    "topic": "ai-agents",
     "source_article_ids": [
       "cd8ee8d2ebf2"
     ]
   },
   {
     "id": "c0026",
-    "text": "Per-agent trust levels allow different AI coding tools to have different security policies for command execution.",
-    "topic": "ai-safety",
-    "source_article_ids": [
-      "cd8ee8d2ebf2"
-    ]
-  },
-  {
-    "id": "c0027",
-    "text": "cmux is a native macOS terminal (Swift + AppKit) that uses libghostty as a rendering library, designed specifically for AI agent multitasking.",
+    "text": "cmux is a native macOS terminal emulator built with Swift + AppKit that uses libghostty as a rendering library, designed for AI agent multitasking",
     "topic": "terminal-emulator",
     "source_article_ids": [
       "b8662afa1c19"
     ]
   },
   {
-    "id": "c0028",
-    "text": "Notification rings and badges using standard OSC escape sequences can alert developers when background AI agents need attention in a multiplexed terminal.",
+    "id": "c0027",
+    "text": "Notification rings and badges using standard OSC escape sequences can alert developers when background AI agents need attention",
     "topic": "developer-tools",
     "source_article_ids": [
       "b8662afa1c19"
     ]
   },
   {
-    "id": "c0029",
-    "text": "Embedding a scriptable browser alongside a terminal enables automation workflows that combine web interaction with command-line tools.",
+    "id": "c0028",
+    "text": "Embedding a scriptable browser alongside a terminal enables automation workflows that combine web and CLI interactions",
     "topic": "automation",
     "source_article_ids": [
       "b8662afa1c19"
     ]
   },
   {
-    "id": "c0030",
-    "text": "Claude Code combined with Obsidian's markdown folder as a knowledge base creates an effective original research workflow.",
+    "id": "c0029",
+    "text": "Claude Code combined with Obsidian's markdown folder structure creates an effective original research workflow where the folder serves as a knowledge base",
     "topic": "research-workflow",
     "source_article_ids": [
       "30edf86fcbd8"
     ]
   },
   {
-    "id": "c0031",
-    "text": "Voice mode enables stream-of-consciousness ideation that an AI can then structure and synthesize into organized research notes.",
+    "id": "c0030",
+    "text": "Voice mode enables stream-of-consciousness ideation that AI can then structure and synthesize into organized knowledge",
     "topic": "voice-input",
     "source_article_ids": [
       "30edf86fcbd8"
     ]
   },
   {
-    "id": "c0032",
-    "text": "Active recall (answering questions about material) is more effective for retention than passive note-taking or re-reading.",
+    "id": "c0031",
+    "text": "Active recall (answering questions about material) is more effective for retention than passive note-taking or re-reading",
     "topic": "spaced-repetition",
     "source_article_ids": [
       "30edf86fcbd8"
     ]
   },
   {
-    "id": "c0033",
-    "text": "Claude.ai's Research feature has no API or CLI access; it only exists in the web UI but produces dramatically more comprehensive results than standard web search by running dozens of searches and cross-referencing sources.",
+    "id": "c0032",
+    "text": "Claude.ai's Research feature produces dramatically more comprehensive results than standard web search by running dozens of searches and cross-referencing sources, but has no API access",
     "topic": "claude-research",
     "source_article_ids": [
       "5f96539044ea"
     ]
   },
   {
+    "id": "c0033",
+    "text": "A workaround chaining background agents, a Chrome extension, and Claude.ai can bridge the gap between CLI tools and web-only AI features",
+    "topic": "developer-tools",
+    "source_article_ids": [
+      "5f96539044ea"
+    ]
+  },
+  {
     "id": "c0034",
-    "text": "Background agents in Claude Code (v2.0.60+) can be chained with browser automation to bridge gaps where features lack API access, without blocking the developer's main session.",
-    "topic": "agentic-tools",
+    "text": "Background agents in Claude Code enable long-running tasks (6-35 minutes) without blocking the developer's main session",
+    "topic": "claude-code",
     "source_article_ids": [
       "5f96539044ea",
       "e3bd27735f37"
@@ -279,7 +278,7 @@
   },
   {
     "id": "c0035",
-    "text": "A native messaging conflict between Claude Desktop and Claude Code must be manually resolved when using Chrome extensions that communicate with both.",
+    "text": "Native messaging conflicts between Claude Desktop and Claude Code require manual config file management to resolve",
     "topic": "developer-tools",
     "source_article_ids": [
       "5f96539044ea"
@@ -287,39 +286,39 @@
   },
   {
     "id": "c0036",
-    "text": "Certain developer tool categories show near-monopoly conditions in LLM recommendations, with GitHub Actions at 93.8% for CI/CD and Stripe at 91.4% for payments.",
-    "topic": "llm-preferences",
+    "text": "GitHub Actions holds near-monopoly status in CI/CD, receiving 93.8% of tool recommendations from Claude Code, illustrating how LLM coding assistants can reinforce market concentration in developer tooling.",
+    "topic": "ci-cd",
     "source_article_ids": [
       "45bb389f0310"
     ]
   },
   {
     "id": "c0037",
-    "text": "Different LLM models produce different tool selection preferences, revealing recency biases and training data composition effects in their recommendations.",
-    "topic": "llm-preferences",
+    "text": "Stripe dominates the payments category with 91.4% of LLM tool recommendations, suggesting certain tool categories have effectively converged on a single winner.",
+    "topic": "payments",
     "source_article_ids": [
       "45bb389f0310"
     ]
   },
   {
     "id": "c0038",
-    "text": "Large-scale LLM preference surveys (thousands of responses across dozens of tools and categories) can map developer tool ecosystem market share.",
-    "topic": "market-analysis",
+    "text": "LLM model preferences for developer tools show measurable recency bias and inter-model disagreements, meaning tool recommendations vary depending on which model is asked.",
+    "topic": "llm-preferences",
     "source_article_ids": [
       "45bb389f0310"
     ]
   },
   {
     "id": "c0039",
-    "text": "AGENTS.md is a standardized, cross-tool instruction format for AI coding agents — a 'README for agents' — adopted by over 60,000 open-source projects on GitHub.",
-    "topic": "ai-agents",
+    "text": "Some developer tool categories exhibit near-monopoly conditions (>75% single-tool dominance) in LLM recommendations, which could create self-reinforcing adoption loops.",
+    "topic": "market-analysis",
     "source_article_ids": [
-      "0e77e7f08ea4"
+      "45bb389f0310"
     ]
   },
   {
     "id": "c0040",
-    "text": "AI agent instruction files are intentionally separated from human-facing README.md to keep human documentation concise while providing detailed agent guidance.",
+    "text": "AGENTS.md is a standardized file format adopted by over 60,000 open-source projects that provides AI coding agent instructions, intentionally separated from README.md to keep human-facing docs concise.",
     "topic": "ai-agents",
     "source_article_ids": [
       "0e77e7f08ea4"
@@ -327,7 +326,7 @@
   },
   {
     "id": "c0041",
-    "text": "The AGENTS.md format is governed by the Agentic AI Foundation under the Linux Foundation, having emerged from cross-industry collaboration rather than a single vendor.",
+    "text": "A single AGENTS.md file works across multiple AI coding tools (Codex, Cursor, Jules, Amp, etc.), functioning as a cross-tool interoperability standard for agent behavior.",
     "topic": "open-standards",
     "source_article_ids": [
       "0e77e7f08ea4"
@@ -335,55 +334,55 @@
   },
   {
     "id": "c0042",
-    "text": "AGENTS.md supports monorepo structures through nested files and has no required fields, maximizing flexibility across project types.",
-    "topic": "ai-agents",
+    "text": "AGENTS.md emerged from cross-industry collaboration and is now governed by the Agentic AI Foundation under the Linux Foundation, with no required fields and support for nested files in monorepos.",
+    "topic": "open-standards",
     "source_article_ids": [
       "0e77e7f08ea4"
     ]
   },
   {
     "id": "c0043",
-    "text": "LLM SEO — optimizing content to rank well in AI model responses — is an emerging discipline analogous to traditional search engine optimization.",
-    "topic": "llm-seo",
+    "text": "Perplexity Computer provides access to 19 different LLM models and can be used to rapidly prototype entire platforms (like an LLM search ranking tool analogous to Moz) in a single session.",
+    "topic": "rapid-prototyping",
     "source_article_ids": [
       "1f606de64fc1"
     ]
   },
   {
     "id": "c0044",
-    "text": "Complex functional applications (e.g., a multi-model search ranking platform) can be built in a single AI prompt session using computer-use agents like Perplexity Computer.",
-    "topic": "ai-tools",
+    "text": "LLM search ranking (tracking how different models rank and recommend content) is an emerging SEO-adjacent discipline, analogous to traditional search engine optimization but for AI-generated answers.",
+    "topic": "seo",
     "source_article_ids": [
       "1f606de64fc1"
     ]
   },
   {
     "id": "c0045",
-    "text": "AI agent orchestration dashboards can run with zero external dependencies using only SQLite, eliminating the need for Redis, Postgres, or Docker.",
-    "topic": "devtools",
+    "text": "AI agent orchestration dashboards can run with zero external dependencies (SQLite only, no Redis/Postgres/Docker), prioritizing simplicity of deployment over scalability.",
+    "topic": "agent-orchestration",
     "source_article_ids": [
       "e0d8e9f5e16b"
     ]
   },
   {
     "id": "c0046",
-    "text": "Local AI coding sessions (e.g., Claude Code) can be auto-discovered and tracked by periodically scanning filesystem directories like ~/.claude/projects/.",
-    "topic": "monitoring",
+    "text": "Mission Control auto-discovers local Claude Code sessions and extracts token usage and cost data, enabling visibility into AI agent operations without manual instrumentation.",
+    "topic": "cost-tracking",
     "source_article_ids": [
       "e0d8e9f5e16b"
     ]
   },
   {
     "id": "c0047",
-    "text": "Quality review gates that block AI agent task completion without human sign-off provide a governance mechanism for agent-driven workflows.",
-    "topic": "ai-agents",
+    "text": "Quality review gates that block AI agent task completion without human sign-off represent a human-in-the-loop pattern for maintaining oversight over autonomous agent work.",
+    "topic": "agent-orchestration",
     "source_article_ids": [
       "e0d8e9f5e16b"
     ]
   },
   {
     "id": "c0048",
-    "text": "A single AI agent can unify personal knowledge management, life planning, content creation, and software development into one integrated workflow.",
+    "text": "A single AI agent can be configured to handle PKM, goal tracking, content creation, and development workflows simultaneously, acting as a unified personal operating system copilot.",
     "topic": "personal-knowledge-management",
     "source_article_ids": [
       "509d538e9b2a"
@@ -391,96 +390,98 @@
   },
   {
     "id": "c0049",
-    "text": "The PARA method (Projects, Areas, Resources, Archives) can be operationalized through an AI agent acting on a PKM backend like LogSeq.",
-    "topic": "personal-knowledge-management",
+    "text": "The PARA method (Projects, Areas, Resources, Archives) can be implemented and maintained through an AI agent, automating organizational structure that traditionally requires manual discipline.",
+    "topic": "productivity-systems",
     "source_article_ids": [
       "509d538e9b2a"
     ]
   },
   {
     "id": "c0050",
-    "text": "A hierarchical goal system (5/3/1-year goals with daily and weekly check-ins) forms a practical AI-assisted life operating system.",
-    "topic": "productivity",
-    "source_article_ids": [
-      "509d538e9b2a"
-    ]
-  },
-  {
-    "id": "c0051",
-    "text": "AI agents can learn to replicate a user's personal writing voice for content creation.",
+    "text": "AI agents can be trained to write in a specific user's voice and style, enabling authentic content creation at scale while maintaining personal tone.",
     "topic": "content-creation",
     "source_article_ids": [
       "509d538e9b2a"
     ]
   },
   {
-    "id": "c0052",
-    "text": "Single-file agent instructions (like AGENTS.md) don't scale beyond modest codebases; a tiered memory architecture (hot/warm/cold) is needed to maintain agent effectiveness on large projects.",
-    "topic": "agent-memory",
+    "id": "c0051",
+    "text": "A hierarchical goal system (5-year, 3-year, 1-year) with daily and weekly check-ins can be AI-copiloted, combining long-term planning with routine accountability.",
+    "topic": "productivity-systems",
     "source_article_ids": [
-      "62de2004e6b4"
+      "509d538e9b2a"
+    ]
+  },
+  {
+    "id": "c0052",
+    "text": "LogSeq can be integrated with AI agents for personal knowledge management, bridging local-first note-taking tools with LLM-powered organization and retrieval.",
+    "topic": "personal-knowledge-management",
+    "source_article_ids": [
+      "509d538e9b2a"
     ]
   },
   {
     "id": "c0053",
-    "text": "Most AI coding agent workflows lack strategic memory, optimizing only for local task completion. A persistent 'theory document' or codified context layer can maintain decision coherence across sessions.",
-    "topic": "agent-memory",
+    "text": "AI coding agents benefit from structured, machine-readable project instructions (AGENTS.md, CLAUDE.md, etc.) that describe conventions, architecture, and constraints — a pattern now standardizing across the ecosystem.",
+    "topic": "ai-agents",
+    "source_article_ids": [
+      "0e77e7f08ea4",
+      "e0d8e9f5e16b"
+    ]
+  },
+  {
+    "id": "c0054",
+    "text": "AI coding agents lack persistent strategic memory across sessions, causing repeated context loss and incoherent decisions over time.",
+    "topic": "agentic-coding",
     "source_article_ids": [
       "62de2004e6b4",
       "fbd42875bc6a"
     ]
   },
   {
-    "id": "c0054",
-    "text": "Documentation in agentic workflows becomes load-bearing infrastructure — functioning as memory rather than reference material, with a knowledge-to-code ratio that can reach ~24%.",
+    "id": "c0055",
+    "text": "Documentation in agent-assisted codebases becomes load-bearing infrastructure rather than optional reference material, functioning as the agent's persistent understanding of the system.",
     "topic": "knowledge-management",
     "source_article_ids": [
-      "62de2004e6b4"
+      "62de2004e6b4",
+      "fbd42875bc6a"
     ]
   },
   {
-    "id": "c0055",
-    "text": "Effective agent context infrastructure tends to emerge from real failures rather than upfront design; the best architectures are discovered iteratively.",
+    "id": "c0056",
+    "text": "A three-tier memory architecture (hot/warm/cold) for AI agent context scales better than a single flat instructions file, which breaks down beyond modest codebases.",
     "topic": "software-architecture",
     "source_article_ids": [
       "62de2004e6b4"
     ]
   },
   {
-    "id": "c0056",
-    "text": "For living documents tracking understanding, holistic rewrites preserve narrative coherence better than append-only logs. Updates should be triggered by shifts in understanding, not by code churn.",
-    "topic": "knowledge-management",
-    "source_article_ids": [
-      "fbd42875bc6a"
-    ]
-  },
-  {
     "id": "c0057",
-    "text": "A structured theory document should separate problem thesis, operating theory, strategy, key discoveries, and open questions — and use sticky session activation to stay current throughout a work session.",
-    "topic": "agent-memory",
+    "text": "In a mature agent-assisted codebase, the knowledge-to-code ratio can reach ~24%, meaning nearly a quarter of the project is context documentation rather than executable code.",
+    "topic": "agentic-coding",
     "source_article_ids": [
-      "fbd42875bc6a"
+      "62de2004e6b4"
     ]
   },
   {
     "id": "c0058",
-    "text": "AI-written code creates 'cognitive debt' — when developers lose understanding of how their codebase works — which slows progress similarly to technical debt.",
-    "topic": "agentic-coding",
+    "text": "Effective agent documentation emerges reactively from real failures and misunderstandings, not from upfront design or anticipatory specification.",
+    "topic": "engineering-practices",
     "source_article_ids": [
-      "b9968822e019"
+      "62de2004e6b4"
     ]
   },
   {
     "id": "c0059",
-    "text": "Interactive and animated explanations build algorithmic intuition more effectively than linear walkthroughs, which convey structure but not deep understanding.",
-    "topic": "code-understanding",
+    "text": "High agent autonomy (~6 autonomous turns per human prompt) is achievable when agents have sufficient persistent context about the codebase.",
+    "topic": "agentic-coding",
     "source_article_ids": [
-      "b9968822e019"
+      "62de2004e6b4"
     ]
   },
   {
     "id": "c0060",
-    "text": "Coding agents can generate rich visual output — interactive explanations, styled HTML pages, Mermaid diagrams — on demand, replacing ASCII art and text tables with browser-rendered content requiring no build step.",
+    "text": "Rich visual output (styled HTML, diagrams, interactive charts) is superior to ASCII terminal output for communicating complex information from AI agents to developers.",
     "topic": "developer-tooling",
     "source_article_ids": [
       "9d4f5c9b2707",
@@ -489,74 +490,1016 @@
   },
   {
     "id": "c0061",
-    "text": "Agent skills can auto-trigger based on output characteristics (e.g., tables exceeding 4 rows or 3 columns) to transparently upgrade output quality without explicit user requests.",
-    "topic": "agent-skills",
+    "text": "Self-contained HTML pages requiring no build step can serve as an agent's primary output format, auto-routing to the appropriate rendering library (Mermaid, CSS Grid, Chart.js) based on content type.",
+    "topic": "data-visualization",
     "source_article_ids": [
       "9d4f5c9b2707"
     ]
   },
   {
     "id": "c0062",
-    "text": "Abliteration is a technique that removes LLM refusal behaviors without using TransformerLens, significantly reducing safety filtering in open-weight models.",
-    "topic": "ai-safety",
+    "text": "Any scrollable agent output page can be converted to a slide deck format for presentation purposes.",
+    "topic": "developer-tools",
     "source_article_ids": [
-      "7c3550a5c409"
+      "9d4f5c9b2707"
     ]
   },
   {
     "id": "c0063",
-    "text": "Mixture-of-experts architectures enable large effective model sizes (e.g., 35B parameters) with much smaller active compute (e.g., 3B active parameters), making powerful models runnable on consumer hardware via tools like Ollama.",
-    "topic": "open-weights-models",
+    "text": "A living 'theory document' that separates problem thesis, operating theory, strategy, discoveries, and open questions maintains decision coherence better than plans or logs.",
+    "topic": "knowledge-management",
     "source_article_ids": [
-      "7c3550a5c409"
+      "fbd42875bc6a"
     ]
   },
   {
     "id": "c0064",
-    "text": "Custom chat templates can fix tool-calling errors in open-weight model serving infrastructure (e.g., llama-server), enabling capabilities not available with default configurations.",
-    "topic": "open-weights-models",
+    "text": "Holistic document rewrites preserve narrative coherence better than append-only logs, which fragment understanding over time.",
+    "topic": "knowledge-management",
+    "source_article_ids": [
+      "fbd42875bc6a"
+    ]
+  },
+  {
+    "id": "c0065",
+    "text": "Context updates for agent memory should be triggered by changes in understanding (new insights, revised beliefs), not by code churn or file modifications.",
+    "topic": "agentic-coding",
+    "source_article_ids": [
+      "fbd42875bc6a"
+    ]
+  },
+  {
+    "id": "c0066",
+    "text": "Agent-written code that developers don't understand creates 'cognitive debt' — analogous to technical debt but in human comprehension rather than code quality.",
+    "topic": "cognitive-debt",
+    "source_article_ids": [
+      "b9968822e019"
+    ]
+  },
+  {
+    "id": "c0067",
+    "text": "AI agents can produce interactive and animated explanations on demand to explain their own code, which is more effective for building intuitive understanding than linear walkthroughs.",
+    "topic": "code-understanding",
+    "source_article_ids": [
+      "b9968822e019"
+    ]
+  },
+  {
+    "id": "c0068",
+    "text": "Not all code warrants deep understanding — simple glue code can be trusted, but core application logic and algorithms require genuine comprehension.",
+    "topic": "engineering-practices",
+    "source_article_ids": [
+      "b9968822e019"
+    ]
+  },
+  {
+    "id": "c0069",
+    "text": "Abliteration is a technique that removes LLM refusal behavior by manipulating model weights directly, without requiring TransformerLens or full retraining.",
+    "topic": "model-safety",
     "source_article_ids": [
       "7c3550a5c409"
     ]
   },
   {
-    "id": "c0065",
-    "text": "LLMs like Opus tend toward simpler, more elegant solutions when the system prompt doesn't over-constrain their behavior with excessive instructions",
+    "id": "c0070",
+    "text": "Mixture-of-experts (MoE) architectures allow large total parameter counts (e.g. 35B) while only activating a fraction (e.g. 3B) per inference, reducing compute costs.",
+    "topic": "open-weights",
+    "source_article_ids": [
+      "7c3550a5c409"
+    ]
+  },
+  {
+    "id": "c0071",
+    "text": "Abliterated/uncensored open-weight models are explicitly not recommended for production or public-facing deployment due to safety concerns.",
+    "topic": "model-safety",
+    "source_article_ids": [
+      "7c3550a5c409"
+    ]
+  },
+  {
+    "id": "c0072",
+    "text": "LLMs like Opus exhibit a simplicity bias, gravitating toward simpler solutions when the system prompt doesn't constrain or override their natural behavior.",
+    "topic": "llm-behavior",
+    "source_article_ids": [
+      "7708389c320c"
+    ]
+  },
+  {
+    "id": "c0073",
+    "text": "Document-based planning (writing plans to files) is superior to conversation-based planning because it avoids context window limits and enables structured revision.",
     "topic": "agentic-coding",
     "source_article_ids": [
       "7708389c320c"
     ]
   },
   {
-    "id": "c0066",
-    "text": "Using a persistent external document (e.g. a markdown file) as the source of truth for plans is superior to in-conversation planning mode, because it survives context window limits and can be referenced across sessions",
-    "topic": "planning-workflows",
+    "id": "c0074",
+    "text": "Agentic coding tools that can modify their own configuration files enable rapid, iterative customization of behavior.",
+    "topic": "agentic-coding",
     "source_article_ids": [
       "7708389c320c"
     ]
   },
   {
-    "id": "c0067",
-    "text": "In-conversation planning in agentic coding tools is limited by context window size, causing plans to degrade or be forgotten in long sessions",
-    "topic": "planning-workflows",
-    "source_article_ids": [
-      "7708389c320c"
-    ]
-  },
-  {
-    "id": "c0068",
-    "text": "Claude Code can modify its own configuration and documentation files (like CLAUDE.md), enabling self-referential workflow improvements",
-    "topic": "claude-code",
-    "source_article_ids": [
-      "7708389c320c"
-    ]
-  },
-  {
-    "id": "c0069",
-    "text": "Claude Code's open mono-repo design allows users to inspect and understand the tool's internals, building trust and enabling power-user workflows",
+    "id": "c0075",
+    "text": "Open-sourcing agentic tools lets users understand internal concepts and system prompts, creating a feedback loop between user knowledge and tool effectiveness.",
     "topic": "developer-tools",
     "source_article_ids": [
       "7708389c320c"
+    ]
+  },
+  {
+    "id": "c0076",
+    "text": "Hypernetworks can generate effective LoRA adapters in a single sub-second forward pass, replacing expensive per-task fine-tuning optimization entirely.",
+    "topic": "model-adaptation",
+    "source_article_ids": [
+      "87054079e2b9"
+    ]
+  },
+  {
+    "id": "c0077",
+    "text": "Document knowledge can be internalized into model parameters using constant memory (~50MB) instead of the linear memory scaling required by in-context processing (12+ GB at 128K tokens).",
+    "topic": "long-context",
+    "source_article_ids": [
+      "87054079e2b9"
+    ]
+  },
+  {
+    "id": "c0078",
+    "text": "Models trained on short sequences (256 tokens) can generalize to much longer documents (32K tokens) for retrieval tasks when knowledge is internalized via LoRA adapters.",
+    "topic": "model-adaptation",
+    "source_article_ids": [
+      "87054079e2b9"
+    ]
+  },
+  {
+    "id": "c0079",
+    "text": "Cross-modal transfer is achievable through generated adapters: a text-only model can perform image classification at 75% accuracy using LoRA adapters produced by a vision-language model.",
+    "topic": "model-adaptation",
+    "source_article_ids": [
+      "87054079e2b9"
+    ]
+  },
+  {
+    "id": "c0080",
+    "text": "Natural language task descriptions can replace the entire fine-tuning pipeline, with a hypernetwork converting a text prompt directly into model weight updates.",
+    "topic": "fine-tuning",
+    "source_article_ids": [
+      "87054079e2b9"
+    ]
+  },
+  {
+    "id": "c0081",
+    "text": "PHI Latin Texts supports structured search of the classical Latin corpus with logical operators (and, or, near/proximity), enabling precise textual queries across all extant Latin literature.",
+    "topic": "digital-humanities",
+    "source_article_ids": [
+      "ad97bb95e674"
+    ]
+  },
+  {
+    "id": "c0082",
+    "text": "PHI searches can be filtered to specific authors using bracket abbreviations (e.g. [Cic]) and to individual works using colon syntax (e.g. [Cic:Catil]), with numeric ranges for batch work selection.",
+    "topic": "classical-philology",
+    "source_article_ids": [
+      "ad97bb95e674"
+    ]
+  },
+  {
+    "id": "c0083",
+    "text": "Multiple author filters can be combined in a single PHI search bracket, enabling cross-author corpus queries without separate searches.",
+    "topic": "text-search",
+    "source_article_ids": [
+      "ad97bb95e674"
+    ]
+  },
+  {
+    "id": "c0084",
+    "text": "AI writing assistants can critique and highlight text with distinct feedback types (e.g. clarity, tone, structure) rather than generating replacement text, preserving the author's voice and agency.",
+    "topic": "ai-writing-tools",
+    "source_article_ids": [
+      "fc10d3e175b2"
+    ]
+  },
+  {
+    "id": "c0085",
+    "text": "Voice consistency in AI writing feedback can be maintained by passing the user's prior completed essays as context, so the AI learns and preserves the author's style.",
+    "topic": "ai-writing-tools",
+    "source_article_ids": [
+      "fc10d3e175b2"
+    ]
+  },
+  {
+    "id": "c0086",
+    "text": "A 'Dignified Technology' design philosophy holds that AI should augment rather than replace human creativity, keeping the human as author and the AI as critic or advisor.",
+    "topic": "ai-writing-tools",
+    "source_article_ids": [
+      "fc10d3e175b2"
+    ]
+  },
+  {
+    "id": "c0087",
+    "text": "Dual-backend auto-save (e.g. cloud database plus localStorage) provides resilience against data loss in writing tools without requiring manual save actions.",
+    "topic": "developer-tools",
+    "source_article_ids": [
+      "fc10d3e175b2"
+    ]
+  },
+  {
+    "id": "c0088",
+    "text": "Agent skills should use just-in-time loading and progressive disclosure — agents don't see reference files until explicitly directed — to keep context windows lean and focused.",
+    "topic": "agent-skills",
+    "source_article_ids": [
+      "0d953f030977",
+      "7708389c320c"
+    ]
+  },
+  {
+    "id": "c0089",
+    "text": "Skill metadata (name and description frontmatter) is the sole trigger mechanism for agent skill selection; poor metadata makes skills invisible regardless of their quality.",
+    "topic": "agent-skills",
+    "source_article_ids": [
+      "0d953f030977"
+    ]
+  },
+  {
+    "id": "c0090",
+    "text": "Instructions for LLM agents should be written differently than for humans: use step-by-step numbering, concrete templates, third-person imperative voice, and avoid narrative prose.",
+    "topic": "prompt-engineering",
+    "source_article_ids": [
+      "0d953f030977"
+    ]
+  },
+  {
+    "id": "c0091",
+    "text": "Agent skills can be validated using LLMs themselves through trigger testing, simulated execution, and adversarial QA, creating a self-referential quality assurance loop.",
+    "topic": "skill-validation",
+    "source_article_ids": [
+      "0d953f030977"
+    ]
+  },
+  {
+    "id": "c0092",
+    "text": "Scripts within agent skills should handle fragile or repetitive tasks with descriptive error output, enabling agents to self-correct without human intervention.",
+    "topic": "agent-skills",
+    "source_article_ids": [
+      "0d953f030977"
+    ]
+  },
+  {
+    "id": "c0093",
+    "text": "Agent skills should avoid human-oriented artifacts (README, CHANGELOG, library code) and instead be structured as a single SKILL.md file under 500 lines with flat subdirectories for scripts and references.",
+    "topic": "agent-skills",
+    "source_article_ids": [
+      "0d953f030977"
+    ]
+  },
+  {
+    "id": "c0094",
+    "text": "Islamization of Egypt and the Levant began centuries after the initial Muslim conquests, not during them, contradicting common assumptions about rapid religious transformation following conquest.",
+    "topic": "islamic-history",
+    "source_article_ids": [
+      "5b728856b62a"
+    ]
+  },
+  {
+    "id": "c0095",
+    "text": "Early Muslim rulers had financial disincentives to convert Christians, as non-Muslim subjects were a major tax revenue source through the jizya system.",
+    "topic": "islamic-history",
+    "source_article_ids": [
+      "5b728856b62a"
+    ]
+  },
+  {
+    "id": "c0096",
+    "text": "State collapse and regional fragmentation under competing warlords, rather than deliberate policy, drove the decisive demographic shift from Christianity to Islam in the Levant and Egypt.",
+    "topic": "islamic-history",
+    "source_article_ids": [
+      "5b728856b62a"
+    ]
+  },
+  {
+    "id": "c0097",
+    "text": "The Ottoman Empire restored political stability to Egypt and the Levant after a prolonged period of fragmentation by competing warlords.",
+    "topic": "ottoman-empire",
+    "source_article_ids": [
+      "5b728856b62a"
+    ]
+  },
+  {
+    "id": "c0098",
+    "text": "Flat note hierarchies with property/tag/link connections work better for AI agent access than folder-based organization in knowledge management systems.",
+    "topic": "agentic-workflows",
+    "source_article_ids": [
+      "0711db34d8f2"
+    ]
+  },
+  {
+    "id": "c0099",
+    "text": "Obsidian Bases enable structured, typed notes that AI agents can programmatically create, query, and update, bridging personal knowledge bases and agentic workflows.",
+    "topic": "knowledge-management",
+    "source_article_ids": [
+      "0711db34d8f2"
+    ]
+  },
+  {
+    "id": "c0100",
+    "text": "Hybrid semantic/keyword search (like QMD) is essential for effective agent-driven queries over personal knowledge vaults, as neither approach alone is sufficient.",
+    "topic": "semantic-search",
+    "source_article_ids": [
+      "0711db34d8f2"
+    ]
+  },
+  {
+    "id": "c0101",
+    "text": "Multi-channel sync strategies (Obsidian Sync + Git + cron) can enable agentic access to knowledge vaults without requiring the GUI to be running.",
+    "topic": "agentic-workflows",
+    "source_article_ids": [
+      "0711db34d8f2"
+    ]
+  },
+  {
+    "id": "c0102",
+    "text": "Obsidian's CLI requiring the GUI to run is currently the biggest limitation for headless agentic workflows.",
+    "topic": "pkm-tooling",
+    "source_article_ids": [
+      "0711db34d8f2"
+    ]
+  },
+  {
+    "id": "c0103",
+    "text": "all-MiniLM-L6-v2 maps sentences to 384-dimensional dense vectors using a lightweight 6-layer transformer, achieving strong semantic search performance with minimal compute.",
+    "topic": "sentence-embeddings",
+    "source_article_ids": [
+      "32e2db27eca9"
+    ]
+  },
+  {
+    "id": "c0104",
+    "text": "Contrastive learning on over 1 billion sentence pairs across 30+ datasets is an effective training strategy for general-purpose sentence embedding models.",
+    "topic": "contrastive-learning",
+    "source_article_ids": [
+      "32e2db27eca9"
+    ]
+  },
+  {
+    "id": "c0105",
+    "text": "all-MiniLM-L6-v2 has ~192 million monthly downloads, making it one of the most widely adopted sentence embedding models in industry.",
+    "topic": "NLP",
+    "source_article_ids": [
+      "32e2db27eca9"
+    ]
+  },
+  {
+    "id": "c0106",
+    "text": "Sentence embedding models may silently truncate long inputs (e.g., 256 word pieces for MiniLM), which can cause information loss if users are unaware of the limit.",
+    "topic": "sentence-embeddings",
+    "source_article_ids": [
+      "32e2db27eca9"
+    ]
+  },
+  {
+    "id": "c0107",
+    "text": "E.J.W. Gibb's six-volume 'A History of Ottoman Poetry' (1900–1909) was the first extended English-language account of Ottoman Turkish literature, covering over five centuries of classical poetry.",
+    "topic": "ottoman-literature",
+    "source_article_ids": [
+      "1cdf956df922"
+    ]
+  },
+  {
+    "id": "c0108",
+    "text": "Gibb's work includes an influential introductory account of Ottoman mysticism and religious philosophy that shaped Western understanding of the tradition.",
+    "topic": "islamic-mysticism",
+    "source_article_ids": [
+      "1cdf956df922"
+    ]
+  },
+  {
+    "id": "c0109",
+    "text": "Major 19th/early 20th-century scholarly text series continue to be reissued with modern supplements, demonstrating the enduring value of foundational critical editions in philology and literary history.",
+    "topic": "textual-scholarship",
+    "source_article_ids": [
+      "1cdf956df922",
+      "df64afc012cb"
+    ]
+  },
+  {
+    "id": "c0110",
+    "text": "CSEL (Corpus Scriptorum Ecclesiasticorum Latinorum) is a critical edition series of Latin ecclesiastical writers running continuously since 1866, now exceeding 100 volumes.",
+    "topic": "latin-patristics",
+    "source_article_ids": [
+      "df64afc012cb"
+    ]
+  },
+  {
+    "id": "c0111",
+    "text": "Augustine is the most heavily represented author in CSEL, with works spanning dozens of volumes across the series.",
+    "topic": "latin-patristics",
+    "source_article_ids": [
+      "df64afc012cb"
+    ]
+  },
+  {
+    "id": "c0112",
+    "text": "CSEL covers Latin ecclesiastical texts from the 2nd century (Tertullian, Minucius Felix) through the 6th century (Ennodius, Cassiodorus), representing the full span of Latin patristic literature.",
+    "topic": "classical-philology",
+    "source_article_ids": [
+      "df64afc012cb"
+    ]
+  },
+  {
+    "id": "c0113",
+    "text": "CSEL's publishing moved from the Austrian Academy of Sciences press to De Gruyter (Berlin) in 2012, reflecting broader consolidation trends in academic publishing.",
+    "topic": "textual-scholarship",
+    "source_article_ids": [
+      "df64afc012cb"
+    ]
+  },
+  {
+    "id": "c0114",
+    "text": "The Strugatsky brothers represent the pinnacle of Russo-Soviet weird fiction, occupying the top positions in the genre's canon.",
+    "topic": "russian-literature",
+    "source_article_ids": [
+      "0b1592de8411"
+    ]
+  },
+  {
+    "id": "c0115",
+    "text": "Russian literary classics are more readable than their reputation suggests, contradicting common perceptions of difficulty.",
+    "topic": "russian-literature",
+    "source_article_ids": [
+      "0b1592de8411"
+    ]
+  },
+  {
+    "id": "c0116",
+    "text": "Russo-Soviet weird fiction encompasses a remarkably broad range of subgenres including steampunk, magical realism, gothic horror, psychedelic satire, and space opera, spanning from Pushkin through the post-Soviet era.",
+    "topic": "weird-fiction",
+    "source_article_ids": [
+      "0b1592de8411"
+    ]
+  },
+  {
+    "id": "c0117",
+    "text": "Several Russo-Soviet weird fiction works use communist ideology as an active narrative and worldbuilding element rather than mere backdrop.",
+    "topic": "soviet-fiction",
+    "source_article_ids": [
+      "0b1592de8411"
+    ]
+  },
+  {
+    "id": "c0118",
+    "text": "Aitmatov's 'A Day Lasts Over a Century' exists in abridged versions that significantly diminish the work and should be avoided.",
+    "topic": "russian-literature",
+    "source_article_ids": [
+      "0b1592de8411"
+    ]
+  },
+  {
+    "id": "c0119",
+    "text": "Eric Cline's Bronze Age Collapse book prioritizes historiography and scholarly discourse over accessible narrative history, making it more useful for understanding the field than the civilizations themselves.",
+    "topic": "historiography",
+    "source_article_ids": [
+      "68a7b3e5322f"
+    ]
+  },
+  {
+    "id": "c0120",
+    "text": "The strongest evidence for the Late Bronze Age Collapse involves earthquake storms and multi-causal systems failure rather than any single cause like the Sea Peoples.",
+    "topic": "bronze-age-collapse",
+    "source_article_ids": [
+      "68a7b3e5322f"
+    ]
+  },
+  {
+    "id": "c0121",
+    "text": "Amanda Podany's 'Brotherhood of Kings' represents a superior model for writing accessible ancient history compared to Cline's more historiographically-focused approach.",
+    "topic": "book-recommendations",
+    "source_article_ids": [
+      "68a7b3e5322f"
+    ]
+  },
+  {
+    "id": "c0122",
+    "text": "beautiful-mermaid is an open source npm library that renders Mermaid diagrams to both SVG and ASCII formats with ultra-fast performance and full theming support.",
+    "topic": "developer-tools",
+    "source_article_ids": [
+      "5bc86988cc3e"
+    ]
+  },
+  {
+    "id": "c0123",
+    "text": "Mermaid diagram rendering can support complex patterns including nested subgraphs, parallel blocks, self-referencing messages, and Unicode characters.",
+    "topic": "data-visualization",
+    "source_article_ids": [
+      "5bc86988cc3e"
+    ]
+  },
+  {
+    "id": "c0124",
+    "text": "Claude Code pre-tool hooks can intercept every tool call before execution, enabling safety guards that check for destructive potential in real time.",
+    "topic": "agent-safety",
+    "source_article_ids": [
+      "e7f9e5b5a2a8"
+    ]
+  },
+  {
+    "id": "c0125",
+    "text": "Simple command blocklists are insufficient for guarding AI coding agents because LLMs write ad-hoc scripts to circumvent them; AST-level analysis (e.g., ast-grep) is needed instead.",
+    "topic": "agent-safety",
+    "source_article_ids": [
+      "e7f9e5b5a2a8"
+    ]
+  },
+  {
+    "id": "c0126",
+    "text": "Effective AI agent safety tools should be agent-friendly, explaining risks and suggesting safe alternatives rather than simply blocking actions.",
+    "topic": "agent-safety",
+    "source_article_ids": [
+      "e7f9e5b5a2a8"
+    ]
+  },
+  {
+    "id": "c0127",
+    "text": "The Bolsheviks functioned as a millenarian apocalyptic sect with dynamics of conversion, prophecy, and purification, not merely as a political party.",
+    "topic": "soviet-history",
+    "source_article_ids": [
+      "b5ec7073675c"
+    ]
+  },
+  {
+    "id": "c0128",
+    "text": "The House of Government in Moscow, the largest residential building in Europe when completed in 1931, saw approximately 800 of its elite residents sent to prison or execution during Stalin's purges.",
+    "topic": "stalinism",
+    "source_article_ids": [
+      "b5ec7073675c"
+    ]
+  },
+  {
+    "id": "c0129",
+    "text": "Microhistory of a single building can illuminate macro-level historical processes like revolution, terror, and ideological collapse, as demonstrated by Slezkine's approach.",
+    "topic": "historiography",
+    "source_article_ids": [
+      "b5ec7073675c"
+    ]
+  },
+  {
+    "id": "c0130",
+    "text": "The Soviet revolutionary arc followed a pattern from idealistic conversion through institutionalized terror to the next generation's loss of faith, mirroring dynamics seen in other millenarian movements.",
+    "topic": "soviet-history",
+    "source_article_ids": [
+      "b5ec7073675c",
+      "0b1592de8411"
+    ]
+  },
+  {
+    "id": "c0131",
+    "text": "Autonomous coding agents can follow a structured loop of PRD-driven story implementation, completing one story per iteration with quality gates enforced via pre-commit hooks.",
+    "topic": "autonomous-agents",
+    "source_article_ids": [
+      "444674685eb8"
+    ]
+  },
+  {
+    "id": "c0132",
+    "text": "Knowledge persistence across agent iterations requires explicit mechanisms like progress logs, pattern consolidation, and directory-level documentation to avoid repeating mistakes.",
+    "topic": "knowledge-management",
+    "source_article_ids": [
+      "444674685eb8"
+    ]
+  },
+  {
+    "id": "c0133",
+    "text": "Drizzle ORM migrations require manual idempotency edits, a recurring gotcha that benefits from being codified as an explicit pattern for agents.",
+    "topic": "developer-tooling",
+    "source_article_ids": [
+      "444674685eb8"
+    ]
+  },
+  {
+    "id": "c0134",
+    "text": "Agents need a clear termination signal (such as a COMPLETE promise) to know when all work is done and the loop should stop.",
+    "topic": "autonomous-agents",
+    "source_article_ids": [
+      "444674685eb8"
+    ]
+  },
+  {
+    "id": "c0135",
+    "text": "Modern academia distorts Greek culture by projecting contemporary bourgeois values onto it, as both Burckhardt and Nietzsche identified.",
+    "topic": "classical-philology",
+    "source_article_ids": [
+      "1b3eff8d3e8f"
+    ]
+  },
+  {
+    "id": "c0136",
+    "text": "Odysseus's quest represents an unembarrassed demand for justice when the divine order becomes unintelligible, offering an alternative to Enlightenment rationalism rooted in spirited anger.",
+    "topic": "political-philosophy",
+    "source_article_ids": [
+      "1b3eff8d3e8f"
+    ]
+  },
+  {
+    "id": "c0137",
+    "text": "Dante's treatment of Odysseus is far more philosophically nuanced than most Christian readers acknowledge, and both secular and religious readers are guilty of self-serving misreadings of foundational texts.",
+    "topic": "classical-philology",
+    "source_article_ids": [
+      "1b3eff8d3e8f"
+    ]
+  },
+  {
+    "id": "c0138",
+    "text": "Warren H. Carroll's 'History of Christendom' is the only comprehensive narration of Western history from an orthodox Catholic perspective still in print, built on the premise that the Incarnation is the decisive turning point of all history.",
+    "topic": "catholic-history",
+    "source_article_ids": [
+      "2396989c6ddc"
+    ]
+  },
+  {
+    "id": "c0139",
+    "text": "The six-volume series traces Western civilization through founding, building, glory, cleaving (Reformation), revolution, and 20th-century crisis, ending with the 'Marian Century.'",
+    "topic": "historiography",
+    "source_article_ids": [
+      "2396989c6ddc"
+    ]
+  },
+  {
+    "id": "c0140",
+    "text": "Byzantium lasted over a millennium and was constantly transforming, not the static civilization it is often assumed to be, fusing Ancient Greek, Roman, Christian, and medieval influences.",
+    "topic": "byzantium",
+    "source_article_ids": [
+      "fb84e3197a92"
+    ]
+  },
+  {
+    "id": "c0141",
+    "text": "Late Antiquity as an academic concept was largely invented by Peter Brown's work, replacing Gibbon's decline-and-fall narrative with a more nuanced understanding of transformation.",
+    "topic": "historiography",
+    "source_article_ids": [
+      "fb84e3197a92",
+      "3fece1a3610b"
+    ]
+  },
+  {
+    "id": "c0142",
+    "text": "Arab conquests took about 40 years and cost Byzantium nearly two-thirds of its territory; non-Arabic sources provide a fundamentally different picture of Islam's rise than traditional Arabic accounts.",
+    "topic": "islamic-history",
+    "source_article_ids": [
+      "fb84e3197a92"
+    ]
+  },
+  {
+    "id": "c0143",
+    "text": "Nestorian Christians carried Roman ideas in Christian form from Persia all the way to China, demonstrating the global reach of late antique intellectual networks.",
+    "topic": "late-antiquity",
+    "source_article_ids": [
+      "fb84e3197a92"
+    ]
+  },
+  {
+    "id": "c0144",
+    "text": "Periodisation is a tool historians impose retroactively — no one experiences their own era as a named period, and these labels shape understanding in often misleading ways.",
+    "topic": "historiography",
+    "source_article_ids": [
+      "3fece1a3610b"
+    ]
+  },
+  {
+    "id": "c0145",
+    "text": "The 'Dark Ages' label was dropped because it was consistently misused to imply intellectual decline, when it originally referred only to scarcity of surviving sources.",
+    "topic": "medieval-history",
+    "source_article_ids": [
+      "3fece1a3610b"
+    ]
+  },
+  {
+    "id": "c0146",
+    "text": "Many atrocities popularly attributed to 'medieval' times — witch panics, the Inquisition, the slave trade — actually occurred in the Early Modern period, while the Early Middle Ages included the Carolingian Renaissance, Viking Age, and Islamic Golden Age.",
+    "topic": "historiography",
+    "source_article_ids": [
+      "3fece1a3610b"
+    ]
+  },
+  {
+    "id": "c0147",
+    "text": "The concept of 'Global Middle Ages' is gaining traction as scholars recognise that European history cannot be understood in isolation from contemporaneous developments worldwide.",
+    "topic": "medieval-history",
+    "source_article_ids": [
+      "3fece1a3610b"
+    ]
+  },
+  {
+    "id": "c0148",
+    "text": "Calling Late Medieval achievements 'Renaissance' while calling Early Modern atrocities 'medieval' is a deliberate distortion that serves ideological purposes rather than historical accuracy.",
+    "topic": "historiography",
+    "source_article_ids": [
+      "3fece1a3610b",
+      "1b3eff8d3e8f"
+    ]
+  },
+  {
+    "id": "c0149",
+    "text": "Maths has overtaken English Literature as the most popular A-level in the UK, and the decline in humanities enrollment is international, not explained by country-specific curriculum changes.",
+    "topic": "education",
+    "source_article_ids": [
+      "d9edc94425dd"
+    ]
+  },
+  {
+    "id": "c0150",
+    "text": "Smartphones have displaced time previously spent reading; half of British adults don't read regularly.",
+    "topic": "reading-habits",
+    "source_article_ids": [
+      "d9edc94425dd"
+    ]
+  },
+  {
+    "id": "c0151",
+    "text": "Reading transmits information more efficiently than podcasts or video, compressing complex ideas into a form that rewards sustained attention.",
+    "topic": "literacy",
+    "source_article_ids": [
+      "d9edc94425dd"
+    ]
+  },
+  {
+    "id": "c0152",
+    "text": "Writing extends thought beyond working memory — outsourcing writing to AI effectively means outsourcing thinking itself.",
+    "topic": "AI-and-writing",
+    "source_article_ids": [
+      "d9edc94425dd"
+    ]
+  },
+  {
+    "id": "c0153",
+    "text": "If your understanding of history or literature is received passively rather than built through active engagement, whoever shaped that narrative also influences your politics — the decline of deep reading and liberal democracy may be intertwined.",
+    "topic": "liberal-democracy",
+    "source_article_ids": [
+      "d9edc94425dd",
+      "829f8fbd274a"
+    ]
+  },
+  {
+    "id": "c0154",
+    "text": "Students choosing maths and physics over humanities suggests a perceived value gap, not laziness — they're picking harder subjects they see as more worthwhile.",
+    "topic": "education",
+    "source_article_ids": [
+      "d9edc94425dd"
+    ]
+  },
+  {
+    "id": "c0155",
+    "text": "The Iliad is far stranger and more fantastical than commonly assumed; its monsters are presented as real, while the Odyssey's monsters are told by an unreliable narrator.",
+    "topic": "classical-literature",
+    "source_article_ids": [
+      "42ec7b68e11a"
+    ]
+  },
+  {
+    "id": "c0156",
+    "text": "The English phrase 'wine-dark sea' for Homer only dates to 1893 (Lang and Butcher), possibly derived from Kingsley's 1858 poem — a modern invention mistaken for ancient tradition.",
+    "topic": "translation",
+    "source_article_ids": [
+      "42ec7b68e11a"
+    ]
+  },
+  {
+    "id": "c0157",
+    "text": "The true test of an epic translation is the connective tissue between famous passages, not the set pieces everyone knows.",
+    "topic": "translation",
+    "source_article_ids": [
+      "42ec7b68e11a"
+    ]
+  },
+  {
+    "id": "c0158",
+    "text": "Translating directly from the source language rather than being influenced by prior translations uncovers fresh readings — layers of interpretation accumulate and obscure the original.",
+    "topic": "translation",
+    "source_article_ids": [
+      "42ec7b68e11a"
+    ]
+  },
+  {
+    "id": "c0159",
+    "text": "The Iliad is ultimately about Achilles losing and regaining his humanity through grief and compassion, not simply a poem about rage.",
+    "topic": "classical-literature",
+    "source_article_ids": [
+      "42ec7b68e11a"
+    ]
+  },
+  {
+    "id": "c0160",
+    "text": "France's Article 49.3 allows the government to pass legislation without a parliamentary vote, bypassing a likely rejection — a constitutional mechanism that creates democratic legitimacy crises.",
+    "topic": "france",
+    "source_article_ids": [
+      "c5b6f9a9c9c8"
+    ]
+  },
+  {
+    "id": "c0161",
+    "text": "Decentralized spontaneous protests using swarm tactics are legally ambiguous (no official organizer to hold responsible) and tactically effective against police containment strategies designed for organized marches.",
+    "topic": "social-movements",
+    "source_article_ids": [
+      "c5b6f9a9c9c8"
+    ]
+  },
+  {
+    "id": "c0162",
+    "text": "The Paris garbage workers' strike created a symbiosis between labor action and street protest — uncollected trash provided literal fuel for nightly fires, merging economic disruption with confrontational tactics.",
+    "topic": "labor-strikes",
+    "source_article_ids": [
+      "c5b6f9a9c9c8"
+    ]
+  },
+  {
+    "id": "c0163",
+    "text": "The French pension movement showed unusual cross-generational solidarity between union picketers and autonomous night rioters, breaking the typical division between institutional and radical protest.",
+    "topic": "social-movements",
+    "source_article_ids": [
+      "c5b6f9a9c9c8"
+    ]
+  },
+  {
+    "id": "c0164",
+    "text": "A movement's major weakness can be its failure to include marginalized populations (Black workers, non-urban communities) who see no stake in the specific demand, limiting its transformative potential.",
+    "topic": "social-movements",
+    "source_article_ids": [
+      "c5b6f9a9c9c8"
+    ]
+  },
+  {
+    "id": "c0165",
+    "text": "The structural tensions behind recent global uprisings (2019, 2020) were suppressed through state violence rather than resolved — they remain latent and can resurface.",
+    "topic": "social-movements",
+    "source_article_ids": [
+      "c5b6f9a9c9c8"
+    ]
+  },
+  {
+    "id": "c0166",
+    "text": "For non-linear SaaS products, single-event activation metrics (like Dropbox's 'file uploaded') don't work — complex tools need composite metrics built from multiple learning milestones.",
+    "topic": "product-analytics",
+    "source_article_ids": [
+      "a0b0716bb150"
+    ]
+  },
+  {
+    "id": "c0167",
+    "text": "Working backwards from purchase/retention to find intermediate predictive milestones is more reliable than guessing forward at what activation events should matter.",
+    "topic": "product-analytics",
+    "source_article_ids": [
+      "a0b0716bb150"
+    ]
+  },
+  {
+    "id": "c0168",
+    "text": "Invisible gamification using diminishing-return points on learning loops can create effective composite activation metrics — Fibery's '30 points in 3 days' target lifted activation from 12% to 20% of leads.",
+    "topic": "gamification",
+    "source_article_ids": [
+      "a0b0716bb150"
+    ]
+  },
+  {
+    "id": "c0169",
+    "text": "Extreme early churn (only 1.5% active after a month) alongside high satisfaction among retained users signals an onboarding problem, not a product problem.",
+    "topic": "user-onboarding",
+    "source_article_ids": [
+      "a0b0716bb150"
+    ]
+  },
+  {
+    "id": "c0170",
+    "text": "When learning history, spend roughly 4x as much effort on specific events and facts as on abstract theory — interpretation without a solid factual foundation is unreliable.",
+    "topic": "learning-methods",
+    "source_article_ids": [
+      "829f8fbd274a"
+    ]
+  },
+  {
+    "id": "c0171",
+    "text": "Drive historical research by live questions in your mind rather than idle curiosity — genuine questions provide natural focus and stopping points.",
+    "topic": "learning-methods",
+    "source_article_ids": [
+      "829f8fbd274a"
+    ]
+  },
+  {
+    "id": "c0172",
+    "text": "Follow a pyramid of depth: many shallow investigations, fewer medium dives, and a handful of deep dives into primary sources — this ratio develops both breadth and genuine understanding.",
+    "topic": "autodidacticism",
+    "source_article_ids": [
+      "829f8fbd274a"
+    ]
+  },
+  {
+    "id": "c0173",
+    "text": "Deep study of a few alien societies lets you viscerally feel the contingency of your own assumptions — you cannot get this from summaries or overviews alone.",
+    "topic": "epistemology",
+    "source_article_ids": [
+      "829f8fbd274a"
+    ]
+  },
+  {
+    "id": "c0174",
+    "text": "Academic scholarship has golden periods per topic (roughly 40 years); newer work is not always better, and sometimes the best scholarship on a subject is decades old.",
+    "topic": "research-methodology",
+    "source_article_ids": [
+      "829f8fbd274a"
+    ]
+  },
+  {
+    "id": "c0175",
+    "text": "For any historical source, trace the full causal chain from the claimed event to the artifact you're reading — each link in that chain is a potential point of distortion.",
+    "topic": "source-criticism",
+    "source_article_ids": [
+      "829f8fbd274a"
+    ]
+  },
+  {
+    "id": "c0176",
+    "text": "Pushkin occupies a singular position in Russian culture with no equivalent in British literary life, yet accessible English-language biographies of him were surprisingly scarce before Feinstein's work",
+    "topic": "russian-literature",
+    "source_article_ids": [
+      "d83c7afa104a"
+    ]
+  },
+  {
+    "id": "c0177",
+    "text": "Pushkin's great-grandfather was an African slave who became a protégé of Peter the Great, and Pushkin took pride in his inherited African features",
+    "topic": "pushkin",
+    "source_article_ids": [
+      "d83c7afa104a"
+    ]
+  },
+  {
+    "id": "c0178",
+    "text": "Pushkin narrowly avoided the Decembrist coup of 1825 because his friends deliberately excluded him, considering him too indiscreet to be trusted with the conspiracy",
+    "topic": "19th-century-russia",
+    "source_article_ids": [
+      "d83c7afa104a"
+    ]
+  },
+  {
+    "id": "c0179",
+    "text": "Pushkin and Keats share striking biographical parallels: both short in stature, both prioritized beauty over intellect in women, and both had their partners unfairly maligned by posterity",
+    "topic": "literary-criticism",
+    "source_article_ids": [
+      "d83c7afa104a"
+    ]
+  },
+  {
+    "id": "c0180",
+    "text": "The best literary biographies exercise restraint — refusing to invent dialogue or dramatize scenes beyond what sources support",
+    "topic": "biography",
+    "source_article_ids": [
+      "d83c7afa104a"
+    ]
+  },
+  {
+    "id": "c0181",
+    "text": "Reading comprehension 'skills' barely exist as transferable abilities — good reading depends primarily on background knowledge, which skills-based curricula neglect",
+    "topic": "reading-instruction",
+    "source_article_ids": [
+      "d820c1596a26"
+    ]
+  },
+  {
+    "id": "c0182",
+    "text": "Abandoning a shared cultural curriculum in schools disproportionately harms disadvantaged students who lack access to background knowledge at home",
+    "topic": "education",
+    "source_article_ids": [
+      "d820c1596a26"
+    ]
+  },
+  {
+    "id": "c0183",
+    "text": "CBT's active therapeutic ingredient may be behavioral change through exposure rather than cognitive restructuring of distorted beliefs",
+    "topic": "psychology",
+    "source_article_ids": [
+      "d820c1596a26"
+    ]
+  },
+  {
+    "id": "c0184",
+    "text": "Bandura demonstrated that learning comes primarily from observing others rather than from personal reward and punishment contingencies",
+    "topic": "learning-science",
+    "source_article_ids": [
+      "d820c1596a26"
+    ]
+  },
+  {
+    "id": "c0185",
+    "text": "The phonics debate in reading instruction was scientifically settled by 1967, but the evidence was ignored in educational practice for decades — illustrating how clear scientific evidence often loses to practitioner intuition",
+    "topic": "reading-instruction",
+    "source_article_ids": [
+      "d820c1596a26"
+    ]
+  },
+  {
+    "id": "c0186",
+    "text": "Psychology lacks a unifying theoretical framework unlike physics, and can only be understood through its history and thousands of individual findings",
+    "topic": "psychology",
+    "source_article_ids": [
+      "d820c1596a26"
     ]
   }
 ]

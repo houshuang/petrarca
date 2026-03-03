@@ -7,7 +7,8 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import {
   getReviewQueue, submitReview, getConceptReview,
-  getArticleById, getConcepts, getStats,
+  getArticleById, getConcepts, getStats, getVoiceNoteById,
+  getMatchingClaims,
 } from '../data/store';
 import { Concept, ConceptReview, ReviewRating } from '../data/types';
 import { logEvent } from '../data/logger';
@@ -27,6 +28,8 @@ function ReviewCard({ concept, review, reason, onComplete }: {
   const sourceArticles = concept.source_article_ids
     .map(id => getArticleById(id))
     .filter(Boolean);
+
+  const matchingClaims = getMatchingClaims(concept.id, 2);
 
   const lastNote = review.notes.length > 0
     ? review.notes[review.notes.length - 1]
@@ -71,6 +74,39 @@ function ReviewCard({ concept, review, reason, onComplete }: {
             <Text style={styles.lastNoteDate}>
               {new Date(lastNote.created_at).toLocaleDateString()}
             </Text>
+          </View>
+        )}
+
+        {/* Voice note transcripts linked to this concept */}
+        {(() => {
+          const voiceNotes = review.notes
+            .filter(n => n.voice_note_id)
+            .map(n => ({ note: n, voiceNote: getVoiceNoteById(n.voice_note_id!) }))
+            .filter((v): v is { note: typeof review.notes[0]; voiceNote: NonNullable<ReturnType<typeof getVoiceNoteById>> } => !!v.voiceNote?.transcript);
+          if (voiceNotes.length === 0) return null;
+          return voiceNotes.map(({ note, voiceNote }) => (
+            <View key={note.id} style={styles.voiceNoteBox}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <Ionicons name="mic" size={14} color="#a78bfa" />
+                <Text style={styles.lastNoteLabel}>Voice note</Text>
+                <Text style={{ color: '#475569', fontSize: 11 }}>
+                  {Math.round(voiceNote.duration_ms / 1000)}s · {new Date(voiceNote.recorded_at).toLocaleDateString()}
+                </Text>
+              </View>
+              <Text style={styles.lastNoteText}>{voiceNote.transcript}</Text>
+            </View>
+          ));
+        })()}
+
+        {/* Matching claims from articles */}
+        {matchingClaims.length > 0 && (
+          <View style={styles.claimsSection}>
+            <Text style={styles.claimsLabel}>Related claims</Text>
+            {matchingClaims.map((claim, i) => (
+              <View key={i} style={styles.claimBox}>
+                <Text style={styles.claimText}>{claim}</Text>
+              </View>
+            ))}
           </View>
         )}
 
@@ -170,13 +206,16 @@ function ReviewCard({ concept, review, reason, onComplete }: {
 
 // --- Main Review Screen ---
 
+const SESSION_CAP = 7;
+
 export default function ReviewScreen() {
   const [, forceUpdate] = useState(0);
-  const queue = getReviewQueue(10);
+  const fullQueue = getReviewQueue(50);
+  const queue = fullQueue.slice(0, SESSION_CAP);
   const [currentIndex, setCurrentIndex] = useState(0);
   const stats = getStats();
 
-  const dueCount = queue.length;
+  const totalDueCount = fullQueue.length;
   const allConcepts = getConcepts();
   const reviewedCount = [...new Set(
     allConcepts
@@ -204,6 +243,9 @@ export default function ReviewScreen() {
     );
   }
 
+  // How many were not shown because of the cap
+  const extraDue = Math.max(0, totalDueCount - SESSION_CAP);
+
   // Queue complete
   if (currentIndex >= queue.length || queue.length === 0) {
     return (
@@ -212,14 +254,20 @@ export default function ReviewScreen() {
           <View style={styles.completedSection}>
             <Ionicons name="checkmark-circle" size={48} color="#10b981" />
             <Text style={styles.completedTitle}>
-              {dueCount === 0 ? 'Nothing due right now' : 'Session complete!'}
+              {totalDueCount === 0 ? 'Nothing due right now' : 'Done for now'}
             </Text>
             <Text style={styles.completedSubtitle}>
               {stats.knownConcepts + stats.encounteredConcepts} of {allConcepts.length} concepts engaged
               {reviewedCount > 0 ? ` · ${reviewedCount} reviewed` : ''}
             </Text>
 
-            {dueCount === 0 && (
+            {extraDue > 0 && (
+              <Text style={styles.completedHint}>
+                {extraDue} more available whenever you're ready
+              </Text>
+            )}
+
+            {totalDueCount === 0 && (
               <Text style={styles.completedHint}>
                 Read more articles and signal on claims to add concepts to your review queue
               </Text>
@@ -233,7 +281,9 @@ export default function ReviewScreen() {
               }}
             >
               <Ionicons name="refresh" size={16} color="#60a5fa" />
-              <Text style={styles.refreshQueueText}>Check again</Text>
+              <Text style={styles.refreshQueueText}>
+                {extraDue > 0 ? 'Continue reviewing' : 'Check again'}
+              </Text>
             </Pressable>
           </View>
 
@@ -281,10 +331,17 @@ export default function ReviewScreen() {
       {/* Progress header */}
       <View style={styles.progressHeader}>
         <Text style={styles.progressText}>
-          {currentIndex + 1} of {queue.length} concepts
+          {currentIndex + 1} of {queue.length}
         </Text>
-        <Pressable onPress={() => { setCurrentIndex(queue.length); }}>
-          <Text style={styles.skipAllText}>End session</Text>
+        <Pressable onPress={() => {
+          logEvent('review_session_end_early', {
+            reviewed: currentIndex,
+            session_size: queue.length,
+            total_due: totalDueCount,
+          });
+          setCurrentIndex(queue.length);
+        }}>
+          <Text style={styles.skipAllText}>Done for now</Text>
         </Pressable>
       </View>
 
@@ -339,6 +396,19 @@ const styles = StyleSheet.create({
   lastNoteLabel: { color: '#a78bfa', fontSize: 11, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
   lastNoteText: { color: '#cbd5e1', fontSize: 14, lineHeight: 20 },
   lastNoteDate: { color: '#475569', fontSize: 11, marginTop: 6 },
+  voiceNoteBox: {
+    backgroundColor: '#1e293b', borderRadius: 12, padding: 14,
+    marginBottom: 16, borderLeftWidth: 3, borderLeftColor: '#a78bfa',
+  },
+
+  // Claims
+  claimsSection: { marginBottom: 16 },
+  claimsLabel: { color: '#64748b', fontSize: 12, marginBottom: 6 },
+  claimBox: {
+    backgroundColor: '#1e293b', borderRadius: 8, padding: 12,
+    marginBottom: 4, borderLeftWidth: 2, borderLeftColor: '#475569',
+  },
+  claimText: { color: '#94a3b8', fontSize: 13, lineHeight: 18, fontStyle: 'italic' },
 
   // Source articles
   sourcesSection: { marginBottom: 16 },

@@ -4,6 +4,60 @@
 
 ---
 
+## 2026-03-03 — User Journey Audit + Critical Gap Fixes
+
+**What**: Comprehensive audit of assumed user journey vs. actual implementation, identifying 28 gaps and 5 critical assumption mismatches. Then a 5-agent parallel swarm to research, simulate, and fix the highest-impact gaps.
+
+**User Journey Analysis** (`research/user-journey-analysis.md`):
+Walked through 7 phases of expected use (first launch → months of habitual use). Found the biggest mismatches between what the design vision promises and what the implementation delivers:
+1. Static content (no refresh mechanism — app dies after week 1)
+2. "Reading is the signal" not true (only explicit button taps update knowledge model)
+3. Cold start (all articles show "Mostly new", knowledge model too thin)
+4. Background research agents unbuilt (key interview request)
+5. Full article markdown rendering broken at deepest reading level
+
+**Fixes Applied (3 agents, parallel)**:
+
+1. **Markdown rendering** (`reader.tsx`, `markdown-utils.ts`): Rewrote MarkdownText to use proper block splitting (preserving code fences), ordered lists, blockquotes, italic, image alt-text. Added `splitMarkdownBlocks()` and `parseMarkdownBlock()` with 26 passing tests.
+
+2. **Implicit signals → knowledge model** (`store.ts`, `reader.tsx`): New `processImplicitEncounter(articleId)` function. When user dwells >60s in claims/sections/full zone, all unknown concepts for that article auto-transition to "encountered". Fires once per reader session, excludes summary zone. Logs `implicit_concept_encounter` events.
+
+3. **Review UX** (`review.tsx`, `store.ts`): Session capped at 7 items (`SESSION_CAP = 7`). "Done for now" messaging replaces "Session complete!" — soft hint shows remaining items. New `getMatchingClaims(conceptId)` function finds relevant claim excerpts via contentWords overlap (>0.2 threshold), shown on review cards for context.
+
+**Research Delivered (2 agents, parallel)**:
+
+4. **Knowledge model simulation** (`scripts/simulate_knowledge_model.py`): Modeled behavior over realistic usage. Key findings: 55% of articles had zero concepts (invisible to knowledge model), 25% of concepts unreachable at 0.3 threshold. Recommended: extract concepts for ALL articles, lower threshold, aim for ~280 concepts.
+
+5. **Content refresh architecture** (`research/content-refresh-design.md`): Designed pipeline-on-Hetzner with daily cron, nginx serving JSON on port 8083 with manifest-based change detection, app fetches remote content with bundled fallback. Identified concept ID stability issue (must switch from sequential to hash-based IDs).
+
+**Concept Re-extraction**: Based on simulation findings, re-ran concept extraction on all articles:
+- 69 → **186 concepts** (2.7x increase)
+- 39 → **107 topics**
+- Article coverage: 21/47 (45%) → **47/47 (100%)**
+- Concepts per article: median 4, range 2-8
+- Cross-article concepts: 8 → **15**
+
+**Measurement events added**: `implicit_concept_encounter` (article_id, trigger_zone, dwell_ms, concepts_updated, concept_ids), `review_session_end_early`
+
+---
+
+## 2026-03-03 — Voice Transcript → Knowledge Model Integration
+
+**What**: Connected voice note transcripts to the knowledge model. Previously, transcripts were displayed but never analyzed. Now they're matched against article concepts, updating concept states and creating linked review notes.
+
+**Implementation**:
+- **`processTranscriptForConcepts()`** in `store.ts`: Same content-word matching as claim signals, but with 0.2 threshold (lower than claims' 0.3 — transcripts are noisier, already scoped to article's concepts). Matched concepts marked as `encountered`. Creates `ConceptNote` entries with `voice_note_id` set, deduplicated.
+- **`getVoiceNoteById()`** accessor in `store.ts`
+- **Wired into transcription flow**: `transcription.ts` calls `processTranscriptForConcepts()` immediately after successful transcription
+- **Concept pills in Progress tab**: Expanded voice notes with transcripts show matched concepts as purple pills below the transcript text
+- **Voice transcripts in Review tab**: `ReviewCard` shows linked voice note transcripts (mic icon, duration, date) between last note and source articles sections
+
+**Tests**: New `__tests__/transcript-concepts.test.ts` — tests matching, state updates, note creation, deduplication, empty results, `getVoiceNoteById`
+
+**Measurement events**: `transcript_concepts_matched` (article_id, voice_note_id, matched_count, concept_ids)
+
+---
+
 ## 2026-03-03 — Spaced Attention Scheduling + Deployment
 
 **What**: Built the spaced attention scheduling system (Phase 4a from plan) and deployed all changes to Hetzner.

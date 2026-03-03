@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getStats, getSignals, getArticles, getByTopic, getReadingState, getTopicKnowledgeStats, getConcepts, getVoiceNotes, getArticleById } from '../data/store';
+import { getStats, getSignals, getArticles, getByTopic, getReadingState, getTopicKnowledgeStats, getConcepts, getVoiceNotes, getArticleById, getConceptReview } from '../data/store';
 import { logEvent, getLogFiles, exportAllLogs, getLogDirectory } from '../data/logger';
+import { transcribeAllPending } from '../data/transcription';
 
 function EventLogSection() {
   const [logFileList, setLogFileList] = useState<string[]>([]);
@@ -106,6 +107,112 @@ function KnowledgeDashboard() {
           </View>
         </View>
       )}
+    </View>
+  );
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  pending: '#64748b',
+  processing: '#3b82f6',
+  completed: '#10b981',
+  failed: '#ef4444',
+};
+
+function VoiceNotesSection({ onRefresh }: { onRefresh: () => void }) {
+  const notes = getVoiceNotes();
+  const [expandedNote, setExpandedNote] = useState<string | null>(null);
+  const [transcribing, setTranscribing] = useState(false);
+
+  if (notes.length === 0) return null;
+
+  const totalDuration = Math.round(notes.reduce((s, n) => s + n.duration_ms, 0) / 1000);
+  const transcribed = notes.filter(n => n.transcription_status === 'completed').length;
+  const pending = notes.filter(n => n.transcription_status === 'pending').length;
+  const uniqueArticles = new Set(notes.map(n => n.article_id)).size;
+
+  const handleTranscribeAll = async () => {
+    setTranscribing(true);
+    logEvent('transcribe_all_start', { pending_count: pending });
+    const completed = await transcribeAllPending(notes);
+    logEvent('transcribe_all_complete', { completed_count: completed });
+    setTranscribing(false);
+    onRefresh();
+  };
+
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>Voice Notes</Text>
+      <Text style={styles.sectionSubtitle}>
+        {notes.length} note{notes.length !== 1 ? 's' : ''} · {totalDuration}s total · {uniqueArticles} article{uniqueArticles !== 1 ? 's' : ''}
+        {transcribed > 0 ? ` · ${transcribed} transcribed` : ''}
+      </Text>
+
+      {pending > 0 && (
+        <Pressable
+          style={[styles.refreshBtn, { marginBottom: 8, opacity: transcribing ? 0.5 : 1 }]}
+          onPress={handleTranscribeAll}
+          disabled={transcribing}
+        >
+          <Ionicons name={transcribing ? 'hourglass-outline' : 'cloud-upload-outline'} size={16} color="#60a5fa" />
+          <Text style={styles.refreshText}>
+            {transcribing ? 'Transcribing...' : `Transcribe All (${pending})`}
+          </Text>
+        </Pressable>
+      )}
+
+      {notes.slice(0, 10).map(n => {
+        const article = getArticleById(n.article_id);
+        const isExpanded = expandedNote === n.id;
+        const statusColor = STATUS_COLORS[n.transcription_status] || '#64748b';
+        return (
+          <Pressable
+            key={n.id}
+            onPress={() => setExpandedNote(isExpanded ? null : n.id)}
+            style={{ marginBottom: 8 }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Ionicons name="mic" size={14} color="#60a5fa" />
+              <Text style={{ color: '#cbd5e1', fontSize: 13, flex: 1 }} numberOfLines={1}>
+                {article?.title || n.article_id}
+              </Text>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: statusColor }} />
+              <Text style={{ color: '#64748b', fontSize: 11 }}>
+                {Math.round(n.duration_ms / 1000)}s
+              </Text>
+            </View>
+            {isExpanded && n.transcript && (
+              <View style={{ marginLeft: 22, marginTop: 4 }}>
+                <Text style={{ color: '#94a3b8', fontSize: 13, lineHeight: 19 }}>
+                  {n.transcript}
+                </Text>
+                {(() => {
+                  const matched = getConcepts().filter(c => {
+                    const review = getConceptReview(c.id);
+                    return review?.notes.some(note => note.voice_note_id === n.id);
+                  });
+                  if (matched.length === 0) return null;
+                  return (
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                      {matched.map(c => (
+                        <View key={c.id} style={{ backgroundColor: '#3b1f7e', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 }}>
+                          <Text style={{ color: '#c4b5fd', fontSize: 11 }}>{c.text}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  );
+                })()}
+              </View>
+            )}
+            {isExpanded && !n.transcript && (
+              <Text style={{ color: '#64748b', fontSize: 12, marginTop: 4, marginLeft: 22, fontStyle: 'italic' }}>
+                {n.transcription_status === 'pending' ? 'Pending transcription' :
+                 n.transcription_status === 'processing' ? 'Transcribing...' :
+                 n.transcription_status === 'failed' ? 'Transcription failed' : 'No transcript'}
+              </Text>
+            )}
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -226,36 +333,7 @@ export default function StatsScreen() {
         <KnowledgeDashboard />
 
         {/* Voice notes summary */}
-        {(() => {
-          const notes = getVoiceNotes();
-          if (notes.length === 0) return null;
-          const totalDuration = Math.round(notes.reduce((s, n) => s + n.duration_ms, 0) / 1000);
-          const transcribed = notes.filter(n => n.transcription_status === 'completed').length;
-          const uniqueArticles = new Set(notes.map(n => n.article_id)).size;
-          return (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Voice Notes</Text>
-              <Text style={styles.sectionSubtitle}>
-                {notes.length} note{notes.length !== 1 ? 's' : ''} · {totalDuration}s total · {uniqueArticles} article{uniqueArticles !== 1 ? 's' : ''}
-                {transcribed > 0 ? ` · ${transcribed} transcribed` : ''}
-              </Text>
-              {notes.slice(0, 5).map(n => {
-                const article = getArticleById(n.article_id);
-                return (
-                  <View key={n.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                    <Ionicons name="mic" size={14} color="#60a5fa" />
-                    <Text style={{ color: '#cbd5e1', fontSize: 13, flex: 1 }} numberOfLines={1}>
-                      {article?.title || n.article_id}
-                    </Text>
-                    <Text style={{ color: '#64748b', fontSize: 11 }}>
-                      {Math.round(n.duration_ms / 1000)}s
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
-          );
-        })()}
+        <VoiceNotesSection onRefresh={() => forceUpdate(n => n + 1)} />
 
         {/* Refresh */}
         <Pressable style={styles.refreshBtn} onPress={() => { logEvent('stats_refresh'); forceUpdate(n => n + 1); }}>

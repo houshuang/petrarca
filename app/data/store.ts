@@ -312,6 +312,26 @@ function contentWords(text: string): Set<string> {
   return new Set(words.filter(w => w.length > 2 && !STOP_WORDS.has(w)));
 }
 
+/**
+ * Implicit encounter: when user spends meaningful time reading an article zone,
+ * mark all "unknown" concepts for this article as "encountered".
+ * Returns the list of concept IDs that were updated.
+ */
+export function processImplicitEncounter(articleId: string): string[] {
+  const articleConcepts = articleConceptIndex.get(articleId) || [];
+  const updated: string[] = [];
+
+  for (const cid of articleConcepts) {
+    const current = getConceptState(cid);
+    if (current.state === 'unknown') {
+      updateConceptState(cid, 'encountered');
+      updated.push(cid);
+    }
+  }
+
+  return updated;
+}
+
 export function processClaimSignalForConcepts(articleId: string, claimText: string, signal: string) {
   const articleConcepts = articleConceptIndex.get(articleId) || [];
   const claimContent = contentWords(claimText);
@@ -335,6 +355,58 @@ export function processClaimSignalForConcepts(articleId: string, claimText: stri
       }
     }
   }
+}
+
+/**
+ * Match transcript text against an article's concepts and create notes.
+ * Lower threshold (0.2) than claims — transcripts are noisier, already scoped to article.
+ */
+export function processTranscriptForConcepts(articleId: string, transcript: string, voiceNoteId: string): string[] {
+  const articleConcepts = articleConceptIndex.get(articleId) || [];
+  const transcriptContent = contentWords(transcript);
+  const matched: string[] = [];
+
+  for (const cid of articleConcepts) {
+    const concept = concepts.find(c => c.id === cid);
+    if (!concept) continue;
+
+    const conceptContent = contentWords(concept.text);
+    if (conceptContent.size === 0) continue;
+
+    const overlap = [...conceptContent].filter(w => transcriptContent.has(w)).length;
+    const overlapRatio = overlap / conceptContent.size;
+
+    if (overlapRatio > 0.2) {
+      updateConceptState(cid, 'encountered');
+
+      // Add note to review, deduplicating by voice_note_id
+      const review = getOrCreateReview(cid);
+      const alreadyLinked = review.notes.some(n => n.voice_note_id === voiceNoteId);
+      if (!alreadyLinked) {
+        review.notes.push({
+          id: `vnote_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          text: transcript,
+          voice_note_id: voiceNoteId,
+          created_at: Date.now(),
+        });
+        conceptReviews.set(cid, review);
+      }
+
+      matched.push(cid);
+    }
+  }
+
+  if (matched.length > 0) {
+    saveConceptReviews(conceptReviews);
+    logEvent('transcript_concepts_matched', {
+      article_id: articleId,
+      voice_note_id: voiceNoteId,
+      matched_count: matched.length,
+      concept_ids: matched,
+    });
+  }
+
+  return matched;
 }
 
 /**
@@ -383,6 +455,13 @@ export function addVoiceNote(note: VoiceNote) {
   });
 }
 
+export function updateVoiceNoteStatus(noteId: string, status: VoiceNote['transcription_status']) {
+  const note = voiceNotes.find(n => n.id === noteId);
+  if (!note) return;
+  note.transcription_status = status;
+  saveVoiceNotes(voiceNotes);
+}
+
 export function updateVoiceNoteTranscript(noteId: string, transcript: string) {
   const note = voiceNotes.find(n => n.id === noteId);
   if (!note) return;
@@ -390,6 +469,10 @@ export function updateVoiceNoteTranscript(noteId: string, transcript: string) {
   note.transcription_status = 'completed';
   saveVoiceNotes(voiceNotes);
   logEvent('voice_note_transcribed', { note_id: noteId, article_id: note.article_id });
+}
+
+export function getVoiceNoteById(noteId: string): VoiceNote | undefined {
+  return voiceNotes.find(n => n.id === noteId);
 }
 
 // --- Spaced Attention Scheduling ---
@@ -537,6 +620,37 @@ export function submitReview(conceptId: string, rating: ReviewRating, noteText?:
 
 export function getConceptReview(conceptId: string): ConceptReview | undefined {
   return conceptReviews.get(conceptId);
+}
+
+/**
+ * Find claims from source articles that match a concept, using contentWords overlap.
+ * Returns up to `limit` matching claim strings.
+ */
+export function getMatchingClaims(conceptId: string, limit: number = 2): string[] {
+  const concept = concepts.find(c => c.id === conceptId);
+  if (!concept) return [];
+
+  const conceptContent = contentWords(concept.text);
+  if (conceptContent.size === 0) return [];
+
+  const scored: Array<{ claim: string; score: number }> = [];
+
+  for (const aid of concept.source_article_ids) {
+    const article = articles.find(a => a.id === aid);
+    if (!article) continue;
+
+    for (const claim of article.key_claims) {
+      const claimContent = contentWords(claim);
+      const overlap = [...conceptContent].filter(w => claimContent.has(w)).length;
+      const overlapRatio = overlap / conceptContent.size;
+      if (overlapRatio > 0.2) {
+        scored.push({ claim, score: overlapRatio });
+      }
+    }
+  }
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, limit).map(s => s.claim);
 }
 
 /**

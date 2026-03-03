@@ -632,10 +632,20 @@ def _llm_fallback(best: dict) -> dict:
     }
 
 
+def _is_valid_section(heading: str, content: str) -> bool:
+    """Check if a section has a valid heading and sufficient content."""
+    h = heading.strip()
+    if h in ("[", "") or h.startswith("](#"):
+        return False
+    if len(content.strip()) < 20:
+        return False
+    return True
+
+
 def _split_into_sections(content: str, llm_sections: list[dict]) -> list[dict]:
     """Split article content into sections, using LLM headings if available."""
     if llm_sections and len(llm_sections) > 1:
-        heading_pattern = re.compile(r'^(#{1,3})\s+(.+)$', re.MULTILINE)
+        heading_pattern = re.compile(r'^(#{1,6})\s+(.+)$', re.MULTILINE)
         headings = list(heading_pattern.finditer(content))
 
         if headings:
@@ -645,6 +655,9 @@ def _split_into_sections(content: str, llm_sections: list[dict]) -> list[dict]:
                 end = headings[j + 1].start() if j + 1 < len(headings) else len(content)
                 section_content = content[start:end].strip()
                 heading = match.group(2).strip()
+
+                if not _is_valid_section(heading, section_content):
+                    continue
 
                 llm_match = None
                 for ls in llm_sections:

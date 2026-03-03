@@ -7,9 +7,11 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
-import { getArticleById, getReadingState, updateReadingState, addSignal, processClaimSignalForConcepts, getRelatedArticles, addVoiceNote, getVoiceNotes } from '../data/store';
+import { getArticleById, getReadingState, updateReadingState, addSignal, processClaimSignalForConcepts, processImplicitEncounter, getRelatedArticles, addVoiceNote, getVoiceNotes } from '../data/store';
 import { ReadingDepth, VoiceNote } from '../data/types';
 import { logEvent } from '../data/logger';
+import { isSectionValid, parseInlineMarkdown, splitMarkdownBlocks, parseMarkdownBlock } from './markdown-utils';
+import { transcribeVoiceNote } from '../data/transcription';
 
 // --- Local types for claim signal tracking ---
 
@@ -36,6 +38,7 @@ const DEPTH_LABELS: Record<DepthZone, string> = {
 const PAUSE_THRESHOLD_MS = 3000;
 const VELOCITY_SAMPLE_INTERVAL_MS = 200;
 const REVISIT_SCROLL_BACK_PX = 150;
+const IMPLICIT_ENCOUNTER_DWELL_MS = 60000; // 60s in a zone triggers implicit encounter
 
 // --- Floating Depth Indicator ---
 
@@ -95,7 +98,50 @@ function ClaimSignalPill({ currentSignal, onSignal, onDismiss }: {
   );
 }
 
+// --- Inline markdown rendering (converts parsed segments to React elements) ---
+
+function renderInlineMarkdown(text: string): (string | React.ReactElement)[] {
+  const segments = parseInlineMarkdown(text);
+  return segments.map((seg, i) => {
+    switch (seg.type) {
+      case 'link':
+        return (
+          <Text
+            key={`link-${i}`}
+            style={styles.markdownLink}
+            onPress={() => Linking.openURL(seg.url)}
+          >
+            {seg.text}
+          </Text>
+        );
+      case 'bold':
+        return (
+          <Text key={`bold-${i}`} style={styles.markdownBold}>
+            {seg.text}
+          </Text>
+        );
+      case 'italic':
+        return (
+          <Text key={`italic-${i}`} style={styles.markdownItalic}>
+            {seg.text}
+          </Text>
+        );
+      case 'code':
+        return (
+          <Text key={`code-${i}`} style={styles.markdownInlineCode}>
+            {seg.text}
+          </Text>
+        );
+      default:
+        return seg.text;
+    }
+  });
+}
+
 // --- Simple markdown renderer ---
+
+// Re-export for tests
+export { isSectionValid } from './markdown-utils';
 
 function MarkdownText({ content, claimHighlights, claimSignals, onClaimTap }: {
   content: string;
@@ -105,82 +151,107 @@ function MarkdownText({ content, claimHighlights, claimSignals, onClaimTap }: {
 }) {
   if (!content) return null;
 
-  const paragraphs = content.split('\n\n').filter(Boolean);
+  const blocks = splitMarkdownBlocks(content);
 
   return (
     <View>
-      {paragraphs.map((p, i) => {
-        const trimmed = p.trim();
+      {blocks.map((raw, i) => {
+        const block = parseMarkdownBlock(raw);
 
-        // Heading
-        const headingMatch = trimmed.match(/^(#{1,3})\s+(.+)$/m);
-        if (headingMatch) {
-          const level = headingMatch[1].length;
-          return (
-            <Text key={i} style={[
-              styles.markdownHeading,
-              level === 1 && { fontSize: 22 },
-              level === 2 && { fontSize: 19 },
-              level === 3 && { fontSize: 17 },
-            ]}>
-              {headingMatch[2]}
-            </Text>
-          );
-        }
+        switch (block.type) {
+          case 'heading':
+            return (
+              <Text key={i} style={[
+                styles.markdownHeading,
+                block.level === 1 && { fontSize: 22 },
+                block.level === 2 && { fontSize: 19 },
+                (block.level ?? 3) >= 3 && { fontSize: 17 },
+              ]}>
+                {renderInlineMarkdown(block.content)}
+              </Text>
+            );
 
-        // List item
-        if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-          const items = trimmed.split('\n').filter(l => l.trim().startsWith('- ') || l.trim().startsWith('* '));
-          return (
-            <View key={i} style={styles.markdownList}>
-              {items.map((item, j) => (
-                <View key={j} style={styles.markdownListItem}>
-                  <Text style={styles.markdownBullet}>·</Text>
-                  <Text style={styles.markdownText}>{item.replace(/^[-*]\s+/, '')}</Text>
-                </View>
-              ))}
-            </View>
-          );
-        }
+          case 'hr':
+            return <View key={i} style={styles.markdownHr} />;
 
-        // Code block
-        if (trimmed.startsWith('```')) {
-          const code = trimmed.replace(/^```\w*\n?/, '').replace(/\n?```$/, '');
-          return (
-            <View key={i} style={styles.codeBlock}>
-              <Text style={styles.codeText}>{code}</Text>
-            </View>
-          );
-        }
+          case 'ul':
+            return (
+              <View key={i} style={styles.markdownList}>
+                {(block.items || []).map((item, j) => (
+                  <View key={j} style={styles.markdownListItem}>
+                    <Text style={styles.markdownBullet}>{'\u00B7'}</Text>
+                    <Text style={styles.markdownText}>
+                      {renderInlineMarkdown(item)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            );
 
-        // Check for claim highlighting
-        if (claimHighlights && claimHighlights.length > 0) {
-          const matchedClaimIndex = findMatchingClaim(trimmed, claimHighlights);
-          if (matchedClaimIndex >= 0) {
-            const signal = claimSignals?.[matchedClaimIndex];
-            const highlightStyle = signal === 'knew_it'
-              ? styles.claimHighlightKnew
-              : signal === 'interesting'
-              ? styles.claimHighlightNew
-              : signal === 'save'
-              ? styles.claimHighlightSave
-              : styles.claimHighlightUnsignaled;
+          case 'ol':
+            return (
+              <View key={i} style={styles.markdownList}>
+                {(block.items || []).map((item, j) => (
+                  <View key={j} style={styles.markdownListItem}>
+                    <Text style={styles.markdownOrderedBullet}>{j + 1}.</Text>
+                    <Text style={styles.markdownText}>
+                      {renderInlineMarkdown(item)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            );
+
+          case 'code':
+            return (
+              <View key={i} style={styles.codeBlock}>
+                <Text style={styles.codeText}>{block.content}</Text>
+              </View>
+            );
+
+          case 'blockquote':
+            return (
+              <View key={i} style={styles.markdownBlockquote}>
+                <Text style={styles.markdownBlockquoteText}>
+                  {renderInlineMarkdown(block.content)}
+                </Text>
+              </View>
+            );
+
+          default: {
+            // Regular paragraph — check for claim highlighting
+            if (claimHighlights && claimHighlights.length > 0) {
+              const matchedClaimIndex = findMatchingClaim(block.content, claimHighlights);
+              if (matchedClaimIndex >= 0) {
+                const signal = claimSignals?.[matchedClaimIndex];
+                const highlightStyle = signal === 'knew_it'
+                  ? styles.claimHighlightKnew
+                  : signal === 'interesting'
+                  ? styles.claimHighlightNew
+                  : signal === 'save'
+                  ? styles.claimHighlightSave
+                  : styles.claimHighlightUnsignaled;
+
+                return (
+                  <Pressable
+                    key={i}
+                    onPress={() => onClaimTap?.(matchedClaimIndex)}
+                  >
+                    <Text style={[styles.markdownText, highlightStyle]}>
+                      {renderInlineMarkdown(block.content)}
+                    </Text>
+                  </Pressable>
+                );
+              }
+            }
 
             return (
-              <Pressable
-                key={i}
-                onPress={() => onClaimTap?.(matchedClaimIndex)}
-              >
-                <Text style={[styles.markdownText, highlightStyle]}>{trimmed}</Text>
-              </Pressable>
+              <Text key={i} style={styles.markdownText}>
+                {renderInlineMarkdown(block.content)}
+              </Text>
             );
           }
         }
-
-        // Regular paragraph
-        return (
-          <Text key={i} style={styles.markdownText}>{trimmed}</Text>
-        );
       })}
     </View>
   );
@@ -258,6 +329,7 @@ function VoiceRecordButton({ articleId, currentDepth }: {
 }) {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
+  const [transcribing, setTranscribing] = useState(false);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [noteCount, setNoteCount] = useState(() => getVoiceNotes(articleId).length);
@@ -315,6 +387,10 @@ function VoiceRecordButton({ articleId, currentDepth }: {
         };
         addVoiceNote(note);
         setNoteCount(n => n + 1);
+
+        // Auto-trigger transcription in background
+        setTranscribing(true);
+        transcribeVoiceNote(note).finally(() => setTranscribing(false));
       }
     } catch (e) {
       console.warn('[voice] failed to stop recording:', e);
@@ -330,9 +406,9 @@ function VoiceRecordButton({ articleId, currentDepth }: {
       onPress={isRecording ? stopRecording : startRecording}
     >
       <Ionicons
-        name={isRecording ? 'stop' : 'mic-outline'}
+        name={isRecording ? 'stop' : transcribing ? 'hourglass-outline' : 'mic-outline'}
         size={18}
-        color={isRecording ? '#ef4444' : '#60a5fa'}
+        color={isRecording ? '#ef4444' : transcribing ? '#f59e0b' : '#60a5fa'}
       />
       {isRecording ? (
         <Text style={styles.voiceTimer}>{recordingDuration}s</Text>
@@ -379,6 +455,7 @@ export default function ReaderScreen() {
   const zoneEnterTime = useRef<Record<string, number>>({});
   const pauseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastVelocityLog = useRef(Date.now());
+  const implicitEncounterFired = useRef(false);
 
   // --- Initialize reading state ---
   useEffect(() => {
@@ -397,16 +474,50 @@ export default function ReaderScreen() {
         time_spent_ms: (currentState.time_spent_ms || 0) + elapsed,
         last_read_at: Date.now(),
       });
-      // Log final zone exit
+      // Log final zone exit and check implicit encounter
       const zone = currentZoneRef.current;
       if (zoneEnterTime.current[zone]) {
         const zoneTime = Date.now() - zoneEnterTime.current[zone];
         logEvent('reader_section_exit', { article_id: article.id, section: zone, time_ms: zoneTime });
+
+        if (!implicitEncounterFired.current && zone !== 'summary' && zoneTime >= IMPLICIT_ENCOUNTER_DWELL_MS) {
+          implicitEncounterFired.current = true;
+          const updatedConcepts = processImplicitEncounter(article.id);
+          if (updatedConcepts.length > 0) {
+            logEvent('implicit_concept_encounter', {
+              article_id: article.id,
+              trigger_zone: zone,
+              dwell_ms: zoneTime,
+              concepts_updated: updatedConcepts.length,
+              concept_ids: updatedConcepts,
+            });
+          }
+        }
       }
       logEvent('reader_close', { article_id: article.id, time_spent_ms: elapsed, final_depth: currentZoneRef.current });
       if (pauseTimer.current) clearTimeout(pauseTimer.current);
     };
   }, []);
+
+  // --- Fire implicit concept encounter if dwell threshold met ---
+  const checkImplicitEncounter = useCallback((zone: DepthZone, dwellMs: number) => {
+    if (!article || implicitEncounterFired.current) return;
+    // Only fire for claims/sections/full zones with meaningful dwell time
+    if (zone === 'summary') return;
+    if (dwellMs < IMPLICIT_ENCOUNTER_DWELL_MS) return;
+
+    implicitEncounterFired.current = true;
+    const updatedConcepts = processImplicitEncounter(article.id);
+    if (updatedConcepts.length > 0) {
+      logEvent('implicit_concept_encounter', {
+        article_id: article.id,
+        trigger_zone: zone,
+        dwell_ms: dwellMs,
+        concepts_updated: updatedConcepts.length,
+        concept_ids: updatedConcepts,
+      });
+    }
+  }, [article]);
 
   // --- Compute which depth zone the user is in based on scroll position ---
   const updateDepthZone = useCallback((scrollY: number) => {
@@ -427,6 +538,7 @@ export default function ReaderScreen() {
       if (zoneEnterTime.current[prevZone]) {
         const zoneTime = now - zoneEnterTime.current[prevZone];
         logEvent('reader_section_exit', { article_id: article.id, section: prevZone, time_ms: zoneTime });
+        checkImplicitEncounter(prevZone, zoneTime);
       }
 
       // Log enter new zone
@@ -453,7 +565,7 @@ export default function ReaderScreen() {
 
       logEvent('reader_scroll_depth', { article_id: article.id, depth: zone, scroll_y: scrollY });
     }
-  }, [article]);
+  }, [article, checkImplicitEncounter]);
 
   // --- Scroll handler with implicit tracking ---
   const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -717,7 +829,7 @@ export default function ReaderScreen() {
               <View style={styles.dividerLine} />
             </View>
 
-            {article.sections.map((section, i) => (
+            {article.sections.filter(isSectionValid).map((section, i) => (
               <SectionCard
                 key={i}
                 section={section}
@@ -909,8 +1021,21 @@ const styles = StyleSheet.create({
   markdownList: { marginBottom: 14 },
   markdownListItem: { flexDirection: 'row', marginBottom: 6, paddingRight: 8 },
   markdownBullet: { color: '#60a5fa', marginRight: 10, fontSize: 16 },
+  markdownOrderedBullet: { color: '#60a5fa', marginRight: 10, fontSize: 14, minWidth: 20 },
   codeBlock: { backgroundColor: '#1e293b', borderRadius: 8, padding: 14, marginBottom: 14 },
   codeText: { color: '#94a3b8', fontSize: 13, fontFamily: 'monospace' },
+  markdownLink: { color: '#60a5fa', textDecorationLine: 'underline' as const },
+  markdownBold: { color: '#f8fafc', fontWeight: '700' as const },
+  markdownItalic: { color: '#cbd5e1', fontStyle: 'italic' as const },
+  markdownInlineCode: { color: '#94a3b8', fontFamily: 'monospace', backgroundColor: '#1e293b', paddingHorizontal: 4 },
+  markdownBlockquote: {
+    borderLeftWidth: 3, borderLeftColor: '#475569',
+    paddingLeft: 14, marginBottom: 14, marginLeft: 4,
+  },
+  markdownBlockquoteText: {
+    color: '#94a3b8', fontSize: 15, lineHeight: 24, fontStyle: 'italic' as const,
+  },
+  markdownHr: { height: 1, backgroundColor: '#334155', marginVertical: 20 },
 
   // Inline claim highlights in full text
   claimHighlightUnsignaled: {
