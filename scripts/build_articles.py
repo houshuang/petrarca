@@ -44,8 +44,9 @@ SCRIPT_DIR = Path(__file__).parent
 PROJECT_DIR = SCRIPT_DIR.parent
 DATA_DIR = PROJECT_DIR / "data"
 APP_DATA_DIR = PROJECT_DIR / "app" / "data"
-OTAK_BOOKMARKS = Path.home() / "src" / "otak" / "data" / "twitter_bookmarks.json"
-OTAK_READWISE = Path.home() / "src" / "otak" / "data" / "readwise_reader.json"
+SOURCES_DIR = Path(os.environ.get("PETRARCA_SOURCES", str(Path.home() / "src" / "otak" / "data")))
+OTAK_BOOKMARKS = SOURCES_DIR / "twitter_bookmarks.json"
+OTAK_READWISE = SOURCES_DIR / "readwise_reader.json"
 
 FILTERED_PATH = DATA_DIR / "bookmarks_filtered.json"
 FETCHED_PATH = DATA_DIR / "articles_fetched.json"
@@ -768,7 +769,6 @@ def extract_concepts(articles: list[dict], dry_run: bool = False) -> list[dict]:
     # Process in batches of 5 articles for better cross-article dedup
     batch_size = 5
     all_concepts = []
-    concept_id_counter = 0
 
     for i in range(0, len(articles), batch_size):
         batch = articles[i:i + batch_size]
@@ -793,10 +793,10 @@ def extract_concepts(articles: list[dict], dry_run: bool = False) -> list[dict]:
                 parsed = json.loads(cleaned)
                 if isinstance(parsed, list):
                     for item in parsed:
-                        concept_id_counter += 1
+                        concept_text = item.get("text", "")
                         concept = {
-                            "id": f"c{concept_id_counter:04d}",
-                            "text": item.get("text", ""),
+                            "id": hashlib.sha256(concept_text.encode()).hexdigest()[:10],
+                            "text": concept_text,
                             "topic": item.get("topic", ""),
                             "source_article_ids": item.get("source_article_ids", []),
                         }
@@ -814,10 +814,6 @@ def extract_concepts(articles: list[dict], dry_run: bool = False) -> list[dict]:
     if len(all_concepts) > 20:
         print(f"  Deduplicating {len(all_concepts)} concepts...", file=sys.stderr)
         all_concepts = _deduplicate_concepts(all_concepts)
-
-    # Re-number after dedup
-    for i, c in enumerate(all_concepts):
-        c["id"] = f"c{i+1:04d}"
 
     print(f"  Final: {len(all_concepts)} concepts", file=sys.stderr)
     return all_concepts
@@ -890,6 +886,14 @@ def main():
         _save_json(concepts, CONCEPTS_PATH)
         APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
         _save_json(concepts, APP_DATA_DIR / "concepts.json")
+        manifest = {
+            "last_updated": datetime.now(timezone.utc).isoformat(),
+            "article_count": len(existing),
+            "concept_count": len(concepts),
+            "articles_hash": hashlib.sha256(json.dumps(existing, sort_keys=True).encode()).hexdigest()[:16],
+            "concepts_hash": hashlib.sha256(json.dumps(concepts, sort_keys=True).encode()).hexdigest()[:16],
+        }
+        _save_json(manifest, DATA_DIR / "manifest.json")
         print(f"  {len(concepts)} concepts saved", file=sys.stderr)
         return
 
@@ -991,6 +995,16 @@ def main():
     for a in articles:
         src_type = a.get("sources", [{}])[0].get("type", "unknown")
         sources[src_type] = sources.get(src_type, 0) + 1
+
+    # Step 6: Generate manifest
+    manifest = {
+        "last_updated": datetime.now(timezone.utc).isoformat(),
+        "article_count": len(articles),
+        "concept_count": len(concepts),
+        "articles_hash": hashlib.sha256(json.dumps(articles, sort_keys=True).encode()).hexdigest()[:16],
+        "concepts_hash": hashlib.sha256(json.dumps(concepts, sort_keys=True).encode()).hexdigest()[:16],
+    }
+    _save_json(manifest, DATA_DIR / "manifest.json")
 
     print(f"\n=== Done ===", file=sys.stderr)
     print(f"  {len(articles)} total articles", file=sys.stderr)

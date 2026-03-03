@@ -4,6 +4,30 @@
 
 ---
 
+## 2026-03-03 — Remaining Gap Fixes: Content Refresh, Research Agents, Synthesis, Connections
+
+**What**: 7-agent swarm implementing all remaining gaps from the user journey analysis. These complete the core vision: live content, background research, cross-article synthesis, in-reading connections, knowledge pre-seeding, and scroll position persistence.
+
+**Implemented (7 tasks)**:
+
+1. **Concept ID stability** (`build_articles.py`): Switched from sequential `c0001` to `sha256(text)[:10]` hash-based IDs. Concept states, reviews, and notes now survive pipeline re-runs. All 176 concepts regenerated with stable IDs.
+
+2. **Content refresh** (`content-sync.ts`, `store.ts`, `build_articles.py`, `setup-content-server.sh`): Full architecture for live content updates. Pipeline generates manifest.json with content hashes. App loads cached remote content on launch, checks for updates in background, merges new content preserving all user state. nginx serves on port 8083, cron runs pipeline daily at 7 AM UTC on Hetzner. Pipeline now supports `PETRARCA_SOURCES` env var for server-side source paths.
+
+3. **Pre-seed knowledge** (`preseed_knowledge.py`, `store.ts`): Reads 537 Readwise items with >30% reading progress, matches against concept topics, pre-seeds 61/176 concepts as "encountered" on fresh install. Eliminates cold start — novelty scores differentiate from day 1.
+
+4. **In-reading connection prompts** (`reader.tsx`, `store.ts`): New `getConceptConnections()` finds concepts matching a claim that the user has encountered in other articles. `ConnectionIndicator` component shows subtle purple pill below claims: "{topic} · seen in N other articles". Tappable to expand article titles. Logs `reader_connection_shown` and `reader_connection_tap`.
+
+5. **Background research agents** (`reader.tsx`, `research.ts`, `research-server.py`, `stats.tsx`): Full pipeline: voice note transcription → "Research this?" banner → POST to Hetzner server → `claude -p` background research → results fetched in Progress tab. Server runs as systemd service. Results show perspectives, recommendations, connections in expandable cards.
+
+6. **Cross-article synthesis** (`generate_syntheses.py`, `syntheses.json`, `index.tsx`, `store.ts`): Groups articles by primary topic, generates synthesis via `claude -p` for topics with 3+ articles. 2 syntheses generated (claude-code, ai-agents). Shown as purple-accented cards at top of expanded topic clusters in Topics view.
+
+7. **Return-to-position** (`reader.tsx`, `store.ts`, `types.ts`): Saves scroll position every 2s, restores on re-entry with "Continuing where you left off" fade indicator. Clears when article fully read.
+
+**Measurement events added**: `content_downloaded`, `content_refreshed`, `knowledge_preseed`, `reader_connection_shown`, `reader_connection_tap`, `research_triggered`, `research_result_viewed`, `synthesis_viewed`, `reader_position_restored`, `review_session_end_early`
+
+---
+
 ## 2026-03-03 — User Journey Audit + Critical Gap Fixes
 
 **What**: Comprehensive audit of assumed user journey vs. actual implementation, identifying 28 gaps and 5 critical assumption mismatches. Then a 5-agent parallel swarm to research, simulate, and fix the highest-impact gaps.

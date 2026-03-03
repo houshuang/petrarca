@@ -1,9 +1,11 @@
-import { Article, ReadingState, UserSignal, ReadingDepth, Concept, ConceptState, ConceptKnowledgeLevel, VoiceNote, ConceptReview, ReviewRating, ConceptNote } from './types';
+import { Article, ReadingState, UserSignal, ReadingDepth, Concept, ConceptState, ConceptKnowledgeLevel, VoiceNote, ConceptReview, ReviewRating, ConceptNote, TopicSynthesis } from './types';
 import { logEvent } from './logger';
 import { loadSignals, saveSignals, loadReadingStates, saveReadingStates, loadConceptStates, saveConceptStates, loadVoiceNotes, saveVoiceNotes, loadConceptReviews, saveConceptReviews } from './persistence';
+import { checkForUpdates, downloadContent, loadCachedContent } from './content-sync';
 
 let articles: Article[] = [];
 let concepts: Concept[] = [];
+let syntheses: TopicSynthesis[] = [];
 let readingStates = new Map<string, ReadingState>();
 let conceptStates = new Map<string, ConceptState>();
 let conceptReviews = new Map<string, ConceptReview>();
@@ -21,39 +23,68 @@ export async function initStore(): Promise<void> {
   if (initPromise) return initPromise;
 
   initPromise = (async () => {
-    // Load articles - try dynamic import, fall back to empty
-    try {
-      const data = require('./articles.json');
-      articles = (Array.isArray(data) ? data : []) as Article[];
-    } catch {
-      articles = [];
+    // Load articles: try cached remote content first, fall back to bundled JSON
+    const cached = await loadCachedContent();
+    if (cached && cached.articles.length > 0) {
+      articles = cached.articles;
+      concepts = cached.concepts;
+    } else {
+      // Fall back to bundled static JSON
+      try {
+        const data = require('./articles.json');
+        articles = (Array.isArray(data) ? data : []) as Article[];
+      } catch {
+        articles = [];
+      }
+      try {
+        const conceptData = require('./concepts.json');
+        concepts = (Array.isArray(conceptData) ? conceptData : []) as Concept[];
+      } catch {
+        concepts = [];
+      }
     }
 
     // Sort by date descending
     articles.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
-    // Load concepts
+    // Load syntheses
     try {
-      const conceptData = require('./concepts.json');
-      concepts = (Array.isArray(conceptData) ? conceptData : []) as Concept[];
+      const synthData = require('./syntheses.json');
+      syntheses = (Array.isArray(synthData) ? synthData : []) as TopicSynthesis[];
     } catch {
-      concepts = [];
+      syntheses = [];
     }
 
     // Build article->concept index
-    articleConceptIndex.clear();
-    for (const c of concepts) {
-      for (const aid of c.source_article_ids) {
-        if (!articleConceptIndex.has(aid)) articleConceptIndex.set(aid, []);
-        articleConceptIndex.get(aid)!.push(c.id);
-      }
-    }
+    rebuildConceptIndex();
 
     signals = await loadSignals();
     readingStates = await loadReadingStates();
     conceptStates = await loadConceptStates();
     conceptReviews = await loadConceptReviews();
     voiceNotes = await loadVoiceNotes();
+
+    // Pre-seed concept states on fresh install (no existing concept states)
+    if (conceptStates.size === 0) {
+      try {
+        const preseedData = require('./preseed-concepts.json') as Array<{ concept_id: string; state: ConceptKnowledgeLevel }>;
+        for (const entry of preseedData) {
+          conceptStates.set(entry.concept_id, {
+            concept_id: entry.concept_id,
+            state: entry.state,
+            last_seen: 0,
+            signal_count: 0,
+          });
+        }
+        if (preseedData.length > 0) {
+          saveConceptStates(conceptStates);
+          logEvent('knowledge_preseed', { count: preseedData.length });
+        }
+      } catch {
+        // preseed file not available, skip
+      }
+    }
+
     initialized = true;
 
     logEvent('store_initialized', {
@@ -65,9 +96,40 @@ export async function initStore(): Promise<void> {
       loaded_concept_reviews: conceptReviews.size,
       loaded_voice_notes: voiceNotes.length,
     });
+
+    // Background: check for content updates from server
+    checkForUpdates().then(async (hasUpdates) => {
+      if (hasUpdates) {
+        const fresh = await downloadContent();
+        if (fresh) {
+          mergeNewContent(fresh.articles, fresh.concepts);
+          logEvent('content_refreshed', {
+            article_count: fresh.articles.length,
+            concept_count: fresh.concepts.length,
+          });
+        }
+      }
+    });
   })();
 
   return initPromise;
+}
+
+function rebuildConceptIndex() {
+  articleConceptIndex.clear();
+  for (const c of concepts) {
+    for (const aid of c.source_article_ids) {
+      if (!articleConceptIndex.has(aid)) articleConceptIndex.set(aid, []);
+      articleConceptIndex.get(aid)!.push(c.id);
+    }
+  }
+}
+
+function mergeNewContent(newArticles: Article[], newConcepts: Concept[]) {
+  articles = newArticles;
+  articles.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  concepts = newConcepts;
+  rebuildConceptIndex();
 }
 
 export function isInitialized(): boolean {
@@ -161,6 +223,7 @@ export function getReadingState(articleId: string): ReadingState {
     last_read_at: 0,
     time_spent_ms: 0,
     started_at: 0,
+    scroll_position_y: 0,
   };
 }
 
@@ -214,6 +277,12 @@ export function getByTopic(): Map<string, Article[]> {
     }
   }
   return topicMap;
+}
+
+// --- Syntheses ---
+
+export function getSynthesisForTopic(topic: string): TopicSynthesis | undefined {
+  return syntheses.find(s => s.topic === topic);
 }
 
 // --- Stats ---
@@ -651,6 +720,53 @@ export function getMatchingClaims(conceptId: string, limit: number = 2): string[
 
   scored.sort((a, b) => b.score - a.score);
   return scored.slice(0, limit).map(s => s.claim);
+}
+
+/**
+ * Find concepts matching a claim that the user has previously encountered/known
+ * AND that appear in other articles. Used for in-reading connection prompts.
+ * Returns max 1 result (best match) to avoid clutter.
+ */
+export function getConceptConnections(articleId: string, claimText: string): {
+  concept: Concept;
+  otherArticles: Array<{ id: string; title: string }>;
+} | null {
+  const articleConcepts = articleConceptIndex.get(articleId) || [];
+  const claimContent = contentWords(claimText);
+  if (claimContent.size === 0) return null;
+
+  let bestMatch: { concept: Concept; otherArticles: Array<{ id: string; title: string }>; score: number } | null = null;
+
+  for (const cid of articleConcepts) {
+    const state = conceptStates.get(cid);
+    if (!state || state.state === 'unknown') continue;
+
+    const concept = concepts.find(c => c.id === cid);
+    if (!concept) continue;
+
+    const conceptContent = contentWords(concept.text);
+    if (conceptContent.size === 0) continue;
+
+    const overlap = [...conceptContent].filter(w => claimContent.has(w)).length;
+    const overlapRatio = overlap / conceptContent.size;
+    if (overlapRatio <= 0.3) continue;
+
+    const otherArticles = concept.source_article_ids
+      .filter(aid => aid !== articleId)
+      .map(aid => {
+        const a = articles.find(art => art.id === aid);
+        return a ? { id: a.id, title: a.title } : null;
+      })
+      .filter((x): x is { id: string; title: string } => x !== null);
+
+    if (otherArticles.length === 0) continue;
+
+    if (!bestMatch || overlapRatio > bestMatch.score) {
+      bestMatch = { concept, otherArticles, score: overlapRatio };
+    }
+  }
+
+  return bestMatch ? { concept: bestMatch.concept, otherArticles: bestMatch.otherArticles } : null;
 }
 
 /**

@@ -2,16 +2,17 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Linking,
   NativeSyntheticEvent, NativeScrollEvent, LayoutChangeEvent,
-  Platform,
+  Platform, Animated,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
-import { getArticleById, getReadingState, updateReadingState, addSignal, processClaimSignalForConcepts, processImplicitEncounter, getRelatedArticles, addVoiceNote, getVoiceNotes } from '../data/store';
+import { getArticleById, getReadingState, updateReadingState, addSignal, processClaimSignalForConcepts, processImplicitEncounter, getRelatedArticles, getConceptConnections, addVoiceNote, getVoiceNotes } from '../data/store';
 import { ReadingDepth, VoiceNote } from '../data/types';
 import { logEvent } from '../data/logger';
 import { isSectionValid, parseInlineMarkdown, splitMarkdownBlocks, parseMarkdownBlock } from './markdown-utils';
 import { transcribeVoiceNote } from '../data/transcription';
+import { triggerResearch } from '../data/research';
 
 // --- Local types for claim signal tracking ---
 
@@ -39,6 +40,7 @@ const PAUSE_THRESHOLD_MS = 3000;
 const VELOCITY_SAMPLE_INTERVAL_MS = 200;
 const REVISIT_SCROLL_BACK_PX = 150;
 const IMPLICIT_ENCOUNTER_DWELL_MS = 60000; // 60s in a zone triggers implicit encounter
+const SCROLL_POSITION_SAVE_INTERVAL_MS = 2000;
 
 // --- Floating Depth Indicator ---
 
@@ -94,6 +96,56 @@ function ClaimSignalPill({ currentSignal, onSignal, onDismiss }: {
           </Pressable>
         </View>
       </View>
+    </Pressable>
+  );
+}
+
+// --- Connection indicator pill (shown below claims) ---
+
+function ConnectionIndicator({ articleId, claimText }: {
+  articleId: string;
+  claimText: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const connection = getConceptConnections(articleId, claimText);
+  if (!connection) return null;
+
+  const { concept, otherArticles } = connection;
+  const count = otherArticles.length;
+
+  useEffect(() => {
+    logEvent('reader_connection_shown', {
+      article_id: articleId,
+      concept_id: concept.id,
+      other_article_count: count,
+    });
+  }, []);
+
+  return (
+    <Pressable
+      style={styles.connectionPill}
+      onPress={() => {
+        setExpanded(e => !e);
+        if (!expanded) {
+          logEvent('reader_connection_tap', {
+            article_id: articleId,
+            concept_id: concept.id,
+          });
+        }
+      }}
+    >
+      <Text style={styles.connectionText}>
+        {concept.topic} · seen in {count} other {count === 1 ? 'article' : 'articles'}
+      </Text>
+      {expanded && (
+        <View style={styles.connectionExpanded}>
+          {otherArticles.map(a => (
+            <Text key={a.id} style={styles.connectionArticleTitle} numberOfLines={1}>
+              {a.title}
+            </Text>
+          ))}
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -323,9 +375,10 @@ function SectionCard({ section, index, expanded, onToggle }: {
 
 // --- Voice recording button ---
 
-function VoiceRecordButton({ articleId, currentDepth }: {
+function VoiceRecordButton({ articleId, currentDepth, onTranscribed }: {
   articleId: string;
   currentDepth: ReadingDepth;
+  onTranscribed?: (transcript: string, noteId: string) => void;
 }) {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
@@ -390,13 +443,18 @@ function VoiceRecordButton({ articleId, currentDepth }: {
 
         // Auto-trigger transcription in background
         setTranscribing(true);
-        transcribeVoiceNote(note).finally(() => setTranscribing(false));
+        transcribeVoiceNote(note).then((transcript) => {
+          setTranscribing(false);
+          if (transcript && onTranscribed) {
+            onTranscribed(transcript, noteId);
+          }
+        }).catch(() => setTranscribing(false));
       }
     } catch (e) {
       console.warn('[voice] failed to stop recording:', e);
       setIsRecording(false);
     }
-  }, [articleId, currentDepth, recordingDuration]);
+  }, [articleId, currentDepth, recordingDuration, onTranscribed]);
 
   if (Platform.OS === 'web') return null;
 
@@ -419,6 +477,71 @@ function VoiceRecordButton({ articleId, currentDepth }: {
   );
 }
 
+// --- Research trigger banner (shows after voice note transcription) ---
+
+function ResearchBanner({ transcript, articleId, articleTitle, articleSummary, concepts, voiceNoteId, onDismiss }: {
+  transcript: string;
+  articleId: string;
+  articleTitle: string;
+  articleSummary: string;
+  concepts: string[];
+  voiceNoteId: string;
+  onDismiss: () => void;
+}) {
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  const handleResearch = useCallback(async () => {
+    setSending(true);
+    await triggerResearch({
+      query: transcript,
+      articleId,
+      articleTitle,
+      articleSummary,
+      concepts,
+      voiceNoteId,
+    });
+    setSending(false);
+    setSent(true);
+    logEvent('research_triggered', {
+      article_id: articleId,
+      voice_note_id: voiceNoteId,
+      query_length: transcript.length,
+    });
+    setTimeout(onDismiss, 2000);
+  }, [transcript, articleId, articleTitle, articleSummary, concepts, voiceNoteId, onDismiss]);
+
+  if (sent) {
+    return (
+      <View style={styles.researchBanner}>
+        <Ionicons name="checkmark-circle" size={16} color="#10b981" />
+        <Text style={styles.researchBannerText}>Research agent dispatched</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.researchBanner}>
+      <Text style={styles.researchTranscript} numberOfLines={2}>{transcript}</Text>
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+        <Pressable
+          style={[styles.researchBtn, sending && { opacity: 0.5 }]}
+          onPress={handleResearch}
+          disabled={sending}
+        >
+          <Ionicons name="search" size={14} color="#f8fafc" />
+          <Text style={styles.researchBtnText}>
+            {sending ? 'Sending...' : 'Research this?'}
+          </Text>
+        </Pressable>
+        <Pressable style={styles.researchDismissBtn} onPress={onDismiss}>
+          <Ionicons name="close" size={14} color="#64748b" />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 // ============================================================
 // Main Reader Screen
 // ============================================================
@@ -434,10 +557,14 @@ export default function ReaderScreen() {
   const [claimSignals, setClaimSignals] = useState<ClaimSignalState>({});
   const [activeClaimPill, setActiveClaimPill] = useState<number | null>(null);
   const [signaledClaimCount, setSignaledClaimCount] = useState(0);
+  const [researchBanner, setResearchBanner] = useState<{ transcript: string; noteId: string } | null>(null);
+  const [showRestoredIndicator, setShowRestoredIndicator] = useState(false);
+  const restoredIndicatorOpacity = useRef(new Animated.Value(1)).current;
 
   // --- Refs ---
   const scrollRef = useRef<ScrollView>(null);
   const enterTime = useRef(Date.now());
+  const lastPositionSaveTime = useRef(0);
 
   // Section layout positions for depth zone tracking
   const zonePositions = useRef<Record<DepthZone, number>>({
@@ -467,12 +594,30 @@ export default function ReaderScreen() {
     logEvent('reader_open', { article_id: article.id, title: article.title, previous_depth: state.depth });
     zoneEnterTime.current = { summary: Date.now() };
 
+    // Restore scroll position if saved
+    const savedY = state.scroll_position_y || 0;
+    if (savedY > 0) {
+      setTimeout(() => {
+        scrollRef.current?.scrollTo({ y: savedY, animated: false });
+        logEvent('reader_position_restored', { article_id: article.id, scroll_y: savedY });
+        setShowRestoredIndicator(true);
+        setTimeout(() => {
+          Animated.timing(restoredIndicatorOpacity, {
+            toValue: 0,
+            duration: 500,
+            useNativeDriver: true,
+          }).start(() => setShowRestoredIndicator(false));
+        }, 2000);
+      }, 300);
+    }
+
     return () => {
       const elapsed = Date.now() - enterTime.current;
       const currentState = getReadingState(article.id);
       updateReadingState(article.id, {
         time_spent_ms: (currentState.time_spent_ms || 0) + elapsed,
         last_read_at: Date.now(),
+        scroll_position_y: lastScrollY.current,
       });
       // Log final zone exit and check implicit encounter
       const zone = currentZoneRef.current;
@@ -560,7 +705,14 @@ export default function ReaderScreen() {
       const savedDepthIdx = DEPTH_ZONES.indexOf(savedState.depth as DepthZone);
       // Only advance depth, never go backwards
       if (currentDepthIdx > savedDepthIdx || savedState.depth === 'unread') {
-        updateReadingState(article.id, { depth: depthMap[zone], last_read_at: now });
+        const depthUpdate: Partial<{ depth: ReadingDepth; last_read_at: number; scroll_position_y: number }> = {
+          depth: depthMap[zone],
+          last_read_at: now,
+        };
+        if (zone === 'full') {
+          depthUpdate.scroll_position_y = 0;
+        }
+        updateReadingState(article.id, depthUpdate);
       }
 
       logEvent('reader_scroll_depth', { article_id: article.id, depth: zone, scroll_y: scrollY });
@@ -617,6 +769,12 @@ export default function ReaderScreen() {
         pause_duration_ms: PAUSE_THRESHOLD_MS,
       });
     }, PAUSE_THRESHOLD_MS);
+
+    // --- Throttled scroll position save ---
+    if (now - lastPositionSaveTime.current >= SCROLL_POSITION_SAVE_INTERVAL_MS) {
+      lastPositionSaveTime.current = now;
+      updateReadingState(article.id, { scroll_position_y: Math.round(scrollY) });
+    }
 
     lastScrollY.current = scrollY;
     lastScrollTime.current = now;
@@ -711,7 +869,11 @@ export default function ReaderScreen() {
           <Ionicons name="arrow-back" size={22} color="#f8fafc" />
         </Pressable>
         <View style={{ flex: 1 }} />
-        <VoiceRecordButton articleId={article.id} currentDepth={currentZone} />
+        <VoiceRecordButton
+          articleId={article.id}
+          currentDepth={currentZone}
+          onTranscribed={(transcript, noteId) => setResearchBanner({ transcript, noteId })}
+        />
         <Pressable onPress={() => {
           logEvent('reader_open_source', { article_id: article.id, url: article.source_url });
           Linking.openURL(article.source_url);
@@ -722,6 +884,26 @@ export default function ReaderScreen() {
 
       {/* Sticky floating depth indicator */}
       <FloatingDepthIndicator currentZone={currentZone} />
+
+      {/* Research trigger banner after voice note transcription */}
+      {researchBanner && article && (
+        <ResearchBanner
+          transcript={researchBanner.transcript}
+          articleId={article.id}
+          articleTitle={article.title}
+          articleSummary={article.full_summary}
+          concepts={article.topics}
+          voiceNoteId={researchBanner.noteId}
+          onDismiss={() => setResearchBanner(null)}
+        />
+      )}
+
+      {/* Position restored indicator */}
+      {showRestoredIndicator && (
+        <Animated.View style={[styles.restoredIndicator, { opacity: restoredIndicatorOpacity }]}>
+          <Text style={styles.restoredText}>Continuing where you left off</Text>
+        </Animated.View>
+      )}
 
       {/* Main scrollable content */}
       <ScrollView
@@ -794,27 +976,30 @@ export default function ReaderScreen() {
           {article.key_claims.map((claim, i) => {
             const signal = claimSignals[i];
             return (
-              <View key={i} style={[
-                styles.claimCard,
-                signal === 'knew_it' && styles.claimCardKnew,
-                signal === 'interesting' && styles.claimCardNew,
-                signal === 'save' && styles.claimCardSave,
-              ]}>
-                <Text style={styles.claimCardText}>{claim}</Text>
-                <View style={styles.claimActions}>
-                  <Pressable
-                    style={[styles.claimBtn, signal === 'knew_it' && styles.claimBtnActiveKnew]}
-                    onPress={() => handleClaimSignal(i, 'knew_it')}
-                  >
-                    <Text style={[styles.claimBtnText, signal === 'knew_it' && { color: '#94a3b8' }]}>Knew this</Text>
-                  </Pressable>
-                  <Pressable
-                    style={[styles.claimBtn, styles.claimBtnNewBorder, signal === 'interesting' && styles.claimBtnActiveNew]}
-                    onPress={() => handleClaimSignal(i, 'interesting')}
-                  >
-                    <Text style={[styles.claimBtnText, { color: '#34d399' }, signal === 'interesting' && { color: '#ffffff' }]}>New to me</Text>
-                  </Pressable>
+              <View key={i}>
+                <View style={[
+                  styles.claimCard,
+                  signal === 'knew_it' && styles.claimCardKnew,
+                  signal === 'interesting' && styles.claimCardNew,
+                  signal === 'save' && styles.claimCardSave,
+                ]}>
+                  <Text style={styles.claimCardText}>{claim}</Text>
+                  <View style={styles.claimActions}>
+                    <Pressable
+                      style={[styles.claimBtn, signal === 'knew_it' && styles.claimBtnActiveKnew]}
+                      onPress={() => handleClaimSignal(i, 'knew_it')}
+                    >
+                      <Text style={[styles.claimBtnText, signal === 'knew_it' && { color: '#94a3b8' }]}>Knew this</Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.claimBtn, styles.claimBtnNewBorder, signal === 'interesting' && styles.claimBtnActiveNew]}
+                      onPress={() => handleClaimSignal(i, 'interesting')}
+                    >
+                      <Text style={[styles.claimBtnText, { color: '#34d399' }, signal === 'interesting' && { color: '#ffffff' }]}>New to me</Text>
+                    </Pressable>
+                  </View>
                 </View>
+                <ConnectionIndicator articleId={article.id} claimText={claim} />
               </View>
             );
           })}
@@ -1104,6 +1289,37 @@ const styles = StyleSheet.create({
   relatedTitle: { color: '#f8fafc', fontSize: 14, fontWeight: '600', marginBottom: 4 },
   relatedConnection: { color: '#a78bfa', fontSize: 12, lineHeight: 16 },
 
+  // Connection indicators
+  connectionPill: {
+    marginTop: -4,
+    marginBottom: 10,
+    marginLeft: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: '#1e1b2e',
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    borderLeftWidth: 2,
+    borderLeftColor: '#7c3aed40',
+  },
+  connectionText: {
+    color: '#8b7fb8',
+    fontSize: 11,
+    fontWeight: '500' as const,
+  },
+  connectionExpanded: {
+    marginTop: 4,
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: '#2d2640',
+  },
+  connectionArticleTitle: {
+    color: '#a78bfa',
+    fontSize: 11,
+    lineHeight: 16,
+    marginBottom: 2,
+  },
+
   // Voice recording
   voiceBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
@@ -1113,4 +1329,57 @@ const styles = StyleSheet.create({
   voiceBtnRecording: { backgroundColor: '#7f1d1d' },
   voiceTimer: { color: '#ef4444', fontSize: 12, fontWeight: '700' },
   voiceCount: { color: '#64748b', fontSize: 11 },
+
+  // Restored position indicator
+  restoredIndicator: {
+    alignItems: 'center',
+    paddingVertical: 6,
+    backgroundColor: '#1e293b',
+  },
+  restoredText: {
+    color: '#94a3b8',
+    fontSize: 12,
+  },
+
+  // Research banner
+  researchBanner: {
+    backgroundColor: '#1a1a2e',
+    borderLeftWidth: 3,
+    borderLeftColor: '#8b5cf6',
+    marginHorizontal: 16,
+    marginVertical: 8,
+    padding: 12,
+    borderRadius: 10,
+  },
+  researchTranscript: {
+    color: '#cbd5e1',
+    fontSize: 13,
+    lineHeight: 19,
+    fontStyle: 'italic' as const,
+  },
+  researchBtn: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    backgroundColor: '#7c3aed',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  researchBtnText: {
+    color: '#f8fafc',
+    fontSize: 13,
+    fontWeight: '600' as const,
+  },
+  researchDismissBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#1e293b',
+  },
+  researchBannerText: {
+    color: '#10b981',
+    fontSize: 13,
+    fontWeight: '500' as const,
+  },
 });

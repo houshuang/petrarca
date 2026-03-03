@@ -44,6 +44,7 @@ export interface ReadingState {
   last_read_at: number;
   time_spent_ms: number;
   started_at: number;
+  scroll_position_y: number;
 }
 
 export type ReadingDepth = 'unread' | 'summary' | 'claims' | 'sections' | 'full';
@@ -99,6 +100,15 @@ export interface ConceptNote {
 
 export type ReviewRating = 1 | 2 | 3 | 4; // again(1) hard(2) good(3) easy(4)
 
+// --- Topic Syntheses ---
+
+export interface TopicSynthesis {
+  topic: string;
+  synthesis_text: string;
+  article_ids: string[];
+  generated_at: string;
+}
+
 // --- Voice Notes ---
 
 export interface VoiceNote {
@@ -111,4 +121,21 @@ export interface VoiceNote {
   file_uri: string;
   transcript?: string;
   transcription_status: 'pending' | 'processing' | 'completed' | 'failed';
+}
+
+// --- Research Agent ---
+
+export interface ResearchResult {
+  id: string;
+  query: string;
+  article_id: string;
+  article_title: string;
+  voice_note_id?: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  requested_at: number;
+  completed_at?: number;
+  perspectives?: string[];
+  recommendations?: string[];
+  connections?: string[];
+  error?: string;
 }

@@ -6,7 +6,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getArticles, getFeedArticles, getInProgressArticles, getReadingState, getStats, getNoveltyScore } from '../data/store';
+import { getArticles, getFeedArticles, getInProgressArticles, getReadingState, getStats, getNoveltyScore, getSynthesisForTopic } from '../data/store';
 import { Article, ReadingDepth } from '../data/types';
 import { logEvent } from '../data/logger';
 
@@ -469,6 +469,44 @@ function TriageModeView() {
   );
 }
 
+// --- Synthesis Card ---
+
+function SynthesisCard({ topic, articleCount }: { topic: string; articleCount: number }) {
+  const synthesis = getSynthesisForTopic(topic);
+  const [expanded, setExpanded] = useState(false);
+
+  if (!synthesis) return null;
+
+  return (
+    <Pressable
+      style={styles.synthesisCard}
+      onPress={() => {
+        const next = !expanded;
+        setExpanded(next);
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        if (next) {
+          logEvent('synthesis_viewed', { topic, article_count: articleCount });
+        }
+      }}
+    >
+      <View style={styles.synthesisHeader}>
+        <Ionicons name="layers" size={16} color="#a78bfa" />
+        <Text style={styles.synthesisTitle}>
+          Synthesis across {articleCount} articles
+        </Text>
+        <Ionicons
+          name={expanded ? 'chevron-up' : 'chevron-down'}
+          size={16}
+          color="#94a3b8"
+        />
+      </View>
+      {expanded && (
+        <Text style={styles.synthesisText}>{synthesis.synthesis_text}</Text>
+      )}
+    </Pressable>
+  );
+}
+
 // --- Topic Clustering Mode ---
 
 interface TopicCluster {
@@ -533,6 +571,7 @@ function TopicsModeView() {
             </Pressable>
             {isExpanded && (
               <View style={styles.clusterArticles}>
+                <SynthesisCard topic={cluster.topic} articleCount={cluster.articles.length} />
                 {cluster.articles.map(a => (
                   <FeedCard key={a.id} article={a} />
                 ))}
@@ -804,6 +843,33 @@ const styles = StyleSheet.create({
   clusterArticles: {
     paddingLeft: 8,
     paddingTop: 4,
+  },
+
+  // Synthesis card
+  synthesisCard: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: '#a78bfa',
+  },
+  synthesisHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  synthesisTitle: {
+    color: '#a78bfa',
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
+  synthesisText: {
+    color: '#cbd5e1',
+    fontSize: 14,
+    lineHeight: 22,
+    marginTop: 12,
   },
 
   // Triage mode

@@ -4,6 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { getStats, getSignals, getArticles, getByTopic, getReadingState, getTopicKnowledgeStats, getConcepts, getVoiceNotes, getArticleById, getConceptReview } from '../data/store';
 import { logEvent, getLogFiles, exportAllLogs, getLogDirectory } from '../data/logger';
 import { transcribeAllPending } from '../data/transcription';
+import { ResearchResult } from '../data/types';
+import { getResearchResults, fetchResearchResults } from '../data/research';
 
 function EventLogSection() {
   const [logFileList, setLogFileList] = useState<string[]>([]);
@@ -217,6 +219,120 @@ function VoiceNotesSection({ onRefresh }: { onRefresh: () => void }) {
   );
 }
 
+function ResearchResultsSection({ onRefresh }: { onRefresh: () => void }) {
+  const [results, setResults] = useState<ResearchResult[]>([]);
+  const [expandedResult, setExpandedResult] = useState<string | null>(null);
+  const [fetching, setFetching] = useState(false);
+
+  useEffect(() => {
+    getResearchResults().then(setResults);
+  }, []);
+
+  const handleFetch = async () => {
+    setFetching(true);
+    logEvent('research_results_fetch_start');
+    const count = await fetchResearchResults();
+    const updated = await getResearchResults();
+    setResults(updated);
+    setFetching(false);
+    if (count > 0) onRefresh();
+  };
+
+  if (results.length === 0) return null;
+
+  const completed = results.filter(r => r.status === 'completed');
+  const pending = results.filter(r => r.status === 'pending' || r.status === 'processing');
+
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>Research Results</Text>
+      <Text style={styles.sectionSubtitle}>
+        {completed.length} completed{pending.length > 0 ? ` · ${pending.length} in progress` : ''}
+      </Text>
+
+      <Pressable
+        style={[styles.refreshBtn, { marginBottom: 8, opacity: fetching ? 0.5 : 1 }]}
+        onPress={handleFetch}
+        disabled={fetching}
+      >
+        <Ionicons name={fetching ? 'hourglass-outline' : 'cloud-download-outline'} size={16} color="#8b5cf6" />
+        <Text style={[styles.refreshText, { color: '#8b5cf6' }]}>
+          {fetching ? 'Checking...' : 'Check for new results'}
+        </Text>
+      </Pressable>
+
+      {results.slice(0, 10).map(r => {
+        const isExpanded = expandedResult === r.id;
+        const statusColor = STATUS_COLORS[r.status] || '#64748b';
+        return (
+          <Pressable
+            key={r.id}
+            onPress={() => {
+              setExpandedResult(isExpanded ? null : r.id);
+              if (!isExpanded) {
+                logEvent('research_result_viewed', { research_id: r.id, article_id: r.article_id });
+              }
+            }}
+            style={styles.researchCard}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Ionicons name="search" size={14} color="#8b5cf6" />
+              <Text style={{ color: '#cbd5e1', fontSize: 13, flex: 1 }} numberOfLines={1}>
+                {r.article_title}
+              </Text>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: statusColor }} />
+            </View>
+            <Text style={{ color: '#94a3b8', fontSize: 12, marginTop: 4 }} numberOfLines={isExpanded ? undefined : 1}>
+              {r.query}
+            </Text>
+
+            {isExpanded && r.status === 'completed' && (
+              <View style={{ marginTop: 10 }}>
+                {r.perspectives && r.perspectives.length > 0 && (
+                  <View style={{ marginBottom: 10 }}>
+                    <Text style={styles.researchSubhead}>Perspectives</Text>
+                    {r.perspectives.map((p, i) => (
+                      <Text key={i} style={styles.researchItem}>{p}</Text>
+                    ))}
+                  </View>
+                )}
+                {r.recommendations && r.recommendations.length > 0 && (
+                  <View style={{ marginBottom: 10 }}>
+                    <Text style={styles.researchSubhead}>Recommendations</Text>
+                    {r.recommendations.map((rec, i) => (
+                      <Text key={i} style={styles.researchItem}>{rec}</Text>
+                    ))}
+                  </View>
+                )}
+                {r.connections && r.connections.length > 0 && (
+                  <View>
+                    <Text style={styles.researchSubhead}>Connections</Text>
+                    {r.connections.map((c, i) => (
+                      <Text key={i} style={styles.researchItem}>{c}</Text>
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
+
+            {isExpanded && r.status === 'failed' && r.error && (
+              <Text style={{ color: '#ef4444', fontSize: 12, marginTop: 6, fontStyle: 'italic' }}>
+                {r.error}
+              </Text>
+            )}
+
+            {isExpanded && (r.status === 'pending' || r.status === 'processing') && (
+              <Text style={{ color: '#f59e0b', fontSize: 12, marginTop: 6, fontStyle: 'italic' }}>
+                Research in progress...
+              </Text>
+            )}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 export default function StatsScreen() {
   const [, forceUpdate] = useState(0);
   const stats = getStats();
@@ -332,6 +448,9 @@ export default function StatsScreen() {
         {/* Knowledge dashboard */}
         <KnowledgeDashboard />
 
+        {/* Research results */}
+        <ResearchResultsSection onRefresh={() => forceUpdate(n => n + 1)} />
+
         {/* Voice notes summary */}
         <VoiceNotesSection onRefresh={() => forceUpdate(n => n + 1)} />
 
@@ -379,4 +498,31 @@ const styles = StyleSheet.create({
   coverageCount: { color: '#64748b', fontSize: 13 },
   refreshBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, marginTop: 8 },
   refreshText: { color: '#60a5fa', fontSize: 14 },
+
+  // Research results
+  researchCard: {
+    backgroundColor: '#1e293b',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#7c3aed',
+  },
+  researchSubhead: {
+    color: '#a78bfa',
+    fontSize: 12,
+    fontWeight: '600' as const,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  researchItem: {
+    color: '#cbd5e1',
+    fontSize: 13,
+    lineHeight: 20,
+    marginBottom: 8,
+    paddingLeft: 8,
+    borderLeftWidth: 2,
+    borderLeftColor: '#334155',
+  },
 });

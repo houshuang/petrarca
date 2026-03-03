@@ -1,0 +1,307 @@
+[
+  {
+    "concept_id": "66285c570e",
+    "state": "encountered",
+    "match_count": 1
+  },
+  {
+    "concept_id": "ff2ccd5a36",
+    "state": "encountered",
+    "match_count": 3
+  },
+  {
+    "concept_id": "00d24f6df3",
+    "state": "encountered",
+    "match_count": 1
+  },
+  {
+    "concept_id": "42845ef8c7",
+    "state": "encountered",
+    "match_count": 9
+  },
+  {
+    "concept_id": "f8316ad93b",
+    "state": "encountered",
+    "match_count": 9
+  },
+  {
+    "concept_id": "5c7c43f4e4",
+    "state": "encountered",
+    "match_count": 3
+  },
+  {
+    "concept_id": "e5d0ab094e",
+    "state": "encountered",
+    "match_count": 3
+  },
+  {
+    "concept_id": "437e824a8f",
+    "state": "encountered",
+    "match_count": 9
+  },
+  {
+    "concept_id": "4cba603669",
+    "state": "encountered",
+    "match_count": 1
+  },
+  {
+    "concept_id": "145dd4cce6",
+    "state": "encountered",
+    "match_count": 2
+  },
+  {
+    "concept_id": "7e6be16577",
+    "state": "encountered",
+    "match_count": 2
+  },
+  {
+    "concept_id": "e83d58e4a2",
+    "state": "encountered",
+    "match_count": 2
+  },
+  {
+    "concept_id": "08d588d4b8",
+    "state": "encountered",
+    "match_count": 2
+  },
+  {
+    "concept_id": "c2f270b07b",
+    "state": "encountered",
+    "match_count": 1
+  },
+  {
+    "concept_id": "a30ba4b889",
+    "state": "encountered",
+    "match_count": 2
+  },
+  {
+    "concept_id": "0af392fd8f",
+    "state": "encountered",
+    "match_count": 1
+  },
+  {
+    "concept_id": "59225a301e",
+    "state": "encountered",
+    "match_count": 2
+  },
+  {
+    "concept_id": "4e3406b37c",
+    "state": "encountered",
+    "match_count": 3
+  },
+  {
+    "concept_id": "582b2475b3",
+    "state": "encountered",
+    "match_count": 3
+  },
+  {
+    "concept_id": "47356a04db",
+    "state": "encountered",
+    "match_count": 3
+  },
+  {
+    "concept_id": "557a45afae",
+    "state": "encountered",
+    "match_count": 1
+  },
+  {
+    "concept_id": "331e7c2b36",
+    "state": "encountered",
+    "match_count": 3
+  },
+  {
+    "concept_id": "3b23da4e79",
+    "state": "encountered",
+    "match_count": 1
+  },
+  {
+    "concept_id": "479fd9a820",
+    "state": "encountered",
+    "match_count": 3
+  },
+  {
+    "concept_id": "7e991c7f66",
+    "state": "encountered",
+    "match_count": 1
+  },
+  {
+    "concept_id": "3fa44631b7",
+    "state": "encountered",
+    "match_count": 1
+  },
+  {
+    "concept_id": "c66f29d528",
+    "state": "encountered",
+    "match_count": 1
+  },
+  {
+    "concept_id": "574e6217fe",
+    "state": "encountered",
+    "match_count": 1
+  },
+  {
+    "concept_id": "6befef6829",
+    "state": "encountered",
+    "match_count": 1
+  },
+  {
+    "concept_id": "ff87fc8293",
+    "state": "encountered",
+    "match_count": 3
+  },
+  {
+    "concept_id": "0c2ff2bd11",
+    "state": "encountered",
+    "match_count": 2
+  },
+  {
+    "concept_id": "e0a111fb27",
+    "state": "encountered",
+    "match_count": 2
+  },
+  {
+    "concept_id": "2d48b2e573",
+    "state": "encountered",
+    "match_count": 3
+  },
+  {
+    "concept_id": "6a785cbc9e",
+    "state": "encountered",
+    "match_count": 1
+  },
+  {
+    "concept_id": "41f8326777",
+    "state": "encountered",
+    "match_count": 1
+  },
+  {
+    "concept_id": "cd19822e74",
+    "state": "encountered",
+    "match_count": 37
+  },
+  {
+    "concept_id": "e53bd7b133",
+    "state": "encountered",
+    "match_count": 2
+  },
+  {
+    "concept_id": "2299b5e536",
+    "state": "encountered",
+    "match_count": 2
+  },
+  {
+    "concept_id": "998b1fa70a",
+    "state": "encountered",
+    "match_count": 19
+  },
+  {
+    "concept_id": "7a6733877a",
+    "state": "encountered",
+    "match_count": 37
+  },
+  {
+    "concept_id": "d041f6ea0f",
+    "state": "encountered",
+    "match_count": 2
+  },
+  {
+    "concept_id": "814ebabed6",
+    "state": "encountered",
+    "match_count": 8
+  },
+  {
+    "concept_id": "b9688e4e1a",
+    "state": "encountered",
+    "match_count": 16
+  },
+  {
+    "concept_id": "9ce6330f34",
+    "state": "encountered",
+    "match_count": 16
+  },
+  {
+    "concept_id": "983d974949",
+    "state": "encountered",
+    "match_count": 16
+  },
+  {
+    "concept_id": "57ba139c73",
+    "state": "encountered",
+    "match_count": 8
+  },
+  {
+    "concept_id": "143a95e8a3",
+    "state": "encountered",
+    "match_count": 3
+  },
+  {
+    "concept_id": "c9e4e110bd",
+    "state": "encountered",
+    "match_count": 3
+  },
+  {
+    "concept_id": "7d52239163",
+    "state": "encountered",
+    "match_count": 3
+  },
+  {
+    "concept_id": "631c75e984",
+    "state": "encountered",
+    "match_count": 3
+  },
+  {
+    "concept_id": "a311b2f293",
+    "state": "encountered",
+    "match_count": 1
+  },
+  {
+    "concept_id": "fbc0dd3f5c",
+    "state": "encountered",
+    "match_count": 1
+  },
+  {
+    "concept_id": "e425f25fd9",
+    "state": "encountered",
+    "match_count": 1
+  },
+  {
+    "concept_id": "b6b8a51a85",
+    "state": "encountered",
+    "match_count": 4
+  },
+  {
+    "concept_id": "6066970788",
+    "state": "encountered",
+    "match_count": 2
+  },
+  {
+    "concept_id": "0ca3152162",
+    "state": "encountered",
+    "match_count": 37
+  },
+  {
+    "concept_id": "1736a69b18",
+    "state": "encountered",
+    "match_count": 1
+  },
+  {
+    "concept_id": "b03f60c2d0",
+    "state": "encountered",
+    "match_count": 2
+  },
+  {
+    "concept_id": "c8c0d0cefc",
+    "state": "encountered",
+    "match_count": 2
+  },
+  {
+    "concept_id": "a68cf8a67a",
+    "state": "encountered",
+    "match_count": 37
+  },
+  {
+    "concept_id": "c7f22f63f1",
+    "state": "encountered",
+    "match_count": 1
+  }
+]

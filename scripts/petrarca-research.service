@@ -1,0 +1,16 @@
+[Unit]
+Description=Petrarca Research Agent Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/petrarca
+ExecStart=/usr/bin/python3 /opt/petrarca/scripts/research-server.py
+Restart=always
+RestartSec=5
+Environment=RESEARCH_RESULTS_DIR=/opt/petrarca/research-results
+Environment=RESEARCH_PORT=8090
+
+[Install]
+WantedBy=multi-user.target
