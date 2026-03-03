@@ -4,6 +4,26 @@
 
 ---
 
+## 2026-03-03 — Spaced Attention Scheduling + Deployment
+
+**What**: Built the spaced attention scheduling system (Phase 4a from plan) and deployed all changes to Hetzner.
+
+**Implementation**:
+- **Review tab**: New tab in navigation for concept-level spaced re-engagement
+- **Scheduling algorithm**: Expanding intervals with difficulty tracking. Ratings map to multipliers: again(reset to 1d), hard(×1.2), good(×2.5), easy(×3.5). Difficulty adjusts ±0.1-0.3 per review.
+- **Priority queue**: Concepts ranked by `overdue × relevance × topic_interest × maturity`. Relevance boosted 1.5× for concepts matching recent reading topics. Topic interest based on article engagement depth. New concepts get 1.3× maturity boost.
+- **Review flow**: Card shows concept → previous notes → prompt "How does this connect?" → optional text note → 4-point understanding rating (confused / fuzzy / solid / could teach)
+- **Auto-creation**: When claim signals transition a concept from unknown to encountered/known, review states are auto-created. "Known" starts at 7-day interval, "encountered" at 1-day.
+- **Knowledge overview**: After completing review session, shows topic-level progress bars
+
+**Types added**: ConceptReview, ConceptNote, ReviewRating
+**Store functions**: getReviewQueue(), submitReview(), ensureReviewStates(), getConceptReview()
+**Measurement events**: `concept_review` (concept_id, rating, stability_days, engagement_count, has_note)
+
+**Deployment**: `exp://alifstian.duckdns.org:8082` — all features live including fluid reader, triage, knowledge model, voice notes, and review
+
+---
+
 ## 2026-03-03 — Bug Fixes + Voice Notes + Connection Prompting
 
 **What**: Fixed critical bugs in knowledge model (NoveltyBadge never rendered, weak concept matching). Added voice note recording, connection prompting, continue reading, and time-aware reading guidance.
