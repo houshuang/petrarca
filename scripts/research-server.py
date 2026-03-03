@@ -48,6 +48,89 @@ Please provide your response as a JSON object with exactly these three arrays of
 Respond ONLY with valid JSON, no other text."""
 
 
+def build_explore_prompt(subtopic: str, exploration_tag: str, triage_signals: dict, existing_concepts: list[str]) -> str:
+    concept_str = ', '.join(existing_concepts[:20]) if existing_concepts else 'none'
+    liked = ', '.join(triage_signals.get('liked', [])) or 'none yet'
+    skipped = ', '.join(triage_signals.get('skipped', [])) or 'none yet'
+    return f"""You are a research assistant helping a reader explore "{exploration_tag}".
+
+The reader has shown interest in the subtopic: "{subtopic}"
+
+READER CONTEXT:
+- Exploration topic: {exploration_tag}
+- Subtopics they liked/read: {liked}
+- Subtopics they skipped: {skipped}
+- Concepts they already track: {concept_str}
+
+Find 3-5 high-quality articles or sources about "{subtopic}" in the context of {exploration_tag}. Look for:
+- Mix of overview and in-depth content
+- Diverse perspectives (academic, journalistic, personal essays)
+- Sources that connect to what the reader already knows
+
+Respond ONLY with valid JSON:
+{{
+  "articles": [
+    {{
+      "title": "Article or source title",
+      "url": "Full URL",
+      "description": "1-2 sentence description of why this is worth reading",
+      "depth": "overview|intermediate|deep"
+    }}
+  ],
+  "connections": ["1-2 sentences connecting this subtopic to reader's existing knowledge"]
+}}"""
+
+
+def run_explore(request_id: str, subtopic: str, exploration_tag: str, triage_signals: dict, existing_concepts: list[str]):
+    result_path = RESULTS_DIR / f'{request_id}.json'
+    result = {
+        'id': request_id,
+        'type': 'explore',
+        'status': 'processing',
+        'subtopic': subtopic,
+        'exploration_tag': exploration_tag,
+    }
+
+    try:
+        prompt = build_explore_prompt(subtopic, exploration_tag, triage_signals, existing_concepts)
+        proc = subprocess.run(
+            ['claude', '-p', prompt],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+
+        if proc.returncode != 0:
+            result['status'] = 'failed'
+            result['error'] = f'claude exited with code {proc.returncode}: {proc.stderr[:500]}'
+        else:
+            output = proc.stdout.strip()
+            json_start = output.find('{')
+            json_end = output.rfind('}') + 1
+            if json_start >= 0 and json_end > json_start:
+                parsed = json.loads(output[json_start:json_end])
+                result['status'] = 'completed'
+                result['completed_at'] = int(time.time() * 1000)
+                result['articles'] = parsed.get('articles', [])
+                result['connections'] = parsed.get('connections', [])
+            else:
+                result['status'] = 'failed'
+                result['error'] = 'Could not parse JSON from claude output'
+
+    except subprocess.TimeoutExpired:
+        result['status'] = 'failed'
+        result['error'] = 'Explore research timed out after 5 minutes'
+    except json.JSONDecodeError as e:
+        result['status'] = 'failed'
+        result['error'] = f'JSON parse error: {e}'
+    except Exception as e:
+        result['status'] = 'failed'
+        result['error'] = str(e)
+
+    result_path.write_text(json.dumps(result, indent=2))
+    print(f'[explore] {request_id} -> {result["status"]}')
+
+
 def run_research(request_id: str, query: str, article_title: str, article_summary: str, concepts: list[str]):
     result_path = RESULTS_DIR / f'{request_id}.json'
     result = {
@@ -101,12 +184,48 @@ def run_research(request_id: str, query: str, article_title: str, article_summar
 
 class ResearchHandler(BaseHTTPRequestHandler):
     def do_POST(self):
-        if self.path != '/research':
+        if self.path not in ('/research', '/research/explore'):
             self.send_error(404)
             return
 
         content_length = int(self.headers.get('Content-Length', 0))
         body = json.loads(self.rfile.read(content_length))
+
+        if self.path == '/research/explore':
+            request_id = body.get('id', f'exp_{int(time.time())}')
+            subtopic = body.get('subtopic', '')
+            exploration_tag = body.get('exploration_tag', '')
+            triage_signals = body.get('triage_signals', {})
+            existing_concepts = body.get('concepts', [])
+
+            if not subtopic or not exploration_tag:
+                self.send_error(400, 'Missing subtopic or exploration_tag')
+                return
+
+            result_path = RESULTS_DIR / f'{request_id}.json'
+            result_path.write_text(json.dumps({
+                'id': request_id,
+                'type': 'explore',
+                'status': 'processing',
+                'subtopic': subtopic,
+                'exploration_tag': exploration_tag,
+                'requested_at': int(time.time() * 1000),
+            }, indent=2))
+
+            thread = threading.Thread(
+                target=run_explore,
+                args=(request_id, subtopic, exploration_tag, triage_signals, existing_concepts),
+                daemon=True,
+            )
+            thread.start()
+
+            print(f'[explore] Started {request_id}: {subtopic[:80]}...')
+
+            self.send_response(202)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'id': request_id, 'status': 'processing'}).encode())
+            return
 
         request_id = body.get('id', f'res_{int(time.time())}')
         query = body.get('query', '')

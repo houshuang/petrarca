@@ -445,11 +445,11 @@ export default function StatsScreen() {
             ))}
         </View>
 
+        {/* Research results — promoted to top for visibility */}
+        <ResearchResultsSection onRefresh={() => forceUpdate(n => n + 1)} />
+
         {/* Knowledge dashboard */}
         <KnowledgeDashboard />
-
-        {/* Research results */}
-        <ResearchResultsSection onRefresh={() => forceUpdate(n => n + 1)} />
 
         {/* Voice notes summary */}
         <VoiceNotesSection onRefresh={() => forceUpdate(n => n + 1)} />

@@ -7,12 +7,13 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
-import { getArticleById, getReadingState, updateReadingState, addSignal, processClaimSignalForConcepts, processImplicitEncounter, getRelatedArticles, getConceptConnections, addVoiceNote, getVoiceNotes } from '../data/store';
-import { ReadingDepth, VoiceNote } from '../data/types';
+import { getArticleById, getReadingState, updateReadingState, addSignal, processClaimSignalForConcepts, processImplicitEncounter, getRelatedArticles, getConceptConnections, addVoiceNote, getVoiceNotes, getHighlightBlockIndices, addHighlight, removeHighlight } from '../data/store';
+import { ReadingDepth, VoiceNote, Highlight } from '../data/types';
+import * as Haptics from 'expo-haptics';
 import { logEvent } from '../data/logger';
 import { isSectionValid, parseInlineMarkdown, splitMarkdownBlocks, parseMarkdownBlock } from './markdown-utils';
 import { transcribeVoiceNote } from '../data/transcription';
-import { triggerResearch } from '../data/research';
+import { triggerResearch, getResearchResultsForArticle } from '../data/research';
 
 // --- Local types for claim signal tracking ---
 
@@ -195,11 +196,13 @@ function renderInlineMarkdown(text: string): (string | React.ReactElement)[] {
 // Re-export for tests
 export { isSectionValid } from './markdown-utils';
 
-function MarkdownText({ content, claimHighlights, claimSignals, onClaimTap }: {
+function MarkdownText({ content, claimHighlights, claimSignals, onClaimTap, highlightedBlocks, onBlockLongPress }: {
   content: string;
   claimHighlights?: string[];
   claimSignals?: ClaimSignalState;
   onClaimTap?: (claimIndex: number) => void;
+  highlightedBlocks?: Set<number>;
+  onBlockLongPress?: (blockIndex: number, text: string) => void;
 }) {
   if (!content) return null;
 
@@ -209,6 +212,7 @@ function MarkdownText({ content, claimHighlights, claimSignals, onClaimTap }: {
     <View>
       {blocks.map((raw, i) => {
         const block = parseMarkdownBlock(raw);
+        const isHighlighted = highlightedBlocks?.has(i);
 
         switch (block.type) {
           case 'heading':
@@ -228,7 +232,13 @@ function MarkdownText({ content, claimHighlights, claimSignals, onClaimTap }: {
 
           case 'ul':
             return (
-              <View key={i} style={styles.markdownList}>
+              <View key={i} style={[styles.markdownList, isHighlighted && styles.paragraphHighlight]}>
+                {onBlockLongPress && (
+                  <Pressable
+                    style={StyleSheet.absoluteFill}
+                    onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onBlockLongPress(i, raw); }}
+                  />
+                )}
                 {(block.items || []).map((item, j) => (
                   <View key={j} style={styles.markdownListItem}>
                     <Text style={styles.markdownBullet}>{'\u00B7'}</Text>
@@ -242,7 +252,13 @@ function MarkdownText({ content, claimHighlights, claimSignals, onClaimTap }: {
 
           case 'ol':
             return (
-              <View key={i} style={styles.markdownList}>
+              <View key={i} style={[styles.markdownList, isHighlighted && styles.paragraphHighlight]}>
+                {onBlockLongPress && (
+                  <Pressable
+                    style={StyleSheet.absoluteFill}
+                    onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onBlockLongPress(i, raw); }}
+                  />
+                )}
                 {(block.items || []).map((item, j) => (
                   <View key={j} style={styles.markdownListItem}>
                     <Text style={styles.markdownOrderedBullet}>{j + 1}.</Text>
@@ -256,18 +272,22 @@ function MarkdownText({ content, claimHighlights, claimSignals, onClaimTap }: {
 
           case 'code':
             return (
-              <View key={i} style={styles.codeBlock}>
+              <View key={i} style={[styles.codeBlock, isHighlighted && styles.paragraphHighlight]}>
                 <Text style={styles.codeText}>{block.content}</Text>
               </View>
             );
 
           case 'blockquote':
             return (
-              <View key={i} style={styles.markdownBlockquote}>
+              <Pressable
+                key={i}
+                onLongPress={onBlockLongPress ? () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onBlockLongPress(i, raw); } : undefined}
+                style={[styles.markdownBlockquote, isHighlighted && styles.paragraphHighlight]}
+              >
                 <Text style={styles.markdownBlockquoteText}>
                   {renderInlineMarkdown(block.content)}
                 </Text>
-              </View>
+              </Pressable>
             );
 
           default: {
@@ -288,6 +308,8 @@ function MarkdownText({ content, claimHighlights, claimSignals, onClaimTap }: {
                   <Pressable
                     key={i}
                     onPress={() => onClaimTap?.(matchedClaimIndex)}
+                    onLongPress={onBlockLongPress ? () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onBlockLongPress(i, block.content); } : undefined}
+                    style={isHighlighted ? styles.paragraphHighlight : undefined}
                   >
                     <Text style={[styles.markdownText, highlightStyle]}>
                       {renderInlineMarkdown(block.content)}
@@ -298,9 +320,15 @@ function MarkdownText({ content, claimHighlights, claimSignals, onClaimTap }: {
             }
 
             return (
-              <Text key={i} style={styles.markdownText}>
-                {renderInlineMarkdown(block.content)}
-              </Text>
+              <Pressable
+                key={i}
+                onLongPress={onBlockLongPress ? () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onBlockLongPress(i, block.content); } : undefined}
+                style={isHighlighted ? styles.paragraphHighlight : undefined}
+              >
+                <Text style={styles.markdownText}>
+                  {renderInlineMarkdown(block.content)}
+                </Text>
+              </Pressable>
             );
           }
         }
@@ -558,6 +586,8 @@ export default function ReaderScreen() {
   const [activeClaimPill, setActiveClaimPill] = useState<number | null>(null);
   const [signaledClaimCount, setSignaledClaimCount] = useState(0);
   const [researchBanner, setResearchBanner] = useState<{ transcript: string; noteId: string } | null>(null);
+  const [highlightedBlocks, setHighlightedBlocks] = useState<Set<number>>(new Set());
+  const [articleResearchCount, setArticleResearchCount] = useState(0);
   const [showRestoredIndicator, setShowRestoredIndicator] = useState(false);
   const restoredIndicatorOpacity = useRef(new Animated.Value(1)).current;
 
@@ -846,6 +876,61 @@ export default function ReaderScreen() {
     setActiveClaimPill(null);
   }, [article, activeClaimPill, handleClaimSignal]);
 
+  // --- Highlight handler ---
+  const [highlightAction, setHighlightAction] = useState<{ blockIndex: number; text: string } | null>(null);
+
+  const handleBlockLongPress = useCallback((blockIndex: number, text: string) => {
+    if (!article) return;
+    const indices = getHighlightBlockIndices(article.id);
+    if (indices.has(blockIndex)) {
+      removeHighlight(article.id, blockIndex);
+      setHighlightedBlocks(prev => {
+        const next = new Set(prev);
+        next.delete(blockIndex);
+        return next;
+      });
+    } else {
+      addHighlight({
+        id: `hl_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        article_id: article.id,
+        block_index: blockIndex,
+        text: text.slice(0, 500),
+        highlighted_at: Date.now(),
+        zone: currentZone,
+      });
+      setHighlightedBlocks(prev => new Set(prev).add(blockIndex));
+      setHighlightAction({ blockIndex, text: text.slice(0, 500) });
+      setTimeout(() => setHighlightAction(null), 4000);
+    }
+  }, [article, currentZone]);
+
+  const handleResearchHighlight = useCallback(async () => {
+    if (!article || !highlightAction) return;
+    await triggerResearch({
+      query: highlightAction.text,
+      articleId: article.id,
+      articleTitle: article.title,
+      articleSummary: article.full_summary,
+      concepts: article.topics,
+    });
+    logEvent('research_triggered_from_highlight', {
+      article_id: article.id,
+      block_index: highlightAction.blockIndex,
+      text_preview: highlightAction.text.slice(0, 80),
+    });
+    setHighlightAction(null);
+  }, [article, highlightAction]);
+
+  // --- Initialize highlights + research results from store ---
+  useEffect(() => {
+    if (!article) return;
+    setHighlightedBlocks(getHighlightBlockIndices(article.id));
+    getResearchResultsForArticle(article.id).then(results => {
+      const completed = results.filter(r => r.status === 'completed').length;
+      setArticleResearchCount(completed);
+    });
+  }, [article?.id]);
+
   // --- Computed values ---
   const totalClaims = article?.key_claims.length || 0;
 
@@ -874,6 +959,18 @@ export default function ReaderScreen() {
           currentDepth={currentZone}
           onTranscribed={(transcript, noteId) => setResearchBanner({ transcript, noteId })}
         />
+        {articleResearchCount > 0 && (
+          <Pressable
+            style={styles.researchBadge}
+            onPress={() => {
+              logEvent('reader_research_badge_tap', { article_id: article.id, count: articleResearchCount });
+              router.push('/stats');
+            }}
+          >
+            <Ionicons name="flask" size={14} color="#a78bfa" />
+            <Text style={styles.researchBadgeText}>{articleResearchCount}</Text>
+          </Pressable>
+        )}
         <Pressable onPress={() => {
           logEvent('reader_open_source', { article_id: article.id, url: article.source_url });
           Linking.openURL(article.source_url);
@@ -956,6 +1053,29 @@ export default function ReaderScreen() {
 
           {/* Summary */}
           <Text style={styles.fullSummary}>{article.full_summary}</Text>
+
+          {/* Dedup banner */}
+          {article.similar_articles && article.similar_articles.length > 0 && (() => {
+            const readSimilar = article.similar_articles!.filter(sa => {
+              const state = getReadingState(sa.id);
+              return state.depth !== 'unread';
+            });
+            if (readSimilar.length === 0) return null;
+            return (
+              <Pressable
+                style={styles.dedupBanner}
+                onPress={() => {
+                  logEvent('dedup_banner_tap', { article_id: article.id, similar_id: readSimilar[0].id });
+                  router.push({ pathname: '/reader', params: { id: readSimilar[0].id } });
+                }}
+              >
+                <Ionicons name="copy-outline" size={14} color="#f59e0b" />
+                <Text style={styles.dedupBannerText}>
+                  Similar to: {readSimilar[0].title}
+                </Text>
+              </Pressable>
+            );
+          })()}
         </View>
 
         {/* ═══════════ CLAIMS ZONE ═══════════ */}
@@ -1039,6 +1159,8 @@ export default function ReaderScreen() {
             claimHighlights={article.key_claims}
             claimSignals={claimSignals}
             onClaimTap={handleInlineClaimTap}
+            highlightedBlocks={highlightedBlocks}
+            onBlockLongPress={handleBlockLongPress}
           />
         </View>
 
@@ -1098,6 +1220,21 @@ export default function ReaderScreen() {
           onSignal={handleInlineClaimSignal}
           onDismiss={() => setActiveClaimPill(null)}
         />
+      )}
+
+      {/* Highlight action bar */}
+      {highlightAction && (
+        <View style={styles.highlightActionBar}>
+          <Ionicons name="checkmark-circle" size={16} color="#f59e0b" />
+          <Text style={styles.highlightActionText}>Highlighted</Text>
+          <Pressable style={styles.highlightResearchBtn} onPress={handleResearchHighlight}>
+            <Ionicons name="search" size={14} color="#a78bfa" />
+            <Text style={styles.highlightResearchText}>Research this</Text>
+          </Pressable>
+          <Pressable onPress={() => setHighlightAction(null)}>
+            <Ionicons name="close" size={16} color="#64748b" />
+          </Pressable>
+        </View>
       )}
     </View>
   );
@@ -1221,6 +1358,34 @@ const styles = StyleSheet.create({
     color: '#94a3b8', fontSize: 15, lineHeight: 24, fontStyle: 'italic' as const,
   },
   markdownHr: { height: 1, backgroundColor: '#334155', marginVertical: 20 },
+
+  // Dedup banner
+  dedupBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#78350f30',
+    borderLeftWidth: 3,
+    borderLeftColor: '#f59e0b',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 12,
+  },
+  dedupBannerText: {
+    color: '#fbbf24',
+    fontSize: 13,
+    flex: 1,
+  },
+
+  // Paragraph highlighting (long-press)
+  paragraphHighlight: {
+    backgroundColor: '#78350f20',
+    borderLeftWidth: 3,
+    borderLeftColor: '#f59e0b',
+    paddingLeft: 8,
+    borderRadius: 4,
+    marginLeft: -8,
+  },
 
   // Inline claim highlights in full text
   claimHighlightUnsignaled: {
@@ -1381,5 +1546,63 @@ const styles = StyleSheet.create({
     color: '#10b981',
     fontSize: 13,
     fontWeight: '500' as const,
+  },
+
+  // Highlight action bar
+  highlightActionBar: {
+    position: 'absolute',
+    bottom: 24,
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    padding: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  highlightActionText: {
+    color: '#f59e0b',
+    fontSize: 13,
+    fontWeight: '600' as const,
+    flex: 1,
+  },
+  highlightResearchBtn: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
+    backgroundColor: '#1a1a2e',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  highlightResearchText: {
+    color: '#a78bfa',
+    fontSize: 12,
+    fontWeight: '500' as const,
+  },
+
+  // Research results badge in top bar
+  researchBadge: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
+    backgroundColor: '#1a1a2e',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginRight: 4,
+  },
+  researchBadgeText: {
+    color: '#a78bfa',
+    fontSize: 11,
+    fontWeight: '600' as const,
   },
 });

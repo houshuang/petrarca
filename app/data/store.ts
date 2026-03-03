@@ -1,6 +1,6 @@
-import { Article, ReadingState, UserSignal, ReadingDepth, Concept, ConceptState, ConceptKnowledgeLevel, VoiceNote, ConceptReview, ReviewRating, ConceptNote, TopicSynthesis } from './types';
+import { Article, ReadingState, UserSignal, ReadingDepth, Concept, ConceptState, ConceptKnowledgeLevel, VoiceNote, ConceptReview, ReviewRating, ConceptNote, TopicSynthesis, Highlight } from './types';
 import { logEvent } from './logger';
-import { loadSignals, saveSignals, loadReadingStates, saveReadingStates, loadConceptStates, saveConceptStates, loadVoiceNotes, saveVoiceNotes, loadConceptReviews, saveConceptReviews } from './persistence';
+import { loadSignals, saveSignals, loadReadingStates, saveReadingStates, loadConceptStates, saveConceptStates, loadVoiceNotes, saveVoiceNotes, loadConceptReviews, saveConceptReviews, loadHighlights, saveHighlights } from './persistence';
 import { checkForUpdates, downloadContent, loadCachedContent } from './content-sync';
 
 let articles: Article[] = [];
@@ -10,6 +10,7 @@ let readingStates = new Map<string, ReadingState>();
 let conceptStates = new Map<string, ConceptState>();
 let conceptReviews = new Map<string, ConceptReview>();
 let voiceNotes: VoiceNote[] = [];
+let highlights: Highlight[] = [];
 let signals: UserSignal[] = [];
 let initialized = false;
 let initPromise: Promise<void> | null = null;
@@ -28,6 +29,7 @@ export async function initStore(): Promise<void> {
     if (cached && cached.articles.length > 0) {
       articles = cached.articles;
       concepts = cached.concepts;
+      if (cached.syntheses) syntheses = cached.syntheses;
     } else {
       // Fall back to bundled static JSON
       try {
@@ -63,6 +65,7 @@ export async function initStore(): Promise<void> {
     conceptStates = await loadConceptStates();
     conceptReviews = await loadConceptReviews();
     voiceNotes = await loadVoiceNotes();
+    highlights = await loadHighlights();
 
     // Pre-seed concept states on fresh install (no existing concept states)
     if (conceptStates.size === 0) {
@@ -95,6 +98,7 @@ export async function initStore(): Promise<void> {
       loaded_concept_states: conceptStates.size,
       loaded_concept_reviews: conceptReviews.size,
       loaded_voice_notes: voiceNotes.length,
+      loaded_highlights: highlights.length,
     });
 
     // Background: check for content updates from server
@@ -102,10 +106,11 @@ export async function initStore(): Promise<void> {
       if (hasUpdates) {
         const fresh = await downloadContent();
         if (fresh) {
-          mergeNewContent(fresh.articles, fresh.concepts);
+          mergeNewContent(fresh.articles, fresh.concepts, fresh.syntheses);
           logEvent('content_refreshed', {
             article_count: fresh.articles.length,
             concept_count: fresh.concepts.length,
+            synthesis_count: fresh.syntheses?.length || 0,
           });
         }
       }
@@ -125,10 +130,11 @@ function rebuildConceptIndex() {
   }
 }
 
-function mergeNewContent(newArticles: Article[], newConcepts: Concept[]) {
+function mergeNewContent(newArticles: Article[], newConcepts: Concept[], newSyntheses?: TopicSynthesis[]) {
   articles = newArticles;
   articles.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   concepts = newConcepts;
+  if (newSyntheses) syntheses = newSyntheses;
   rebuildConceptIndex();
 }
 
@@ -542,6 +548,34 @@ export function updateVoiceNoteTranscript(noteId: string, transcript: string) {
 
 export function getVoiceNoteById(noteId: string): VoiceNote | undefined {
   return voiceNotes.find(n => n.id === noteId);
+}
+
+// --- Highlights ---
+
+export function getHighlights(articleId?: string): Highlight[] {
+  if (articleId) return highlights.filter(h => h.article_id === articleId);
+  return highlights;
+}
+
+export function getHighlightBlockIndices(articleId: string): Set<number> {
+  return new Set(highlights.filter(h => h.article_id === articleId).map(h => h.block_index));
+}
+
+export function addHighlight(highlight: Highlight) {
+  highlights.push(highlight);
+  saveHighlights(highlights);
+  logEvent('paragraph_highlight', {
+    article_id: highlight.article_id,
+    block_index: highlight.block_index,
+    zone: highlight.zone,
+    text_preview: highlight.text.slice(0, 80),
+  });
+}
+
+export function removeHighlight(articleId: string, blockIndex: number) {
+  highlights = highlights.filter(h => !(h.article_id === articleId && h.block_index === blockIndex));
+  saveHighlights(highlights);
+  logEvent('paragraph_unhighlight', { article_id: articleId, block_index: blockIndex });
 }
 
 // --- Spaced Attention Scheduling ---

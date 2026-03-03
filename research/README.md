@@ -35,3 +35,4 @@ Master index of all research documents. **Always update this file when adding ne
 | [development-reference.md](development-reference.md) | **Complete dev reference** — architecture, all experiments, hypotheses, decisions, file index, event log | Active |
 | [user-journey-analysis.md](user-journey-analysis.md) | Assumptions vs. reality: expected user journey over weeks, gap analysis, prioritized recommendations | Done |
 | [content-refresh-design.md](content-refresh-design.md) | Architecture for scheduled pipeline on Hetzner + HTTP content serving + app sync | Done |
+| [honest-assessment.md](honest-assessment.md) | Frank self-critique: what works, what doesn't, risk-ranked assumptions, experiments needed | Done |

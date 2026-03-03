@@ -1,11 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { UserSignal, ReadingState, ConceptState, VoiceNote, ConceptReview } from './types';
+import { UserSignal, ReadingState, ConceptState, VoiceNote, ConceptReview, Highlight } from './types';
 
 const SIGNALS_KEY = '@petrarca/signals';
 const READING_STATES_KEY = '@petrarca/reading_states';
 const CONCEPT_STATES_KEY = '@petrarca/concept_states';
 const VOICE_NOTES_KEY = '@petrarca/voice_notes';
 const CONCEPT_REVIEWS_KEY = '@petrarca/concept_reviews';
+const HIGHLIGHTS_KEY = '@petrarca/highlights';
 
 export async function loadSignals(): Promise<UserSignal[]> {
   try {
@@ -105,5 +106,24 @@ export async function saveConceptReviews(reviews: Map<string, ConceptReview>): P
     await AsyncStorage.setItem(CONCEPT_REVIEWS_KEY, JSON.stringify(entries));
   } catch (e) {
     console.warn('[persistence] failed to save concept reviews:', e);
+  }
+}
+
+export async function loadHighlights(): Promise<Highlight[]> {
+  try {
+    const raw = await AsyncStorage.getItem(HIGHLIGHTS_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw);
+  } catch (e) {
+    console.warn('[persistence] failed to load highlights:', e);
+    return [];
+  }
+}
+
+export async function saveHighlights(highlights: Highlight[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(HIGHLIGHTS_KEY, JSON.stringify(highlights));
+  } catch (e) {
+    console.warn('[persistence] failed to save highlights:', e);
   }
 }

@@ -15,6 +15,9 @@ export interface Article {
   content_type: ContentType;
   word_count: number;
   sources: ArticleSource[];
+  similar_articles?: Array<{ id: string; title: string; score: number }>;
+  exploration_tag?: string;
+  parent_id?: string;
 }
 
 export interface ArticleSection {
@@ -121,6 +124,18 @@ export interface VoiceNote {
   file_uri: string;
   transcript?: string;
   transcription_status: 'pending' | 'processing' | 'completed' | 'failed';
+}
+
+// --- Highlights ---
+
+export interface Highlight {
+  id: string;
+  article_id: string;
+  block_index: number;       // index into markdown blocks
+  text: string;              // full paragraph text
+  highlighted_at: number;
+  zone: ReadingDepth;
+  note?: string;
 }
 
 // --- Research Agent ---

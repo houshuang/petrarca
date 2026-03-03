@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getLibraryArticles, getByTopic, getReadingState, getArticles } from '../data/store';
-import { Article, ReadingDepth } from '../data/types';
+import { getLibraryArticles, getByTopic, getReadingState, getArticles, getHighlights, getArticleById } from '../data/store';
+import { Article, ReadingDepth, Highlight } from '../data/types';
 import { logEvent } from '../data/logger';
 
 const DEPTH_COLORS: Record<ReadingDepth, string> = {
@@ -55,8 +55,68 @@ function LibraryItem({ article }: { article: Article }) {
   );
 }
 
+function HighlightItem({ highlight }: { highlight: Highlight }) {
+  const router = useRouter();
+  const article = getArticleById(highlight.article_id);
+  if (!article) return null;
+
+  const date = new Date(highlight.highlighted_at).toLocaleDateString();
+
+  return (
+    <Pressable
+      style={styles.highlightItem}
+      onPress={() => {
+        logEvent('library_highlight_tap', { article_id: highlight.article_id, block_index: highlight.block_index });
+        router.push({ pathname: '/reader', params: { id: highlight.article_id } });
+      }}
+    >
+      <Text style={styles.highlightArticleTitle} numberOfLines={1}>{article.title}</Text>
+      <Text style={styles.highlightText} numberOfLines={2}>{highlight.text}</Text>
+      <Text style={styles.highlightMeta}>{date}</Text>
+    </Pressable>
+  );
+}
+
+function HighlightsView() {
+  const allHighlights = getHighlights();
+
+  if (allHighlights.length === 0) {
+    return (
+      <View style={styles.empty}>
+        <Ionicons name="color-wand-outline" size={48} color="#475569" />
+        <Text style={styles.emptyTitle}>No highlights yet</Text>
+        <Text style={styles.emptySubtitle}>Long-press paragraphs while reading to highlight</Text>
+      </View>
+    );
+  }
+
+  // Group by article, sorted by most recent highlight
+  const byArticle = new Map<string, Highlight[]>();
+  for (const h of allHighlights) {
+    if (!byArticle.has(h.article_id)) byArticle.set(h.article_id, []);
+    byArticle.get(h.article_id)!.push(h);
+  }
+  const groups = [...byArticle.entries()]
+    .map(([articleId, highlights]) => ({
+      articleId,
+      highlights: highlights.sort((a, b) => b.highlighted_at - a.highlighted_at),
+      latest: Math.max(...highlights.map(h => h.highlighted_at)),
+    }))
+    .sort((a, b) => b.latest - a.latest);
+
+  return (
+    <>
+      {groups.map(({ articleId, highlights }) => (
+        <View key={articleId}>
+          {highlights.map(h => <HighlightItem key={h.id} highlight={h} />)}
+        </View>
+      ))}
+    </>
+  );
+}
+
 export default function LibraryScreen() {
-  const [viewMode, setViewMode] = useState<'recent' | 'topic'>('recent');
+  const [viewMode, setViewMode] = useState<'recent' | 'topic' | 'highlights'>('recent');
   const [, forceUpdate] = useState(0);
   const library = getLibraryArticles();
   const allArticles = getArticles();
@@ -77,6 +137,12 @@ export default function LibraryScreen() {
         >
           <Text style={[styles.toggleText, viewMode === 'topic' && styles.toggleTextActive]}>By Topic</Text>
         </Pressable>
+        <Pressable
+          style={[styles.toggleBtn, viewMode === 'highlights' && styles.toggleActive]}
+          onPress={() => { logEvent('library_view_mode', { mode: 'highlights' }); setViewMode('highlights'); }}
+        >
+          <Text style={[styles.toggleText, viewMode === 'highlights' && styles.toggleTextActive]}>Highlights</Text>
+        </Pressable>
         <View style={{ flex: 1 }} />
         <Pressable onPress={() => forceUpdate(n => n + 1)}>
           <Ionicons name="refresh" size={18} color="#64748b" />
@@ -94,12 +160,14 @@ export default function LibraryScreen() {
           ) : (
             library.map(a => <LibraryItem key={a.id} article={a} />)
           )
-        ) : (
+        ) : viewMode === 'topic' ? (
           [...topicMap.entries()]
             .sort((a, b) => b[1].length - a[1].length)
             .map(([topic, articles]) => (
               <TopicGroup key={topic} topic={topic} articles={articles} />
             ))
+        ) : (
+          <HighlightsView />
         )}
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -155,4 +223,16 @@ const styles = StyleSheet.create({
   empty: { justifyContent: 'center', alignItems: 'center', paddingTop: 100, gap: 8 },
   emptyTitle: { color: '#f8fafc', fontSize: 20, fontWeight: '700' },
   emptySubtitle: { color: '#94a3b8', fontSize: 14 },
+
+  highlightItem: {
+    backgroundColor: '#1e293b',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#f59e0b',
+  },
+  highlightArticleTitle: { color: '#60a5fa', fontSize: 12, fontWeight: '500', marginBottom: 4 },
+  highlightText: { color: '#e2e8f0', fontSize: 14, lineHeight: 20, marginBottom: 4 },
+  highlightMeta: { color: '#64748b', fontSize: 11 },
 });

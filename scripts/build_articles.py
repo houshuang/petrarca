@@ -819,6 +819,44 @@ def extract_concepts(articles: list[dict], dry_run: bool = False) -> list[dict]:
     return all_concepts
 
 
+def detect_similar_articles(articles: list[dict]) -> list[dict]:
+    """Add similar_articles field to articles with Jaccard similarity > 0.5."""
+    def _article_words(article):
+        words = set()
+        for t in article.get("topics", []):
+            words.update(t.lower().split())
+        for c in article.get("key_claims", []):
+            words.update(w.lower() for w in c.split() if len(w) > 3)
+        return words
+
+    word_sets = [(a["id"], a["title"], _article_words(a)) for a in articles]
+
+    for i, article in enumerate(articles):
+        if not article.get("key_claims"):
+            continue
+        words_i = word_sets[i][2]
+        if not words_i:
+            continue
+
+        similar = []
+        for j, (aid, title, words_j) in enumerate(word_sets):
+            if i == j or not words_j:
+                continue
+            intersection = len(words_i & words_j)
+            union = len(words_i | words_j)
+            if union == 0:
+                continue
+            score = intersection / union
+            if score > 0.5:
+                similar.append({"id": aid, "title": title, "score": round(score, 2)})
+
+        if similar:
+            similar.sort(key=lambda x: -x["score"])
+            article["similar_articles"] = similar[:3]
+
+    return articles
+
+
 def _deduplicate_concepts(concepts: list[dict]) -> list[dict]:
     """Simple word-overlap deduplication of concepts."""
     if not concepts:
@@ -979,6 +1017,12 @@ def main():
 
     articles = build_articles(deduped, existing_articles, dry_run=args.dry_run)
 
+    # Detect similar articles before saving
+    print(f"\n=== Step 4b: Detect Similar Articles ===", file=sys.stderr)
+    articles = detect_similar_articles(articles)
+    similar_count = sum(1 for a in articles if a.get("similar_articles"))
+    print(f"  {similar_count} articles have similar matches", file=sys.stderr)
+
     # Save final output
     _save_json(articles, ARTICLES_PATH)
     APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -989,6 +1033,22 @@ def main():
     concepts = extract_concepts(articles, dry_run=args.dry_run)
     _save_json(concepts, CONCEPTS_PATH)
     _save_json(concepts, APP_DATA_DIR / "concepts.json")
+
+    # Auto-trigger synthesis for topics with 3+ articles
+    try:
+        topics_count = {}
+        for a in articles:
+            for t in a.get("topics", []):
+                topics_count[t] = topics_count.get(t, 0) + 1
+        rich_topics = [t for t, c in topics_count.items() if c >= 3]
+        if rich_topics:
+            print(f"  Auto-generating syntheses for {len(rich_topics)} topics with 3+ articles", file=sys.stderr)
+            subprocess.run(
+                ["python3", str(SCRIPT_DIR / "generate_syntheses.py")],
+                timeout=300,
+            )
+    except Exception as e:
+        print(f"  Auto-synthesis failed: {e}", file=sys.stderr)
 
     # Summary
     sources = {}

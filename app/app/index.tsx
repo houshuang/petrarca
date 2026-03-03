@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getArticles, getFeedArticles, getInProgressArticles, getReadingState, getStats, getNoveltyScore, getSynthesisForTopic } from '../data/store';
+import { fetchResearchResults, getResearchResults } from '../data/research';
 import { Article, ReadingDepth } from '../data/types';
 import { logEvent } from '../data/logger';
 
@@ -139,6 +140,20 @@ function FeedCard({ article }: { article: Article }) {
           </View>
         )}
       </View>
+
+      {/* Dedup indicator */}
+      {article.similar_articles && article.similar_articles.length > 0 && (() => {
+        const readSimilar = article.similar_articles!.filter(sa => {
+          const s = getReadingState(sa.id);
+          return s.depth !== 'unread';
+        });
+        if (readSimilar.length === 0) return null;
+        return (
+          <Text style={styles.dedupIndicator}>
+            Similar to: {readSimilar[0].title}
+          </Text>
+        );
+      })()}
 
       {article.author ? (
         <Text style={styles.author}>{article.author}</Text>
@@ -593,10 +608,17 @@ export default function FeedScreen() {
   const [showAll, setShowAll] = useState(false);
   const [, forceUpdate] = useState(0);
   const [triageReady, setTriageReady] = useState(false);
+  const [newResearchCount, setNewResearchCount] = useState(0);
 
-  // Pre-load triage states
+  // Pre-load triage states + auto-fetch research results
   useEffect(() => {
     loadTriageStates().then(() => setTriageReady(true));
+    fetchResearchResults().then(count => {
+      if (count > 0) {
+        setNewResearchCount(count);
+        logEvent('research_results_fetched', { new_count: count });
+      }
+    }).catch(() => {});
   }, []);
 
   const allArticles = getArticles();
@@ -674,6 +696,24 @@ export default function FeedScreen() {
           )}
 
           <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+            {/* Research results banner */}
+            {newResearchCount > 0 && (
+              <Pressable
+                style={styles.researchResultsBanner}
+                onPress={() => {
+                  logEvent('research_results_banner_tap', { count: newResearchCount });
+                  setNewResearchCount(0);
+                  router.push('/stats');
+                }}
+              >
+                <Ionicons name="flask-outline" size={16} color="#a78bfa" />
+                <Text style={styles.researchResultsBannerText}>
+                  {newResearchCount} research result{newResearchCount !== 1 ? 's' : ''} ready
+                </Text>
+                <Ionicons name="chevron-forward" size={14} color="#64748b" />
+              </Pressable>
+            )}
+
             {/* Continue Reading section */}
             {(() => {
               const inProgress = getInProgressArticles();
@@ -706,6 +746,42 @@ export default function FeedScreen() {
               );
             })()}
 
+            {/* Exploration sections */}
+            {(() => {
+              const explorationTags = new Set(
+                listArticles.filter(a => a.exploration_tag).map(a => a.exploration_tag!)
+              );
+              if (explorationTags.size === 0) return null;
+              return [...explorationTags].map(tag => {
+                const explorationArticles = listArticles.filter(a => a.exploration_tag === tag);
+                // Mix subtopics: show one per primary topic first
+                const seenTopics = new Set<string>();
+                const sorted: Article[] = [];
+                for (const a of explorationArticles) {
+                  const primaryTopic = a.topics[0] || '';
+                  if (!seenTopics.has(primaryTopic)) {
+                    seenTopics.add(primaryTopic);
+                    sorted.push(a);
+                  }
+                }
+                // Then add remaining
+                for (const a of explorationArticles) {
+                  if (!sorted.includes(a)) sorted.push(a);
+                }
+
+                return (
+                  <View key={tag} style={styles.explorationSection}>
+                    <View style={styles.explorationHeader}>
+                      <Ionicons name="compass-outline" size={16} color="#10b981" />
+                      <Text style={styles.explorationTitle}>Exploring: {tag}</Text>
+                      <Text style={styles.explorationCount}>{explorationArticles.length}</Text>
+                    </View>
+                    {sorted.slice(0, 8).map(a => <FeedCard key={a.id} article={a} />)}
+                  </View>
+                );
+              });
+            })()}
+
             {listArticles.length === 0 ? (
               <View style={styles.empty}>
                 <Ionicons name="checkmark-circle" size={48} color="#10b981" />
@@ -713,7 +789,7 @@ export default function FeedScreen() {
                 <Text style={styles.emptySubtitle}>No unread articles</Text>
               </View>
             ) : (
-              listArticles.map(a => <FeedCard key={a.id} article={a} />)
+              listArticles.filter(a => !a.exploration_tag).map(a => <FeedCard key={a.id} article={a} />)
             )}
             <View style={{ height: 40 }} />
           </ScrollView>
@@ -792,6 +868,7 @@ const styles = StyleSheet.create({
   depthText: { fontSize: 11, fontWeight: '500' },
   noveltyBadge: { borderWidth: 1, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, marginRight: 4 },
   noveltyText: { fontSize: 11, fontWeight: '500' },
+  dedupIndicator: { color: '#f59e0b', fontSize: 11, marginTop: 6, fontStyle: 'italic' as const },
   // Continue Reading
   continueSection: { marginBottom: 8, paddingHorizontal: 16 },
   continueSectionTitle: { color: '#94a3b8', fontSize: 13, fontWeight: '600', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
@@ -1030,5 +1107,54 @@ const styles = StyleSheet.create({
     color: '#60a5fa',
     fontSize: 14,
     fontWeight: '500',
+  },
+
+  // Research results banner
+  researchResultsBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#1a1a2e',
+    borderLeftWidth: 3,
+    borderLeftColor: '#a78bfa',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  researchResultsBannerText: {
+    color: '#a78bfa',
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
+
+  // Exploration section
+  explorationSection: {
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#10b98133',
+    borderRadius: 12,
+    padding: 12,
+  },
+  explorationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  explorationTitle: {
+    color: '#10b981',
+    fontSize: 15,
+    fontWeight: '600',
+    flex: 1,
+  },
+  explorationCount: {
+    color: '#64748b',
+    fontSize: 12,
+    backgroundColor: '#1e293b',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    overflow: 'hidden',
   },
 });
