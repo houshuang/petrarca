@@ -74,6 +74,31 @@ export interface ConceptState {
   signal_count: number;
 }
 
+// --- Spaced Attention Scheduling ---
+
+export interface ConceptReview {
+  concept_id: string;
+  // Scheduling state
+  stability_days: number;        // Current interval in days (grows with good reviews)
+  difficulty: number;            // 0.3 (easy) to 3.0 (hard)
+  due_at: number;                // Timestamp when next review is due
+  engagement_count: number;      // Total times engaged
+  last_engaged_at: number;
+  // Self-assessment
+  understanding: number;         // 1-4 scale (confused → could teach)
+  // Engagement history
+  notes: ConceptNote[];
+}
+
+export interface ConceptNote {
+  id: string;
+  text: string;
+  voice_note_id?: string;
+  created_at: number;
+}
+
+export type ReviewRating = 1 | 2 | 3 | 4; // again(1) hard(2) good(3) easy(4)
+
 // --- Voice Notes ---
 
 export interface VoiceNote {

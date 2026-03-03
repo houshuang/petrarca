@@ -1,11 +1,12 @@
-import { Article, ReadingState, UserSignal, ReadingDepth, Concept, ConceptState, ConceptKnowledgeLevel, VoiceNote } from './types';
+import { Article, ReadingState, UserSignal, ReadingDepth, Concept, ConceptState, ConceptKnowledgeLevel, VoiceNote, ConceptReview, ReviewRating, ConceptNote } from './types';
 import { logEvent } from './logger';
-import { loadSignals, saveSignals, loadReadingStates, saveReadingStates, loadConceptStates, saveConceptStates, loadVoiceNotes, saveVoiceNotes } from './persistence';
+import { loadSignals, saveSignals, loadReadingStates, saveReadingStates, loadConceptStates, saveConceptStates, loadVoiceNotes, saveVoiceNotes, loadConceptReviews, saveConceptReviews } from './persistence';
 
 let articles: Article[] = [];
 let concepts: Concept[] = [];
 let readingStates = new Map<string, ReadingState>();
 let conceptStates = new Map<string, ConceptState>();
+let conceptReviews = new Map<string, ConceptReview>();
 let voiceNotes: VoiceNote[] = [];
 let signals: UserSignal[] = [];
 let initialized = false;
@@ -13,6 +14,7 @@ let initPromise: Promise<void> | null = null;
 
 // Precomputed: article_id -> concept_ids
 let articleConceptIndex = new Map<string, string[]>();
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export async function initStore(): Promise<void> {
   if (initialized) return;
@@ -50,6 +52,7 @@ export async function initStore(): Promise<void> {
     signals = await loadSignals();
     readingStates = await loadReadingStates();
     conceptStates = await loadConceptStates();
+    conceptReviews = await loadConceptReviews();
     voiceNotes = await loadVoiceNotes();
     initialized = true;
 
@@ -59,6 +62,7 @@ export async function initStore(): Promise<void> {
       loaded_signals: signals.length,
       loaded_reading_states: readingStates.size,
       loaded_concept_states: conceptStates.size,
+      loaded_concept_reviews: conceptReviews.size,
       loaded_voice_notes: voiceNotes.length,
     });
   })();
@@ -269,6 +273,16 @@ export function updateConceptState(conceptId: string, state: ConceptKnowledgeLev
   conceptStates.set(conceptId, updated);
   saveConceptStates(conceptStates);
 
+  // Create review state if transitioning from unknown
+  if (current.state === 'unknown' && state !== 'unknown' && !conceptReviews.has(conceptId)) {
+    const review = getOrCreateReview(conceptId);
+    // "known" concepts get longer initial interval
+    review.stability_days = state === 'known' ? 7 : 1;
+    review.due_at = Date.now() + review.stability_days * DAY_MS;
+    conceptReviews.set(conceptId, review);
+    saveConceptReviews(conceptReviews);
+  }
+
   logEvent('concept_state_update', {
     concept_id: conceptId,
     state,
@@ -376,6 +390,153 @@ export function updateVoiceNoteTranscript(noteId: string, transcript: string) {
   note.transcription_status = 'completed';
   saveVoiceNotes(voiceNotes);
   logEvent('voice_note_transcribed', { note_id: noteId, article_id: note.article_id });
+}
+
+// --- Spaced Attention Scheduling ---
+
+function getOrCreateReview(conceptId: string): ConceptReview {
+  const existing = conceptReviews.get(conceptId);
+  if (existing) return existing;
+
+  return {
+    concept_id: conceptId,
+    stability_days: 1,
+    difficulty: 1.0,
+    due_at: Date.now(), // due immediately
+    engagement_count: 0,
+    last_engaged_at: 0,
+    understanding: 0,
+    notes: [],
+  };
+}
+
+/**
+ * Ensure concepts that have been encountered/known have review states.
+ */
+export function ensureReviewStates() {
+  let created = 0;
+  for (const [cid, state] of conceptStates) {
+    if (state.state !== 'unknown' && !conceptReviews.has(cid)) {
+      const review = getOrCreateReview(cid);
+      review.due_at = Date.now(); // due now
+      conceptReviews.set(cid, review);
+      created++;
+    }
+  }
+  if (created > 0) {
+    saveConceptReviews(conceptReviews);
+  }
+}
+
+/**
+ * Get concepts that are due for review, ranked by priority.
+ * Priority factors: overdue amount, relevance to current reading, topic interest.
+ */
+export function getReviewQueue(limit: number = 10): Array<{
+  concept: Concept;
+  review: ConceptReview;
+  priority: number;
+  reason: string;
+}> {
+  ensureReviewStates();
+  const now = Date.now();
+  const results: Array<{ concept: Concept; review: ConceptReview; priority: number; reason: string }> = [];
+
+  // Get current active topics from recent reading
+  const activeTopics = new Set<string>();
+  for (const [, state] of readingStates) {
+    if (state.depth !== 'unread' && now - state.last_read_at < 7 * DAY_MS) {
+      const article = articles.find(a => a.id === state.article_id);
+      if (article) article.topics.forEach(t => activeTopics.add(t));
+    }
+  }
+
+  for (const [cid, review] of conceptReviews) {
+    const concept = concepts.find(c => c.id === cid);
+    if (!concept) continue;
+
+    // Base: how overdue is this concept?
+    const overdueDays = Math.max(0, (now - review.due_at) / DAY_MS);
+    const scheduling = Math.min(overdueDays / Math.max(1, review.stability_days), 2.0);
+
+    // Relevance: does this topic appear in recent reading?
+    const relevant = activeTopics.has(concept.topic);
+    const relevanceFactor = relevant ? 1.5 : 0.7;
+
+    // Topic interest: how many articles read in this topic?
+    const topicArticles = articles.filter(a => a.topics.includes(concept.topic));
+    const engagedCount = topicArticles.filter(a => {
+      const s = readingStates.get(a.id);
+      return s && s.depth !== 'unread';
+    }).length;
+    const interestFactor = engagedCount >= 5 ? 1.5 : engagedCount >= 2 ? 1.0 : 0.5;
+
+    // Maturity: new concepts should be reviewed sooner
+    const maturityFactor = review.engagement_count <= 1 ? 1.3 : review.engagement_count >= 5 ? 0.8 : 1.0;
+
+    const priority = Math.max(0.01, scheduling * relevanceFactor * interestFactor * maturityFactor);
+
+    // Build reason string
+    let reason = '';
+    if (overdueDays > 7) reason = `Overdue by ${Math.round(overdueDays)} days`;
+    else if (relevant) reason = 'Connects to current reading';
+    else if (review.engagement_count === 0) reason = 'New concept to explore';
+    else reason = 'Scheduled review';
+
+    results.push({ concept, review, priority, reason });
+  }
+
+  results.sort((a, b) => b.priority - a.priority);
+  return results.slice(0, limit);
+}
+
+/**
+ * Record a review engagement and update scheduling.
+ */
+export function submitReview(conceptId: string, rating: ReviewRating, noteText?: string) {
+  const review = getOrCreateReview(conceptId);
+
+  // Update scheduling based on rating
+  // Rating 1 (again): reset to 1 day, increase difficulty
+  // Rating 2 (hard): interval * 1.2, slight difficulty increase
+  // Rating 3 (good): interval * 2.5, slight difficulty decrease
+  // Rating 4 (easy): interval * 3.5, difficulty decrease
+  const multipliers: Record<ReviewRating, number> = { 1: 0.5, 2: 1.2, 3: 2.5, 4: 3.5 };
+  const difficultyAdjust: Record<ReviewRating, number> = { 1: 0.3, 2: 0.1, 3: -0.05, 4: -0.15 };
+
+  if (rating === 1) {
+    review.stability_days = 1; // Reset
+  } else {
+    review.stability_days = Math.max(1, Math.min(365, review.stability_days * multipliers[rating]));
+  }
+  review.difficulty = Math.max(0.3, Math.min(3.0, review.difficulty + difficultyAdjust[rating]));
+  review.due_at = Date.now() + review.stability_days * DAY_MS;
+  review.engagement_count++;
+  review.last_engaged_at = Date.now();
+  review.understanding = rating;
+
+  if (noteText) {
+    review.notes.push({
+      id: `note_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      text: noteText,
+      created_at: Date.now(),
+    });
+  }
+
+  conceptReviews.set(conceptId, review);
+  saveConceptReviews(conceptReviews);
+
+  logEvent('concept_review', {
+    concept_id: conceptId,
+    rating,
+    stability_days: review.stability_days,
+    engagement_count: review.engagement_count,
+    has_note: !!noteText,
+  });
+}
+
+export function getConceptReview(conceptId: string): ConceptReview | undefined {
+  return conceptReviews.get(conceptId);
 }
 
 /**

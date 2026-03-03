@@ -1,10 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { UserSignal, ReadingState, ConceptState, VoiceNote } from './types';
+import { UserSignal, ReadingState, ConceptState, VoiceNote, ConceptReview } from './types';
 
 const SIGNALS_KEY = '@petrarca/signals';
 const READING_STATES_KEY = '@petrarca/reading_states';
 const CONCEPT_STATES_KEY = '@petrarca/concept_states';
 const VOICE_NOTES_KEY = '@petrarca/voice_notes';
+const CONCEPT_REVIEWS_KEY = '@petrarca/concept_reviews';
 
 export async function loadSignals(): Promise<UserSignal[]> {
   try {
@@ -83,5 +84,26 @@ export async function saveVoiceNotes(notes: VoiceNote[]): Promise<void> {
     await AsyncStorage.setItem(VOICE_NOTES_KEY, JSON.stringify(notes));
   } catch (e) {
     console.warn('[persistence] failed to save voice notes:', e);
+  }
+}
+
+export async function loadConceptReviews(): Promise<Map<string, ConceptReview>> {
+  try {
+    const raw = await AsyncStorage.getItem(CONCEPT_REVIEWS_KEY);
+    if (!raw) return new Map();
+    const entries: [string, ConceptReview][] = JSON.parse(raw);
+    return new Map(entries);
+  } catch (e) {
+    console.warn('[persistence] failed to load concept reviews:', e);
+    return new Map();
+  }
+}
+
+export async function saveConceptReviews(reviews: Map<string, ConceptReview>): Promise<void> {
+  try {
+    const entries = Array.from(reviews.entries());
+    await AsyncStorage.setItem(CONCEPT_REVIEWS_KEY, JSON.stringify(entries));
+  } catch (e) {
+    console.warn('[persistence] failed to save concept reviews:', e);
   }
 }
