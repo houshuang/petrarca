@@ -4,6 +4,40 @@
 
 ---
 
+## 2026-03-03 — Sprint: Highlighting, Dedup, Exploration, Live Pipeline
+
+**What**: Full implementation sprint covering 8 parts across 19 files. Two concrete use cases driving the work: (1) live Twitter/Readwise pipeline running every 4 hours, (2) guided topic exploration mode for Sicily research trip.
+
+**Implemented**:
+
+1. **Paragraph highlighting** (`types.ts`, `persistence.ts`, `store.ts`, `reader.tsx`, `library.tsx`): Long-press any paragraph in full article view → amber highlight with haptic feedback. Highlights persisted to AsyncStorage. New "Highlights" view mode in Library tab groups highlights by article, sorted by recency. 4-second action bar appears after highlighting with "Research this" option.
+
+2. **Dedup detection** (`build_articles.py`, `types.ts`, `reader.tsx`, `index.tsx`): Pipeline computes Jaccard similarity on topics + claim words between new and existing articles. Articles with score > 0.5 get `similar_articles` array. Reader shows amber "Similar to: [title]" banner below summary. Feed cards show italic dedup indicator.
+
+3. **Topic synthesis prominence** (`content-sync.ts`, `store.ts`, `index.tsx`): Syntheses now downloaded from server alongside articles/concepts. Loaded from cached content on init. Purple synthesis cards shown in topic clusters view.
+
+4. **Research agent enhancement** (`reader.tsx`, `index.tsx`, `stats.tsx`): "Research this" button on highlights sends paragraph text to research server. Auto-fetch research results on app launch with banner "N research results ready". Research results section promoted higher in Progress tab. Purple badge in reader top bar shows count for current article.
+
+5. **Topic exploration mode** (`explore_topic.py`, `import_url.py`, `index.tsx`, `research-server.py`): New `explore_topic.py` takes seed topic, uses `claude -p` to generate 12-15 subtopics with URLs. `import_url.py` fetches and processes URLs through pipeline, supports Wikipedia H2 chunking. Feed shows "Exploring: {tag}" sections with breadth-first subtopic mixing. New `/research/explore` endpoint finds more content for subtopics user shows interest in.
+
+6. **Live content pipeline** (`content-refresh.sh`, `fetch_twitter_bookmarks.py`, `fetch_readwise_reader.py`): Server-side cron every 4 hours. Fetches Twitter bookmarks via twikit + Readwise Reader via API. Runs `build_articles.py` and `generate_syntheses.py`. Copies output to nginx content directory. App syncs on launch via manifest hash comparison.
+
+7. **Honest assessment** (`research/honest-assessment.md`): Frank self-critique document covering what works, what doesn't, risk-ranked assumptions, experiments that would matter.
+
+**Server deployment**:
+- Python venv with twikit, requests, trafilatura on Hetzner
+- nginx content server on port 8083
+- 4-hour cron at `/etc/cron.d/petrarca-refresh`
+- Initial run: 50 Twitter bookmarks, 11,900 Readwise items fetched, 10 articles built, 11 concepts extracted
+- Research server restarted with `/research/explore` endpoint
+- Twikit cookies + Readwise token deployed
+
+**Measurement events added**: `paragraph_highlight`, `paragraph_unhighlight`, `highlight_research_tap`
+
+**Files changed**: 19 files, +2543 lines
+
+---
+
 ## 2026-03-03 — Remaining Gap Fixes: Content Refresh, Research Agents, Synthesis, Connections
 
 **What**: 7-agent swarm implementing all remaining gaps from the user journey analysis. These complete the core vision: live content, background research, cross-article synthesis, in-reading connections, knowledge pre-seeding, and scroll position persistence.
