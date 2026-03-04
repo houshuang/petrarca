@@ -147,6 +147,7 @@ def _build_article_obj(
     exploration_tag: str | None = None,
     parent_id: str | None = None,
     article_id: str | None = None,
+    reading_order: str | None = None,
 ) -> dict:
     """Build an article dict matching the Article interface."""
     aid = article_id or _article_id(url)
@@ -175,6 +176,8 @@ def _build_article_obj(
         article["exploration_tag"] = exploration_tag
     if parent_id:
         article["parent_id"] = parent_id
+    if reading_order:
+        article["reading_order"] = reading_order
 
     return article
 
@@ -218,18 +221,38 @@ def import_single_url(
     articles: list[dict],
     source_tag: str = "manual",
     exploration_tag: str | None = None,
+    reading_order: str | None = None,
     chunk: bool = False,
     dry_run: bool = False,
+    content_text: str | None = None,
 ) -> list[dict]:
-    """Import a single URL. Returns list of new article dicts added."""
+    """Import a single URL. Returns list of new article dicts added.
+
+    If content_text is provided, it is used as the article body instead of
+    fetching the URL. This supports the /ingest endpoint where the Chrome
+    extension already extracted the page content.
+    """
     # Check for duplicate
     existing_urls = {a.get("source_url", "") for a in articles}
     if url in existing_urls:
         print(f"  SKIP (already exists): {url[:80]}", file=sys.stderr)
         return []
 
-    print(f"\n  Fetching: {url[:80]}...", file=sys.stderr)
-    fetched = fetch_article(url)
+    if content_text and len(content_text.strip()) > 100:
+        print(f"\n  Using pre-extracted content for: {url[:80]}...", file=sys.stderr)
+        fetched = {
+            "title": "",
+            "text": content_text,
+            "word_count": len(content_text.split()),
+            "fetch_method": "pre-extracted",
+            "author": "",
+            "hostname": urlparse(url).netloc,
+            "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        }
+    else:
+        print(f"\n  Fetching: {url[:80]}...", file=sys.stderr)
+        fetched = fetch_article(url)
+
     if not fetched:
         print(f"  FAIL: no content extracted from {url[:80]}", file=sys.stderr)
         return []
@@ -271,6 +294,7 @@ def import_single_url(
                     exploration_tag=exploration_tag,
                     parent_id=parent_id if i > 0 else None,
                     article_id=chunk_aid,
+                    reading_order=reading_order,
                 )
                 # Override source_url to keep original, not the chunk URL
                 article["source_url"] = url
@@ -291,6 +315,7 @@ def import_single_url(
         fetched, llm, url,
         source_tag=source_tag,
         exploration_tag=exploration_tag,
+        reading_order=reading_order,
     )
     new_articles.append(article)
     return new_articles
@@ -307,7 +332,7 @@ def load_urls_from_file(path: str) -> list[str]:
     return urls
 
 
-def load_urls_from_exploration(path: str) -> tuple[list[str], str]:
+def load_urls_from_exploration(path: str) -> tuple[list[str], str, dict[str, str]]:
     """Load URLs from an exploration JSON file.
 
     Expected format:
@@ -317,24 +342,29 @@ def load_urls_from_exploration(path: str) -> tuple[list[str], str]:
         "subtopics": [
             {
                 "name": "...",
+                "reading_order": "foundational" | "intermediate" | "deep",
                 "urls": ["https://...", ...]
             },
             ...
         ]
     }
 
-    Returns (urls, exploration_tag).
+    Returns (urls, exploration_tag, url_reading_orders).
     """
     data = json.loads(Path(path).read_text())
     tag = data.get("exploration_tag", data.get("topic", "exploration").lower().replace(" ", "-"))
 
     urls = []
+    url_reading_orders: dict[str, str] = {}
     for subtopic in data.get("subtopics", []):
+        reading_order = subtopic.get("reading_order", "")
         for url in subtopic.get("urls", []):
             if url not in urls:
                 urls.append(url)
+            if reading_order and url not in url_reading_orders:
+                url_reading_orders[url] = reading_order
 
-    return urls, tag
+    return urls, tag, url_reading_orders
 
 
 def update_manifest(articles: list[dict], concepts: list[dict]):
@@ -372,18 +402,22 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Skip LLM calls")
     parser.add_argument("--no-concepts", action="store_true",
                         help="Skip concept extraction")
+    parser.add_argument("--content-file",
+                        help="Read pre-extracted article content from this file instead of fetching the URL")
     args = parser.parse_args()
 
     # Collect URLs from all input modes
     urls = list(args.urls)
     exploration_tag = args.exploration_tag
+    url_reading_orders: dict[str, str] = {}
 
     if args.urls_file:
         urls.extend(load_urls_from_file(args.urls_file))
 
     if args.from_exploration:
-        exploration_urls, expl_tag = load_urls_from_exploration(args.from_exploration)
+        exploration_urls, expl_tag, expl_reading_orders = load_urls_from_exploration(args.from_exploration)
         urls.extend(exploration_urls)
+        url_reading_orders.update(expl_reading_orders)
         if not exploration_tag:
             exploration_tag = expl_tag
         if args.tag == "manual":
@@ -416,6 +450,16 @@ def main():
     articles = _load_json(ARTICLES_PATH) or []
     concepts = _load_json(CONCEPTS_PATH) or []
 
+    # Read pre-extracted content if provided
+    pre_content = None
+    if args.content_file:
+        content_path = Path(args.content_file)
+        if content_path.exists():
+            pre_content = content_path.read_text()
+            print(f"  Using pre-extracted content from: {args.content_file} ({len(pre_content)} chars)", file=sys.stderr)
+        else:
+            print(f"  WARNING: content file not found: {args.content_file}", file=sys.stderr)
+
     print(f"  Existing: {len(articles)} articles, {len(concepts)} concepts", file=sys.stderr)
 
     # Process each URL
@@ -426,8 +470,10 @@ def main():
             url, articles,
             source_tag=args.tag,
             exploration_tag=exploration_tag,
+            reading_order=url_reading_orders.get(url),
             chunk=args.chunk,
             dry_run=args.dry_run,
+            content_text=pre_content if i == 0 else None,
         )
         for article in new_articles:
             articles.append(article)

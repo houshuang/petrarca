@@ -1,17 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, Linking,
+  View, Text, StyleSheet, ScrollView, Pressable, Linking, TextInput,
   NativeSyntheticEvent, NativeScrollEvent, LayoutChangeEvent,
-  Platform, Animated,
+  Platform, Animated, Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
-import { getArticleById, getReadingState, updateReadingState, addSignal, processClaimSignalForConcepts, processImplicitEncounter, getRelatedArticles, getConceptConnections, addVoiceNote, getVoiceNotes, getHighlightBlockIndices, addHighlight, removeHighlight } from '../data/store';
+import { getArticleById, getReadingState, updateReadingState, addSignal, processClaimSignalForConcepts, processImplicitEncounter, processTranscriptForConcepts, getRelatedArticles, getConceptConnections, addVoiceNote, getVoiceNotes, getHighlightBlockIndices, addHighlight, removeHighlight, updateHighlightNote, dismissArticle } from '../data/store';
 import { ReadingDepth, VoiceNote, Highlight } from '../data/types';
 import * as Haptics from 'expo-haptics';
 import { logEvent } from '../data/logger';
-import { isSectionValid, parseInlineMarkdown, splitMarkdownBlocks, parseMarkdownBlock } from './markdown-utils';
+import { isSectionValid, parseInlineMarkdown, splitMarkdownBlocks, parseMarkdownBlock } from '../lib/markdown-utils';
 import { transcribeVoiceNote } from '../data/transcription';
 import { triggerResearch, getResearchResultsForArticle } from '../data/research';
 
@@ -24,6 +24,13 @@ interface ClaimSignalState {
 }
 
 // --- Depth zone definitions ---
+
+function getDisplayTitle(article: { title: string; one_line_summary: string }): string {
+  if (/^Thread by @/i.test(article.title) && article.one_line_summary && article.one_line_summary !== '[dry run]') {
+    return article.one_line_summary;
+  }
+  return article.title;
+}
 
 const DEPTH_ZONES = ['summary', 'claims', 'sections', 'full'] as const;
 type DepthZone = typeof DEPTH_ZONES[number];
@@ -43,9 +50,29 @@ const REVISIT_SCROLL_BACK_PX = 150;
 const IMPLICIT_ENCOUNTER_DWELL_MS = 60000; // 60s in a zone triggers implicit encounter
 const SCROLL_POSITION_SAVE_INTERVAL_MS = 2000;
 
+// --- Helpers ---
+
+function stripLeadingTitle(text: string, title: string): string {
+  if (!text) return '';
+  const lines = text.split('\n');
+  const firstLine = lines[0].replace(/^#+\s*/, '').trim();
+  if (firstLine === title.trim()) {
+    return lines.slice(1).join('\n').trimStart();
+  }
+  return text;
+}
+
 // --- Floating Depth Indicator ---
 
-function FloatingDepthIndicator({ currentZone }: { currentZone: DepthZone }) {
+function FloatingDepthIndicator({ currentZone, claimCount, sectionCount }: {
+  currentZone: DepthZone;
+  claimCount: number;
+  sectionCount: number;
+}) {
+  const zoneCounts: Partial<Record<DepthZone, number>> = {};
+  if (claimCount > 0) zoneCounts.claims = claimCount;
+  if (sectionCount > 0) zoneCounts.sections = sectionCount;
+
   return (
     <View style={styles.depthIndicator}>
       {DEPTH_ZONES.map((zone, i) => {
@@ -53,15 +80,21 @@ function FloatingDepthIndicator({ currentZone }: { currentZone: DepthZone }) {
         const idx = DEPTH_ZONES.indexOf(zone);
         const currentIdx = DEPTH_ZONES.indexOf(currentZone);
         const reached = idx <= currentIdx;
+        const count = zoneCounts[zone];
         return (
           <View key={zone} style={styles.depthIndicatorItem}>
-            {i > 0 && <Text style={styles.depthDot}>·</Text>}
+            {i > 0 && (
+              <View style={[styles.depthConnector, reached && styles.depthConnectorReached]} />
+            )}
             <Text style={[
               styles.depthLabel,
               active && styles.depthLabelActive,
               reached && !active && styles.depthLabelReached,
             ]}>
               {DEPTH_LABELS[zone]}
+              {count != null && (
+                <Text style={styles.depthCount}> ({count})</Text>
+              )}
             </Text>
           </View>
         );
@@ -101,18 +134,19 @@ function ClaimSignalPill({ currentSignal, onSignal, onDismiss }: {
   );
 }
 
-// --- Connection indicator pill (shown below claims) ---
+// --- Connection callout card (shown below claims) ---
 
 function ConnectionIndicator({ articleId, claimText }: {
   articleId: string;
   claimText: string;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const router = useRouter();
   const connection = getConceptConnections(articleId, claimText);
   if (!connection) return null;
 
   const { concept, otherArticles } = connection;
   const count = otherArticles.length;
+  const displayArticles = otherArticles.slice(0, 3);
 
   useEffect(() => {
     logEvent('reader_connection_shown', {
@@ -123,31 +157,32 @@ function ConnectionIndicator({ articleId, claimText }: {
   }, []);
 
   return (
-    <Pressable
-      style={styles.connectionPill}
-      onPress={() => {
-        setExpanded(e => !e);
-        if (!expanded) {
-          logEvent('reader_connection_tap', {
-            article_id: articleId,
-            concept_id: concept.id,
-          });
-        }
-      }}
-    >
-      <Text style={styles.connectionText}>
-        {concept.topic} · seen in {count} other {count === 1 ? 'article' : 'articles'}
-      </Text>
-      {expanded && (
-        <View style={styles.connectionExpanded}>
-          {otherArticles.map(a => (
-            <Text key={a.id} style={styles.connectionArticleTitle} numberOfLines={1}>
-              {a.title}
-            </Text>
-          ))}
-        </View>
+    <View style={styles.connectionCard}>
+      <View style={styles.connectionHeader}>
+        <Ionicons name="git-network-outline" size={14} color="#a78bfa" />
+        <Text style={styles.connectionLabel}>Also explored in:</Text>
+      </View>
+      {displayArticles.map(a => (
+        <Pressable
+          key={a.id}
+          style={styles.connectionArticleRow}
+          onPress={() => {
+            logEvent('reader_connection_tap', {
+              article_id: articleId,
+              concept_id: concept.id,
+              target_article: a.id,
+            });
+            router.push({ pathname: '/reader', params: { id: a.id } });
+          }}
+        >
+          <Text style={styles.connectionArticleTitle} numberOfLines={1}>{a.title}</Text>
+          <Ionicons name="chevron-forward" size={12} color="#64748b" />
+        </Pressable>
+      ))}
+      {count > 3 && (
+        <Text style={styles.connectionMore}>+{count - 3} more</Text>
       )}
-    </Pressable>
+    </View>
   );
 }
 
@@ -163,6 +198,7 @@ function renderInlineMarkdown(text: string): (string | React.ReactElement)[] {
             key={`link-${i}`}
             style={styles.markdownLink}
             onPress={() => Linking.openURL(seg.url)}
+            {...(Platform.OS === 'web' ? { accessibilityRole: 'link', href: seg.url, hrefAttrs: { target: '_blank', rel: 'noopener noreferrer' } } as any : {})}
           >
             {seg.text}
           </Text>
@@ -194,7 +230,7 @@ function renderInlineMarkdown(text: string): (string | React.ReactElement)[] {
 // --- Simple markdown renderer ---
 
 // Re-export for tests
-export { isSectionValid } from './markdown-utils';
+export { isSectionValid } from '../lib/markdown-utils';
 
 function MarkdownText({ content, claimHighlights, claimSignals, onClaimTap, highlightedBlocks, onBlockLongPress }: {
   content: string;
@@ -376,7 +412,7 @@ function SectionCard({ section, index, expanded, onToggle }: {
         <View style={{ flex: 1 }}>
           <Text style={styles.sectionHeading}>{section.heading}</Text>
           {!expanded && section.summary && (
-            <Text style={styles.sectionSummary} numberOfLines={2}>{section.summary}</Text>
+            <Text style={styles.sectionSummary} numberOfLines={Platform.OS === 'web' ? undefined : 2}>{section.summary}</Text>
           )}
         </View>
         <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color="#64748b" />
@@ -397,6 +433,74 @@ function SectionCard({ section, index, expanded, onToggle }: {
           <MarkdownText content={section.content} />
         </View>
       )}
+    </View>
+  );
+}
+
+// --- Text note input (web replacement for voice recording) ---
+
+function TextNoteInput({ articleId, currentDepth, onNoteSubmitted }: {
+  articleId: string;
+  currentDepth: ReadingDepth;
+  onNoteSubmitted?: (text: string, noteId: string) => void;
+}) {
+  const [text, setText] = useState('');
+  const [expanded, setExpanded] = useState(false);
+
+  const handleSubmit = useCallback(() => {
+    if (!text.trim()) return;
+    const noteId = `tn_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const note: VoiceNote = {
+      id: noteId,
+      article_id: articleId,
+      depth: currentDepth,
+      recorded_at: Date.now(),
+      duration_ms: 0,
+      file_uri: '',
+      transcription_status: 'completed',
+      transcript: text.trim(),
+    };
+    addVoiceNote(note);
+    logEvent('text_note_added', { article_id: articleId, depth: currentDepth, length: text.length });
+    const submitted = text.trim();
+    setText('');
+    setExpanded(false);
+    if (onNoteSubmitted) onNoteSubmitted(submitted, noteId);
+  }, [text, articleId, currentDepth, onNoteSubmitted]);
+
+  if (!expanded) {
+    return (
+      <Pressable style={styles.textNoteBtn} onPress={() => setExpanded(true)}>
+        <Ionicons name="create-outline" size={16} color="#60a5fa" />
+        <Text style={styles.textNoteBtnText}>Add note</Text>
+      </Pressable>
+    );
+  }
+
+  return (
+    <View style={styles.textNoteContainer}>
+      <TextInput
+        style={styles.textNoteInput}
+        placeholder="Your thoughts..."
+        placeholderTextColor="#475569"
+        multiline
+        value={text}
+        onChangeText={setText}
+        autoFocus
+      />
+      <View style={styles.textNoteActions}>
+        <Pressable style={styles.textNoteCancelBtn} onPress={() => { setText(''); setExpanded(false); }}>
+          <Text style={styles.textNoteCancelText}>Cancel</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.textNoteSubmitBtn, !text.trim() && { opacity: 0.4 }]}
+          onPress={handleSubmit}
+          disabled={!text.trim()}
+        >
+          <Ionicons name="send" size={14} color="#f8fafc" />
+          <Text style={styles.textNoteSubmitText}>Save</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -589,6 +693,7 @@ export default function ReaderScreen() {
   const [highlightedBlocks, setHighlightedBlocks] = useState<Set<number>>(new Set());
   const [articleResearchCount, setArticleResearchCount] = useState(0);
   const [showRestoredIndicator, setShowRestoredIndicator] = useState(false);
+  const [showDismissMenu, setShowDismissMenu] = useState(false);
   const restoredIndicatorOpacity = useRef(new Animated.Value(1)).current;
 
   // --- Refs ---
@@ -878,6 +983,8 @@ export default function ReaderScreen() {
 
   // --- Highlight handler ---
   const [highlightAction, setHighlightAction] = useState<{ blockIndex: number; text: string } | null>(null);
+  const [highlightNoteMode, setHighlightNoteMode] = useState(false);
+  const [highlightNoteText, setHighlightNoteText] = useState('');
 
   const handleBlockLongPress = useCallback((blockIndex: number, text: string) => {
     if (!article) return;
@@ -954,11 +1061,22 @@ export default function ReaderScreen() {
           <Ionicons name="arrow-back" size={22} color="#f8fafc" />
         </Pressable>
         <View style={{ flex: 1 }} />
-        <VoiceRecordButton
-          articleId={article.id}
-          currentDepth={currentZone}
-          onTranscribed={(transcript, noteId) => setResearchBanner({ transcript, noteId })}
-        />
+        {Platform.OS === 'web' ? (
+          <TextNoteInput
+            articleId={article.id}
+            currentDepth={currentZone}
+            onNoteSubmitted={(text, noteId) => {
+              processTranscriptForConcepts(article.id, text, noteId);
+              setResearchBanner({ transcript: text, noteId });
+            }}
+          />
+        ) : (
+          <VoiceRecordButton
+            articleId={article.id}
+            currentDepth={currentZone}
+            onTranscribed={(transcript, noteId) => setResearchBanner({ transcript, noteId })}
+          />
+        )}
         {articleResearchCount > 0 && (
           <Pressable
             style={styles.researchBadge}
@@ -972,6 +1090,21 @@ export default function ReaderScreen() {
           </Pressable>
         )}
         <Pressable onPress={() => {
+          if (Platform.OS === 'web') {
+            setShowDismissMenu(true);
+          } else {
+            Alert.alert('Dismiss article', 'Why are you dismissing this?', [
+              { text: 'Not useful', onPress: () => { dismissArticle(article.id, 'low_quality'); router.back(); } },
+              { text: 'Wrong topic', onPress: () => { dismissArticle(article.id, 'not_relevant'); router.back(); } },
+              { text: 'Duplicate', onPress: () => { dismissArticle(article.id, 'duplicate'); router.back(); } },
+              { text: 'Cancel', style: 'cancel' },
+            ]);
+          }
+          logEvent('dismiss_menu_open', { article_id: article.id });
+        }}>
+          <Ionicons name="flag-outline" size={20} color="#64748b" />
+        </Pressable>
+        <Pressable onPress={() => {
           logEvent('reader_open_source', { article_id: article.id, url: article.source_url });
           Linking.openURL(article.source_url);
         }}>
@@ -979,8 +1112,44 @@ export default function ReaderScreen() {
         </Pressable>
       </View>
 
+      {/* Dismiss menu (web) */}
+      {showDismissMenu && (
+        <View style={styles.dismissOverlay}>
+          <View style={styles.dismissMenu}>
+            <Text style={styles.dismissMenuTitle}>Dismiss article</Text>
+            {([
+              ['Not useful', 'low_quality'],
+              ['Wrong topic', 'not_relevant'],
+              ['Duplicate', 'duplicate'],
+            ] as const).map(([label, reason]) => (
+              <Pressable
+                key={reason}
+                style={styles.dismissMenuItem}
+                onPress={() => {
+                  dismissArticle(article.id, reason);
+                  setShowDismissMenu(false);
+                  router.back();
+                }}
+              >
+                <Text style={styles.dismissMenuItemText}>{label}</Text>
+              </Pressable>
+            ))}
+            <Pressable
+              style={[styles.dismissMenuItem, { borderTopWidth: 1, borderTopColor: '#334155' }]}
+              onPress={() => setShowDismissMenu(false)}
+            >
+              <Text style={[styles.dismissMenuItemText, { color: '#64748b' }]}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+
       {/* Sticky floating depth indicator */}
-      <FloatingDepthIndicator currentZone={currentZone} />
+      <FloatingDepthIndicator
+        currentZone={currentZone}
+        claimCount={article.key_claims.length}
+        sectionCount={article.sections.filter(isSectionValid).length}
+      />
 
       {/* Research trigger banner after voice note transcription */}
       {researchBanner && article && (
@@ -1009,10 +1178,11 @@ export default function ReaderScreen() {
         showsVerticalScrollIndicator={false}
         scrollEventThrottle={16}
         onScroll={handleScroll}
+        testID="reader-content"
       >
         {/* ═══════════ HEADER ZONE ═══════════ */}
         <View onLayout={onZoneLayout('summary')}>
-          <Text style={styles.articleTitle}>{article.title}</Text>
+          <Text style={styles.articleTitle}>{getDisplayTitle(article)}</Text>
           <View style={styles.metaRow}>
             {article.author ? <Text style={styles.metaText}>{article.author}</Text> : null}
             <Text style={styles.metaText}>{article.hostname}</Text>
@@ -1052,7 +1222,7 @@ export default function ReaderScreen() {
           </View>
 
           {/* Summary */}
-          <Text style={styles.fullSummary}>{article.full_summary}</Text>
+          <MarkdownText content={stripLeadingTitle(article.full_summary, article.title)} />
 
           {/* Dedup banner */}
           {article.similar_articles && article.similar_articles.length > 0 && (() => {
@@ -1080,49 +1250,73 @@ export default function ReaderScreen() {
 
         {/* ═══════════ CLAIMS ZONE ═══════════ */}
         <View onLayout={onZoneLayout('claims')}>
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>Key Claims</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          {/* Claims progress */}
-          {totalClaims > 0 && (
-            <Text style={styles.claimsProgress}>
-              {signaledClaimCount} of {totalClaims} claims reviewed
-            </Text>
-          )}
-
-          {article.key_claims.map((claim, i) => {
-            const signal = claimSignals[i];
-            return (
-              <View key={i}>
-                <View style={[
-                  styles.claimCard,
-                  signal === 'knew_it' && styles.claimCardKnew,
-                  signal === 'interesting' && styles.claimCardNew,
-                  signal === 'save' && styles.claimCardSave,
-                ]}>
-                  <Text style={styles.claimCardText}>{claim}</Text>
-                  <View style={styles.claimActions}>
-                    <Pressable
-                      style={[styles.claimBtn, signal === 'knew_it' && styles.claimBtnActiveKnew]}
-                      onPress={() => handleClaimSignal(i, 'knew_it')}
-                    >
-                      <Text style={[styles.claimBtnText, signal === 'knew_it' && { color: '#94a3b8' }]}>Knew this</Text>
-                    </Pressable>
-                    <Pressable
-                      style={[styles.claimBtn, styles.claimBtnNewBorder, signal === 'interesting' && styles.claimBtnActiveNew]}
-                      onPress={() => handleClaimSignal(i, 'interesting')}
-                    >
-                      <Text style={[styles.claimBtnText, { color: '#34d399' }, signal === 'interesting' && { color: '#ffffff' }]}>New to me</Text>
-                    </Pressable>
-                  </View>
+          {article.key_claims.length > 0 && (
+            <>
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <View style={styles.dividerLabelRow}>
+                  <Ionicons name="bulb-outline" size={14} color="#8b5cf6" />
+                  <Text style={styles.dividerText}>Key Claims</Text>
                 </View>
-                <ConnectionIndicator articleId={article.id} claimText={claim} />
+                <View style={styles.dividerLine} />
               </View>
-            );
-          })}
+
+              {/* Claims progress */}
+              {totalClaims > 0 && (
+                <Text style={styles.claimsProgress}>
+                  {signaledClaimCount} of {totalClaims} claims reviewed
+                </Text>
+              )}
+
+              {article.key_claims.map((claim, i) => {
+                const signal = claimSignals[i];
+                return (
+                  <View key={i}>
+                    <View style={[
+                      styles.claimCard,
+                      signal === 'knew_it' && styles.claimCardKnew,
+                      signal === 'interesting' && styles.claimCardNew,
+                      signal === 'save' && styles.claimCardSave,
+                    ]}>
+                      <Text style={styles.claimCardText}>{claim}</Text>
+                      <View style={styles.claimActions}>
+                        <Pressable
+                          style={[styles.claimBtn, signal === 'knew_it' && styles.claimBtnActiveKnew]}
+                          onPress={() => handleClaimSignal(i, 'knew_it')}
+                        >
+                          <Text style={[styles.claimBtnText, signal === 'knew_it' && { color: '#94a3b8' }]}>Knew this</Text>
+                        </Pressable>
+                        <Pressable
+                          style={[styles.claimBtn, styles.claimBtnNewBorder, signal === 'interesting' && styles.claimBtnActiveNew]}
+                          onPress={() => handleClaimSignal(i, 'interesting')}
+                        >
+                          <Text style={[styles.claimBtnText, { color: '#34d399' }, signal === 'interesting' && { color: '#ffffff' }]}>New to me</Text>
+                        </Pressable>
+                        <Pressable
+                          style={styles.claimResearchBtn}
+                          onPress={() => {
+                            logEvent('claim_research_tap', { article_id: article.id, claim_index: i });
+                            triggerResearch({
+                              query: claim,
+                              articleId: article.id,
+                              articleTitle: article.title,
+                              articleSummary: article.one_line_summary,
+                              concepts: article.topics,
+                            });
+                            setResearchBanner({ transcript: claim, noteId: `claim_${i}` });
+                          }}
+                        >
+                          <Ionicons name="search" size={12} color="#a78bfa" />
+                          <Text style={styles.claimResearchText}>Research</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                    <ConnectionIndicator articleId={article.id} claimText={claim} />
+                  </View>
+                );
+              })}
+            </>
+          )}
         </View>
 
         {/* ═══════════ SECTIONS ZONE ═══════════ */}
@@ -1130,7 +1324,10 @@ export default function ReaderScreen() {
           <View onLayout={onZoneLayout('sections')}>
             <View style={styles.divider}>
               <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>Sections</Text>
+              <View style={styles.dividerLabelRow}>
+                <Ionicons name="document-text-outline" size={14} color="#f59e0b" />
+                <Text style={styles.dividerText}>Sections</Text>
+              </View>
               <View style={styles.dividerLine} />
             </View>
 
@@ -1150,7 +1347,10 @@ export default function ReaderScreen() {
         <View onLayout={onZoneLayout('full')}>
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>Full Article</Text>
+            <View style={styles.dividerLabelRow}>
+              <Ionicons name="book-outline" size={14} color="#10b981" />
+              <Text style={styles.dividerText}>Full Article</Text>
+            </View>
             <View style={styles.dividerLine} />
           </View>
 
@@ -1204,7 +1404,7 @@ export default function ReaderScreen() {
             <Text style={styles.sourceLabel}>
               Found via @{article.sources[0].author_username}
             </Text>
-            <Text style={styles.sourceText} numberOfLines={3}>
+            <Text style={styles.sourceText} numberOfLines={Platform.OS === 'web' ? undefined : 3}>
               {article.sources[0].tweet_text}
             </Text>
           </View>
@@ -1225,15 +1425,58 @@ export default function ReaderScreen() {
       {/* Highlight action bar */}
       {highlightAction && (
         <View style={styles.highlightActionBar}>
-          <Ionicons name="checkmark-circle" size={16} color="#f59e0b" />
-          <Text style={styles.highlightActionText}>Highlighted</Text>
-          <Pressable style={styles.highlightResearchBtn} onPress={handleResearchHighlight}>
-            <Ionicons name="search" size={14} color="#a78bfa" />
-            <Text style={styles.highlightResearchText}>Research this</Text>
-          </Pressable>
-          <Pressable onPress={() => setHighlightAction(null)}>
-            <Ionicons name="close" size={16} color="#64748b" />
-          </Pressable>
+          {highlightNoteMode ? (
+            <View style={{ flex: 1 }}>
+              <TextInput
+                style={styles.highlightNoteInput}
+                placeholder="Your note on this passage..."
+                placeholderTextColor="#475569"
+                value={highlightNoteText}
+                onChangeText={setHighlightNoteText}
+                autoFocus
+                multiline
+              />
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 6 }}>
+                <Pressable onPress={() => { setHighlightNoteMode(false); setHighlightNoteText(''); }}>
+                  <Text style={{ color: '#64748b', fontSize: 13 }}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.highlightNoteSaveBtn, !highlightNoteText.trim() && { opacity: 0.4 }]}
+                  onPress={() => {
+                    if (highlightNoteText.trim() && article) {
+                      updateHighlightNote(article.id, highlightAction.blockIndex, highlightNoteText.trim());
+                      logEvent('highlight_note_saved', { article_id: article.id, block_index: highlightAction.blockIndex });
+                    }
+                    setHighlightNoteMode(false);
+                    setHighlightNoteText('');
+                    setHighlightAction(null);
+                  }}
+                  disabled={!highlightNoteText.trim()}
+                >
+                  <Text style={{ color: '#f8fafc', fontSize: 13, fontWeight: '600' }}>Save</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <>
+              <Ionicons name="checkmark-circle" size={16} color="#f59e0b" />
+              <Text style={styles.highlightActionText}>Highlighted</Text>
+              <Pressable
+                style={styles.highlightNoteBtn}
+                onPress={() => setHighlightNoteMode(true)}
+              >
+                <Ionicons name="create-outline" size={14} color="#60a5fa" />
+                <Text style={styles.highlightNoteLabel}>Note</Text>
+              </Pressable>
+              <Pressable style={styles.highlightResearchBtn} onPress={handleResearchHighlight}>
+                <Ionicons name="search" size={14} color="#a78bfa" />
+                <Text style={styles.highlightResearchText}>Research</Text>
+              </Pressable>
+              <Pressable onPress={() => setHighlightAction(null)}>
+                <Ionicons name="close" size={16} color="#64748b" />
+              </Pressable>
+            </>
+          )}
         </View>
       )}
     </View>
@@ -1248,10 +1491,10 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0f172a' },
   topBar: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingTop: 56, paddingBottom: 8, gap: 12,
+    paddingHorizontal: 16, paddingTop: Platform.OS === 'web' ? 12 : 56, paddingBottom: 8, gap: 12,
   },
   backButton: { padding: 4 },
-  scroll: { flex: 1, paddingHorizontal: 20 },
+  scroll: { flex: 1, paddingHorizontal: Platform.OS === 'web' ? 40 : 20 },
   errorText: { color: '#ef4444', fontSize: 16, textAlign: 'center', marginTop: 100 },
   backLink: { color: '#60a5fa', fontSize: 14, textAlign: 'center', marginTop: 12 },
 
@@ -1263,17 +1506,25 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 16,
     backgroundColor: '#0f172aee',
+    ...(Platform.OS === 'web' ? { borderBottomWidth: 1, borderBottomColor: '#1e293b' } : {}),
   },
   depthIndicatorItem: { flexDirection: 'row', alignItems: 'center' },
-  depthDot: { color: '#334155', fontSize: 14, marginHorizontal: 8 },
+  depthConnector: { width: 16, height: 2, backgroundColor: '#334155', marginHorizontal: 6, borderRadius: 1 },
+  depthConnectorReached: { backgroundColor: '#475569' },
   depthLabel: { color: '#475569', fontSize: 12, fontWeight: '500' },
   depthLabelActive: { color: '#f8fafc', fontWeight: '700' },
   depthLabelReached: { color: '#94a3b8' },
+  depthCount: { color: '#64748b', fontSize: 11, fontWeight: '400' as const },
 
   // Article header
   articleTitle: {
-    color: '#f8fafc', fontSize: 26, fontWeight: '700',
-    lineHeight: 34, marginBottom: 10, letterSpacing: -0.3,
+    color: '#f8fafc',
+    fontSize: Platform.OS === 'web' ? 32 : 26,
+    fontWeight: '700',
+    lineHeight: Platform.OS === 'web' ? 42 : 34,
+    marginBottom: 10,
+    letterSpacing: -0.3,
+    ...(Platform.OS === 'web' ? { fontFamily: 'Georgia, "Times New Roman", serif' } : {}),
   },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
   metaText: { color: '#64748b', fontSize: 13 },
@@ -1283,8 +1534,12 @@ const styles = StyleSheet.create({
 
   // Summary
   fullSummary: {
-    color: '#e2e8f0', fontSize: 17, lineHeight: 28,
-    marginBottom: 24, letterSpacing: 0.1,
+    color: '#e2e8f0',
+    fontSize: Platform.OS === 'web' ? 18 : 17,
+    lineHeight: Platform.OS === 'web' ? 30 : 28,
+    marginBottom: 24,
+    letterSpacing: 0.1,
+    ...(Platform.OS === 'web' ? { fontFamily: 'Georgia, "Times New Roman", serif' } : {}),
   },
 
   // Dividers between zones
@@ -1293,6 +1548,7 @@ const styles = StyleSheet.create({
     marginTop: 28, marginBottom: 20, gap: 12,
   },
   dividerLine: { flex: 1, height: 1, backgroundColor: '#1e293b' },
+  dividerLabelRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
   dividerText: { color: '#64748b', fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1 },
 
   // Claims progress
@@ -1337,8 +1593,12 @@ const styles = StyleSheet.create({
     marginTop: 20, marginBottom: 10, lineHeight: 28,
   },
   markdownText: {
-    color: '#cbd5e1', fontSize: 16, lineHeight: 26,
-    marginBottom: 14, letterSpacing: 0.15,
+    color: '#cbd5e1',
+    fontSize: Platform.OS === 'web' ? 18 : 16,
+    lineHeight: Platform.OS === 'web' ? 30 : 26,
+    marginBottom: 14,
+    letterSpacing: 0.15,
+    ...(Platform.OS === 'web' ? { fontFamily: 'Georgia, "Times New Roman", serif' } : {}),
   },
   markdownList: { marginBottom: 14 },
   markdownListItem: { flexDirection: 'row', marginBottom: 6, paddingRight: 8 },
@@ -1454,35 +1714,45 @@ const styles = StyleSheet.create({
   relatedTitle: { color: '#f8fafc', fontSize: 14, fontWeight: '600', marginBottom: 4 },
   relatedConnection: { color: '#a78bfa', fontSize: 12, lineHeight: 16 },
 
-  // Connection indicators
-  connectionPill: {
-    marginTop: -4,
-    marginBottom: 10,
-    marginLeft: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    backgroundColor: '#1e1b2e',
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-    borderLeftWidth: 2,
-    borderLeftColor: '#7c3aed40',
+  // Connection callout card
+  connectionCard: {
+    marginTop: -2,
+    marginBottom: 12,
+    padding: 12,
+    backgroundColor: 'rgba(147, 51, 234, 0.06)',
+    borderRadius: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: '#7c3aed',
   },
-  connectionText: {
-    color: '#8b7fb8',
-    fontSize: 11,
-    fontWeight: '500' as const,
+  connectionHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    marginBottom: 8,
   },
-  connectionExpanded: {
-    marginTop: 4,
-    paddingTop: 4,
-    borderTopWidth: 1,
-    borderTopColor: '#2d2640',
+  connectionLabel: {
+    color: '#a78bfa',
+    fontSize: 12,
+    fontWeight: '600' as const,
+  },
+  connectionArticleRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
   },
   connectionArticleTitle: {
-    color: '#a78bfa',
+    color: '#c4b5fd',
+    fontSize: 13,
+    flex: 1,
+    marginRight: 8,
+  },
+  connectionMore: {
+    color: '#7c6fa8',
     fontSize: 11,
-    lineHeight: 16,
-    marginBottom: 2,
+    marginTop: 4,
+    paddingHorizontal: 4,
   },
 
   // Voice recording
@@ -1574,6 +1844,32 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
     flex: 1,
   },
+  highlightNoteBtn: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
+    backgroundColor: '#1e293b',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  highlightNoteLabel: {
+    color: '#60a5fa',
+    fontSize: 12,
+    fontWeight: '500' as const,
+  },
+  highlightNoteInput: {
+    color: '#f8fafc',
+    fontSize: 14,
+    lineHeight: 20,
+    minHeight: 36,
+  },
+  highlightNoteSaveBtn: {
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
   highlightResearchBtn: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
@@ -1588,6 +1884,45 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500' as const,
   },
+
+  // Text note input (web)
+  textNoteBtn: {
+    flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4,
+    paddingHorizontal: 10, paddingVertical: 6,
+    borderRadius: 16, backgroundColor: '#1e293b', marginRight: 10,
+  },
+  textNoteBtnText: { color: '#60a5fa', fontSize: 12, fontWeight: '500' as const },
+  textNoteContainer: {
+    position: 'absolute' as const, top: '100%' as any, right: 0,
+    width: 300, backgroundColor: '#1e293b', borderRadius: 12, padding: 12,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 12, elevation: 8,
+    borderWidth: 1, borderColor: '#334155', zIndex: 100,
+  },
+  textNoteInput: {
+    color: '#f8fafc', fontSize: 14, lineHeight: 20,
+    minHeight: 60, textAlignVertical: 'top' as const,
+    marginBottom: 8,
+  },
+  textNoteActions: {
+    flexDirection: 'row' as const, justifyContent: 'flex-end' as const, gap: 8,
+  },
+  textNoteCancelBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  textNoteCancelText: { color: '#64748b', fontSize: 13 },
+  textNoteSubmitBtn: {
+    flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4,
+    backgroundColor: '#2563eb', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
+  },
+  textNoteSubmitText: { color: '#f8fafc', fontSize: 13, fontWeight: '600' as const },
+
+  // Claim research button
+  claimResearchBtn: {
+    flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4,
+    paddingHorizontal: 10, paddingVertical: 6,
+    borderRadius: 8, backgroundColor: '#1a1a2e',
+    marginLeft: 'auto' as any,
+  },
+  claimResearchText: { color: '#a78bfa', fontSize: 12, fontWeight: '500' as const },
 
   // Research results badge in top bar
   researchBadge: {
@@ -1604,5 +1939,41 @@ const styles = StyleSheet.create({
     color: '#a78bfa',
     fontSize: 11,
     fontWeight: '600' as const,
+  },
+
+  // Dismiss menu (web)
+  dismissOverlay: {
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    zIndex: 100,
+  },
+  dismissMenu: {
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    width: 260,
+    overflow: 'hidden' as const,
+  },
+  dismissMenuTitle: {
+    color: '#f8fafc',
+    fontSize: 15,
+    fontWeight: '600' as const,
+    padding: 16,
+    textAlign: 'center' as const,
+    borderBottomWidth: 1,
+    borderBottomColor: '#334155',
+  },
+  dismissMenuItem: {
+    padding: 14,
+  },
+  dismissMenuItemText: {
+    color: '#f8fafc',
+    fontSize: 14,
+    textAlign: 'center' as const,
   },
 });

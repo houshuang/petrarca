@@ -3,7 +3,7 @@ import {
   parseInlineMarkdown,
   parseMarkdownBlock,
   splitMarkdownBlocks,
-} from '../app/markdown-utils';
+} from '../lib/markdown-utils';
 
 describe('isSectionValid', () => {
   test('rejects section with "[" heading', () => {

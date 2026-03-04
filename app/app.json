@@ -13,7 +13,8 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.stian.petrarca"
     },
     "android": {
       "adaptiveIcon": {
@@ -29,7 +30,14 @@
     },
     "plugins": [
       "expo-router",
-      "expo-font"
-    ]
+      "expo-font",
+      "expo-notifications"
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "5d72383d-5e3f-4e71-9a58-65bef214943d"
+      }
+    }
   }
 }

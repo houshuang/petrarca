@@ -447,24 +447,53 @@ def deduplicate_fetched(fetched: list[dict]) -> list[dict]:
 # Step 4: Build articles with LLM processing
 # ---------------------------------------------------------------------------
 
-def _call_claude(prompt: str, timeout: int = 180) -> str | None:
-    env = dict(os.environ)
-    env.pop("CLAUDECODE", None)
+def _call_llm(prompt: str, provider: str = "gemini") -> str | None:
+    """Call LLM API. Provider: 'gemini' (default, cheap/fast) or 'anthropic' (high-value)."""
+    if provider == "anthropic":
+        return _call_anthropic(prompt)
+    return _call_gemini(prompt)
+
+
+def _call_gemini(prompt: str) -> str | None:
+    api_key = os.environ.get("GEMINI_KEY", "")
+    if not api_key:
+        print("    GEMINI_KEY not set, falling back to anthropic", file=sys.stderr)
+        return _call_anthropic(prompt)
     try:
-        result = subprocess.run(
-            ["claude", "-p", prompt, "--max-turns", "1"],
-            capture_output=True, text=True, timeout=timeout, env=env,
+        from google import genai
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
         )
-        if result.returncode == 0:
-            return result.stdout.strip()
-        print(f"    claude error: {result.stderr[:200]}", file=sys.stderr)
+        return response.text.strip() if response.text else None
+    except Exception as e:
+        print(f"    gemini error: {e}", file=sys.stderr)
         return None
-    except subprocess.TimeoutExpired:
-        print(f"    claude timed out after {timeout}s", file=sys.stderr)
+
+
+def _call_anthropic(prompt: str) -> str | None:
+    api_key = os.environ.get("ANTHROPIC_KEY", "")
+    if not api_key:
+        print("    ANTHROPIC_KEY not set", file=sys.stderr)
         return None
-    except FileNotFoundError:
-        print("    claude CLI not found", file=sys.stderr)
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key)
+        message = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=4096,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return message.content[0].text.strip() if message.content else None
+    except Exception as e:
+        print(f"    anthropic error: {e}", file=sys.stderr)
         return None
+
+
+# Keep old name as alias so import_url.py and other callers still work
+def _call_claude(prompt: str, timeout: int = 180) -> str | None:
+    return _call_llm(prompt, provider="gemini")
 
 
 def _article_id(url: str, fallback: str = "") -> str:
@@ -621,12 +650,23 @@ def build_articles(candidates: list[dict], existing_articles: list[dict],
 
 
 def _llm_fallback(best: dict) -> dict:
+    title = best["title"]
+    # Replace unhelpful "Thread by @username" titles with first line of content
+    if re.match(r'^Thread by @', title, re.IGNORECASE):
+        first_line = best["text"].split('\n')[0].strip()[:120]
+        if first_line:
+            title = first_line
+
+    # Extract basic claims from first sentences as fallback
+    sentences = [s.strip() for s in re.split(r'[.!?]\s+', best["text"][:1000]) if len(s.strip()) > 20]
+    fallback_claims = sentences[:3]
+
     return {
-        "title": best["title"],
+        "title": title,
         "one_line_summary": best["text"][:120],
         "full_summary": best["text"][:500],
         "sections": [],
-        "key_claims": [],
+        "key_claims": fallback_claims,
         "topics": [],
         "estimated_read_minutes": max(1, best["word_count"] // 200),
         "content_type": "unknown",

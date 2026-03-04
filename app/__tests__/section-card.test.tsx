@@ -1,4 +1,4 @@
-import { isSectionValid } from '../app/markdown-utils';
+import { isSectionValid } from '../lib/markdown-utils';
 
 describe('SectionCard filtering via isSectionValid', () => {
   test('accepts valid section heading', () => {

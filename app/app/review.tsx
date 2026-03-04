@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, TextInput,
-  KeyboardAvoidingView, Platform,
+  KeyboardAvoidingView, Platform, ViewStyle,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,52 @@ import {
 } from '../data/store';
 import { Concept, ConceptReview, ReviewRating } from '../data/types';
 import { logEvent } from '../data/logger';
+
+// --- Prompt Tiers ---
+
+type PromptTier = 'first_encounter' | 'building_familiarity' | 'cross_referencing' | 'mastery_check';
+
+function getPromptTier(engagementCount: number): PromptTier {
+  if (engagementCount === 0) return 'first_encounter';
+  if (engagementCount <= 2) return 'building_familiarity';
+  if (engagementCount <= 4) return 'cross_referencing';
+  return 'mastery_check';
+}
+
+function getPromptText(
+  tier: PromptTier,
+  sourceArticles: Array<{ id: string; title: string }>,
+): string {
+  switch (tier) {
+    case 'first_encounter':
+      return sourceArticles.length === 1
+        ? `You recently encountered this in "${sourceArticles[0].title}". What stands out?`
+        : 'You recently encountered this. What stands out?';
+    case 'building_familiarity':
+      return sourceArticles.length >= 2
+        ? `You've seen this in "${sourceArticles[0].title}" and ${sourceArticles.length - 1} other ${sourceArticles.length - 1 === 1 ? 'article' : 'articles'}. How has your understanding evolved?`
+        : 'How does this connect to what you\'ve been reading?';
+    case 'cross_referencing':
+      return `You've seen this across ${sourceArticles.length} article${sourceArticles.length !== 1 ? 's' : ''}. What patterns do you notice?`;
+    case 'mastery_check':
+      return 'Could you explain this to someone? What would you emphasize?';
+  }
+}
+
+const RATING_LABELS: Record<number, { emoji: string; label: string }> = {
+  1: { emoji: '\u2753', label: 'Confused' },
+  2: { emoji: '\u{1F324}\uFE0F', label: 'Fuzzy' },
+  3: { emoji: '\u2705', label: 'Solid' },
+  4: { emoji: '\u{1F393}', label: 'Expert' },
+};
+
+function daysAgoText(dueAt: number, stabilityDays: number): string {
+  const lastReviewedAt = dueAt - stabilityDays * 86400000;
+  const daysAgo = Math.round((Date.now() - lastReviewedAt) / 86400000);
+  if (daysAgo <= 0) return 'Today';
+  if (daysAgo === 1) return '1 day ago';
+  return `${daysAgo} days ago`;
+}
 
 // --- Review Card ---
 
@@ -29,11 +75,23 @@ function ReviewCard({ concept, review, reason, onComplete }: {
     .map(id => getArticleById(id))
     .filter(Boolean);
 
-  const matchingClaims = getMatchingClaims(concept.id, 2);
+  const promptTier = getPromptTier(review.engagement_count);
 
-  const lastNote = review.notes.length > 0
-    ? review.notes[review.notes.length - 1]
-    : null;
+  // Log prompt tier on mount
+  useState(() => {
+    logEvent('review_prompt_tier', {
+      concept_id: concept.id,
+      tier: promptTier,
+      engagement_count: review.engagement_count,
+    });
+  });
+
+  const matchingClaims = getMatchingClaims(concept.id, 3);
+
+  const recentNotes = review.notes
+    .filter(n => !n.voice_note_id)
+    .slice(-3)
+    .reverse();
 
   const handleRate = useCallback((rating: ReviewRating) => {
     submitReview(concept.id, rating, noteText || undefined);
@@ -53,27 +111,32 @@ function ReviewCard({ concept, review, reason, onComplete }: {
 
         <Text style={styles.conceptText}>{concept.text}</Text>
 
-        {/* Engagement stats */}
+        {/* Review history info */}
         <View style={styles.statsRow}>
-          {review.engagement_count > 0 && (
+          {review.engagement_count > 0 ? (
             <Text style={styles.statText}>
-              Reviewed {review.engagement_count}× ·
-              Next in {Math.round(review.stability_days)}d
+              Review #{review.engagement_count + 1} · Last reviewed {daysAgoText(review.due_at, review.stability_days)}
+              {review.understanding > 0 && RATING_LABELS[review.understanding]
+                ? ` · Previous: ${RATING_LABELS[review.understanding].emoji} ${RATING_LABELS[review.understanding].label}`
+                : ''}
             </Text>
-          )}
-          {review.engagement_count === 0 && (
-            <Text style={styles.statText}>First review</Text>
+          ) : (
+            <Text style={styles.statText}>Review #1</Text>
           )}
         </View>
 
-        {/* Last note (if any) */}
-        {lastNote && (
-          <View style={styles.lastNoteBox}>
-            <Text style={styles.lastNoteLabel}>Your last note</Text>
-            <Text style={styles.lastNoteText}>{lastNote.text}</Text>
-            <Text style={styles.lastNoteDate}>
-              {new Date(lastNote.created_at).toLocaleDateString()}
-            </Text>
+        {/* Recent notes */}
+        {recentNotes.length > 0 && (
+          <View style={{ marginBottom: 16 }}>
+            <Text style={styles.lastNoteLabel}>Your notes</Text>
+            {recentNotes.map(note => (
+              <View key={note.id} style={styles.lastNoteBox}>
+                <Text style={styles.lastNoteText}>{note.text}</Text>
+                <Text style={styles.lastNoteDate}>
+                  {new Date(note.created_at).toLocaleDateString()}
+                </Text>
+              </View>
+            ))}
           </View>
         )}
 
@@ -102,10 +165,18 @@ function ReviewCard({ concept, review, reason, onComplete }: {
         {matchingClaims.length > 0 && (
           <View style={styles.claimsSection}>
             <Text style={styles.claimsLabel}>Related claims</Text>
-            {matchingClaims.map((claim, i) => (
-              <View key={i} style={styles.claimBox}>
-                <Text style={styles.claimText}>{claim}</Text>
-              </View>
+            {matchingClaims.map((match, i) => (
+              <Pressable
+                key={i}
+                style={styles.claimBox}
+                onPress={() => {
+                  logEvent('review_claim_tap', { concept_id: concept.id, article_id: match.articleId });
+                  router.push({ pathname: '/reader', params: { id: match.articleId } });
+                }}
+              >
+                <Text style={styles.claimText}>{match.claim}</Text>
+                <Text style={styles.claimSource}>from {match.articleTitle}</Text>
+              </Pressable>
             ))}
           </View>
         )}
@@ -134,18 +205,24 @@ function ReviewCard({ concept, review, reason, onComplete }: {
         {phase === 'prompt' && (
           <View style={styles.phaseSection}>
             <Text style={styles.promptText}>
-              How does this concept connect to what you've been reading?
+              {getPromptText(promptTier, sourceArticles as Array<{ id: string; title: string }>)}
             </Text>
             <View style={styles.promptActions}>
               <Pressable
-                style={styles.actionBtn}
+                style={({ hovered }: any) => [
+                  styles.actionBtn,
+                  hovered && Platform.OS === 'web' && { backgroundColor: '#253347' },
+                ] as ViewStyle[]}
                 onPress={() => setPhase('respond')}
               >
                 <Ionicons name="create-outline" size={18} color="#60a5fa" />
                 <Text style={styles.actionBtnText}>Add a note</Text>
               </Pressable>
               <Pressable
-                style={styles.actionBtn}
+                style={({ hovered }: any) => [
+                  styles.actionBtn,
+                  hovered && Platform.OS === 'web' && { backgroundColor: '#253347' },
+                ] as ViewStyle[]}
                 onPress={() => setPhase('rate')}
               >
                 <Ionicons name="checkmark-circle-outline" size={18} color="#10b981" />
@@ -189,7 +266,11 @@ function ReviewCard({ concept, review, reason, onComplete }: {
               ] as const).map(([rating, label, desc, color]) => (
                 <Pressable
                   key={rating}
-                  style={[styles.ratingBtn, { borderColor: color }]}
+                  style={({ hovered }: any) => [
+                    styles.ratingBtn,
+                    { borderColor: color },
+                    hovered && Platform.OS === 'web' && { backgroundColor: '#253347', borderWidth: 2 },
+                  ] as ViewStyle[]}
                   onPress={() => handleRate(rating)}
                 >
                   <Text style={[styles.ratingLabel, { color }]}>{label}</Text>
@@ -391,9 +472,9 @@ const styles = StyleSheet.create({
   // Last note
   lastNoteBox: {
     backgroundColor: '#1e293b', borderRadius: 12, padding: 14,
-    marginBottom: 16, borderLeftWidth: 3, borderLeftColor: '#8b5cf6',
+    marginBottom: 8, borderLeftWidth: 3, borderLeftColor: '#8b5cf6',
   },
-  lastNoteLabel: { color: '#a78bfa', fontSize: 11, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
+  lastNoteLabel: { color: '#a78bfa', fontSize: 11, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
   lastNoteText: { color: '#cbd5e1', fontSize: 14, lineHeight: 20 },
   lastNoteDate: { color: '#475569', fontSize: 11, marginTop: 6 },
   voiceNoteBox: {
@@ -409,6 +490,7 @@ const styles = StyleSheet.create({
     marginBottom: 4, borderLeftWidth: 2, borderLeftColor: '#475569',
   },
   claimText: { color: '#94a3b8', fontSize: 13, lineHeight: 18, fontStyle: 'italic' },
+  claimSource: { color: '#64748b', fontSize: 11, marginTop: 4 },
 
   // Source articles
   sourcesSection: { marginBottom: 16 },

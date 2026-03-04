@@ -18,6 +18,9 @@ export interface Article {
   similar_articles?: Array<{ id: string; title: string; score: number }>;
   exploration_tag?: string;
   parent_id?: string;
+  reading_order?: 'foundational' | 'intermediate' | 'deep';
+  exploration_tier?: 'foundational' | 'intermediate' | 'deep';
+  exploration_order?: number;
 }
 
 export interface ArticleSection {
@@ -136,6 +139,100 @@ export interface Highlight {
   highlighted_at: number;
   zone: ReadingDepth;
   note?: string;
+}
+
+// --- Books ---
+
+export interface Book {
+  id: string;
+  title: string;
+  author: string;
+  cover_url?: string;
+  chapters: BookChapterMeta[];
+  topics: string[];
+  thesis_statement?: string;
+  running_argument: string[];   // one sentence per chapter processed
+  language: string;
+  added_at: number;
+}
+
+export interface BookChapterMeta {
+  chapter_number: number;
+  title: string;
+  section_count: number;
+  processing_status: 'pending' | 'completed';
+}
+
+export interface BookSection {
+  id: string;                  // book_id:ch{N}:s{M}
+  book_id: string;
+  chapter_number: number;
+  section_number: number;
+  title: string;
+  chapter_title: string;
+  content_markdown: string;
+  summary: string;
+  briefing: string;
+  claims: BookClaim[];
+  key_terms: KeyTerm[];
+  cross_book_connections: CrossBookConnection[];
+  word_count: number;
+  estimated_read_minutes: number;
+}
+
+export interface BookClaim {
+  claim_id: string;            // M1, S1, etc. (scoped to section)
+  text: string;
+  claim_type: string;
+  confidence: number;
+  source_passage?: string;
+  supports_claim?: string;
+  is_main: boolean;
+}
+
+export interface KeyTerm {
+  term: string;
+  definition: string;
+  conflicts_with?: string;     // if another book defines it differently
+}
+
+export interface CrossBookConnection {
+  target_section_id: string;
+  target_book_title: string;
+  target_claim_text: string;
+  relationship: 'agrees' | 'disagrees' | 'extends' | 'provides_evidence' | 'same_topic';
+}
+
+export type BookReadingDepth = 'unread' | 'briefing' | 'claims' | 'reading' | 'reflected';
+
+export type ClaimSignalType = 'knew_it' | 'interesting' | 'save';
+
+export interface BookReadingState {
+  book_id: string;
+  section_states: Record<string, SectionReadingState>;
+  total_time_spent_ms: number;
+  last_read_at: number;
+  personal_thread: PersonalThreadEntry[];
+}
+
+export interface SectionReadingState {
+  depth: BookReadingDepth;
+  scroll_position_y: number;
+  time_spent_ms: number;
+  last_read_at: number;
+  claim_signals: Record<string, ClaimSignalType>;
+}
+
+export interface PersonalThreadEntry {
+  id: string;
+  book_id: string;
+  section_id: string;
+  created_at: number;
+  type: 'reflection' | 'voice_note' | 'claim_reaction' | 'connection';
+  text: string;
+  voice_note_id?: string;
+  claim_id?: string;
+  linked_concept_ids?: string[];
 }
 
 // --- Research Agent ---

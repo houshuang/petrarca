@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
-import { initStore } from '../data/store';
+import { View, Text, ActivityIndicator, StyleSheet, Platform } from 'react-native';
+import { initStore, getReviewQueue } from '../data/store';
 import { startNewSession, logEvent } from '../data/logger';
+import { requestNotificationPermissions, scheduleDailyReviewReminder } from '../lib/notifications';
 
 export default function Layout() {
   const [ready, setReady] = useState(false);
@@ -13,6 +14,13 @@ export default function Layout() {
       startNewSession();
       await initStore();
       setReady(true);
+
+      const granted = await requestNotificationPermissions();
+      logEvent('notifications_permission', { granted });
+      if (granted) {
+        const reviewCount = getReviewQueue().length;
+        await scheduleDailyReviewReminder(reviewCount);
+      }
     })();
   }, []);
 
@@ -30,7 +38,12 @@ export default function Layout() {
       screenOptions={{
         tabBarActiveTintColor: '#2563eb',
         tabBarInactiveTintColor: '#94a3b8',
-        tabBarStyle: { backgroundColor: '#0f172a', borderTopColor: '#1e293b' },
+        tabBarStyle: {
+          backgroundColor: '#0f172a',
+          borderTopColor: '#1e293b',
+          borderTopWidth: 1,
+          ...(Platform.OS === 'web' ? { height: 52 } : {}),
+        },
         headerStyle: { backgroundColor: '#0f172a' },
         headerTintColor: '#f8fafc',
       }}
@@ -71,8 +84,17 @@ export default function Layout() {
       <Tabs.Screen
         name="reader"
         options={{
-          href: null, // hidden from tab bar
+          href: null,
           headerShown: false,
+          tabBarStyle: { display: 'none' },
+        }}
+      />
+      <Tabs.Screen
+        name="book-reader"
+        options={{
+          href: null,
+          headerShown: false,
+          tabBarStyle: { display: 'none' },
         }}
       />
     </Tabs>

@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { UserSignal, ReadingState, ConceptState, VoiceNote, ConceptReview, Highlight } from './types';
+import { UserSignal, ReadingState, ConceptState, VoiceNote, ConceptReview, Highlight, BookReadingState } from './types';
 
 const SIGNALS_KEY = '@petrarca/signals';
 const READING_STATES_KEY = '@petrarca/reading_states';
@@ -7,6 +7,7 @@ const CONCEPT_STATES_KEY = '@petrarca/concept_states';
 const VOICE_NOTES_KEY = '@petrarca/voice_notes';
 const CONCEPT_REVIEWS_KEY = '@petrarca/concept_reviews';
 const HIGHLIGHTS_KEY = '@petrarca/highlights';
+const BOOK_READING_STATES_KEY = '@petrarca/book_reading_states';
 
 export async function loadSignals(): Promise<UserSignal[]> {
   try {
@@ -125,5 +126,26 @@ export async function saveHighlights(highlights: Highlight[]): Promise<void> {
     await AsyncStorage.setItem(HIGHLIGHTS_KEY, JSON.stringify(highlights));
   } catch (e) {
     console.warn('[persistence] failed to save highlights:', e);
+  }
+}
+
+export async function loadBookReadingStates(): Promise<Map<string, BookReadingState>> {
+  try {
+    const raw = await AsyncStorage.getItem(BOOK_READING_STATES_KEY);
+    if (!raw) return new Map();
+    const entries: [string, BookReadingState][] = JSON.parse(raw);
+    return new Map(entries);
+  } catch (e) {
+    console.warn('[persistence] failed to load book reading states:', e);
+    return new Map();
+  }
+}
+
+export async function saveBookReadingStates(states: Map<string, BookReadingState>): Promise<void> {
+  try {
+    const entries = Array.from(states.entries());
+    await AsyncStorage.setItem(BOOK_READING_STATES_KEY, JSON.stringify(entries));
+  } catch (e) {
+    console.warn('[persistence] failed to save book reading states:', e);
   }
 }

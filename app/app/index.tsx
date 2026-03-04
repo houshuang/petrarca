@@ -2,13 +2,14 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Dimensions,
   Animated, PanResponder, LayoutAnimation, Platform, UIManager,
+  ViewStyle,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getArticles, getFeedArticles, getInProgressArticles, getReadingState, getStats, getNoveltyScore, getSynthesisForTopic } from '../data/store';
+import { getArticles, getFeedArticles, getInProgressArticles, getReadingState, getStats, getNoveltyScore, getExplorationOrder, getSynthesisForTopic, isDismissed, getReviewQueue, getBooks, getBookReadingState, getBookProgress, getBooksNeedingContextRestore, getSectionReadingState } from '../data/store';
 import { fetchResearchResults, getResearchResults } from '../data/research';
-import { Article, ReadingDepth } from '../data/types';
+import { Article, ReadingDepth, Book } from '../data/types';
 import { logEvent } from '../data/logger';
 
 // Enable LayoutAnimation on Android
@@ -20,6 +21,13 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 type ViewMode = 'list' | 'topics' | 'triage';
 type TriageState = 'untriaged' | 'read_later' | 'skipped';
+
+function getDisplayTitle(article: Article): string {
+  if (/^Thread by @/i.test(article.title) && article.one_line_summary && article.one_line_summary !== '[dry run]') {
+    return article.one_line_summary;
+  }
+  return article.title;
+}
 
 // --- Triage persistence (local to this module) ---
 
@@ -80,6 +88,34 @@ const DEPTH_COLORS: Record<ReadingDepth, string> = {
   full: '#10b981',
 };
 
+// --- Helpers ---
+
+const CONTENT_TYPE_COLORS: Record<string, string> = {
+  research: '#8b5cf6',
+  analysis: '#3b82f6',
+  tutorial: '#10b981',
+  opinion: '#f59e0b',
+  news: '#64748b',
+  reference: '#06b6d4',
+};
+
+function getContentTypeColor(contentType?: string): string {
+  if (!contentType) return '#334155';
+  return CONTENT_TYPE_COLORS[contentType.toLowerCase()] || '#334155';
+}
+
+function getTopicColor(topic: string): { bg: string; border: string; text: string } {
+  if (Platform.OS !== 'web') return { bg: '#334155', border: '#334155', text: '#94a3b8' };
+  let hash = 0;
+  for (let i = 0; i < topic.length; i++) hash = topic.charCodeAt(i) + ((hash << 5) - hash);
+  const hue = ((hash % 360) + 360) % 360;
+  return {
+    bg: `hsla(${hue}, 40%, 20%, 0.5)`,
+    border: `hsl(${hue}, 50%, 40%)`,
+    text: `hsl(${hue}, 60%, 70%)`,
+  };
+}
+
 // --- Feed Card (used in List and Topic modes) ---
 
 function NoveltyBadge({ articleId }: { articleId: string }) {
@@ -98,13 +134,35 @@ function NoveltyBadge({ articleId }: { articleId: string }) {
   );
 }
 
+const TIER_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  foundational: { label: 'Start here', color: '#10b981', bg: '#10b98120' },
+  intermediate: { label: 'Building on', color: '#f59e0b', bg: '#f59e0b20' },
+  deep: { label: 'Deep dive', color: '#a78bfa', bg: '#a78bfa20' },
+};
+
+function TierBadge({ readingOrder }: { readingOrder?: string }) {
+  if (!readingOrder || !TIER_CONFIG[readingOrder]) return null;
+  const { label, color, bg } = TIER_CONFIG[readingOrder];
+  return (
+    <View style={[styles.tierBadge, { backgroundColor: bg, borderColor: color }]}>
+      <Text style={[styles.tierText, { color }]}>{label}</Text>
+    </View>
+  );
+}
+
 function FeedCard({ article }: { article: Article }) {
   const router = useRouter();
   const state = getReadingState(article.id);
+  const accentColor = getContentTypeColor((article as any).content_type);
 
   return (
     <Pressable
-      style={styles.card}
+      style={({ hovered }: any) => [
+        styles.card,
+        { borderTopWidth: 2, borderTopColor: accentColor },
+        Platform.OS === 'web' && { padding: 20, marginBottom: 14 },
+        hovered && Platform.OS === 'web' && { backgroundColor: '#253347', transform: [{ translateY: -1 }] },
+      ] as ViewStyle[]}
       onPress={() => {
         logEvent('feed_item_tap', { article_id: article.id, title: article.title, novelty: getNoveltyScore(article.id) });
         router.push({ pathname: '/reader', params: { id: article.id } });
@@ -112,10 +170,13 @@ function FeedCard({ article }: { article: Article }) {
     >
       <View style={styles.cardHeader}>
         <Text style={styles.hostname}>{article.hostname}</Text>
-        <Text style={styles.readTime}>{article.estimated_read_minutes} min</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <TierBadge readingOrder={article.reading_order || article.exploration_tier} />
+          <Text style={styles.readTime}>{article.estimated_read_minutes} min</Text>
+        </View>
       </View>
 
-      <Text style={styles.title}>{article.title}</Text>
+      <Text style={styles.title}>{getDisplayTitle(article)}</Text>
 
       {article.one_line_summary && article.one_line_summary !== '[dry run]' && (
         <Text style={styles.summary} numberOfLines={2}>{article.one_line_summary}</Text>
@@ -123,11 +184,14 @@ function FeedCard({ article }: { article: Article }) {
 
       <View style={styles.cardFooter}>
         <View style={styles.topics}>
-          {article.topics.slice(0, 3).map(t => (
-            <View key={t} style={styles.topicPill}>
-              <Text style={styles.topicText}>{t}</Text>
-            </View>
-          ))}
+          {article.topics.slice(0, 3).map(t => {
+            const tc = getTopicColor(t);
+            return (
+              <View key={t} style={[styles.topicPill, { backgroundColor: tc.bg, borderWidth: 1, borderColor: tc.border }]}>
+                <Text style={[styles.topicText, { color: tc.text }]}>{t}</Text>
+              </View>
+            );
+          })}
         </View>
 
         <NoveltyBadge articleId={article.id} />
@@ -286,7 +350,7 @@ function TriageCard({
   return (
     <Animated.View
       style={[styles.triageCardWrapper, cardStyle]}
-      {...(isTop ? panResponder.panHandlers : {})}
+      {...(isTop && Platform.OS !== 'web' ? panResponder.panHandlers : {})}
     >
       <View style={styles.triageCard}>
         {/* Action labels */}
@@ -314,7 +378,7 @@ function TriageCard({
             <Text style={styles.triageReadTime}>{article.estimated_read_minutes} min read</Text>
           </View>
 
-          <Text style={styles.triageTitle}>{article.title}</Text>
+          <Text style={styles.triageTitle}>{getDisplayTitle(article)}</Text>
 
           {article.one_line_summary && article.one_line_summary !== '[dry run]' && (
             <Text style={styles.triageSummary}>{article.one_line_summary}</Text>
@@ -333,8 +397,8 @@ function TriageCard({
           ) : null}
         </View>
 
-        {/* Swipe hints */}
-        {isTop && (
+        {/* Swipe hints (mobile) / Action buttons (web) */}
+        {isTop && Platform.OS !== 'web' && (
           <View style={styles.swipeHints}>
             <View style={styles.swipeHint}>
               <Ionicons name="arrow-back" size={14} color="#64748b" />
@@ -350,6 +414,43 @@ function TriageCard({
             </View>
           </View>
         )}
+        {isTop && Platform.OS === 'web' && (
+          <View style={styles.webTriageButtons}>
+            <Pressable
+              style={({ hovered }: any) => [
+                styles.webTriageBtn,
+                styles.webTriageBtnSkip,
+                hovered && { backgroundColor: '#7f1d1d' },
+              ] as ViewStyle[]}
+              onPress={() => onSwipe('left')}
+            >
+              <Ionicons name="close-circle" size={18} color="#ef4444" />
+              <Text style={[styles.webTriageBtnText, { color: '#ef4444' }]}>Skip</Text>
+            </Pressable>
+            <Pressable
+              style={({ hovered }: any) => [
+                styles.webTriageBtn,
+                styles.webTriageBtnRead,
+                hovered && { backgroundColor: '#1e3a5f' },
+              ] as ViewStyle[]}
+              onPress={() => onSwipe('up')}
+            >
+              <Ionicons name="book" size={18} color="#60a5fa" />
+              <Text style={[styles.webTriageBtnText, { color: '#60a5fa' }]}>Read Now</Text>
+            </Pressable>
+            <Pressable
+              style={({ hovered }: any) => [
+                styles.webTriageBtn,
+                styles.webTriageBtnSave,
+                hovered && { backgroundColor: '#065f46' },
+              ] as ViewStyle[]}
+              onPress={() => onSwipe('right')}
+            >
+              <Ionicons name="bookmark" size={18} color="#10b981" />
+              <Text style={[styles.webTriageBtnText, { color: '#10b981' }]}>Save</Text>
+            </Pressable>
+          </View>
+        )}
       </View>
     </Animated.View>
   );
@@ -359,7 +460,7 @@ function TriageCard({
 
 function TriageModeView() {
   const router = useRouter();
-  const articles = getArticles();
+  const articles = getArticles().filter(a => !isDismissed(a.id));
   const [triageStates, setTriageStates] = useState<Record<string, TriageState>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -376,7 +477,16 @@ function TriageModeView() {
     logEvent('triage_mode_enter', { total_articles: articles.length });
   }, []);
 
-  const untriagedArticles = articles.filter(a => getTriageState(a.id) === 'untriaged');
+  const untriagedArticles = articles
+    .filter(a => getTriageState(a.id) === 'untriaged')
+    .sort((a, b) => {
+      const orderA = getExplorationOrder(a);
+      const orderB = getExplorationOrder(b);
+      if (orderA !== orderB) return orderA - orderB;
+      const scoreA = getNoveltyScore(a.id) ?? 1.0;
+      const scoreB = getNoveltyScore(b.id) ?? 1.0;
+      return scoreB - scoreA;
+    });
   const totalUntriaged = untriagedArticles.length;
   const visibleCards = untriagedArticles.slice(0, 3);
 
@@ -393,6 +503,7 @@ function TriageModeView() {
         decision: 'read_later',
         article_id: article.id,
         title: article.title,
+        novelty: getNoveltyScore(article.id),
       });
     } else if (direction === 'left') {
       setTriageState(article.id, 'skipped');
@@ -401,6 +512,7 @@ function TriageModeView() {
         decision: 'skipped',
         article_id: article.id,
         title: article.title,
+        novelty: getNoveltyScore(article.id),
       });
     } else if (direction === 'up') {
       setTriageState(article.id, 'read_later');
@@ -409,6 +521,7 @@ function TriageModeView() {
         decision: 'read_now',
         article_id: article.id,
         title: article.title,
+        novelty: getNoveltyScore(article.id),
       });
       router.push({ pathname: '/reader', params: { id: article.id } });
     }
@@ -531,7 +644,7 @@ interface TopicCluster {
 
 function TopicsModeView() {
   const router = useRouter();
-  const articles = getArticles();
+  const articles = getArticles().filter(a => !isDismissed(a.id));
   const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set());
 
   // Group by primary topic
@@ -609,6 +722,7 @@ export default function FeedScreen() {
   const [, forceUpdate] = useState(0);
   const [triageReady, setTriageReady] = useState(false);
   const [newResearchCount, setNewResearchCount] = useState(0);
+  const [webBannerDismissed, setWebBannerDismissed] = useState(false);
 
   // Pre-load triage states + auto-fetch research results
   useEffect(() => {
@@ -621,8 +735,8 @@ export default function FeedScreen() {
     }).catch(() => {});
   }, []);
 
-  const allArticles = getArticles();
-  const feed = showAll ? allArticles : getFeedArticles();
+  const allArticles = getArticles().filter(a => !isDismissed(a.id));
+  const feed = showAll ? allArticles : getFeedArticles().filter(a => !isDismissed(a.id));
   const stats = getStats();
 
   // In list mode after triage, show only read_later items if any have been triaged
@@ -636,7 +750,14 @@ export default function FeedScreen() {
       const ts = getTriageState(a.id);
       return ts === 'read_later' || ts === 'untriaged';
     });
-  })();
+  })().sort((a, b) => {
+    const orderA = getExplorationOrder(a);
+    const orderB = getExplorationOrder(b);
+    if (orderA !== orderB) return orderA - orderB;
+    const scoreA = getNoveltyScore(a.id) ?? 1.0;
+    const scoreB = getNoveltyScore(b.id) ?? 1.0;
+    return scoreB - scoreA;
+  });
 
   const handleViewModeChange = (mode: ViewMode) => {
     setViewMode(mode);
@@ -668,6 +789,27 @@ export default function FeedScreen() {
           </Pressable>
         ))}
       </View>
+
+      {Platform.OS === 'web' && !webBannerDismissed && (() => {
+        const reviewCount = getReviewQueue().length;
+        if (reviewCount === 0) return null;
+        return (
+          <Pressable
+            style={styles.webReviewBanner}
+            onPress={() => {
+              logEvent('web_review_banner_tap', { review_count: reviewCount });
+              setWebBannerDismissed(true);
+              router.push('/review');
+            }}
+          >
+            <Ionicons name="bulb-outline" size={16} color="#f59e0b" />
+            <Text style={styles.webReviewBannerText}>
+              You have {reviewCount} concept{reviewCount !== 1 ? 's' : ''} to review
+            </Text>
+            <Ionicons name="chevron-forward" size={14} color="#64748b" />
+          </Pressable>
+        );
+      })()}
 
       {viewMode === 'list' && (
         <>
@@ -714,14 +856,69 @@ export default function FeedScreen() {
               </Pressable>
             )}
 
-            {/* Continue Reading section */}
+            {/* Continue Reading section — articles + books */}
             {(() => {
               const inProgress = getInProgressArticles();
-              if (inProgress.length === 0) return null;
+              const booksNeedingRestore = getBooksNeedingContextRestore();
+              const inProgressBooks = getBooks().filter(b => {
+                const progress = getBookProgress(b.id);
+                return progress.read > 0 && progress.pct < 100;
+              });
+              if (inProgress.length === 0 && inProgressBooks.length === 0) return null;
               return (
                 <View style={styles.continueSection}>
                   <Text style={styles.continueSectionTitle}>Continue Reading</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+                    {inProgressBooks.map(book => {
+                      const progress = getBookProgress(book.id);
+                      const restoreInfo = booksNeedingRestore.find(r => r.book.id === book.id);
+                      // Find next unread section
+                      let nextSectionLabel = '';
+                      let nextSid = '';
+                      for (const ch of book.chapters.filter(c => c.processing_status === 'completed')) {
+                        for (let s = 1; s <= ch.section_count; s++) {
+                          const sid = `${book.id}:ch${ch.chapter_number}:s${s}`;
+                          const ss = getSectionReadingState(book.id, sid);
+                          if (ss.depth === 'unread') {
+                            nextSectionLabel = `Ch ${ch.chapter_number}, §${s}`;
+                            nextSid = sid;
+                            break;
+                          }
+                        }
+                        if (nextSid) break;
+                      }
+                      return (
+                        <Pressable
+                          key={`book-${book.id}`}
+                          style={[styles.continueCard, { borderLeftWidth: 3, borderLeftColor: '#60a5fa' }]}
+                          onPress={() => {
+                            logEvent('continue_book_tap', { book_id: book.id, pct: progress.pct });
+                            if (restoreInfo) {
+                              router.push({ pathname: '/book-reader', params: { bookId: book.id, sectionId: restoreInfo.lastSectionId } });
+                            } else if (nextSid) {
+                              router.push({ pathname: '/book-reader', params: { bookId: book.id, sectionId: nextSid } });
+                            } else {
+                              router.push({ pathname: '/book-reader', params: { bookId: book.id, sectionId: '' } });
+                            }
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+                            <Ionicons name="book" size={12} color="#60a5fa" />
+                            <Text style={{ color: '#60a5fa', fontSize: 11, fontWeight: '600' }}>BOOK</Text>
+                          </View>
+                          <Text style={styles.continueCardTitle} numberOfLines={2}>{book.title}</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                            <Text style={styles.continueCardDepth}>{progress.pct}% · {progress.read}/{progress.total} sections</Text>
+                          </View>
+                          {nextSectionLabel && (
+                            <Text style={{ color: '#34d399', fontSize: 11, marginTop: 2 }}>Next: {nextSectionLabel}</Text>
+                          )}
+                          {restoreInfo && restoreInfo.daysSince >= 2 && (
+                            <Text style={{ color: '#f59e0b', fontSize: 11, marginTop: 2 }}>{restoreInfo.daysSince}d ago</Text>
+                          )}
+                        </Pressable>
+                      );
+                    })}
                     {inProgress.map(a => {
                       const state = getReadingState(a.id);
                       return (
@@ -868,6 +1065,8 @@ const styles = StyleSheet.create({
   depthText: { fontSize: 11, fontWeight: '500' },
   noveltyBadge: { borderWidth: 1, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, marginRight: 4 },
   noveltyText: { fontSize: 11, fontWeight: '500' },
+  tierBadge: { borderWidth: 1, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  tierText: { fontSize: 11, fontWeight: '600' },
   dedupIndicator: { color: '#f59e0b', fontSize: 11, marginTop: 6, fontStyle: 'italic' as const },
   // Continue Reading
   continueSection: { marginBottom: 8, paddingHorizontal: 16 },
@@ -970,7 +1169,8 @@ const styles = StyleSheet.create({
   },
   triageCardWrapper: {
     position: 'absolute',
-    width: SCREEN_WIDTH - 32,
+    width: '90%',
+    maxWidth: 700,
     maxHeight: SCREEN_HEIGHT * 0.65,
   },
   triageCard: {
@@ -1156,5 +1356,52 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 10,
     overflow: 'hidden',
+  },
+
+  // Web triage buttons
+  webTriageButtons: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+  },
+  webTriageBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#1e293b',
+  },
+  webTriageBtnSkip: { borderWidth: 1, borderColor: '#ef444440' },
+  webTriageBtnRead: { borderWidth: 1, borderColor: '#60a5fa40' },
+  webTriageBtnSave: { borderWidth: 1, borderColor: '#10b98140' },
+  webTriageBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  // Web review banner
+  webReviewBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#1a1a0e',
+    borderLeftWidth: 3,
+    borderLeftColor: '#f59e0b',
+    padding: 12,
+    marginHorizontal: 16,
+    marginTop: 4,
+    borderRadius: 10,
+  },
+  webReviewBannerText: {
+    color: '#f59e0b',
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
   },
 });

@@ -48,6 +48,11 @@ log "Step 3: Building articles..."
 python3 "$SCRIPT_DIR/build_articles.py" --limit 10 \
     || log "Step 3 FAILED: build_articles.py"
 
+# Step 3b: Validate and fix articles
+log "Step 3b: Validating articles..."
+python3 "$SCRIPT_DIR/validate_articles.py" --fix \
+    || log "Step 3b FAILED: validate_articles.py"
+
 # Step 4: Generate syntheses
 if [ -f "$SCRIPT_DIR/generate_syntheses.py" ]; then
     log "Step 4: Generating syntheses..."
@@ -57,9 +62,46 @@ else
     log "Step 4: Skipping syntheses (generate_syntheses.py not found)"
 fi
 
-# Step 5: Copy output to app data directory
-log "Step 5: Copying output files..."
-for f in articles.json concepts.json manifest.json; do
+# Step 5: Generate books manifest from individual book meta files
+BOOKS_DIR="$PROJECT_DIR/data/books"
+if [ -d "$BOOKS_DIR" ] && ls "$BOOKS_DIR"/*/meta.json 1>/dev/null 2>&1; then
+    log "Step 5: Generating books.json manifest..."
+    python3 -c "
+import json, pathlib, hashlib
+books_dir = pathlib.Path('$BOOKS_DIR')
+books = []
+for meta_file in sorted(books_dir.glob('*/meta.json')):
+    meta = json.loads(meta_file.read_text())
+    # Strip fields only needed by pipeline, keep what app needs
+    books.append({
+        'id': meta['id'],
+        'title': meta['title'],
+        'author': meta['author'],
+        'cover_url': meta.get('cover_url'),
+        'chapters': meta['chapters'],
+        'topics': meta.get('topics', []),
+        'thesis_statement': meta.get('thesis_statement'),
+        'running_argument': meta.get('running_argument', []),
+        'language': meta.get('language', 'en'),
+        'added_at': meta.get('added_at', 0),
+    })
+out = json.dumps(books, indent=2, ensure_ascii=False)
+(books_dir.parent / 'books.json').write_text(out)
+# Update manifest hash
+manifest_path = books_dir.parent / 'manifest.json'
+if manifest_path.exists():
+    manifest = json.loads(manifest_path.read_text())
+    manifest['books_hash'] = hashlib.sha256(out.encode()).hexdigest()[:16]
+    manifest_path.write_text(json.dumps(manifest, indent=2))
+print(f'Generated books.json with {len(books)} books')
+" || log "Step 5 FAILED: books manifest generation"
+else
+    log "Step 5: No books found, skipping books.json generation"
+fi
+
+# Step 6: Copy output to app data directory
+log "Step 6: Copying output files..."
+for f in articles.json concepts.json manifest.json books.json; do
     if [ -f "$PROJECT_DIR/data/$f" ]; then
         cp "$PROJECT_DIR/data/$f" "$PROJECT_DIR/app/data/"
     else
@@ -69,11 +111,17 @@ done
 log "Copied to $PROJECT_DIR/app/data/"
 
 if [ -d "/opt/petrarca/data" ]; then
-    for f in articles.json concepts.json manifest.json; do
+    for f in articles.json concepts.json manifest.json books.json; do
         if [ -f "$PROJECT_DIR/data/$f" ]; then
             cp "$PROJECT_DIR/data/$f" /opt/petrarca/data/
         fi
     done
+    # Also copy book chapter section files
+    if [ -d "$PROJECT_DIR/data/books" ]; then
+        mkdir -p /opt/petrarca/data/books
+        cp -r "$PROJECT_DIR/data/books"/* /opt/petrarca/data/books/ 2>/dev/null \
+            || log "Note: no book data to copy"
+    fi
     log "Copied to /opt/petrarca/data/ (HTTP serving)"
 fi
 

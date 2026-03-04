@@ -4,6 +4,162 @@
 
 ---
 
+## 2026-03-04 — Book Reader: UX Polish Pass (Session 3)
+
+**What**: Third iteration on the Book Reader, implementing remaining research priorities. Focus: adaptive depth, Socratic reflection, concept familiarity indicators, suggested next sections, and enhanced feed integration.
+
+**Improvements implemented**:
+
+1. **Fixed Argument Skeleton View** — Completed the broken ternary operator in Claims zone from Session 2. Toggle now switches between flat claim list and tree view (main claims + supporting evidence indented). Added claimsHeaderRow, skeletonToggle styles.
+
+2. **Adaptive Depth (Research Priority 7)** — When opening an unread section, analyzes concept familiarity by matching section key terms and claims against the user's known concepts. If 70%+ concepts are familiar, shows a purple "Skip to Claims" banner. Tapping scrolls to the claims zone. Dismissible.
+
+3. **Socratic Reflection Prompts (Research Priority 4)** — Each section gets a deterministic contextual question shown in the reflection card: "What evidence would change your mind?", "How does this connect to what you know about X?", "What's the one key insight?", or "What's missing from this argument?". Amber styling with question icon.
+
+4. **"What You Bring" in Briefing** — Green familiarity card showing concepts the user already knows that are relevant to this section (chips with checkmarks). Shows "N new concepts to discover" count. Uses concept store for real-time personalization.
+
+5. **Key Term Familiarity Indicators** — Key Terms zone now shows "Familiar" badges (green) on terms matching known concepts, plus "Appears in N articles" counts. Terms with prior knowledge get a green left border.
+
+6. **Suggested Next in Shelf** — BookShelfItem in Library now shows a green "Continue: Ch N, §M" button for books with partial progress, jumping directly to the next unread section.
+
+7. **Engagement Stats on Landing Page** — Book Landing Page shows claims reviewed, reflections count, and average minutes per section.
+
+8. **Enhanced Feed Book Cards** — Continue Reading cards for books now show the specific next section (Ch N, §M) and navigate directly to it instead of the landing page.
+
+**Research priorities addressed**:
+- Priority 3 (Argument Skeleton View): ✅ Fixed
+- Priority 4 (Socratic Mode): ✅ Lightweight version
+- Priority 7 (Adaptive Depth): ✅ Concept-based familiarity
+- Walkthrough Gap #7 (Suggested Next): ✅ In shelf
+
+**Files modified**: `book-reader.tsx`, `library.tsx`, `index.tsx`
+
+**Build**: `npx tsc --noEmit` clean, `npx expo export --platform web` clean
+
+---
+
+## 2026-03-04 — Book Reader: UX Polish Pass (Session 2)
+
+**What**: Continued iterating on the Book Reader based on the walkthrough analysis and research findings from the previous session. Focused on the moments between sections, chapter transitions, book completion, and the reading footer.
+
+**Improvements implemented**:
+
+1. **Chapter transition card** — When entering Section 1 of a new chapter, a green "Chapter N Complete" card appears showing the previous chapter's title and running argument summary, plus a "Now entering" badge for the new chapter. Addresses the walkthrough gap: "readers lose the forest for the trees."
+
+2. **Personal thread in briefings** — The Briefing zone now surfaces up to 3 recent notes from the user's personal thread (from earlier sections). This means insights from Chapter 2 appear while reading Chapter 5, creating self-referential connections.
+
+3. **Section mini-map in footer** — Replaced the text "§N of M" navigation label with a visual dot map. Each dot is color-coded: gray (unread), blue (in-progress), green (reflected), with the current section larger and highlighted. Dots are tappable to jump to any section in the chapter.
+
+4. **Session stats in reflection card** — The "Section Complete" card now shows claims reviewed and paragraphs highlighted during this section's reading session, giving a sense of engagement depth.
+
+5. **Book completion experience** — When finishing the last section of a book, a special "Book Complete" card replaces the usual "next section" button. Shows: stats grid (sections/minutes/claims/notes), the full running argument across all chapters, and a "Your Journey" section with the last 5 personal thread entries. Logged as `book_completed` event.
+
+6. **Book overview button in Shelf** — Expanded shelf view now includes a "Book overview" button that navigates to the BookLandingPage, providing quick access to the thesis, argument, and chapter map.
+
+7. **Pipeline: cross-connection relationship classification** — The ingestion pipeline now uses an LLM pass to classify connections as `agrees`/`disagrees`/`extends`/`provides_evidence`/`same_topic` instead of defaulting everything to `same_topic`. The book reader UI already had color-coded styling for each type.
+
+8. **Pipeline: topic and thesis extraction** — The pipeline now automatically extracts 3-5 topic tags and a thesis statement from the book's key terms, claims, and running argument. These populate the Book Landing Page.
+
+9. **Pipeline: books manifest generation** — The content-refresh.sh now generates `books.json` from individual book meta files and copies book chapter data to the nginx serving directory.
+
+**Status**: TypeScript clean, web build clean. Pipeline enhancements untested (need Hetzner deploy + real EPUB).
+
+---
+
+## 2026-03-04 — Book Reader: Full Implementation + Research Deep Dive
+
+**What**: Implemented the complete Book Reader feature (Mode B: "Deep Shelf") from the plan at `plans/sleepy-leaping-lagoon.md`, then conducted extensive research and simulated a 6-week user journey through the Arabic-Latin bridge reading cluster.
+
+**Implementation** (all 9 tasks completed, TypeScript clean, web build clean):
+
+1. **Types** (`types.ts`): Book, BookSection, BookClaim, KeyTerm, CrossBookConnection, BookReadingState, SectionReadingState, PersonalThreadEntry — ~80 lines of new interfaces.
+
+2. **Persistence** (`persistence.ts`): loadBookReadingStates/saveBookReadingStates using Map-based `[key, value][]` tuple serialization.
+
+3. **Content sync** (`content-sync.ts`): books_hash in manifest, books.json download, lazy fetchBookChapterSections() with local caching per chapter.
+
+4. **State management** (`store.ts`): Module-level books/bookSections/bookReadingStates vars. Full accessors: getBooks, getBookById, getBookChapterSections, getBookReadingState, updateSectionReadingState, recordBookClaimSignal, addPersonalThreadEntry, getBookProgress, getBooksByTopic, getBooksNeedingContextRestore.
+
+5. **Book reader** (`book-reader.tsx`, ~1100 lines): 4-zone progressive depth reader (Briefing → Claims → Key Terms → Full Text). Includes: CrossBookConnectionCard (tappable, navigates to referenced section), FloatingDepthIndicator, ClaimSignalPill, VoiceRecordButton/TextNoteInput, section completion with reflection prompt, prev/next navigation across chapters. Plus a **Book Landing Page** showing "What You Bring" connections, thesis, chapter map with section dots, running argument, and continue/start buttons.
+
+6. **Library Shelf** (`library.tsx`): New 'shelf' view mode with BookShelfItem (expandable chapters, section dots), ContextRestoreBanner (amber, >2 days), ShelfTopicGroup (interleaved books + articles by topic).
+
+7. **Feed integration** (`index.tsx`): In-progress books appear in Continue Reading horizontal scroll alongside articles, with blue book accent and progress percentage.
+
+8. **Ingestion pipeline** (`ingest_book_petrarca.py`, 807 lines): pymupdf → section splitting → Gemini Flash extraction → cross-book matching. Output: books/{id}/meta.json + ch{N}_sections.json.
+
+9. **Server endpoint** (`research-server.py`): POST /ingest-book with book path + optional chapter number.
+
+**Research produced** (4 new documents):
+
+- `kindle-integration.md` — No official API, Readwise is best middleware for highlights, kindle-api TypeScript lib for progress. Includes complete fetch_kindle_books.py script and EPUB position mapping code.
+- `innovative-reading-patterns.md` — Scite.ai citation classification, Socratic AI vs summary AI, InfraNodus gap detection, Heptabase concept-level model.
+- `innovative-reading-ux.md` — LiquidText/Passages/Roam cross-text visualization, context restoration psychology, interleaved reading pedagogy (effect size 0.65), gesture vocabulary design, 13 ranked recommendations.
+- `book-reader-walkthrough.md` — Day-by-day simulation of reading 4 Arabic-Latin bridge books over 6 weeks: how briefings evolve, cross-book connections surface, personal thread builds, topic synthesis emerges. Identified 10 implementation gaps.
+
+**Key insight from research**: Context restoration is the biggest unsolved problem in reading apps. No mainstream app (Kindle, Readwise, Apple Books) handles resumption after days well. Petrarca's data model already captures everything needed for a differentiated "Welcome Back" experience.
+
+**Status**: Complete implementation. Books ingestion pipeline untested with real EPUBs (needs Hetzner deployment). App compiles and builds cleanly.
+
+---
+
+## 2026-03-04 — Research: Email Ingestion and Browser Web Clipper
+
+**What**: Researched two new content ingestion paths: (1) forwarding emails to the pipeline, (2) a Chrome extension web clipper.
+
+**Findings**:
+
+Email ingestion — best approach is **Cloudflare Email Workers** (free, no port 25 needed, domain required). Worker uses `postal-mime` JS library to parse the raw email stream, extracts `<a href>` links and plain-text URLs, filters out tracking URLs and CDN assets, then POSTs the best candidate URL(s) to a new `/ingest` endpoint on the Hetzner research server. The research server spawns `import_url.py` in a background thread — same pattern as existing research agents. Self-hosted Postfix is the alternative but Hetzner blocks port 25 by default. Mailgun inbound requires paid plan.
+
+Browser clipper — **unpacked Chrome extension** (3 files, no store submission). Manifest V3, popup with single "Save to Petrarca" button, POSTs `{url, title}` to `/ingest`. Same endpoint as email ingestion. Requires HTTPS on the server; Cloudflare Tunnel (`cloudflared`) is the simplest zero-config option.
+
+Both paths converge on the same `/ingest` endpoint in `research-server.py` which calls `import_url.py` — no new pipeline logic needed.
+
+**Status**: Research only, not implemented yet. See `research/ingestion-sources.md` for full code.
+
+---
+
+## 2026-03-04 — Experience Redesign: Connections, Web Notes, Review Context, Sicily Content
+
+**What**: Two-part session. First: 4-part UI redesign making existing features visible and rewarding. Second: ran the Sicily topic exploration to populate the app with real diverse content (205 articles, 781 concepts, 199 cross-article connections).
+
+**Part 1 — UI Redesign** (4 items from plan):
+
+1. **Prominent Connection Moments** (`reader.tsx`): Replaced collapsed purple pill `ConnectionIndicator` with always-visible callout card. Purple-tinted background, left accent border, "Also explored in:" header with tappable article titles that navigate via `router.push`. Always expanded, max 3 connections shown.
+
+2. **Web Note-Taking + Research Buttons** (`reader.tsx`): Added `TextNoteInput` component for web platform (replaces `VoiceRecordButton` which returns null on web). Expandable text input at bottom of reader, submits via `addVoiceNote()` with pre-filled transcript. Added "Research" button on each claim card — calls `triggerResearch()` with claim text + article context. Platform conditional: `Platform.OS === 'web'` switches between `TextNoteInput` and `VoiceRecordButton`.
+
+3. **Review Cards with Real Context** (`review.tsx`, `store.ts`): Changed `getMatchingClaims()` return type from `string[]` to `{claim, articleTitle, articleId}[]`. Claims now show article attribution ("from [Article Title]") and are tappable to navigate to source. Shows 3 recent notes instead of 1. Contextual prompts reference actual articles: "You've seen this in [Article A] and N other articles. How has your understanding evolved?"
+
+4. **Rewarding Progressive Depth** (`reader.tsx`): Enhanced `FloatingDepthIndicator` with claim/section counts ("Claims (3)"), connector lines between zones, active zone bolding. Added zone divider icons: bulb (purple) before Claims, document (amber) before Sections, book (green) before Full. Visual weight to section transitions.
+
+**Part 2 — Content Honesty Check**:
+
+After building UI, audited the data: only 47 articles all about AI coding tools, only 11/170 concepts spanning >1 article. Connection features had nothing to connect. Honest assessment: "lipstick on scaffolding."
+
+**Part 3 — Sicily Topic Exploration** (ran existing but never-executed scripts):
+
+- `explore_topic.py "Sicily — history, literature, geography, culture"` → 15 subtopics (5 foundational, 5 intermediate, 5 deep), 45 URLs
+- `import_url.py --from-exploration --chunk` → processed all 45 URLs through full LLM pipeline
+- Wikipedia articles chunked at H2 boundaries → rich sections
+- **Result**: 205 articles total (195 Sicily + 10 original), 781 concepts, 199 cross-article connections
+- Topics: Greek colonization, Arab-Norman culture, Frederick II, Sicilian School, Vespers, Verga, Pirandello, Sciascia, Lampedusa, Mafia, language, cuisine, Risorgimento, Archimedes, Opera dei Pupi, Bellini
+
+**Part 4 — Inline Highlight Annotation** (built while waiting for import):
+
+- Added "Note" button to highlight action bar (appears on long-press paragraph highlight)
+- Tapping "Note" expands TextInput below the action bar
+- Save persists note to `Highlight.note` field via new `updateHighlightNote()` in store.ts
+- Measurement event: `highlight_note_added`
+
+**Deployment**: Built web export (8.2 MB with embedded data), deployed to `http://alifstian.duckdns.org:8084`
+
+**Files changed**: `reader.tsx`, `review.tsx`, `store.ts`
+
+**Measurement events added**: `claim_research_tap`, `text_note_submitted`, `highlight_note_added`
+
+---
+
 ## 2026-03-03 — Sprint: Highlighting, Dedup, Exploration, Live Pipeline
 
 **What**: Full implementation sprint covering 8 parts across 19 files. Two concrete use cases driving the work: (1) live Twitter/Readwise pipeline running every 4 hours, (2) guided topic exploration mode for Sicily research trip.
