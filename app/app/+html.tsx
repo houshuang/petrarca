@@ -65,6 +65,36 @@ function PetrarcaStyles() {
           }
 
           a:hover { color: #93c5fd; }
+
+          /* Ensure Pressable components respond to DOM clicks (fixes Playwright/automation) */
+          [role="button"] {
+            -webkit-tap-highlight-color: transparent;
+          }
+        `,
+      }}
+    />
+  );
+}
+
+function WebClickFix() {
+  return (
+    <script
+      dangerouslySetInnerHTML={{
+        __html: `
+          // React Native Web Pressable uses a custom responder system that doesn't
+          // always fire onPress from synthetic DOM clicks. This bridges the gap by
+          // dispatching pointer events that RN Web's responder system recognizes.
+          document.addEventListener('click', function(e) {
+            var target = e.target;
+            // Only intervene for programmatic clicks (no isTrusted) on role="button" elements
+            if (e.isTrusted) return;
+            var btn = target.closest ? target.closest('[role="button"]') : null;
+            if (!btn) return;
+            btn.dispatchEvent(new PointerEvent('pointerdown', {bubbles: true, cancelable: true, pointerId: 1}));
+            setTimeout(function() {
+              btn.dispatchEvent(new PointerEvent('pointerup', {bubbles: true, cancelable: true, pointerId: 1}));
+            }, 50);
+          }, true);
         `,
       }}
     />
@@ -84,6 +114,7 @@ export default function Root({ children }: PropsWithChildren) {
         <title>Petrarca</title>
         <ScrollViewStyleReset />
         <PetrarcaStyles />
+        <WebClickFix />
       </head>
       <body>{children}</body>
     </html>

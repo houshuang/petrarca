@@ -326,6 +326,30 @@ function MarkdownText({ content, claimHighlights, claimSignals, onClaimTap, high
               </Pressable>
             );
 
+          case 'table':
+            return (
+              <View key={i} style={styles.tableContainer}>
+                {block.headers && block.headers.length > 0 && (
+                  <View style={styles.tableRow}>
+                    {block.headers.map((h, hi) => (
+                      <View key={hi} style={[styles.tableCell, styles.tableHeaderCell]}>
+                        <Text style={styles.tableHeaderText}>{renderInlineMarkdown(h)}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                {(block.rows || []).map((row, ri) => (
+                  <View key={ri} style={[styles.tableRow, ri % 2 === 1 && styles.tableRowAlt]}>
+                    {row.map((cell, ci) => (
+                      <View key={ci} style={styles.tableCell}>
+                        <Text style={styles.tableCellText}>{renderInlineMarkdown(cell)}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ))}
+              </View>
+            );
+
           default: {
             // Regular paragraph — check for claim highlighting
             if (claimHighlights && claimHighlights.length > 0) {
@@ -1618,6 +1642,37 @@ const styles = StyleSheet.create({
     color: '#94a3b8', fontSize: 15, lineHeight: 24, fontStyle: 'italic' as const,
   },
   markdownHr: { height: 1, backgroundColor: '#334155', marginVertical: 20 },
+  tableContainer: {
+    marginBottom: 14,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  tableRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
+  },
+  tableRowAlt: { backgroundColor: '#0f172a' },
+  tableCell: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  tableHeaderCell: {
+    backgroundColor: '#1e293b',
+  },
+  tableHeaderText: {
+    color: '#f8fafc',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  tableCellText: {
+    color: '#cbd5e1',
+    fontSize: 13,
+    lineHeight: 18,
+  },
 
   // Dedup banner
   dedupBanner: {

@@ -58,13 +58,15 @@ export function parseInlineMarkdown(text: string): InlineSegment[] {
 }
 
 /** Block types produced by splitMarkdownBlocks */
-export type BlockType = 'heading' | 'hr' | 'ul' | 'ol' | 'code' | 'blockquote' | 'paragraph';
+export type BlockType = 'heading' | 'hr' | 'ul' | 'ol' | 'code' | 'blockquote' | 'table' | 'paragraph';
 
 export interface ParsedBlock {
   type: BlockType;
   content: string;
   level?: number; // heading level
   items?: string[]; // list items
+  headers?: string[]; // table headers
+  rows?: string[][]; // table rows
 }
 
 /**
@@ -95,12 +97,22 @@ export function splitMarkdownBlocks(markdown: string): string[] {
         inCodeFence = false;
       }
     } else if (line.trim() === '') {
-      // Blank line separates blocks
+      // Blank line separates blocks — but keep table rows together
       if (current.length > 0) {
+        const isTableContext = current.every(l => l.includes('|'));
+        if (isTableContext) {
+          // Don't break table blocks on blank lines — just skip the blank
+        } else {
+          blocks.push(current.join('\n'));
+          current = [];
+        }
+      }
+    } else {
+      // If we're accumulating table lines and this line has no pipes, flush the table first
+      if (current.length > 0 && current.every(l => l.includes('|')) && !line.includes('|')) {
         blocks.push(current.join('\n'));
         current = [];
       }
-    } else {
       current.push(line);
     }
   }
@@ -157,6 +169,45 @@ export function parseMarkdownBlock(trimmed: string): ParsedBlock {
       .map(l => l.replace(/^>\s?/, ''))
       .join('\n');
     return { type: 'blockquote', content };
+  }
+
+  // Table (lines starting with | or containing | separators)
+  const tableLines = trimmed.split('\n').filter(l => l.trim().length > 0);
+  if (tableLines.length >= 2 && tableLines.every(l => l.includes('|'))) {
+    const parseRow = (line: string) =>
+      line.split('|').map(c => c.trim()).filter((c, i, arr) => {
+        // Remove empty first/last cells from leading/trailing |
+        if (i === 0 && arr[0] === '') return false;
+        if (i === arr.length - 1 && arr[arr.length - 1] === '') return false;
+        return true;
+      });
+
+    const isSeparator = (line: string) => /^\|?\s*[-:]+[-:|\s]*$/.test(line.trim());
+    const isEmptyRow = (line: string) => line.replace(/\|/g, '').trim() === '';
+
+    let headerRow: string[] | undefined;
+    const dataRows: string[][] = [];
+
+    for (let ti = 0; ti < tableLines.length; ti++) {
+      if (isSeparator(tableLines[ti])) continue;
+      if (isEmptyRow(tableLines[ti])) continue; // skip rows that are just pipes
+      const cells = parseRow(tableLines[ti]);
+      if (cells.length === 0) continue;
+      if (!headerRow && ti <= 1) {
+        headerRow = cells;
+      } else {
+        dataRows.push(cells);
+      }
+    }
+
+    if (headerRow || dataRows.length > 0) {
+      return {
+        type: 'table',
+        content: trimmed,
+        headers: headerRow,
+        rows: dataRows,
+      };
+    }
   }
 
   // Regular paragraph

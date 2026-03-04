@@ -142,6 +142,25 @@ describe('parseMarkdownBlock', () => {
     const result = parseMarkdownBlock('Just a regular paragraph of text.');
     expect(result).toEqual({ type: 'paragraph', content: 'Just a regular paragraph of text.' });
   });
+
+  test('parses standard markdown tables', () => {
+    const result = parseMarkdownBlock('| Name | Age |\n|------|-----|\n| Alice | 30 |\n| Bob | 25 |');
+    expect(result.type).toBe('table');
+    expect(result.headers).toEqual(['Name', 'Age']);
+    expect(result.rows).toEqual([['Alice', '30'], ['Bob', '25']]);
+  });
+
+  test('parses Wikipedia infobox-style pipe tables', () => {
+    const result = parseMarkdownBlock('Sicilia | |\n|---|---|\n| Regione Siciliana | |\n| Anthem:');
+    expect(result.type).toBe('table');
+    expect(result.headers).toBeDefined();
+  });
+
+  test('skips empty pipe-only rows in tables', () => {
+    const result = parseMarkdownBlock('| Name | Value |\n|------|-------|\n| | |\n| Capital | Palermo |');
+    expect(result.type).toBe('table');
+    expect(result.rows!.some(r => r.includes('Palermo'))).toBe(true);
+  });
 });
 
 describe('splitMarkdownBlocks', () => {
@@ -172,5 +191,14 @@ describe('splitMarkdownBlocks', () => {
   test('handles multiple blank lines', () => {
     const blocks = splitMarkdownBlocks('A\n\n\n\nB');
     expect(blocks).toEqual(['A', 'B']);
+  });
+
+  test('keeps table rows together across blank lines', () => {
+    const md = 'Before.\n\n| A | B |\n|---|---|\n\n| 1 | 2 |\n\nAfter.';
+    const blocks = splitMarkdownBlocks(md);
+    expect(blocks[0]).toBe('Before.');
+    // Table rows should be grouped together
+    expect(blocks.some(b => b.includes('| A | B |') && b.includes('| 1 | 2 |'))).toBe(true);
+    expect(blocks[blocks.length - 1]).toBe('After.');
   });
 });
