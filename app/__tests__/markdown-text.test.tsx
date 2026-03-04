@@ -157,9 +157,11 @@ describe('parseMarkdownBlock', () => {
   });
 
   test('skips empty pipe-only rows in tables', () => {
-    const result = parseMarkdownBlock('| Name | Value |\n|------|-------|\n| | |\n| Capital | Palermo |');
+    const input = ['| Name | Value |', '|------|-------|', '|  |  |', '| Capital | Palermo |'].join('\n');
+    const result = parseMarkdownBlock(input);
     expect(result.type).toBe('table');
-    expect(result.rows!.some(r => r.includes('Palermo'))).toBe(true);
+    const hasPalermo = (result.rows || []).some(r => r.includes('Palermo'));
+    expect(hasPalermo).toBe(true);
   });
 });
 

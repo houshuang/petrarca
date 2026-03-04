@@ -108,8 +108,15 @@ export function splitMarkdownBlocks(markdown: string): string[] {
         }
       }
     } else {
-      // If we're accumulating table lines and this line has no pipes, flush the table first
-      if (current.length > 0 && current.every(l => l.includes('|')) && !line.includes('|')) {
+      const lineHasPipe = line.includes('|');
+      const currentIsTable = current.length > 0 && current.every(l => l.includes('|'));
+
+      if (currentIsTable && !lineHasPipe) {
+        // Flush accumulated table lines before starting a non-table line
+        blocks.push(current.join('\n'));
+        current = [];
+      } else if (current.length > 0 && !currentIsTable && lineHasPipe && (/^\|/.test(line) || /\|.*\|/.test(line))) {
+        // Non-table block followed by a table line — flush the non-table part first
         blocks.push(current.join('\n'));
         current = [];
       }
