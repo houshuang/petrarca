@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Tabs } from 'expo-router';
+import { Stack } from 'expo-router';
 import { View, Text, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Font from 'expo-font';
@@ -29,7 +29,7 @@ const fontAssets = {
   'DMSans-Bold': require('../assets/fonts/DMSans-Bold.ttf'),
 };
 
-export default function Layout() {
+export default function RootLayout() {
   const [ready, setReady] = useState(false);
   const isDesktop = useIsDesktopWeb();
 
@@ -60,96 +60,27 @@ export default function Layout() {
     );
   }
 
-  const tabs = (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: colors.ink,
-        tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: isDesktop
-          ? { display: 'none' }
-          : {
-              backgroundColor: colors.parchmentDark,
-              borderTopColor: colors.ruleDark,
-              borderTopWidth: StyleSheet.hairlineWidth,
-              height: Platform.OS === 'web' ? 56 : 52,
-              paddingTop: 4,
-            },
-        tabBarShowLabel: true,
-        tabBarLabelStyle: {
-          fontFamily: Platform.OS === 'web' ? "'EB Garamond', Georgia, serif" : 'EBGaramond',
-          fontSize: 12,
-        },
-        tabBarIconStyle: { display: 'none' },
-      }}
-      screenListeners={{
-        tabPress: (e) => {
-          logEvent('tab_press', { tab: e.target?.split('-')[0] });
-        },
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Feed',
-        }}
-      />
-      <Tabs.Screen
-        name="library"
-        options={{
-          title: 'Library',
-        }}
-      />
-      <Tabs.Screen
-        name="review"
-        options={{
-          title: 'Review',
-        }}
-      />
-      <Tabs.Screen
-        name="stats"
-        options={{
-          title: 'Progress',
-        }}
-      />
-      <Tabs.Screen
-        name="reader"
-        options={{
-          href: null,
-          headerShown: false,
-          tabBarStyle: { display: 'none' },
-        }}
-      />
-      <Tabs.Screen
-        name="book-reader"
-        options={{
-          href: null,
-          headerShown: false,
-          tabBarStyle: { display: 'none' },
-        }}
-      />
-      <Tabs.Screen
-        name="+not-found"
-        options={{
-          href: null,
-          headerShown: false,
-        }}
-      />
-    </Tabs>
+  const stack = (
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="reader" />
+      <Stack.Screen name="book-reader" />
+      <Stack.Screen name="+not-found" />
+    </Stack>
   );
 
   if (isDesktop) {
     return (
       <View style={styles.desktopRoot}>
         <WebSidebar />
-        <View style={styles.desktopContent}>{tabs}</View>
+        <View style={styles.desktopContent}>{stack}</View>
       </View>
     );
   }
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.parchment }} edges={['top']}>
-      {tabs}
+      {stack}
     </SafeAreaView>
   );
 }
@@ -176,4 +107,3 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
-

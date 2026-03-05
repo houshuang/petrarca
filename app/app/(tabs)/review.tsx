@@ -8,10 +8,11 @@ import {
   getReviewQueue, submitReview, getConceptReview,
   getArticleById, getConcepts, getStats, getVoiceNoteById,
   getMatchingClaims,
-} from '../data/store';
-import { Concept, ConceptReview, ReviewRating } from '../data/types';
-import { logEvent } from '../data/logger';
-import { colors, fonts, type } from '../design/tokens';
+} from '../../data/store';
+import { Concept, ConceptReview, ReviewRating } from '../../data/types';
+import { logEvent } from '../../data/logger';
+import { useIsDesktopWeb } from '../../lib/use-responsive';
+import { colors, fonts, type, layout } from '../../design/tokens';
 
 // --- Prompt Tiers ---
 
@@ -281,6 +282,8 @@ function ReviewCard({ concept, review, reason, onComplete }: {
 const SESSION_CAP = 7;
 
 export default function ReviewScreen() {
+  const router = useRouter();
+  const isDesktop = useIsDesktopWeb();
   const [, forceUpdate] = useState(0);
   const fullQueue = getReviewQueue(50);
   const queue = fullQueue.slice(0, SESSION_CAP);
@@ -303,8 +306,13 @@ export default function ReviewScreen() {
   // No concepts at all
   if (allConcepts.length === 0) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, isDesktop && styles.desktopContainer]}>
         <View style={styles.header}>
+          {!isDesktop && (
+            <Pressable onPress={() => router.push('/')} style={styles.backLink}>
+              <Text style={styles.backLinkText}>← Feed</Text>
+            </Pressable>
+          )}
           <Text style={styles.title}>Review</Text>
           <Text style={styles.subtitle}>Spaced attention</Text>
           <View style={styles.doubleRule}>
@@ -328,8 +336,13 @@ export default function ReviewScreen() {
   // Queue complete
   if (currentIndex >= queue.length || queue.length === 0) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, isDesktop && styles.desktopContainer]}>
         <View style={styles.header}>
+          {!isDesktop && (
+            <Pressable onPress={() => router.push('/')} style={styles.backLink}>
+              <Text style={styles.backLinkText}>← Feed</Text>
+            </Pressable>
+          )}
           <Text style={styles.title}>Review</Text>
           <Text style={styles.subtitle}>Spaced attention</Text>
           <View style={styles.doubleRule}>
@@ -410,11 +423,16 @@ export default function ReviewScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, isDesktop && styles.desktopContainer]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       {/* Header */}
       <View style={styles.header}>
+        {!isDesktop && (
+          <Pressable onPress={() => router.push('/')} style={styles.backLink}>
+            <Text style={styles.backLinkText}>← Feed</Text>
+          </Pressable>
+        )}
         <View style={styles.headerRow}>
           <View>
             <Text style={styles.title}>Review</Text>
@@ -454,6 +472,7 @@ export default function ReviewScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.parchment },
+  desktopContainer: { maxWidth: layout.contentMaxWidth, alignSelf: 'center' as const, width: '100%' as any },
   scroll: { flex: 1 },
   cardScroll: { flex: 1, paddingHorizontal: 20 },
 
@@ -461,6 +480,14 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 20,
     paddingTop: 16,
+  },
+  backLink: {
+    marginBottom: 4,
+  },
+  backLinkText: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.textMuted,
   },
   headerRow: {
     flexDirection: 'row',

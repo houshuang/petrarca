@@ -7,13 +7,13 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getArticles, getFeedArticles, getInProgressArticles, getReadingState, getStats, getNoveltyScore, getExplorationOrder, getSynthesisForTopic, isDismissed, getReviewQueue, getBooks, getBookReadingState, getBookProgress, getBooksNeedingContextRestore, getSectionReadingState } from '../data/store';
-import { fetchResearchResults, getResearchResults } from '../data/research';
-import { Article, ReadingDepth, Book } from '../data/types';
-import { logEvent } from '../data/logger';
-import { getDisplayTitle } from '../lib/display-utils';
-import { useIsDesktopWeb } from '../lib/use-responsive';
-import { colors, fonts, type, spacing, layout } from '../design/tokens';
+import { getArticles, getFeedArticles, getInProgressArticles, getReadingState, getStats, getNoveltyScore, getExplorationOrder, getSynthesisForTopic, isDismissed, getReviewQueue, getBooks, getBookReadingState, getBookProgress, getBooksNeedingContextRestore, getSectionReadingState } from '../../data/store';
+import { fetchResearchResults, getResearchResults } from '../../data/research';
+import { Article, ReadingDepth, Book } from '../../data/types';
+import { logEvent } from '../../data/logger';
+import { getDisplayTitle } from '../../lib/display-utils';
+import { useIsDesktopWeb } from '../../lib/use-responsive';
+import { colors, fonts, type, spacing, layout } from '../../design/tokens';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -730,6 +730,19 @@ export default function FeedScreen() {
             ))}
           </View>
         </View>
+        {!isDesktop && (
+          <View style={styles.sectionNav}>
+            {[
+              { label: 'Library', path: '/library' },
+              { label: 'Review', path: '/review' },
+              { label: 'Progress', path: '/stats' },
+            ].map(({ label, path }, i) => (
+              <Pressable key={path} onPress={() => { logEvent('section_nav', { target: path }); router.push(path as any); }}>
+                <Text style={styles.sectionNavText}>{i > 0 ? ' · ' : ''}{label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
         <View style={styles.headerRule} />
       </View>
 
@@ -949,6 +962,15 @@ const styles = StyleSheet.create({
   screenTitle: {
     ...type.screenTitle,
     color: colors.ink,
+  },
+  sectionNav: {
+    flexDirection: 'row',
+    marginTop: 4,
+  },
+  sectionNavText: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.textMuted,
   },
   headerRule: {
     height: 1.5,

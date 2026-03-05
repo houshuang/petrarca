@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Share, Animated } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getStats, getSignals, getArticles, getByTopic, getReadingState, getTopicKnowledgeStats, getConcepts, getVoiceNotes, getArticleById, getConceptReview } from '../data/store';
-import { logEvent, getLogFiles, exportAllLogs, getLogDirectory } from '../data/logger';
-import { transcribeAllPending } from '../data/transcription';
-import { ResearchResult } from '../data/types';
-import { getResearchResults, fetchResearchResults } from '../data/research';
-import { colors, fonts, type, spacing, layout } from '../design/tokens';
+import { getStats, getSignals, getArticles, getByTopic, getReadingState, getTopicKnowledgeStats, getConcepts, getVoiceNotes, getArticleById, getConceptReview } from '../../data/store';
+import { logEvent, getLogFiles, exportAllLogs, getLogDirectory } from '../../data/logger';
+import { transcribeAllPending } from '../../data/transcription';
+import { ResearchResult } from '../../data/types';
+import { getResearchResults, fetchResearchResults } from '../../data/research';
+import { useIsDesktopWeb } from '../../lib/use-responsive';
+import { colors, fonts, type, spacing, layout } from '../../design/tokens';
 
 function EventLogSection() {
   const [logFileList, setLogFileList] = useState<string[]>([]);
@@ -349,6 +351,8 @@ function ResearchResultsSection({ onRefresh }: { onRefresh: () => void }) {
 }
 
 export default function StatsScreen() {
+  const router = useRouter();
+  const isDesktop = useIsDesktopWeb();
   const [, forceUpdate] = useState(0);
   const stats = getStats();
   const articles = getArticles();
@@ -374,9 +378,14 @@ export default function StatsScreen() {
   const crossLinks = concepts.filter(c => c.source_article_ids && c.source_article_ids.length > 1).length;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isDesktop && styles.desktopContainer]}>
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Header */}
+        {!isDesktop && (
+          <Pressable onPress={() => router.push('/')} style={styles.backLink}>
+            <Text style={styles.backLinkText}>← Feed</Text>
+          </Pressable>
+        )}
         <Text style={styles.screenTitle}>Progress</Text>
         <Text style={styles.screenSubtitle}>Your reading journey at a glance</Text>
 
@@ -486,9 +495,18 @@ export default function StatsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.parchment },
+  desktopContainer: { maxWidth: layout.contentMaxWidth, alignSelf: 'center' as const, width: '100%' as any },
   scroll: { flex: 1, paddingHorizontal: layout.screenPadding, paddingTop: 12 },
 
   // Header
+  backLink: {
+    marginBottom: 4,
+  },
+  backLinkText: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.textMuted,
+  },
   screenTitle: {
     ...type.screenTitle,
     color: colors.ink,

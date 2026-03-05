@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Platform, ViewStyle } from 'react-native';
 import { useRouter } from 'expo-router';
-import { getLibraryArticles, getByTopic, getReadingState, getArticles, getHighlights, getArticleById, getBooks, getBookById, getBooksByTopic, getBookProgress, getBookReadingState, getBookChapterSections, getCachedBookSections, getBooksNeedingContextRestore, getSectionReadingState } from '../data/store';
-import { Article, ReadingDepth, Highlight, Book, BookChapterMeta, BookReadingDepth } from '../data/types';
-import { logEvent } from '../data/logger';
-import { colors, fonts, type } from '../design/tokens';
+import { getLibraryArticles, getByTopic, getReadingState, getArticles, getHighlights, getArticleById, getBooks, getBookById, getBooksByTopic, getBookProgress, getBookReadingState, getBookChapterSections, getCachedBookSections, getBooksNeedingContextRestore, getSectionReadingState } from '../../data/store';
+import { Article, ReadingDepth, Highlight, Book, BookChapterMeta, BookReadingDepth } from '../../data/types';
+import { logEvent } from '../../data/logger';
+import { useIsDesktopWeb } from '../../lib/use-responsive';
+import { colors, fonts, type, layout } from '../../design/tokens';
 
 const DEPTH_LABELS: Record<ReadingDepth, string> = {
   unread: '—',
@@ -316,6 +317,8 @@ function ShelfView() {
 }
 
 export default function LibraryScreen() {
+  const router = useRouter();
+  const isDesktop = useIsDesktopWeb();
   const [viewMode, setViewMode] = useState<'recent' | 'topic' | 'highlights' | 'shelf'>('recent');
   const [, forceUpdate] = useState(0);
   const library = getLibraryArticles();
@@ -323,9 +326,14 @@ export default function LibraryScreen() {
   const topicMap = getByTopic();
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isDesktop && styles.desktopContainer]}>
       {/* Screen title */}
       <View style={styles.header}>
+        {!isDesktop && (
+          <Pressable onPress={() => router.push('/')} style={styles.backLink}>
+            <Text style={styles.backLinkText}>← Feed</Text>
+          </Pressable>
+        )}
         <Text style={styles.screenTitle}>Library</Text>
         <Text style={styles.screenSubtitle}>your reading collection</Text>
         <View style={styles.doubleRule}>
@@ -413,10 +421,19 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.parchment,
   },
+  desktopContainer: { maxWidth: layout.contentMaxWidth, alignSelf: 'center' as const, width: '100%' as any },
   header: {
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 0,
+  },
+  backLink: {
+    marginBottom: 4,
+  },
+  backLinkText: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.textMuted,
   },
   screenTitle: {
     ...type.screenTitle,
