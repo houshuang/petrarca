@@ -29,18 +29,6 @@ const fontAssets = {
   'DMSans-Bold': require('../assets/fonts/DMSans-Bold.ttf'),
 };
 
-/** Tab bar label using EB Garamond serif font */
-function TabLabel({ label, focused }: { label: string; focused: boolean }) {
-  return (
-    <View style={tabStyles.labelWrap}>
-      {focused && <View style={tabStyles.dot} />}
-      <Text style={[tabStyles.label, focused && tabStyles.labelActive]}>
-        {label}
-      </Text>
-    </View>
-  );
-}
-
 export default function Layout() {
   const [ready, setReady] = useState(false);
   const isDesktop = useIsDesktopWeb();
@@ -83,10 +71,16 @@ export default function Layout() {
           : {
               backgroundColor: colors.parchmentDark,
               borderTopColor: colors.ruleDark,
-              borderTopWidth: 1.5,
-              ...(Platform.OS === 'web' ? { height: 56 } : {}),
+              borderTopWidth: StyleSheet.hairlineWidth,
+              height: Platform.OS === 'web' ? 56 : 52,
+              paddingTop: 4,
             },
-        tabBarShowLabel: false,
+        tabBarShowLabel: true,
+        tabBarLabelStyle: {
+          fontFamily: Platform.OS === 'web' ? "'EB Garamond', Georgia, serif" : 'EBGaramond',
+          fontSize: 12,
+        },
+        tabBarIconStyle: { display: 'none' },
       }}
       screenListeners={{
         tabPress: (e) => {
@@ -98,28 +92,24 @@ export default function Layout() {
         name="index"
         options={{
           title: 'Feed',
-          tabBarIcon: ({ focused }) => <TabLabel label="Feed" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="library"
         options={{
           title: 'Library',
-          tabBarIcon: ({ focused }) => <TabLabel label="Library" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="review"
         options={{
           title: 'Review',
-          tabBarIcon: ({ focused }) => <TabLabel label="Review" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="stats"
         options={{
           title: 'Progress',
-          tabBarIcon: ({ focused }) => <TabLabel label="Progress" focused={focused} />,
         }}
       />
       <Tabs.Screen
@@ -187,23 +177,3 @@ const styles = StyleSheet.create({
   },
 });
 
-const tabStyles = StyleSheet.create({
-  labelWrap: {
-    alignItems: 'center',
-    gap: 3,
-  },
-  dot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.rubric,
-  },
-  label: {
-    fontFamily: Platform.OS === 'web' ? "'EB Garamond', Georgia, serif" : 'EBGaramond',
-    fontSize: 13,
-    color: colors.textMuted,
-  },
-  labelActive: {
-    color: colors.ink,
-  },
-});

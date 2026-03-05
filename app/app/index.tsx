@@ -12,6 +12,7 @@ import { fetchResearchResults, getResearchResults } from '../data/research';
 import { Article, ReadingDepth, Book } from '../data/types';
 import { logEvent } from '../data/logger';
 import { getDisplayTitle } from '../lib/display-utils';
+import { useIsDesktopWeb } from '../lib/use-responsive';
 import { colors, fonts, type, spacing, layout } from '../design/tokens';
 
 // Enable LayoutAnimation on Android
@@ -661,6 +662,7 @@ function TopicsModeView() {
 
 export default function FeedScreen() {
   const router = useRouter();
+  const isDesktop = useIsDesktopWeb();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [showAll, setShowAll] = useState(false);
   const [, forceUpdate] = useState(0);
@@ -709,33 +711,26 @@ export default function FeedScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      {/* Screen title */}
+    <View style={[styles.container, isDesktop && styles.desktopContainer]}>
+      {/* Compact header: title + view mode on one row */}
       <View style={styles.screenHeader}>
-        <Text style={styles.screenTitle}>Petrarca</Text>
-        <Text style={styles.screenSubtitle}>
-          {allArticles.length} texts · {stats.totalConcepts || 0} concepts
-        </Text>
-        {/* Double rule */}
-        <View style={styles.doubleRule}>
-          <View style={styles.doubleRuleTop} />
-          <View style={styles.doubleRuleBottom} />
+        <View style={styles.headerTitleRow}>
+          <Text style={styles.screenTitle}>{isDesktop ? 'Feed' : 'Petrarca'}</Text>
+          <View style={styles.viewModeRow}>
+            {(['list', 'topics', 'triage'] as ViewMode[]).map(mode => (
+              <Pressable
+                key={mode}
+                style={[styles.viewModeButton, viewMode === mode && styles.viewModeButtonActive]}
+                onPress={() => handleViewModeChange(mode)}
+              >
+                <Text style={[styles.viewModeText, viewMode === mode && styles.viewModeTextActive]}>
+                  {mode === 'list' ? 'List' : mode === 'topics' ? 'Topics' : 'Triage'}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
-      </View>
-
-      {/* View mode toggle */}
-      <View style={styles.viewModeRow}>
-        {(['list', 'topics', 'triage'] as ViewMode[]).map(mode => (
-          <Pressable
-            key={mode}
-            style={[styles.viewModeButton, viewMode === mode && styles.viewModeButtonActive]}
-            onPress={() => handleViewModeChange(mode)}
-          >
-            <Text style={[styles.viewModeText, viewMode === mode && styles.viewModeTextActive]}>
-              {mode === 'list' ? 'List' : mode === 'topics' ? 'Topics' : 'Triage'}
-            </Text>
-          </Pressable>
-        ))}
+        <View style={styles.headerRule} />
       </View>
 
       {Platform.OS === 'web' && !webBannerDismissed && (() => {
@@ -939,46 +934,34 @@ export default function FeedScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.parchment },
+  desktopContainer: { maxWidth: layout.contentMaxWidth, alignSelf: 'center' as const, width: '100%' as any },
 
-  // Screen header
+  // Screen header — compact
   screenHeader: {
     paddingHorizontal: layout.screenPadding,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xs,
+    paddingTop: spacing.xs,
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   screenTitle: {
     ...type.screenTitle,
     color: colors.ink,
   },
-  screenSubtitle: {
-    ...type.screenSubtitle,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  doubleRule: {
-    marginTop: spacing.sm,
-  },
-  doubleRuleTop: {
-    height: layout.doubleRuleTop,
+  headerRule: {
+    height: 1.5,
     backgroundColor: colors.ink,
+    marginTop: spacing.xs,
   },
-  doubleRuleBottom: {
-    height: layout.doubleRuleBottom,
-    backgroundColor: colors.ink,
-    marginTop: layout.doubleRuleGap,
-  },
-
-  // View mode toggle
   viewModeRow: {
     flexDirection: 'row',
-    paddingHorizontal: layout.screenPadding,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-    gap: spacing.sm,
+    gap: 6,
   },
   viewModeButton: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
     borderRadius: 3,
     borderWidth: 1,
     borderColor: colors.textMuted,
@@ -989,6 +972,7 @@ const styles = StyleSheet.create({
   },
   viewModeText: {
     ...type.metadata,
+    fontSize: 12,
     color: colors.textMuted,
   },
   viewModeTextActive: {
@@ -1002,7 +986,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     paddingHorizontal: layout.screenPadding,
     paddingTop: spacing.xs,
-    paddingBottom: spacing.xs,
+    paddingBottom: 2,
     gap: spacing.lg,
   },
   filterToggle: {
