@@ -21,6 +21,11 @@ let dismissedArticles = new Set<string>();
 let initialized = false;
 let initPromise: Promise<void> | null = null;
 
+// Current reader state (for sidebar context)
+let currentReaderArticleId: string | null = null;
+export function setCurrentReaderArticle(id: string | null) { currentReaderArticleId = id; }
+export function getCurrentReaderArticle() { return currentReaderArticleId; }
+
 const DISMISSED_KEY = '@petrarca/dismissed_articles';
 
 // Precomputed: article_id -> concept_ids

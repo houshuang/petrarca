@@ -189,6 +189,7 @@ function FeedCard({ article }: { article: Article }) {
 
 function DesktopFeedCard({ article }: { article: Article }) {
   const router = useRouter();
+  const state = getReadingState(article.id);
 
   return (
     <Pressable
@@ -201,9 +202,19 @@ function DesktopFeedCard({ article }: { article: Article }) {
         router.push({ pathname: '/reader', params: { id: article.id } });
       }}
     >
-      <Text style={styles.cardSource}>
-        {article.hostname || 'Article'}
-      </Text>
+      <View style={styles.cardSourceRow}>
+        <Text style={styles.cardSource}>
+          {article.hostname || 'Article'}
+        </Text>
+        {state.depth !== 'unread' && (
+          <View style={styles.cardDepthIndicator}>
+            <View style={[styles.cardDepthDot, { backgroundColor: DEPTH_COLORS[state.depth] }]} />
+            <Text style={[styles.cardDepthLabel, { color: DEPTH_COLORS[state.depth] }]}>
+              {DEPTH_LABELS[state.depth]}
+            </Text>
+          </View>
+        )}
+      </View>
       <Text style={styles.cardTitle}>{getDisplayTitle(article)}</Text>
       {article.one_line_summary && article.one_line_summary !== '[dry run]' && (
         <Text style={styles.cardSummary} numberOfLines={3}>{article.one_line_summary}</Text>
@@ -213,11 +224,26 @@ function DesktopFeedCard({ article }: { article: Article }) {
           {article.topics.slice(0, 3).map(t => (
             <Text key={t} style={styles.cardTag}>{t}</Text>
           ))}
+          <TierBadge readingOrder={article.reading_order || article.exploration_tier} />
+          <NoveltyBadge articleId={article.id} />
         </View>
         {article.estimated_read_minutes ? (
           <Text style={styles.cardTime}>{article.estimated_read_minutes} min</Text>
         ) : null}
       </View>
+      {/* Dedup indicator */}
+      {article.similar_articles && article.similar_articles.length > 0 && (() => {
+        const readSimilar = article.similar_articles!.filter(sa => {
+          const s = getReadingState(sa.id);
+          return s.depth !== 'unread';
+        });
+        if (readSimilar.length === 0) return null;
+        return (
+          <Text style={styles.cardDedupIndicator}>
+            Similar to: {readSimilar[0].title}
+          </Text>
+        );
+      })()}
     </Pressable>
   );
 }
@@ -1190,14 +1216,42 @@ const styles = StyleSheet.create({
       transform: [{ translateY: -1 }],
     } as any : {}),
   },
+  cardSourceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
   cardSource: {
     fontFamily: Platform.OS === 'web' ? "'DM Sans', sans-serif" : 'DMSans-SemiBold',
     fontSize: 10,
     letterSpacing: 0.5,
     textTransform: 'uppercase' as const,
     color: colors.textMuted,
-    marginBottom: 6,
     ...(Platform.OS === 'web' ? { fontWeight: '600' as any } : {}),
+  },
+  cardDepthIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  cardDepthDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  cardDepthLabel: {
+    fontFamily: Platform.OS === 'web' ? "'DM Sans', sans-serif" : 'DMSans',
+    fontSize: 9,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase' as const,
+  },
+  cardDedupIndicator: {
+    fontFamily: Platform.OS === 'web' ? "'EB Garamond', Georgia, serif" : 'EBGaramond-Italic',
+    fontSize: 11,
+    color: colors.warning,
+    marginTop: 8,
+    ...(Platform.OS === 'web' ? { fontStyle: 'italic' as any } : {}),
   },
   cardTitle: {
     fontFamily: Platform.OS === 'web' ? "'EB Garamond', Georgia, serif" : 'EBGaramond-Medium',

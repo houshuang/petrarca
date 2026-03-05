@@ -7,13 +7,14 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
-import { getArticleById, getReadingState, updateReadingState, addSignal, processClaimSignalForConcepts, processImplicitEncounter, processTranscriptForConcepts, getRelatedArticles, getConceptConnections, addVoiceNote, getVoiceNotes, getHighlightBlockIndices, addHighlight, removeHighlight, updateHighlightNote, dismissArticle, getConceptsForArticleWithState, updateConceptState, getConceptState, getConcepts } from '../data/store';
+import { getArticleById, getReadingState, updateReadingState, addSignal, processClaimSignalForConcepts, processImplicitEncounter, processTranscriptForConcepts, getRelatedArticles, getConceptConnections, addVoiceNote, getVoiceNotes, getHighlightBlockIndices, addHighlight, removeHighlight, updateHighlightNote, dismissArticle, getConceptsForArticleWithState, updateConceptState, getConceptState, getConcepts, setCurrentReaderArticle } from '../data/store';
 import { ReadingDepth, VoiceNote, Highlight, Concept, ConceptKnowledgeLevel } from '../data/types';
 import * as Haptics from 'expo-haptics';
 import { logEvent } from '../data/logger';
 import { isSectionValid, parseInlineMarkdown, splitMarkdownBlocks, parseMarkdownBlock } from '../lib/markdown-utils';
 import { transcribeVoiceNote } from '../data/transcription';
 import { triggerResearch, getResearchResultsForArticle } from '../data/research';
+import { queueExploration, getQueueLength } from '../data/exploration-queue';
 import { getDisplayTitle } from '../lib/display-utils';
 import { useIsDesktopWeb } from '../lib/use-responsive';
 import { colors, fonts, type, spacing, layout } from '../design/tokens';
@@ -179,13 +180,14 @@ function ConnectionIndicator({ articleId, claimText }: {
 
 // --- Concept detail sheet (bottom sheet overlay) ---
 
-function ConceptSheet({ concept, currentState, currentArticleId, onClose, onStateChange, onConceptTap }: {
+function ConceptSheet({ concept, currentState, currentArticleId, onClose, onStateChange, onConceptTap, onExplorationQueued }: {
   concept: Concept;
   currentState: ConceptKnowledgeLevel;
   currentArticleId: string;
   onClose: () => void;
   onStateChange: (level: ConceptKnowledgeLevel) => void;
   onConceptTap: (concept: Concept, state: ConceptKnowledgeLevel) => void;
+  onExplorationQueued?: (count: number) => void;
 }) {
   const router = useRouter();
   const allConcepts = getConcepts();
@@ -282,9 +284,15 @@ function ConceptSheet({ concept, currentState, currentArticleId, onClose, onStat
 
         <Pressable
           style={styles.conceptSheetExploreBtn}
-          onPress={() => {
+          onPress={async () => {
             logEvent('concept_explore_tap', { concept_id: concept.id, concept_name: concept.name || concept.text });
-            Alert.alert('Queued', `"${concept.name || concept.text}" added to exploration queue.`);
+            const qLen = await queueExploration(
+              concept.id,
+              concept.name || concept.text || '',
+              currentArticleId,
+            );
+            onExplorationQueued?.(qLen);
+            Alert.alert('Queued', `"${concept.name || concept.text}" added to exploration queue (${qLen} pending).`);
           }}
         >
           <Ionicons name="compass-outline" size={16} color={colors.parchment} />
@@ -336,22 +344,128 @@ function renderInlineMarkdown(text: string): (string | React.ReactElement)[] {
   });
 }
 
+// --- Inline concept highlighting ---
+
+function renderInlineWithConcepts(
+  text: string,
+  conceptHighlights: Array<{ concept: Concept; state: ConceptKnowledgeLevel }>,
+  onConceptTap: (concept: Concept, state: ConceptKnowledgeLevel) => void,
+): (string | React.ReactElement)[] {
+  if (!conceptHighlights || conceptHighlights.length === 0) {
+    return renderInlineMarkdown(text);
+  }
+
+  const segments = parseInlineMarkdown(text);
+  const result: (string | React.ReactElement)[] = [];
+
+  for (let si = 0; si < segments.length; si++) {
+    const seg = segments[si];
+    if (seg.type !== 'text') {
+      // Non-text segments (links, bold, italic, code) — render as usual
+      switch (seg.type) {
+        case 'link':
+          result.push(
+            <Text key={`link-${si}`} style={styles.markdownLink}
+              onPress={() => Linking.openURL(seg.url)}
+              {...(Platform.OS === 'web' ? { accessibilityRole: 'link', href: seg.url, hrefAttrs: { target: '_blank', rel: 'noopener noreferrer' } } as any : {})}
+            >{seg.text}</Text>
+          );
+          break;
+        case 'bold':
+          result.push(<Text key={`bold-${si}`} style={styles.markdownBold}>{seg.text}</Text>);
+          break;
+        case 'italic':
+          result.push(<Text key={`italic-${si}`} style={styles.markdownItalic}>{seg.text}</Text>);
+          break;
+        case 'code':
+          result.push(<Text key={`code-${si}`} style={styles.markdownInlineCode}>{seg.text}</Text>);
+          break;
+        default:
+          result.push((seg as any).text);
+      }
+      continue;
+    }
+
+    // For text segments, scan for concept matches
+    let remaining = seg.text;
+    let partIdx = 0;
+
+    while (remaining.length > 0) {
+      const lower = remaining.toLowerCase();
+      let bestMatch: { concept: Concept; state: ConceptKnowledgeLevel; start: number; length: number; matchText: string } | null = null;
+
+      for (const { concept, state } of conceptHighlights) {
+        const names = [concept.name || concept.text || '', ...(concept.aliases || [])].filter(Boolean);
+        for (const name of names) {
+          if (name.length < 2) continue;
+          const idx = lower.indexOf(name.toLowerCase());
+          if (idx >= 0 && (!bestMatch || name.length > bestMatch.length || (name.length === bestMatch.length && idx < bestMatch.start))) {
+            bestMatch = { concept, state, start: idx, length: name.length, matchText: remaining.slice(idx, idx + name.length) };
+          }
+        }
+      }
+
+      if (!bestMatch) {
+        result.push(remaining);
+        break;
+      }
+
+      // Text before the match
+      if (bestMatch.start > 0) {
+        result.push(remaining.slice(0, bestMatch.start));
+      }
+
+      // The concept match — styled underline
+      const underlineStyle = bestMatch.state === 'unknown'
+        ? styles.conceptUnderlineUnknown
+        : bestMatch.state === 'encountered'
+        ? styles.conceptUnderlineLearning
+        : styles.conceptUnderlineKnown;
+
+      result.push(
+        <Text
+          key={`concept-${si}-${partIdx}`}
+          style={underlineStyle}
+          onPress={() => onConceptTap(bestMatch!.concept, bestMatch!.state)}
+        >
+          {bestMatch.matchText}
+        </Text>
+      );
+
+      remaining = remaining.slice(bestMatch.start + bestMatch.length);
+      partIdx++;
+    }
+  }
+
+  return result;
+}
+
 // --- Simple markdown renderer ---
 
 // Re-export for tests
 export { isSectionValid } from '../lib/markdown-utils';
 
-function MarkdownText({ content, claimHighlights, claimSignals, onClaimTap, highlightedBlocks, onBlockLongPress }: {
+function MarkdownText({ content, claimHighlights, claimSignals, onClaimTap, highlightedBlocks, onBlockLongPress, conceptHighlights, onConceptTap }: {
   content: string;
   claimHighlights?: string[];
   claimSignals?: ClaimSignalState;
   onClaimTap?: (claimIndex: number) => void;
   highlightedBlocks?: Set<number>;
   onBlockLongPress?: (blockIndex: number, text: string) => void;
+  conceptHighlights?: Array<{ concept: Concept; state: ConceptKnowledgeLevel }>;
+  onConceptTap?: (concept: Concept, state: ConceptKnowledgeLevel) => void;
 }) {
   if (!content) return null;
 
   const blocks = splitMarkdownBlocks(content);
+
+  // Helper: render inline with or without concept highlights
+  const renderInline = (text: string) => {
+    if (conceptHighlights && conceptHighlights.length > 0 && onConceptTap) {
+      return renderInlineWithConcepts(text, conceptHighlights, onConceptTap);
+    }
+    return renderInlineMarkdown(text);
+  };
 
   return (
     <View>
@@ -388,7 +502,7 @@ function MarkdownText({ content, claimHighlights, claimSignals, onClaimTap, high
                   <View key={j} style={styles.markdownListItem}>
                     <Text style={styles.markdownBullet}>{'·'}</Text>
                     <Text style={styles.markdownText}>
-                      {renderInlineMarkdown(item)}
+                      {renderInline(item)}
                     </Text>
                   </View>
                 ))}
@@ -408,7 +522,7 @@ function MarkdownText({ content, claimHighlights, claimSignals, onClaimTap, high
                   <View key={j} style={styles.markdownListItem}>
                     <Text style={styles.markdownOrderedBullet}>{j + 1}.</Text>
                     <Text style={styles.markdownText}>
-                      {renderInlineMarkdown(item)}
+                      {renderInline(item)}
                     </Text>
                   </View>
                 ))}
@@ -430,7 +544,7 @@ function MarkdownText({ content, claimHighlights, claimSignals, onClaimTap, high
                 style={[styles.markdownBlockquote, isHighlighted && styles.paragraphHighlight]}
               >
                 <Text style={styles.markdownBlockquoteText}>
-                  {renderInlineMarkdown(block.content)}
+                  {renderInline(block.content)}
                 </Text>
               </Pressable>
             );
@@ -481,7 +595,7 @@ function MarkdownText({ content, claimHighlights, claimSignals, onClaimTap, high
                     style={isHighlighted ? styles.paragraphHighlight : undefined}
                   >
                     <Text style={[styles.markdownText, highlightStyle]}>
-                      {renderInlineMarkdown(block.content)}
+                      {renderInline(block.content)}
                     </Text>
                   </Pressable>
                 );
@@ -495,7 +609,7 @@ function MarkdownText({ content, claimHighlights, claimSignals, onClaimTap, high
                 style={isHighlighted ? styles.paragraphHighlight : undefined}
               >
                 <Text style={styles.markdownText}>
-                  {renderInlineMarkdown(block.content)}
+                  {renderInline(block.content)}
                 </Text>
               </Pressable>
             );
@@ -533,11 +647,13 @@ function findMatchingClaim(paragraph: string, claims: string[]): number {
 
 // --- Section card (expandable) ---
 
-function SectionCard({ section, index, expanded, onToggle }: {
+function SectionCard({ section, index, expanded, onToggle, conceptHighlights, onConceptTap }: {
   section: { heading: string; content: string; summary: string; key_claims: string[] };
   index: number;
   expanded: boolean;
   onToggle: () => void;
+  conceptHighlights?: Array<{ concept: Concept; state: ConceptKnowledgeLevel }>;
+  onConceptTap?: (concept: Concept, state: ConceptKnowledgeLevel) => void;
 }) {
   return (
     <View style={styles.sectionCard}>
@@ -563,7 +679,7 @@ function SectionCard({ section, index, expanded, onToggle }: {
               ))}
             </View>
           )}
-          <MarkdownText content={section.content} />
+          <MarkdownText content={section.content} conceptHighlights={conceptHighlights} onConceptTap={onConceptTap} />
         </View>
       )}
     </View>
@@ -807,6 +923,101 @@ function ResearchBanner({ transcript, articleId, articleTitle, articleSummary, c
   );
 }
 
+// --- Concept Map Overlay ---
+
+function ConceptMapOverlay({ articleTitle, concepts, onConceptTap, onClose }: {
+  articleTitle: string;
+  concepts: Array<{ concept: Concept; state: ConceptKnowledgeLevel }>;
+  onConceptTap: (concept: Concept, state: ConceptKnowledgeLevel) => void;
+  onClose: () => void;
+}) {
+  const allConcepts = getConcepts();
+  const conceptIds = new Set(concepts.map(c => c.concept.id));
+  const RADIUS = 130;
+  const CENTER_X = 160;
+  const CENTER_Y = 160;
+
+  // Build relationship lines between concepts in this article
+  const lines: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
+  const positions = concepts.map((_, i) => {
+    const angle = (2 * Math.PI * i) / concepts.length - Math.PI / 2;
+    return { x: CENTER_X + RADIUS * Math.cos(angle), y: CENTER_Y + RADIUS * Math.sin(angle) };
+  });
+
+  concepts.forEach(({ concept }, i) => {
+    for (const relId of concept.related_concepts || []) {
+      const j = concepts.findIndex(c => c.concept.id === relId);
+      if (j > i && j >= 0) {
+        lines.push({ x1: positions[i].x, y1: positions[i].y, x2: positions[j].x, y2: positions[j].y });
+      }
+    }
+  });
+
+  const stateColor = (state: ConceptKnowledgeLevel) =>
+    state === 'unknown' ? colors.rubric : state === 'encountered' ? colors.claimNew : colors.textMuted;
+
+  return (
+    <Pressable style={styles.conceptMapBackdrop} onPress={onClose}>
+      <Pressable style={styles.conceptMapContainer} onPress={e => e.stopPropagation()}>
+        <View style={styles.conceptMapCloseRow}>
+          <Text style={styles.conceptMapTitle}>Concept Map</Text>
+          <Pressable onPress={onClose}>
+            <Ionicons name="close" size={22} color={colors.textMuted} />
+          </Pressable>
+        </View>
+
+        <View style={styles.conceptMapArea}>
+          {/* Center: article title */}
+          <View style={[styles.conceptMapCenter, { left: CENTER_X - 60, top: CENTER_Y - 20 }]}>
+            <Text style={styles.conceptMapCenterText} numberOfLines={2}>{articleTitle}</Text>
+          </View>
+
+          {/* Relationship lines */}
+          {lines.map((line, i) => {
+            const dx = line.x2 - line.x1;
+            const dy = line.y2 - line.y1;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+            return (
+              <View
+                key={`line-${i}`}
+                style={[styles.conceptMapLine, {
+                  left: line.x1,
+                  top: line.y1,
+                  width: length,
+                  transform: [{ rotate: `${angle}deg` }],
+                  transformOrigin: '0 0',
+                }] as any}
+              />
+            );
+          })}
+
+          {/* Concept chips */}
+          {concepts.map(({ concept, state }, i) => {
+            const pos = positions[i];
+            return (
+              <Pressable
+                key={concept.id}
+                style={[styles.conceptMapChip, {
+                  left: pos.x - 40,
+                  top: pos.y - 14,
+                  borderColor: stateColor(state),
+                }]}
+                onPress={() => onConceptTap(concept, state)}
+              >
+                <View style={[styles.conceptMapChipDot, { backgroundColor: stateColor(state) }]} />
+                <Text style={styles.conceptMapChipText} numberOfLines={1}>
+                  {concept.name || concept.text}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </Pressable>
+    </Pressable>
+  );
+}
+
 // ============================================================
 // Main Reader Screen
 // ============================================================
@@ -829,6 +1040,8 @@ export default function ReaderScreen() {
   const [articleResearchCount, setArticleResearchCount] = useState(0);
   const [showRestoredIndicator, setShowRestoredIndicator] = useState(false);
   const [showDismissMenu, setShowDismissMenu] = useState(false);
+  const [explorationQueueCount, setExplorationQueueCount] = useState(0);
+  const [showConceptMap, setShowConceptMap] = useState(false);
   const restoredIndicatorOpacity = useRef(new Animated.Value(1)).current;
 
   // --- Refs ---
@@ -853,6 +1066,12 @@ export default function ReaderScreen() {
   const pauseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastVelocityLog = useRef(Date.now());
   const implicitEncounterFired = useRef(false);
+
+  // --- Track current reader article for sidebar ---
+  useEffect(() => {
+    setCurrentReaderArticle(article?.id || null);
+    return () => setCurrentReaderArticle(null);
+  }, [article?.id]);
 
   // --- Initialize reading state ---
   useEffect(() => {
@@ -1171,10 +1390,16 @@ export default function ReaderScreen() {
       const completed = results.filter(r => r.status === 'completed').length;
       setArticleResearchCount(completed);
     });
+    getQueueLength().then(setExplorationQueueCount);
   }, [article?.id]);
 
   // --- Computed values ---
   const totalClaims = article?.key_claims.length || 0;
+  const articleConceptHighlights = article ? getConceptsForArticleWithState(article.id) : [];
+  const handleConceptTapInline = useCallback((concept: Concept, state: ConceptKnowledgeLevel) => {
+    logEvent('concept_inline_tap', { article_id: article?.id, concept_id: concept.id, concept_name: concept.name || concept.text });
+    setSelectedConcept({ concept, state });
+  }, [article]);
 
   // --- Error state ---
   if (!article) {
@@ -1212,6 +1437,12 @@ export default function ReaderScreen() {
             onTranscribed={(transcript, noteId) => setResearchBanner({ transcript, noteId })}
           />
         )}
+        {explorationQueueCount > 0 && (
+          <View style={styles.explorationBadge}>
+            <Ionicons name="compass-outline" size={14} color={colors.rubric} />
+            <Text style={styles.explorationBadgeText}>{explorationQueueCount}</Text>
+          </View>
+        )}
         {articleResearchCount > 0 && (
           <Pressable
             style={styles.researchBadge}
@@ -1222,6 +1453,14 @@ export default function ReaderScreen() {
           >
             <Ionicons name="flask" size={14} color={colors.rubric} />
             <Text style={styles.researchBadgeText}>{articleResearchCount}</Text>
+          </Pressable>
+        )}
+        {articleConceptHighlights.length > 0 && (
+          <Pressable onPress={() => {
+            setShowConceptMap(true);
+            logEvent('concept_map_open', { article_id: article.id, concept_count: articleConceptHighlights.length });
+          }}>
+            <Ionicons name="git-network-outline" size={20} color={colors.textMuted} />
           </Pressable>
         )}
         <Pressable onPress={() => {
@@ -1358,7 +1597,11 @@ export default function ReaderScreen() {
           </View>
 
           {/* Summary */}
-          <MarkdownText content={stripLeadingTitle(article.full_summary, article.title)} />
+          <MarkdownText
+            content={stripLeadingTitle(article.full_summary, article.title)}
+            conceptHighlights={articleConceptHighlights}
+            onConceptTap={handleConceptTapInline}
+          />
 
           {/* Dedup banner */}
           {article.similar_articles && article.similar_articles.length > 0 && (() => {
@@ -1449,6 +1692,8 @@ export default function ReaderScreen() {
                 index={i}
                 expanded={expandedSections.has(i)}
                 onToggle={() => toggleSection(i)}
+                conceptHighlights={articleConceptHighlights}
+                onConceptTap={handleConceptTapInline}
               />
             ))}
           </View>
@@ -1474,6 +1719,8 @@ export default function ReaderScreen() {
                   onClaimTap={handleInlineClaimTap}
                   highlightedBlocks={highlightedBlocks}
                   onBlockLongPress={handleBlockLongPress}
+                  conceptHighlights={articleConceptHighlights}
+                  onConceptTap={handleConceptTapInline}
                 />
               </View>
             ))
@@ -1485,6 +1732,8 @@ export default function ReaderScreen() {
               onClaimTap={handleInlineClaimTap}
               highlightedBlocks={highlightedBlocks}
               onBlockLongPress={handleBlockLongPress}
+              conceptHighlights={articleConceptHighlights}
+              onConceptTap={handleConceptTapInline}
             />
           )}
 
@@ -1559,6 +1808,19 @@ export default function ReaderScreen() {
         />
       )}
 
+      {/* Concept map overlay */}
+      {showConceptMap && article && (
+        <ConceptMapOverlay
+          articleTitle={article.title}
+          concepts={articleConceptHighlights}
+          onConceptTap={(concept, state) => {
+            setShowConceptMap(false);
+            setSelectedConcept({ concept, state });
+          }}
+          onClose={() => setShowConceptMap(false)}
+        />
+      )}
+
       {/* Concept detail sheet */}
       {selectedConcept && article && (
         <ConceptSheet
@@ -1573,6 +1835,7 @@ export default function ReaderScreen() {
           onConceptTap={(concept, state) => {
             setSelectedConcept({ concept, state });
           }}
+          onExplorationQueued={setExplorationQueueCount}
         />
       )}
 
@@ -1880,6 +2143,27 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3, borderLeftColor: colors.rubric,
   },
 
+  // Concept inline underlines
+  conceptUnderlineUnknown: {
+    textDecorationLine: 'underline' as const,
+    textDecorationStyle: 'dotted' as const,
+    textDecorationColor: colors.rubric,
+    color: colors.textBody,
+  },
+  conceptUnderlineLearning: {
+    textDecorationLine: 'underline' as const,
+    textDecorationStyle: 'solid' as const,
+    textDecorationColor: colors.claimNew,
+    color: colors.textBody,
+  },
+  conceptUnderlineKnown: {
+    textDecorationLine: 'underline' as const,
+    textDecorationStyle: 'dotted' as const,
+    textDecorationColor: colors.textMuted,
+    color: colors.textBody,
+    opacity: 0.8,
+  },
+
   // Floating signal pill
   pillBackdrop: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
@@ -2152,6 +2436,23 @@ const styles = StyleSheet.create({
   claimResearchText: { fontFamily: fonts.body, color: colors.rubric, fontSize: 11 },
 
   // Research results badge in top bar
+  explorationBadge: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 3,
+    backgroundColor: colors.parchmentDark,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.rule,
+  },
+  explorationBadgeText: {
+    fontFamily: fonts.body,
+    color: colors.rubric,
+    fontSize: 11,
+    fontWeight: '600' as const,
+  },
   researchBadge: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
@@ -2391,5 +2692,82 @@ const styles = StyleSheet.create({
     color: colors.parchment,
     fontSize: 14,
     fontWeight: '500' as const,
+  },
+
+  // Concept map overlay
+  conceptMapBackdrop: {
+    position: 'absolute' as const,
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    zIndex: 300,
+  },
+  conceptMapContainer: {
+    backgroundColor: colors.parchment,
+    borderRadius: 8,
+    padding: 20,
+    width: 340,
+    maxHeight: '80%' as any,
+    borderWidth: 1,
+    borderColor: colors.rule,
+  },
+  conceptMapCloseRow: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    marginBottom: 16,
+  },
+  conceptMapTitle: {
+    fontFamily: fonts.bodyMedium,
+    color: colors.ink,
+    fontSize: 16,
+    ...(Platform.OS === 'web' ? { fontWeight: '600' } : {}),
+  },
+  conceptMapArea: {
+    width: 320,
+    height: 320,
+    position: 'relative' as const,
+  },
+  conceptMapCenter: {
+    position: 'absolute' as const,
+    width: 120,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  conceptMapCenterText: {
+    fontFamily: fonts.reading,
+    color: colors.textSecondary,
+    fontSize: 12,
+    textAlign: 'center' as const,
+    ...(Platform.OS === 'web' ? { fontStyle: 'italic' as any } : {}),
+  },
+  conceptMapLine: {
+    position: 'absolute' as const,
+    height: 1,
+    backgroundColor: colors.rule,
+  },
+  conceptMapChip: {
+    position: 'absolute' as const,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 4,
+    backgroundColor: colors.parchmentDark,
+    borderWidth: 1,
+    maxWidth: 90,
+  },
+  conceptMapChipDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+  },
+  conceptMapChipText: {
+    fontFamily: fonts.body,
+    fontSize: 10,
+    color: colors.ink,
+    flex: 1,
   },
 });

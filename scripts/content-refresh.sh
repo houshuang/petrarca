@@ -53,6 +53,11 @@ log "Step 3b: Validating articles..."
 python3 "$SCRIPT_DIR/validate_articles.py" --fix \
     || log "Step 3b FAILED: validate_articles.py"
 
+# Step 3c: Extract entity concepts for new articles (incremental)
+log "Step 3c: Extracting entity concepts for new articles..."
+python3 "$SCRIPT_DIR/extract_entity_concepts.py" --incremental \
+    || log "Step 3c FAILED: extract_entity_concepts.py"
+
 # Step 4: Generate syntheses
 if [ -f "$SCRIPT_DIR/generate_syntheses.py" ]; then
     log "Step 4: Generating syntheses..."

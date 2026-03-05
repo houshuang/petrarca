@@ -623,6 +623,97 @@ def run_ingest_book(book_path: str, chapter: int | None, request_id: str):
     result_path.write_text(json.dumps(result, indent=2))
 
 
+def build_explore_batch_prompt(concepts: list[dict]) -> str:
+    concept_lines = '\n'.join(
+        f'- "{c["name"]}" (context: {c.get("context_article_title", "N/A")})'
+        for c in concepts
+    )
+    return f"""You are a research assistant. A reader wants to explore these concepts further. For each concept, find 2-3 high-quality URLs from diverse sources (academic, journalism, essays, Wikipedia).
+
+CONCEPTS TO EXPLORE:
+{concept_lines}
+
+For each concept, find articles that would help a curious reader understand it better. Look for diverse perspectives and reliable sources.
+
+Return ONLY valid JSON:
+{{
+  "results": [
+    {{
+      "concept_name": "the concept name",
+      "urls": [
+        {{
+          "url": "https://...",
+          "title": "Article title",
+          "description": "Why this is worth reading"
+        }}
+      ]
+    }}
+  ]
+}}"""
+
+
+def run_explore_batch(request_id: str, concepts: list[dict]):
+    result_path = RESULTS_DIR / f'{request_id}.json'
+    result = {
+        'id': request_id,
+        'type': 'explore_batch',
+        'status': 'processing',
+        'concept_count': len(concepts),
+        'requested_at': int(time.time() * 1000),
+    }
+    result_path.write_text(json.dumps(result, indent=2))
+
+    try:
+        prompt = build_explore_batch_prompt(concepts)
+        proc = subprocess.run(
+            ['claude', '-p', prompt],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+
+        if proc.returncode != 0:
+            result['status'] = 'failed'
+            result['error'] = f'claude exited with code {proc.returncode}: {proc.stderr[:500]}'
+        else:
+            output = proc.stdout.strip()
+            json_start = output.find('{')
+            json_end = output.rfind('}') + 1
+            if json_start >= 0 and json_end > json_start:
+                parsed = json.loads(output[json_start:json_end])
+                result['status'] = 'completed'
+                result['completed_at'] = int(time.time() * 1000)
+                result['results'] = parsed.get('results', [])
+
+                # Auto-import top 2 URLs per concept
+                for concept_result in result.get('results', []):
+                    for url_entry in concept_result.get('urls', [])[:2]:
+                        url = url_entry.get('url', '')
+                        if url:
+                            print(f'[explore-batch] Auto-importing: {url[:80]}', flush=True)
+                            threading.Thread(
+                                target=run_ingest,
+                                args=(url, url_entry.get('title', ''), '', '', '', 'explore-batch'),
+                                daemon=True,
+                            ).start()
+            else:
+                result['status'] = 'failed'
+                result['error'] = 'Could not parse JSON from claude output'
+
+    except subprocess.TimeoutExpired:
+        result['status'] = 'failed'
+        result['error'] = 'Explore batch timed out after 5 minutes'
+    except json.JSONDecodeError as e:
+        result['status'] = 'failed'
+        result['error'] = f'JSON parse error: {e}'
+    except Exception as e:
+        result['status'] = 'failed'
+        result['error'] = str(e)
+
+    result_path.write_text(json.dumps(result, indent=2))
+    print(f'[explore-batch] {request_id} -> {result["status"]} ({len(concepts)} concepts)', flush=True)
+
+
 class ResearchHandler(BaseHTTPRequestHandler):
     def _send_cors_headers(self):
         self.send_header('Access-Control-Allow-Origin', '*')
@@ -633,6 +724,42 @@ class ResearchHandler(BaseHTTPRequestHandler):
         self.send_response(204)
         self._send_cors_headers()
         self.end_headers()
+
+    def _handle_explore_batch(self):
+        content_length = int(self.headers.get('Content-Length', 0))
+        if not content_length:
+            self.send_response(400)
+            self._send_cors_headers()
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': 'Empty request body'}).encode())
+            return
+
+        body = json.loads(self.rfile.read(content_length))
+        concepts = body.get('concepts', [])
+        if not concepts:
+            self.send_response(400)
+            self._send_cors_headers()
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': 'No concepts provided'}).encode())
+            return
+
+        request_id = f'expb_{int(time.time())}'
+        print(f'[explore-batch] Received {len(concepts)} concepts', flush=True)
+
+        thread = threading.Thread(
+            target=run_explore_batch,
+            args=(request_id, concepts),
+            daemon=True,
+        )
+        thread.start()
+
+        self.send_response(202)
+        self._send_cors_headers()
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({'id': request_id, 'status': 'processing', 'concept_count': len(concepts)}).encode())
 
     def _handle_ingest_email(self):
         """Accept raw email from Cloudflare Worker, process server-side."""
@@ -777,6 +904,9 @@ class ResearchHandler(BaseHTTPRequestHandler):
             return self._handle_ingest_email()
         if self.path == '/ingest-book':
             return self._handle_ingest_book()
+
+        if self.path == '/research/explore-batch':
+            return self._handle_explore_batch()
 
         if self.path not in ('/research', '/research/explore'):
             self.send_error(404)

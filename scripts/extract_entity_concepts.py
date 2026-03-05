@@ -240,10 +240,27 @@ def main():
     parser.add_argument("--test", type=int, help="Test with N articles only")
     parser.add_argument("--dry-run", action="store_true", help="Show prompts without calling LLM")
     parser.add_argument("--no-relationships", action="store_true", help="Skip relationship extraction")
+    parser.add_argument("--incremental", action="store_true", help="Only process articles not already covered in concepts.json")
     args = parser.parse_args()
 
     articles = load_articles()
     print(f"Loaded {len(articles)} articles", file=sys.stderr)
+
+    # Load existing concepts for incremental mode
+    existing_concepts = []
+    covered_article_ids = set()
+    if args.incremental and os.path.exists(CONCEPTS_PATH):
+        with open(CONCEPTS_PATH) as f:
+            existing_concepts = json.load(f)
+        # Only treat as valid entity concepts if they have 'name' field (not old sentence-style)
+        if existing_concepts and isinstance(existing_concepts[0], dict) and existing_concepts[0].get("name"):
+            for c in existing_concepts:
+                for aid in c.get("source_article_ids", []):
+                    covered_article_ids.add(aid)
+            print(f"  Incremental mode: {len(existing_concepts)} existing concepts covering {len(covered_article_ids)} articles", file=sys.stderr)
+        else:
+            print(f"  Incremental mode: existing concepts are old-style, will extract all", file=sys.stderr)
+            existing_concepts = []
 
     if args.test:
         articles = articles[: args.test]
@@ -252,6 +269,14 @@ def main():
     # Filter to articles that have content
     articles = [a for a in articles if a.get("key_claims") or a.get("full_summary")]
     print(f"  {len(articles)} articles with content", file=sys.stderr)
+
+    # In incremental mode, skip already-covered articles
+    if args.incremental and covered_article_ids:
+        articles = [a for a in articles if a["id"] not in covered_article_ids]
+        print(f"  After filtering covered articles: {len(articles)} new articles to process", file=sys.stderr)
+        if len(articles) == 0:
+            print(f"  No new articles to process, keeping existing concepts.", file=sys.stderr)
+            return
 
     # Backup old concepts
     if os.path.exists(CONCEPTS_PATH):
@@ -315,6 +340,12 @@ def main():
     print(f"\n  Deduplicating {len(all_concepts)} raw concepts...", file=sys.stderr)
     all_concepts = deduplicate_concepts(all_concepts)
     print(f"  After dedup: {len(all_concepts)} concepts", file=sys.stderr)
+
+    # In incremental mode, merge new concepts with existing ones
+    if args.incremental and existing_concepts:
+        print(f"  Merging {len(all_concepts)} new concepts with {len(existing_concepts)} existing...", file=sys.stderr)
+        all_concepts = deduplicate_concepts(existing_concepts + all_concepts)
+        print(f"  After merge: {len(all_concepts)} total concepts", file=sys.stderr)
 
     # Extract relationships
     if not args.no_relationships and len(all_concepts) > 5:
