@@ -266,7 +266,7 @@ export function getRelatedArticles(articleId: string, limit: number = 3): Array<
       }
       const entry = scores.get(relatedArticleId)!;
       entry.count++;
-      entry.concepts.push(concept.text);
+      entry.concepts.push(conceptName(concept));
     }
   }
 
@@ -360,7 +360,7 @@ export function getStats() {
     return s && s.depth !== 'unread';
   });
 
-  const depthCounts = { summary: 0, claims: 0, sections: 0, full: 0 };
+  const depthCounts = { summary: 0, claims: 0, concepts: 0, sections: 0, full: 0 };
   let totalTimeMs = 0;
   for (const [, state] of readingStates) {
     if (state.depth !== 'unread') {
@@ -448,6 +448,49 @@ function contentWords(text: string): Set<string> {
   return new Set(words.filter(w => w.length > 2 && !STOP_WORDS.has(w)));
 }
 
+/** Get the display name for a concept (entity-style name, or fallback to old text) */
+function conceptName(c: Concept): string {
+  return c.name || c.text || '';
+}
+
+/** Check if a concept's name or aliases appear in a text string (case-insensitive substring match) */
+function conceptMatchesText(concept: Concept, text: string): boolean {
+  const lower = text.toLowerCase();
+  const name = conceptName(concept).toLowerCase();
+  if (name && lower.includes(name)) return true;
+  for (const alias of concept.aliases || []) {
+    if (alias && lower.includes(alias.toLowerCase())) return true;
+  }
+  return false;
+}
+
+/**
+ * Get all concepts for an article with their knowledge state, sorted by state.
+ * Unknown concepts first (most interesting), then encountered, then known.
+ */
+export function getConceptsForArticleWithState(articleId: string): Array<{ concept: Concept; state: ConceptKnowledgeLevel }> {
+  const conceptIds = articleConceptIndex.get(articleId) || [];
+  const stateOrder: Record<ConceptKnowledgeLevel, number> = { unknown: 0, encountered: 1, known: 2 };
+
+  return conceptIds
+    .map(cid => {
+      const concept = concepts.find(c => c.id === cid);
+      if (!concept) return null;
+      const state = conceptStates.get(cid);
+      return { concept, state: state?.state || 'unknown' as ConceptKnowledgeLevel };
+    })
+    .filter((x): x is { concept: Concept; state: ConceptKnowledgeLevel } => x !== null)
+    .sort((a, b) => stateOrder[a.state] - stateOrder[b.state]);
+}
+
+/** Find concepts whose name/alias appears in the given text (for inline highlighting) */
+export function findConceptsInText(articleId: string, text: string): Concept[] {
+  const conceptIds = articleConceptIndex.get(articleId) || [];
+  return conceptIds
+    .map(cid => concepts.find(c => c.id === cid))
+    .filter((c): c is Concept => c !== null && c !== undefined && conceptMatchesText(c, text));
+}
+
 /**
  * Implicit encounter: when user spends meaningful time reading an article zone,
  * mark all "unknown" concepts for this article as "encountered".
@@ -470,24 +513,31 @@ export function processImplicitEncounter(articleId: string): string[] {
 
 export function processClaimSignalForConcepts(articleId: string, claimText: string, signal: string) {
   const articleConcepts = articleConceptIndex.get(articleId) || [];
-  const claimContent = contentWords(claimText);
 
   for (const cid of articleConcepts) {
     const concept = concepts.find(c => c.id === cid);
     if (!concept) continue;
 
-    const conceptContent = contentWords(concept.text);
-    if (conceptContent.size === 0) continue;
-
-    const overlap = [...conceptContent].filter(w => claimContent.has(w)).length;
-    const overlapRatio = overlap / conceptContent.size;
-
-    // Lower threshold since we're matching content words only (stop words removed)
-    if (overlapRatio > 0.3) {
+    // Entity-style: check if concept name/alias appears in claim text
+    if (conceptMatchesText(concept, claimText)) {
       if (signal === 'knew_it') {
         updateConceptState(cid, 'known');
       } else if (signal === 'interesting') {
         updateConceptState(cid, 'encountered');
+      }
+      continue;
+    }
+
+    // Fallback: word overlap for concepts without a short name (legacy data)
+    const name = conceptName(concept);
+    if (name.split(/\s+/).length > 6) {
+      const conceptContent = contentWords(name);
+      if (conceptContent.size === 0) continue;
+      const claimContent = contentWords(claimText);
+      const overlap = [...conceptContent].filter(w => claimContent.has(w)).length;
+      if (overlap / conceptContent.size > 0.3) {
+        if (signal === 'knew_it') updateConceptState(cid, 'known');
+        else if (signal === 'interesting') updateConceptState(cid, 'encountered');
       }
     }
   }
@@ -499,20 +549,30 @@ export function processClaimSignalForConcepts(articleId: string, claimText: stri
  */
 export function processTranscriptForConcepts(articleId: string, transcript: string, voiceNoteId: string): string[] {
   const articleConcepts = articleConceptIndex.get(articleId) || [];
-  const transcriptContent = contentWords(transcript);
   const matched: string[] = [];
 
   for (const cid of articleConcepts) {
     const concept = concepts.find(c => c.id === cid);
     if (!concept) continue;
 
-    const conceptContent = contentWords(concept.text);
-    if (conceptContent.size === 0) continue;
+    // Entity-style: check if concept name appears in transcript
+    const nameMatches = conceptMatchesText(concept, transcript);
 
-    const overlap = [...conceptContent].filter(w => transcriptContent.has(w)).length;
-    const overlapRatio = overlap / conceptContent.size;
+    // Fallback: word overlap for legacy long-form concepts
+    let overlapMatches = false;
+    if (!nameMatches) {
+      const name = conceptName(concept);
+      if (name.split(/\s+/).length > 6) {
+        const conceptContent = contentWords(name);
+        if (conceptContent.size > 0) {
+          const transcriptContent = contentWords(transcript);
+          const overlap = [...conceptContent].filter(w => transcriptContent.has(w)).length;
+          overlapMatches = overlap / conceptContent.size > 0.2;
+        }
+      }
+    }
 
-    if (overlapRatio > 0.2) {
+    if (nameMatches || overlapMatches) {
       updateConceptState(cid, 'encountered');
 
       // Add note to review, deduplicating by voice_note_id
@@ -802,9 +862,6 @@ export function getMatchingClaims(conceptId: string, limit: number = 2): Array<{
   const concept = concepts.find(c => c.id === conceptId);
   if (!concept) return [];
 
-  const conceptContent = contentWords(concept.text);
-  if (conceptContent.size === 0) return [];
-
   const scored: Array<{ claim: string; articleTitle: string; articleId: string; score: number }> = [];
 
   for (const aid of concept.source_article_ids) {
@@ -812,6 +869,15 @@ export function getMatchingClaims(conceptId: string, limit: number = 2): Array<{
     if (!article) continue;
 
     for (const claim of article.key_claims) {
+      // Entity-style: check if concept name appears in the claim
+      if (conceptMatchesText(concept, claim)) {
+        scored.push({ claim, articleTitle: article.title, articleId: article.id, score: 1.0 });
+        continue;
+      }
+      // Fallback: word overlap
+      const cName = conceptName(concept);
+      const conceptContent = contentWords(cName);
+      if (conceptContent.size === 0) continue;
       const claimContent = contentWords(claim);
       const overlap = [...conceptContent].filter(w => claimContent.has(w)).length;
       const overlapRatio = overlap / conceptContent.size;
@@ -835,8 +901,7 @@ export function getConceptConnections(articleId: string, claimText: string): {
   otherArticles: Array<{ id: string; title: string }>;
 } | null {
   const articleConcepts = articleConceptIndex.get(articleId) || [];
-  const claimContent = contentWords(claimText);
-  if (claimContent.size === 0) return null;
+  if (!claimText) return null;
 
   let bestMatch: { concept: Concept; otherArticles: Array<{ id: string; title: string }>; score: number } | null = null;
 
@@ -847,12 +912,20 @@ export function getConceptConnections(articleId: string, claimText: string): {
     const concept = concepts.find(c => c.id === cid);
     if (!concept) continue;
 
-    const conceptContent = contentWords(concept.text);
-    if (conceptContent.size === 0) continue;
-
-    const overlap = [...conceptContent].filter(w => claimContent.has(w)).length;
-    const overlapRatio = overlap / conceptContent.size;
-    if (overlapRatio <= 0.3) continue;
+    // Entity-style: check if concept name appears in the text
+    let score = 0;
+    if (conceptMatchesText(concept, claimText)) {
+      score = 1.0;
+    } else {
+      // Fallback: word overlap for legacy concepts
+      const cName = conceptName(concept);
+      const conceptContent = contentWords(cName);
+      if (conceptContent.size === 0) continue;
+      const claimContent = contentWords(claimText);
+      const overlap = [...conceptContent].filter(w => claimContent.has(w)).length;
+      score = overlap / conceptContent.size;
+      if (score <= 0.3) continue;
+    }
 
     const otherArticles = concept.source_article_ids
       .filter(aid => aid !== articleId)
@@ -864,8 +937,8 @@ export function getConceptConnections(articleId: string, claimText: string): {
 
     if (otherArticles.length === 0) continue;
 
-    if (!bestMatch || overlapRatio > bestMatch.score) {
-      bestMatch = { concept, otherArticles, score: overlapRatio };
+    if (!bestMatch || score > bestMatch.score) {
+      bestMatch = { concept, otherArticles, score };
     }
   }
 

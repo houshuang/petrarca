@@ -44,6 +44,7 @@
 | 2026-03-04 | — | Book Reader (Mode B): full implementation — types, store, content-sync, book-reader.tsx, library shelf, ingestion pipeline, server endpoint, book landing page, context restoration, color-coded cross-book connections. Plus research: Kindle integration, innovative reading UX, 6-week walkthrough simulation |
 | 2026-03-04 | — | Book Reader UX polish: chapter transition cards, personal thread in briefings, section mini-map footer, session stats, book completion experience, pipeline enhancements (relationship classification, topic/thesis extraction, key term evolution tracking, books manifest generation) |
 | 2026-03-04 | — | Book Reader Session 3: adaptive depth (concept familiarity → skip-to-claims), Socratic reflection prompts, "What you bring" briefing cards, key term familiarity badges, suggested next section in shelf, engagement stats on landing page, enhanced feed book cards |
+| 2026-03-05 | — | Concept-centric reader: entity-style concepts (120 named entities replacing 781 sentence-concepts), concept chips zone, ConceptSheet bottom sheet, full article zone rendering fix (sections instead of raw markdown), entity extraction script |
 
 **Deployed**: `exp://alifstian.duckdns.org:8082` (native), `http://alifstian.duckdns.org:8084` (web)
 
@@ -90,9 +91,9 @@ explore_topic.py → subtopics + URLs → import_url.py → articles with explor
 ### Key Types (`app/data/types.ts`)
 - `Article`: id, title, author, source_url, hostname, date, content_markdown, sections[], one_line_summary, full_summary, key_claims[], topics[], estimated_read_minutes, content_type, word_count, sources[], similar_articles?, exploration_tag?, parent_id?
 - `ArticleSection`: heading, content, summary, key_claims[]
-- `ReadingState`: article_id, depth (unread→summary→claims→sections→full), current_section_index, time_spent_ms
+- `ReadingState`: article_id, depth (unread→summary→concepts→sections→full), current_section_index, time_spent_ms
 - `UserSignal`: article_id, signal (interesting|knew_it|deep_dive|not_relevant|save), timestamp, depth
-- `Concept`: id, text, topic, source_article_ids[]
+- `Concept`: id, name, description, text? (deprecated), topic, source_article_ids[], aliases?[], related_concepts?[]
 - `Highlight`: id, article_id, block_index, text, highlighted_at, zone, note?
 - `TopicSynthesis`: topic, article_ids[], synthesis_text, generated_at
 - `ConceptState`: concept_id, state (unknown|encountered|known), last_seen, signal_count
@@ -118,11 +119,19 @@ explore_topic.py → subtopics + URLs → import_url.py → articles with explor
 - Generates: sections[], one_line_summary, full_summary, key_claims[], topics[], content_type, estimated_read_minutes
 - One `claude -p` call per article with structured JSON prompt
 
-**Concept extraction** (`--concepts-only` flag):
+**Concept extraction** (two approaches):
+
+*Legacy (`--concepts-only` flag in `build_articles.py`)*:
 - Batches of 5 articles sent to LLM
-- Prompt asks for concepts: things a reader learns, frameworks, findings, techniques
-- Cross-batch deduplication via word overlap (content words only, >60% overlap = duplicate)
-- Output: `data/concepts.json` with 69 concepts across 39 topics, 8 cross-article concepts
+- Sentence-level concepts — deprecated, replaced by entity extraction
+
+*Entity extraction (`scripts/extract_entity_concepts.py`)*:
+- Batches of 5 articles sent to Anthropic API (Claude Sonnet)
+- Prompt asks for named entities: people, places, events, theories, techniques (1-6 word noun phrases)
+- Each entity: name, description, topic, aliases, source_article_ids
+- Cross-batch deduplication via name/alias substring matching
+- Second pass extracts `related_concepts` relationships
+- Output: `data/concepts.json` with 120 entity-style concepts, 77 with relationships
 
 **CLI flags**:
 - `--source twitter|readwise|all`
@@ -132,7 +141,7 @@ explore_topic.py → subtopics + URLs → import_url.py → articles with explor
 - `--limit N` (max articles)
 - `--incremental` (skip URLs already in articles.json)
 
-**Current output**: 205 articles (195 Sicily exploration + 10 original), 781 concepts, 199 cross-article connections
+**Current output**: 205 articles (195 Sicily exploration + 10 original), 120 entity-style concepts (replacing 781 sentence-concepts), 77 cross-concept relationships
 
 **Exploration pipeline** (`explore_topic.py` → `import_url.py`):
 - `explore_topic.py` generates 12-15 subtopics with URLs via `claude -p`, organized into foundational/intermediate/deep tiers
@@ -147,9 +156,9 @@ explore_topic.py → subtopics + URLs → import_url.py → articles with explor
 
 **Hypothesis**: Continuous vertical scrolling through depth levels produces deeper reading than discrete tabs, because removing the "switch tab" decision reduces friction.
 
-**Implementation** (`reader.tsx`, ~990 lines):
-- Single scrollable document: Header → Summary → Claims → Sections → Full Article
-- `FloatingDepthIndicator`: sticky bar at top showing `Summary · Claims · Sections · Full` with active zone highlighted
+**Implementation** (`reader.tsx`, ~2200 lines):
+- Single scrollable document: Header → Summary → Concepts → Sections → Full Article
+- `FloatingDepthIndicator`: sticky bar at top showing `Summary · Concepts · Sections · Full` with active zone highlighted
 - Zone tracking via `onLayout` callbacks → `zonePositions` ref → scroll position comparison
 - Reading depth only advances (never regresses) — persisted to `ReadingState`
 - Dividers between zones: styled `─── KEY CLAIMS ───` section breaks
@@ -293,19 +302,27 @@ explore_topic.py → subtopics + URLs → import_url.py → articles with explor
 ### Concept Lifecycle
 
 ```
-Article processed by pipeline
-  → LLM extracts concepts (text, topic)
-  → Deduplication across batches
-  → concepts.json
+Article processed by entity extraction (extract_entity_concepts.py)
+  → LLM extracts named entities: name, description, topic, aliases
+  → Deduplication via name/alias substring matching
+  → Second pass extracts related_concepts relationships
+  → concepts.json (120 entity-style concepts)
 
-User reads article and signals on claims
+User opens reader → concept chips displayed below summary
+  → Taps chip → ConceptSheet bottom sheet opens
+  → Sets state: Unknown / Learning / Know this
+  → ConceptState persisted to AsyncStorage
+
+User signals on claims (still supported)
   → processClaimSignalForConcepts() matches claims to concepts
+  → Entity-first matching: substring on concept.name + aliases
+  → Fallback to word-overlap for legacy long-form concepts (>6 words)
   → "knew_it" → concept becomes "known"
   → "interesting" → concept becomes "encountered"
-  → ConceptState persisted to AsyncStorage
 
 User records voice note → Soniox transcribes
   → processTranscriptForConcepts() matches transcript to article's concepts
+  → Same entity-first + word-overlap fallback matching
   → Matched concepts become "encountered"
   → ConceptNote created with voice_note_id (deduplicated)
   → Transcript visible in Review tab on matched concepts
@@ -316,24 +333,23 @@ ConceptState transitions trigger review creation
   → Review appears in Review tab when due
 ```
 
-### Concept-Claim Matching (`store.ts`)
+### Concept Matching (`store.ts`)
 
-Uses content-word overlap (stop words removed):
+**Entity-first matching** (primary, for new entity-style concepts):
+- `conceptMatchesText(concept, text)`: checks if concept.name or any alias is a substring of the text
+- Fast, reliable for short entity names like "Garibaldi" or "Greek colonization"
+- Used in: `processClaimSignalForConcepts`, `processTranscriptForConcepts`, `getConceptConnections`, `getMatchingClaims`
+
+**Word-overlap fallback** (for legacy long-form concepts with >6 words):
 1. Build `STOP_WORDS` set (200+ common English words)
 2. `contentWords(text)`: lowercase, remove punctuation, filter words ≤2 chars and stop words
 3. For each article concept, compute `overlap / conceptContent.size`
-4. Threshold: >0.3 content word overlap = match for claims, >0.2 for voice transcripts (noisier text, already scoped to article)
+4. Threshold: >0.3 content word overlap = match for claims, >0.2 for voice transcripts
 
-Previous bug: raw word overlap including stop words inflated scores, causing everything to match. Fix reduced false positives dramatically.
-
-### Transcript → Concept Matching (`store.ts` → `processTranscriptForConcepts()`)
-
-Same algorithm as claim matching, with differences:
-- **Lower threshold (0.2)**: Transcripts are noisier (spoken language, ASR errors) but already scoped to article's concepts
-- **Signal**: All matches become `encountered` (voice = engagement, not knowledge assessment)
-- **Notes**: Creates `ConceptNote` with `voice_note_id` set, deduplicated by voice_note_id per concept
-- **Returns**: Array of matched concept IDs for logging
-- **Called from**: `transcription.ts` after successful Soniox transcription
+**Helper functions**:
+- `conceptName(c)`: returns `c.name || c.text || ''` — handles both old and new concept formats
+- `getConceptsForArticleWithState(articleId)`: returns concepts with their knowledge states for the concept chips UI
+- `findConceptsInText(articleId, text)`: finds which concepts from an article appear in a text passage
 
 ### Novelty Scoring
 
@@ -485,7 +501,7 @@ When a transcript completes:
 | `data/concepts.json` | — | Bundled concepts (generated by pipeline, updated by content sync) |
 | `data/syntheses.json` | — | Bundled topic syntheses (generated by pipeline) |
 | `app/_layout.tsx` | 86 | Tab navigator: Feed, Library, Review, Progress + hidden Reader |
-| `app/reader.tsx` | ~1700 | Fluid depth reader: highlighting, claim signals, dedup banner, research badge, voice recording, web text notes, claim research buttons, inline highlight annotation, enhanced connections + depth indicator |
+| `app/reader.tsx` | ~2200 | Fluid depth reader: concept chips zone, ConceptSheet bottom sheet, sections-based full article rendering, highlighting, claim signals, dedup banner, research badge, voice recording, web text notes, claim research buttons, inline highlight annotation, enhanced connections + depth indicator |
 | `app/index.tsx` | ~1160 | Feed: List/Topics/Triage, exploration sections, dedup indicators, research banner |
 | `app/review.tsx` | ~500 | Spaced attention review: prompt→respond→rate flow, voice transcript display, claims with article attribution, contextual prompts, 3 recent notes |
 | `app/stats.tsx` | ~400 | Progress: reading stats, knowledge map, research results, voice notes, event log |
@@ -500,6 +516,7 @@ When a transcript completes:
 | `generate_syntheses.py` | ~166 | Generate topic syntheses for topics with 3+ articles via `claude -p` |
 | `explore_topic.py` | ~247 | Generate exploration plan: seed topic → subtopics + URLs via `claude -p` |
 | `import_url.py` | ~467 | Import URLs into pipeline: single, batch, exploration plan, Wikipedia chunking |
+| `extract_entity_concepts.py` | ~350 | Entity-style concept extraction: batched Anthropic API calls, dedup, relationship extraction |
 | `fetch_twitter_bookmarks.py` | ~267 | Fetch Twitter/X bookmarks via twikit (GraphQL API) |
 | `fetch_readwise_reader.py` | ~263 | Fetch Readwise Reader items via API |
 | `content-refresh.sh` | ~82 | Server cron orchestrator: fetch → build → synthesize → copy to HTTP serving |
@@ -674,6 +691,11 @@ Every user interaction is logged to JSONL via `logEvent()`. Events by screen:
 | `text_note_submitted` | article_id, depth, text_length |
 | `reader_connection_shown` | article_id, concept, other_article_count |
 | `reader_connection_tap` | article_id, concept, target_article_id |
+| `concept_chip_tap` | article_id, concept_id, concept_name |
+| `concept_state_change` | concept_id, from, to |
+| `concept_sheet_article_tap` | concept_id, target_article |
+| `concept_sheet_related_tap` | from_concept, to_concept |
+| `concept_explore_tap` | concept_id, concept_name |
 
 ### Feed
 | Event | Data |

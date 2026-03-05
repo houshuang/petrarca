@@ -294,7 +294,6 @@
     "text": "Sicily is the largest island in the Mediterranean and the seventh largest in Europe, with a predominantly hilly terrain (61.4%).",
     "topic": "geography",
     "source_article_ids": [
-      "06a2bc42fd07",
       "2f8acf17038f",
       "53225e02f90a"
     ]
@@ -304,33 +303,7 @@
     "text": "Sicily's history spans continuous waves of civilization: prehistoric, Greek, Roman, Byzantine, Arab, Norman, and modern Italian periods, making it a critical crossroads between Europe, North Africa, and the Middle East.",
     "topic": "mediterranean-history",
     "source_article_ids": [
-      "06a2bc42fd07",
-      "8ff6a8148803",
       "2f8acf17038f"
-    ]
-  },
-  {
-    "id": "e689e56e79",
-    "text": "The Maltese language originates from the Sicilian Arabic dialect spoken during the medieval Arab period in Sicily.",
-    "topic": "linguistics",
-    "source_article_ids": [
-      "06a2bc42fd07"
-    ]
-  },
-  {
-    "id": "6bc89dddad",
-    "text": "Arabic administrative systems continued functioning under Norman rule in Sicily, and Greeks made up roughly a third of the population at the time of Norman conquest, concentrated in the northeast.",
-    "topic": "norman-sicily",
-    "source_article_ids": [
-      "06a2bc42fd07"
-    ]
-  },
-  {
-    "id": "97c100d5d3",
-    "text": "The Sicans and Sicels are generally distinguished by scholars as separate ancient peoples who inhabited Sicily in prehistoric times.",
-    "topic": "ancient-history",
-    "source_article_ids": [
-      "06a2bc42fd07"
     ]
   },
   {
@@ -412,38 +385,6 @@
     "topic": "ornithology",
     "source_article_ids": [
       "ffc3139cd5a1"
-    ]
-  },
-  {
-    "id": "c6ab659b26",
-    "text": "The proposed Strait of Messina bridge raised international law questions about innocent passage rights.",
-    "topic": "international-law",
-    "source_article_ids": [
-      "8ff6a8148803"
-    ]
-  },
-  {
-    "id": "c770339a0a",
-    "text": "Grand Tour and travel literature on Sicily has a long literary tradition dating from the 18th century onward.",
-    "topic": "travel-literature",
-    "source_article_ids": [
-      "8ff6a8148803"
-    ]
-  },
-  {
-    "id": "4a45fa6547",
-    "text": "The Sicilian Mafia's international connections, particularly with the United States, remain an active subject of scholarly and journalistic investigation.",
-    "topic": "organized-crime",
-    "source_article_ids": [
-      "8ff6a8148803"
-    ]
-  },
-  {
-    "id": "a8dcafe712",
-    "text": "Bronze Age and prehistoric Sicily are active and ongoing areas of archaeological scholarship.",
-    "topic": "archaeology",
-    "source_article_ids": [
-      "8ff6a8148803"
     ]
   },
   {
@@ -587,8 +528,7 @@
     "text": "Mount Etna is the tallest active volcano in Europe, reaching 3,403 meters after its Voragine crater grew in September 2024.",
     "topic": "volcanology",
     "source_article_ids": [
-      "3c01c0239295",
-      "fdb9e4b537ec"
+      "3c01c0239295"
     ]
   },
   {
@@ -654,8 +594,7 @@
     "text": "Despite Roman political control, Greek language and culture persisted on Sicily throughout antiquity, and linguistic minorities (Gallo-Italic, Arbëreshë Albanian, Griko Greek) survive to this day.",
     "topic": "linguistics",
     "source_article_ids": [
-      "38c83425902a",
-      "fdb9e4b537ec"
+      "38c83425902a"
     ]
   },
   {
@@ -680,7 +619,6 @@
     "text": "Sicily's population has been declining since 2011 (dropping 3.4% by 2021), with Catania falling below 300,000 residents — a stark contrast to ancient Syracuse's estimated 300,000 inhabitants in the 5th century BC.",
     "topic": "demographics",
     "source_article_ids": [
-      "fdb9e4b537ec",
       "563509d67455"
     ]
   },
@@ -690,14 +628,6 @@
     "topic": "migration",
     "source_article_ids": [
       "563509d67455"
-    ]
-  },
-  {
-    "id": "077eb8a682",
-    "text": "The Strait of Messina and Sicily's surrounding islands are crucial nodes for bird migration routes.",
-    "topic": "ornithology",
-    "source_article_ids": [
-      "fdb9e4b537ec"
     ]
   },
   {
@@ -733,20 +663,11 @@
     ]
   },
   {
-    "id": "2fdccde5d9",
-    "text": "La Regione Siciliana ha azzerato il disavanzo chiudendo il rendiconto 2024 con un attivo di 2,15 miliardi di euro.",
-    "topic": "regional-politics",
-    "source_article_ids": [
-      "fdb9e4b537ec"
-    ]
-  },
-  {
     "id": "2dec6f6732",
     "text": "The Strait of Messina Bridge, approved in August 2025, will be a 3.6 km, €6.1 billion project — the world's longest suspension bridge when completed in 2032. The project has been cancelled and revived three times across different Italian governments.",
     "topic": "transport-infrastructure",
     "source_article_ids": [
-      "025a097c89cc",
-      "6acc7482250e"
+      "025a097c89cc"
     ]
   },
   {
@@ -805,31 +726,6 @@
     "source_article_ids": [
       "c7de9339a970",
       "32afa0f1aac6"
-    ]
-  },
-  {
-    "id": "8b995d011e",
-    "text": "The Maltese language originated from Siculo-Arabic spoken during Arab rule of Sicily.",
-    "topic": "romance-languages",
-    "source_article_ids": [
-      "72cee370d28c"
-    ]
-  },
-  {
-    "id": "b23ad396b3",
-    "text": "Sicily's multicultural history involved successive waves of Sicani, Sicels, Greeks, Carthaginians, Romans, Byzantines, Arabs, and Normans, with Greeks making up roughly one-third of the population at the time of the Norman conquest.",
-    "topic": "mediterranean-history",
-    "source_article_ids": [
-      "72cee370d28c",
-      "6acc7482250e"
-    ]
-  },
-  {
-    "id": "3329356823",
-    "text": "Sicily was a key destination on the British and American Grand Tour from the 18th to the 20th century.",
-    "topic": "travel-literature",
-    "source_article_ids": [
-      "6acc7482250e"
     ]
   },
   {
@@ -1106,8 +1002,7 @@
     "text": "Syracuse's petrochemical hub produces an estimated 70% of Italy's refined petroleum exports, a transformation that began when ERG petroleum company industrialized the area from 1938 onward.",
     "topic": "petrochemicals",
     "source_article_ids": [
-      "9f4131dff942",
-      "348fd6b2cdc6"
+      "9f4131dff942"
     ]
   },
   {
@@ -1203,8 +1098,7 @@
     "text": "The prehistoric Syraka marsh in the Pantanelli lagoon area likely gave Syracuse its name, a derivation first proposed by Stephanus of Byzantium.",
     "topic": "etymology",
     "source_article_ids": [
-      "81cd6b1a8377",
-      "348fd6b2cdc6"
+      "81cd6b1a8377"
     ]
   },
   {
@@ -1212,8 +1106,7 @@
     "text": "Major earthquakes in 1542 and 1990 were decisive in shaping Syracuse's urban development and social fabric.",
     "topic": "seismic-history",
     "source_article_ids": [
-      "81cd6b1a8377",
-      "348fd6b2cdc6"
+      "81cd6b1a8377"
     ]
   },
   {
@@ -1237,16 +1130,7 @@
     "text": "Syracuse has been continuously inhabited from the Neolithic period (Stentinello culture) through the present day, passing through Greek, Roman, Arab, Norman, Spanish, and modern Italian rule.",
     "topic": "historical-continuity",
     "source_article_ids": [
-      "348fd6b2cdc6",
       "81cd6b1a8377"
-    ]
-  },
-  {
-    "id": "357c28aabe",
-    "text": "Italian-language scholarship dominates the historiography of Syracuse, with key works by Privitera, Orsi, Amari, and De Sanctis.",
-    "topic": "historiography",
-    "source_article_ids": [
-      "348fd6b2cdc6"
     ]
   },
   {
@@ -1361,30 +1245,6 @@
     ]
   },
   {
-    "id": "17d99c8999",
-    "text": "Syracuse was founded as a Corinthian/Dorian Greek colony in the 8th century BC and is classified as a UNESCO World Heritage Site.",
-    "topic": "ancient-Greece",
-    "source_article_ids": [
-      "e2439546fe48"
-    ]
-  },
-  {
-    "id": "ba03a12e17",
-    "text": "Scholarship on Syracuse spans over 200 years (1791–2015), with the vast majority of works published in Italian.",
-    "topic": "historiography",
-    "source_article_ids": [
-      "e2439546fe48"
-    ]
-  },
-  {
-    "id": "ca9a21b568",
-    "text": "Caravaggio had a documented stay in Syracuse significant enough to warrant a dedicated art-historical monograph.",
-    "topic": "art-history",
-    "source_article_ids": [
-      "e2439546fe48"
-    ]
-  },
-  {
     "id": "c1985a8d52",
     "text": "Sicily remained under some form of Roman control from 241 BC until the 9th century AD, a span of over a millennium.",
     "topic": "roman-history",
@@ -1438,22 +1298,6 @@
     "topic": "slave-revolts",
     "source_article_ids": [
       "24a816714fc7"
-    ]
-  },
-  {
-    "id": "fc16f1bffa",
-    "text": "Roman-era Sicilians were trilingual, speaking Latin, Greek, and possibly Punic, according to Apuleius.",
-    "topic": "sicilian-linguistics",
-    "source_article_ids": [
-      "6f5bc5663a78"
-    ]
-  },
-  {
-    "id": "1292f2eb79",
-    "text": "Finley's 'Storia della Sicilia antica' is the dominant modern authority on Roman Sicily, and Italian-language scholarship dominates the field of Roman Sicilian history.",
-    "topic": "historiography",
-    "source_article_ids": [
-      "6f5bc5663a78"
     ]
   },
   {
@@ -1578,21 +1422,11 @@
     ]
   },
   {
-    "id": "ebcc325e12",
-    "text": "Sicily's sources for Roman history span from Polybius (2nd c. BCE) to Symmachus (4th c. CE), covering its full Roman period from the First Punic War through the fall of the Western Empire.",
-    "topic": "classical-antiquity",
-    "source_article_ids": [
-      "6f5bc5663a78"
-    ]
-  },
-  {
     "id": "0ae1c0c767",
     "text": "Arab forces began raiding Sicily as early as 652, with full conquest starting in 827 when Byzantine rebel Euphemius invited the Aghlabid emir to invade, leading to Islamic rule lasting until the Norman conquest around 1091.",
     "topic": "medieval-history",
     "source_article_ids": [
-      "e7a9e9258b8c",
-      "38be2958c540",
-      "07891ba35399"
+      "38be2958c540"
     ]
   },
   {
@@ -1601,8 +1435,7 @@
     "topic": "medieval-mediterranean",
     "source_article_ids": [
       "38be2958c540",
-      "61ebc2a1fdb3",
-      "07891ba35399"
+      "61ebc2a1fdb3"
     ]
   },
   {
@@ -1647,7 +1480,6 @@
     "text": "Frederick II deported approximately 60,000 Sicilian Muslims to a colony at Lucera in Apulia in the 1220s rather than exterminate them.",
     "topic": "medieval-history",
     "source_article_ids": [
-      "e7a9e9258b8c",
       "58b05920c6d8"
     ]
   },
@@ -1657,16 +1489,7 @@
     "topic": "islamic-cultural-legacy",
     "source_article_ids": [
       "38be2958c540",
-      "58b05920c6d8",
-      "07891ba35399"
-    ]
-  },
-  {
-    "id": "9450d7582e",
-    "text": "Before Arab arrival, medieval Greek was the most widely spoken language in Sicily, and the Sicilian Church remained Greek Orthodox well into Norman rule, with Latinization coming later.",
-    "topic": "byzantine-history",
-    "source_article_ids": [
-      "07891ba35399"
+      "58b05920c6d8"
     ]
   },
   {
@@ -1678,44 +1501,12 @@
     ]
   },
   {
-    "id": "385ced7012",
-    "text": "The Emirate of Bari (847–871) was a distinct Islamic polity on the Italian mainland, separate from the Sicilian emirate.",
-    "topic": "medieval-history",
-    "source_article_ids": [
-      "e7a9e9258b8c"
-    ]
-  },
-  {
-    "id": "9b9a6c10f5",
-    "text": "The Fatimid navy projected Islamic power across the central Mediterranean from 909 to 1036 CE, with Sicily as a key base.",
-    "topic": "medieval-mediterranean",
-    "source_article_ids": [
-      "e7a9e9258b8c"
-    ]
-  },
-  {
     "id": "1f8d91eb2b",
     "text": "Religious coexistence in Sicily collapsed after the 1160s reconquest and the death of William II in 1189, with Saracen archers paradoxically serving in Christian armies even as Islam was being eliminated.",
     "topic": "religious-coexistence",
     "source_article_ids": [
       "61ebc2a1fdb3",
       "58b05920c6d8"
-    ]
-  },
-  {
-    "id": "fb4117d88c",
-    "text": "The Spanish Inquisition persecuted remaining Muslim communities in Sicily into the 17th century, and Moriscos fleeing Spain found temporary refuge there during the 1609–1614 expulsion.",
-    "topic": "spanish-inquisition",
-    "source_article_ids": [
-      "e7a9e9258b8c"
-    ]
-  },
-  {
-    "id": "56eea0dc80",
-    "text": "Mosques in Sicily were often built with the help of Byzantine craftsmen, reflecting practical cultural cooperation across religious boundaries.",
-    "topic": "religious-coexistence",
-    "source_article_ids": [
-      "07891ba35399"
     ]
   },
   {
@@ -2090,8 +1881,7 @@
     "text": "Frederick II (1194–1250) was crowned King of Germany in 1212 and received Imperial coronation in 1220, ruling as Holy Roman Emperor until 1250.",
     "topic": "medieval-history",
     "source_article_ids": [
-      "a76b5be579eb",
-      "e5755fc40dbe"
+      "a76b5be579eb"
     ]
   },
   {
@@ -2103,49 +1893,11 @@
     ]
   },
   {
-    "id": "a09d0e99cb",
-    "text": "Frederick II held an extraordinary accumulation of titles including King of Sicily (from 1197), King of Jerusalem, Duke of Swabia, and was a member of the Hohenstaufen dynasty.",
-    "topic": "holy-roman-empire",
-    "source_article_ids": [
-      "e5755fc40dbe",
-      "c89da8e46b06"
-    ]
-  },
-  {
-    "id": "d08d489784",
-    "text": "Frederick II saw himself as a direct successor to Augustus and the classical Roman emperors, and Van Cleve's subtitle 'Immutator Mundi' (Changer of the World) reflects his reputation as a transformative medieval ruler.",
-    "topic": "medieval-history",
-    "source_article_ids": [
-      "48de8d2f8d57",
-      "c89da8e46b06"
-    ]
-  },
-  {
-    "id": "383292f5a4",
-    "text": "Kantorowicz's biography (1931/1937) and Abulafia's biography (1988) are the two most prominent and heavily cited scholarly works on Frederick II.",
-    "topic": "historiography",
-    "source_article_ids": [
-      "48de8d2f8d57",
-      "c89da8e46b06"
-    ]
-  },
-  {
     "id": "bac50f658d",
     "text": "Frederick II's conflicts with the papacy constitute a major scholarly theme, including Pope Innocent IV deposing him and an actual papal crusade launched against him (1228–1230).",
     "topic": "papal-imperial-conflict",
     "source_article_ids": [
-      "a76b5be579eb",
-      "c89da8e46b06",
-      "48de8d2f8d57"
-    ]
-  },
-  {
-    "id": "0bfe8b3c3b",
-    "text": "Despite being excommunicated, Frederick II participated in the Fifth and Sixth Crusades and appears in Dante's Divine Comedy.",
-    "topic": "crusades",
-    "source_article_ids": [
-      "e5755fc40dbe",
-      "48de8d2f8d57"
+      "a76b5be579eb"
     ]
   },
   {
@@ -2170,39 +1922,6 @@
     "topic": "historiography",
     "source_article_ids": [
       "a76b5be579eb"
-    ]
-  },
-  {
-    "id": "ee29daec42",
-    "text": "Frederick II authored 'De arte venandi cum avibus' (The Art of Falconry, c. 1250), a primary source on falconry still in scholarly print.",
-    "topic": "medieval-history",
-    "source_article_ids": [
-      "c89da8e46b06"
-    ]
-  },
-  {
-    "id": "69f44c8272",
-    "text": "Frederick II's Psalter (c. 1235–1237) and a 1215 deed for the Teutonic Order survive as digitized primary sources.",
-    "topic": "medieval-history",
-    "source_article_ids": [
-      "e5755fc40dbe"
-    ]
-  },
-  {
-    "id": "9259a9b601",
-    "text": "Scholarship on Frederick II spans works in at least five languages (English, Italian, French, Russian, German), reflecting his pan-European significance.",
-    "topic": "historiography",
-    "source_article_ids": [
-      "48de8d2f8d57",
-      "c89da8e46b06"
-    ]
-  },
-  {
-    "id": "e9e4578d72",
-    "text": "Frederick II's Sicilian court poetry has been compared to Heian Japanese court literature, suggesting structural parallels between courtly literary cultures.",
-    "topic": "medieval-literature",
-    "source_article_ids": [
-      "48de8d2f8d57"
     ]
   },
   {
@@ -2258,7 +1977,6 @@
     "text": "Frederick II was a patron of arts and literature, a sonneteer in the Sicilian School, and founder of the University of Naples (1224).",
     "topic": "medieval-literature",
     "source_article_ids": [
-      "e5755fc40dbe",
       "e37152283342"
     ]
   },
@@ -2268,8 +1986,7 @@
     "topic": "sicilian-school",
     "source_article_ids": [
       "928875ae2d43",
-      "581e35e920ad",
-      "be961abf6b9e"
+      "581e35e920ad"
     ]
   },
   {
@@ -2335,14 +2052,6 @@
     "topic": "frederick-ii",
     "source_article_ids": [
       "928875ae2d43"
-    ]
-  },
-  {
-    "id": "b5c3e0ed35",
-    "text": "The most comprehensive modern critical edition of the Sicilian School is the three-volume Mondadori Meridiani set (2008), and scholarly study spans from De Sanctis (1870) to major 21st-century editions across Italian, German, and English scholarship.",
-    "topic": "bibliography",
-    "source_article_ids": [
-      "be961abf6b9e"
     ]
   },
   {
@@ -2651,7 +2360,6 @@
     "text": "The Kingdom of Sicily existed from 1130 to 1816, spanning Norman, Swabian, Angevin, Aragonese, Spanish, and Bourbon periods, making it one of the longest-lasting political entities in Mediterranean history.",
     "topic": "medieval-history",
     "source_article_ids": [
-      "a68090222da6",
       "135b7ff6c328"
     ]
   },
@@ -2661,8 +2369,7 @@
     "topic": "medieval-history",
     "source_article_ids": [
       "0ede0e0d53b1",
-      "135b7ff6c328",
-      "a68090222da6"
+      "135b7ff6c328"
     ]
   },
   {
@@ -2670,8 +2377,7 @@
     "text": "The War of the Sicilian Vespers demonstrated the decline of papal political authority and the rise of assertive secular monarchies, as the papacy failed to impose its will despite organizing crusades against both Frederick II and Aragon.",
     "topic": "medieval-politics",
     "source_article_ids": [
-      "0ede0e0d53b1",
-      "19c03400152b"
+      "0ede0e0d53b1"
     ]
   },
   {
@@ -2679,8 +2385,7 @@
     "text": "Peter III of Aragon's intervention in Sicily triggered an era of Aragonese expansion across the Western Mediterranean, with the Compromise of Caspe (1412) later peacefully resolving the Aragonese succession crisis.",
     "topic": "medieval-history",
     "source_article_ids": [
-      "0ede0e0d53b1",
-      "19c03400152b"
+      "0ede0e0d53b1"
     ]
   },
   {
@@ -2696,8 +2401,7 @@
     "text": "Durum wheat was the Kingdom of Sicily's main export, traded through Naples and Amalfi, but the kingdom increasingly became a raw material supplier to northern Italian cities like Genoa in an exploitative economic relationship.",
     "topic": "medieval-economy",
     "source_article_ids": [
-      "135b7ff6c328",
-      "a68090222da6"
+      "135b7ff6c328"
     ]
   },
   {
@@ -2705,7 +2409,6 @@
     "text": "Henri Bresc argued that Sicily became an economic satellite of northern Italian cities with a proto-proletarian population, driven by Angevin feudalization and dependence on Florentine bankers.",
     "topic": "medieval-economy",
     "source_article_ids": [
-      "19c03400152b",
       "135b7ff6c328"
     ]
   },
@@ -2738,8 +2441,7 @@
     "text": "Norman Sicily was unusually pluralistic: Muslims in Palermo had their own qadi courts and public prayer calls, Catholics in Arabic-speaking areas sometimes adopted Arabic or Muslim names, and intermarriage occurred between faiths.",
     "topic": "medieval-religious-pluralism",
     "source_article_ids": [
-      "9fcf826214e0",
-      "a68090222da6"
+      "9fcf826214e0"
     ]
   },
   {
@@ -2755,8 +2457,7 @@
     "text": "Jews were expelled from Sicily during 1492–1513 under the Spanish Inquisition, paralleling broader Iberian expulsion policies.",
     "topic": "medieval-religious-pluralism",
     "source_article_ids": [
-      "9fcf826214e0",
-      "19c03400152b"
+      "9fcf826214e0"
     ]
   },
   {
@@ -2765,23 +2466,6 @@
     "topic": "crusades",
     "source_article_ids": [
       "0ede0e0d53b1"
-    ]
-  },
-  {
-    "id": "71404efb04",
-    "text": "David Abulafia is the most prolific English-language scholar on the Kingdom of Sicily, with at least three major works, while Roger II is framed in historiography as a ruler mediating between Eastern and Western traditions.",
-    "topic": "historiography",
-    "source_article_ids": [
-      "a68090222da6",
-      "19c03400152b"
-    ]
-  },
-  {
-    "id": "1cb9a6f6cd",
-    "text": "Queens played significant roles in the Norman-Swabian Kingdom of Sicily as consorts, regents, and even regnants.",
-    "topic": "medieval-history",
-    "source_article_ids": [
-      "a68090222da6"
     ]
   },
   {
@@ -2963,71 +2647,11 @@
     ]
   },
   {
-    "id": "a78ebf7be7",
-    "text": "The War of the Sicilian Vespers (1282–1302) was a major Mediterranean conflict involving Sicily, Aragon-Catalonia, Naples, France, Genoa, and the Byzantine Empire.",
-    "topic": "medieval-history",
-    "source_article_ids": [
-      "d62d914fdfbe",
-      "d0ac00a39040"
-    ]
-  },
-  {
-    "id": "c88c8e48d0",
-    "text": "The War of the Sicilian Vespers remains an actively researched topic, studied across military history, peace research, crusade studies, Mediterranean studies, and urban history, with publications as recent as 2024.",
-    "topic": "historiography",
-    "source_article_ids": [
-      "d62d914fdfbe",
-      "d0ac00a39040"
-    ]
-  },
-  {
-    "id": "7dc8796fd6",
-    "text": "Steven Runciman's 1958 book remains the standard English-language reference on the Sicilian Vespers.",
-    "topic": "historiography",
-    "source_article_ids": [
-      "d0ac00a39040"
-    ]
-  },
-  {
-    "id": "cce9538576",
-    "text": "The earliest native Sicilian account of the 1282 uprising, 'Rebellamentu di Sichilia', was written just eight years after the event.",
-    "topic": "historiography",
-    "source_article_ids": [
-      "d0ac00a39040"
-    ]
-  },
-  {
-    "id": "a0e1ef1445",
-    "text": "Michele Amari's 19th-century study of the Sicilian Vespers went through nine editions, reflecting enduring Italian scholarly interest.",
-    "topic": "historiography",
-    "source_article_ids": [
-      "d0ac00a39040"
-    ]
-  },
-  {
-    "id": "0dfe65ad55",
-    "text": "Modern scholarship on the Sicilian Vespers increasingly focuses on naval warfare, Mediterranean economics, and Aragonese imperial expansion rather than purely political narrative.",
-    "topic": "medieval-history",
-    "source_article_ids": [
-      "d0ac00a39040",
-      "d62d914fdfbe"
-    ]
-  },
-  {
-    "id": "839c11bd57",
-    "text": "Stanton's 2019 book on Roger of Lauria is the most frequently cited single work in recent Vespers scholarship, covering campaigns from 1268 to 1302.",
-    "topic": "medieval-history",
-    "source_article_ids": [
-      "d62d914fdfbe"
-    ]
-  },
-  {
     "id": "9c195122a0",
     "text": "Mount Etna is 3,403 m tall (as of Sept 2024), making it the tallest active volcano in Europe and the tallest Italian peak south of the Alps, though its height constantly changes due to eruptions.",
     "topic": "volcanology",
     "source_article_ids": [
-      "f490fc5f2b90",
-      "315f06e21765"
+      "f490fc5f2b90"
     ]
   },
   {
@@ -3043,8 +2667,7 @@
     "text": "Mount Etna was designated a UNESCO World Heritage Site in 2013 and a UN Decade Volcano.",
     "topic": "volcanology",
     "source_article_ids": [
-      "f490fc5f2b90",
-      "315f06e21765"
+      "f490fc5f2b90"
     ]
   },
   {
@@ -3060,8 +2683,7 @@
     "text": "In classical mythology, the titan Typhon is imprisoned beneath Etna and Hephaestus forges there; in medieval Breton-Norman tradition, King Arthur's otherworld kingdom was placed inside the mountain.",
     "topic": "mythology",
     "source_article_ids": [
-      "f490fc5f2b90",
-      "315f06e21765"
+      "f490fc5f2b90"
     ]
   },
   {
@@ -3077,8 +2699,7 @@
     "text": "A catastrophic flank collapse of Etna ~8,000 years ago caused a tsunami across the eastern Mediterranean, though the claim it destroyed Neolithic Atlit Yam in Israel is scientifically contested.",
     "topic": "geology",
     "source_article_ids": [
-      "b2adf9c57c20",
-      "315f06e21765"
+      "b2adf9c57c20"
     ]
   },
   {
@@ -3102,16 +2723,7 @@
     "text": "The entire Mount Etna massif is slowly sliding toward the Mediterranean Sea at 14 mm per year due to gravity acting on a sloping basement.",
     "topic": "geology",
     "source_article_ids": [
-      "b2adf9c57c20",
-      "315f06e21765"
-    ]
-  },
-  {
-    "id": "324972b724",
-    "text": "Etna's eruption chronology has been documented across 2,750 years using archeomagnetic and radiometric dating methods.",
-    "topic": "volcanology",
-    "source_article_ids": [
-      "315f06e21765"
+      "b2adf9c57c20"
     ]
   },
   {
@@ -3328,24 +2940,6 @@
     ]
   },
   {
-    "id": "8bdc19f3e4",
-    "text": "Luigi Pirandello (1867–1936) was a Nobel Prize-winning (1934) Sicilian author from Agrigento who revolutionized modern dramatic and scenic art.",
-    "topic": "italian-literature",
-    "source_article_ids": [
-      "752fffc53a00",
-      "49cb81e25bb8"
-    ]
-  },
-  {
-    "id": "35ee75109e",
-    "text": "Pirandello claimed partial Greek ancestry, saying his surname derived from 'Piranghelos'.",
-    "topic": "italian-literature",
-    "source_article_ids": [
-      "752fffc53a00",
-      "49cb81e25bb8"
-    ]
-  },
-  {
     "id": "b40c2133b2",
     "text": "Pirandello's works have been adapted into over 40 films spanning more than a century (1920–2023), with 'Il fu Mattia Pascal' being the most-adapted with at least four film versions.",
     "topic": "film-adaptations",
@@ -3359,46 +2953,6 @@
     "topic": "world-cinema",
     "source_article_ids": [
       "ac81220effb0"
-    ]
-  },
-  {
-    "id": "f96c0bccb9",
-    "text": "Pirandello significantly influenced modern dramatists including Pinter, Beckett, Sartre, and Dario Fo.",
-    "topic": "modern-theatre",
-    "source_article_ids": [
-      "752fffc53a00"
-    ]
-  },
-  {
-    "id": "27019d177d",
-    "text": "Pirandello is studied in comparative literary contexts alongside Chekhov, Kafka, Synge, and Yeats.",
-    "topic": "comparative-literature",
-    "source_article_ids": [
-      "49cb81e25bb8"
-    ]
-  },
-  {
-    "id": "dd2886a22b",
-    "text": "Pirandello's work was featured in one of the BBC's earliest television productions in 1930.",
-    "topic": "broadcast-history",
-    "source_article_ids": [
-      "752fffc53a00"
-    ]
-  },
-  {
-    "id": "5cdf20d483",
-    "text": "Pirandello's relationship with fascist Italy is documented across multiple scholarly sources.",
-    "topic": "italian-politics",
-    "source_article_ids": [
-      "752fffc53a00"
-    ]
-  },
-  {
-    "id": "d45ac09d98",
-    "text": "Scholarly interest in Pirandello has been continuous from the 1930s through at least 2022, with works widely available in free digital editions across multiple platforms.",
-    "topic": "digital-humanities",
-    "source_article_ids": [
-      "49cb81e25bb8"
     ]
   },
   {
@@ -3479,7 +3033,6 @@
     "text": "Sicily produced a remarkable concentration of major Italian literary figures including Pirandello (Agrigento), Sciascia, and Lampedusa, all deeply engaged with Sicilian identity and history.",
     "topic": "sicilian-literature",
     "source_article_ids": [
-      "49cb81e25bb8",
       "4eea6e3a23dc",
       "630da86d11c0"
     ]
@@ -3490,8 +3043,7 @@
     "topic": "italian-literature",
     "source_article_ids": [
       "1f253bf8aae3",
-      "7e81977febca",
-      "25e4694c8042"
+      "7e81977febca"
     ]
   },
   {
@@ -3509,9 +3061,7 @@
     "topic": "literary-criticism",
     "source_article_ids": [
       "7e81977febca",
-      "d8ed79d08bf0",
-      "25e4694c8042",
-      "432eed9036b2"
+      "d8ed79d08bf0"
     ]
   },
   {
@@ -3535,8 +3085,7 @@
     "text": "The Leopard won Italy's Strega Prize in 1959 despite fierce political controversy, and The Guardian ranked it among the 10 best historical novels in 2012.",
     "topic": "italian-literature",
     "source_article_ids": [
-      "7e81977febca",
-      "25e4694c8042"
+      "7e81977febca"
     ]
   },
   {
@@ -3544,8 +3093,7 @@
     "text": "Visconti's 1963 film adaptation of The Leopard won the Palme d'Or at Cannes; 20th Century Fox cut it heavily for US release but it was restored in 1983.",
     "topic": "film-adaptation",
     "source_article_ids": [
-      "7e81977febca",
-      "25e4694c8042"
+      "7e81977febca"
     ]
   },
   {
@@ -3561,8 +3109,7 @@
     "text": "Lampedusa was the last of the Tomasi Princes of Lampedusa, holding titles including 11th Prince of Lampedusa, 12th Duke of Palma, and Grandee of Spain of the First Class.",
     "topic": "sicilian-aristocracy",
     "source_article_ids": [
-      "1f253bf8aae3",
-      "432eed9036b2"
+      "1f253bf8aae3"
     ]
   },
   {
@@ -3636,22 +3183,6 @@
     "topic": "biography",
     "source_article_ids": [
       "d8ed79d08bf0"
-    ]
-  },
-  {
-    "id": "436a15e0c5",
-    "text": "The standard English translation of The Leopard by Archibald Colquhoun was published by Pantheon in 1960.",
-    "topic": "italian-literature",
-    "source_article_ids": [
-      "25e4694c8042"
-    ]
-  },
-  {
-    "id": "a1170fad73",
-    "text": "A new French-language biography of Lampedusa was published in 2025, indicating continued scholarly interest nearly 70 years after his death.",
-    "topic": "biography",
-    "source_article_ids": [
-      "432eed9036b2"
     ]
   },
   {
@@ -3769,30 +3300,6 @@
     "topic": "critica-letteraria",
     "source_article_ids": [
       "60102a1bea99"
-    ]
-  },
-  {
-    "id": "0cff63c4d1",
-    "text": "L'adattamento cinematografico di Visconti (1963) avrebbe riformulato un romanzo percepito come 'di destra' in un successo culturale 'di sinistra', generando studi critici ancora sessant'anni dopo",
-    "topic": "adattamento-cinematografico",
-    "source_article_ids": [
-      "0d2d95b8f793"
-    ]
-  },
-  {
-    "id": "72f75a7c87",
-    "text": "La lettura di Francesco Orlando (1998) del romanzo attraverso la lente dell'intimità e della storia è considerata un contributo critico fondamentale",
-    "topic": "critica-letteraria",
-    "source_article_ids": [
-      "0d2d95b8f793"
-    ]
-  },
-  {
-    "id": "0e35f015d0",
-    "text": "L'interesse accademico per Il Gattopardo si estende su sei decenni (1963–2023) e oltre i confini italiani, con studi sulla ricezione in Romania e altri paesi",
-    "topic": "critica-letteraria",
-    "source_article_ids": [
-      "0d2d95b8f793"
     ]
   },
   {
@@ -3955,9 +3462,7 @@
     "text": "The Sicilian Mafia functions primarily as a cartel of private protection firms, filling a vacuum left by weak or unreliable state institutions rather than being merely a criminal organization.",
     "topic": "institutional-economics",
     "source_article_ids": [
-      "61ada289d493",
-      "739d6adc9488",
-      "2e5f4f4e7b52"
+      "61ada289d493"
     ]
   },
   {
@@ -4070,56 +3575,6 @@
     "topic": "organized-crime",
     "source_article_ids": [
       "1e77501817ba"
-    ]
-  },
-  {
-    "id": "1595f5a1e1",
-    "text": "The word 'mafia' may derive from Arabic terms dating to Arab rule of Sicily (827–1061), though its etymology remains contested among scholars.",
-    "topic": "etymology",
-    "source_article_ids": [
-      "739d6adc9488"
-    ]
-  },
-  {
-    "id": "25fecab11d",
-    "text": "The Sicilian Mafia is structured as a federation of independent families sharing a common 'brand' as protection suppliers, not a single hierarchical organization.",
-    "topic": "organized-crime",
-    "source_article_ids": [
-      "739d6adc9488"
-    ]
-  },
-  {
-    "id": "4f1eae9a23",
-    "text": "Economic research links Mafia origins to failures in property rights enforcement and resource extraction (particularly sulfur mines) in 19th-century Sicily.",
-    "topic": "institutional-economics",
-    "source_article_ids": [
-      "739d6adc9488",
-      "2e5f4f4e7b52"
-    ]
-  },
-  {
-    "id": "77c368d856",
-    "text": "The academic study of the Sicilian Mafia spans nearly 150 years, with modern scholarship increasingly applying economic theory and quantitative methods rather than purely criminological approaches.",
-    "topic": "criminology",
-    "source_article_ids": [
-      "739d6adc9488",
-      "2e5f4f4e7b52"
-    ]
-  },
-  {
-    "id": "6eb7e4d987",
-    "text": "The Sicilian Mafia operated as a transnational organization with presence across Italy, Malta, the United States, and Canada.",
-    "topic": "organized-crime",
-    "source_article_ids": [
-      "2e5f4f4e7b52"
-    ]
-  },
-  {
-    "id": "23d7bf7e85",
-    "text": "Anti-Mafia movements became a significant counter-force in Sicily, particularly in Palermo, representing organized civic resistance to Mafia control.",
-    "topic": "anti-mafia",
-    "source_article_ids": [
-      "2e5f4f4e7b52"
     ]
   },
   {
@@ -4259,38 +3714,6 @@
     "topic": "anti-mafia",
     "source_article_ids": [
       "e2832a6ebd07"
-    ]
-  },
-  {
-    "id": "7095c0fa5e",
-    "text": "The 1987 Maxi Trial convicted 338 defendants with 19 life sentences, making it the largest Mafia trial in history.",
-    "topic": "anti-mafia",
-    "source_article_ids": [
-      "24238fdb152a"
-    ]
-  },
-  {
-    "id": "e7d049b979",
-    "text": "Giovanni Falcone was assassinated by car bomb by the Corleonesi clan on 23 May 1992, with the American Mafia allegedly providing an explosives expert.",
-    "topic": "political-assassination",
-    "source_article_ids": [
-      "24238fdb152a"
-    ]
-  },
-  {
-    "id": "cf46e6c15d",
-    "text": "Giovanni Brusca, Falcone's killer, later became a collaborator and confessed in detail about the assassination.",
-    "topic": "anti-mafia",
-    "source_article_ids": [
-      "24238fdb152a"
-    ]
-  },
-  {
-    "id": "ccec097633",
-    "text": "Falcone's anti-Mafia work led to FBI cooperation and posthumous international recognition, and 24 Mafia figures received life sentences in 1997 for the Capaci bombing.",
-    "topic": "anti-mafia",
-    "source_article_ids": [
-      "24238fdb152a"
     ]
   },
   {
@@ -4453,9 +3876,7 @@
     "text": "Sicilian is classified as a distinct Romance language derived directly from Vulgar Latin, not a dialect of Italian, though its status remains an active scholarly debate.",
     "topic": "language-classification",
     "source_article_ids": [
-      "6c07a247733d",
-      "56b72c3f9638",
-      "ebc73b70b8e7"
+      "6c07a247733d"
     ]
   },
   {
@@ -4463,8 +3884,7 @@
     "text": "Sicilian was the first literary language of Italy, predating standard Italian through the 13th-century Scuola Siciliana; Dante acknowledged in De Vulgari Eloquentia that all Italian poetry was once called 'Sicilian'.",
     "topic": "literary-history",
     "source_article_ids": [
-      "6c07a247733d",
-      "56b72c3f9638"
+      "6c07a247733d"
     ]
   },
   {
@@ -4481,7 +3901,6 @@
     "text": "UNESCO classifies Sicilian as a 'vulnerable' or endangered language.",
     "topic": "language-endangerment",
     "source_article_ids": [
-      "56b72c3f9638",
       "6c07a247733d"
     ]
   },
@@ -4491,8 +3910,7 @@
     "topic": "language-policy",
     "source_article_ids": [
       "6c07a247733d",
-      "39fa7904ceff",
-      "56b72c3f9638"
+      "39fa7904ceff"
     ]
   },
   {
@@ -4501,8 +3919,6 @@
     "topic": "language-preservation",
     "source_article_ids": [
       "39fa7904ceff",
-      "56b72c3f9638",
-      "ebc73b70b8e7",
       "6c07a247733d"
     ]
   },
@@ -4546,38 +3962,6 @@
     "source_article_ids": [
       "39fa7904ceff",
       "6c07a247733d"
-    ]
-  },
-  {
-    "id": "fa63e6dcc0",
-    "text": "Sicilian shares significant vocabulary with Maltese, reflecting historical Arabic influence on both languages.",
-    "topic": "historical-linguistics",
-    "source_article_ids": [
-      "56b72c3f9638"
-    ]
-  },
-  {
-    "id": "4c53694bf7",
-    "text": "Privitera (2004) argues Sicilian is the oldest Romance language, and scholarly interest spans from Pitrè's 1875 grammar to modern linguistic studies.",
-    "topic": "romance-linguistics",
-    "source_article_ids": [
-      "ebc73b70b8e7"
-    ]
-  },
-  {
-    "id": "3b7417c2bb",
-    "text": "Google Translate added Sicilian as a supported language in 2024, marking a milestone in digital recognition of the language.",
-    "topic": "digital-language-tools",
-    "source_article_ids": [
-      "56b72c3f9638"
-    ]
-  },
-  {
-    "id": "228a1452c8",
-    "text": "The Piccitto Vocabolario Siciliano (1977/2002) serves as the foundational reference for Sicilian orthography.",
-    "topic": "lexicography",
-    "source_article_ids": [
-      "ebc73b70b8e7"
     ]
   },
   {
@@ -4771,24 +4155,6 @@
     ]
   },
   {
-    "id": "b424c0b429",
-    "text": "Sicilian is classified as a distinct language (not merely a dialect) with its own ISO 639-3 code 'scn', and UNESCO considers it a vulnerable language.",
-    "topic": "sicilian-language",
-    "source_article_ids": [
-      "8166ae629f33",
-      "4b236bbb0f0f"
-    ]
-  },
-  {
-    "id": "cc5a45d3de",
-    "text": "Italy signed but never ratified the European Charter for Regional or Minority Languages, and Italian law 482/99 excludes Sicilian from protected languages, though the Sicilian Region has its own legislation (1951–2011) promoting Sicilian in schools.",
-    "topic": "language-policy",
-    "source_article_ids": [
-      "8166ae629f33",
-      "4b236bbb0f0f"
-    ]
-  },
-  {
     "id": "6acebae217",
     "text": "Antonio Veneziano (16th c.) explicitly defended the dignity of writing literature in Sicilian, comparing himself to Homer writing in Greek and Petrarch in Tuscan.",
     "topic": "sicilian-language",
@@ -4834,54 +4200,6 @@
     "topic": "sicilian-language",
     "source_article_ids": [
       "09d6d2473bf1"
-    ]
-  },
-  {
-    "id": "51f7bd7498",
-    "text": "Southern Calabria is linguistically a Sicilian outpost, distinguished mainly by greater Greek loanwords versus Sicilian's Arabic loanwords.",
-    "topic": "romance-linguistics",
-    "source_article_ids": [
-      "8166ae629f33"
-    ]
-  },
-  {
-    "id": "c39e3f68a7",
-    "text": "Specific isoglosses (consonant assimilations, use of 'tenere', enclitic possessives) delineate the boundary between Sicilian and southern Italian dialects.",
-    "topic": "romance-linguistics",
-    "source_article_ids": [
-      "8166ae629f33"
-    ]
-  },
-  {
-    "id": "cc94491d45",
-    "text": "Sicilian studies have an international dimension, with university chairs in Argentina and Tunisia.",
-    "topic": "sicilian-language",
-    "source_article_ids": [
-      "8166ae629f33"
-    ]
-  },
-  {
-    "id": "786fb238e5",
-    "text": "Multiple active preservation projects exist for Sicilian (Arba Sicula, Salviamo il Siciliano, LinguaSiciliana.org), and its lexicographic tradition dates back to the 19th century with multiple dictionaries now digitized.",
-    "topic": "language-preservation",
-    "source_article_ids": [
-      "4b236bbb0f0f"
-    ]
-  },
-  {
-    "id": "87b00dd569",
-    "text": "Sicily contains Gallo-Italic dialect communities distinct from the main Sicilian language.",
-    "topic": "dialectology",
-    "source_article_ids": [
-      "4b236bbb0f0f"
-    ]
-  },
-  {
-    "id": "295f745572",
-    "text": "CRICD and REIS maintain official regional archives of Sicilian intangible cultural heritage.",
-    "topic": "language-preservation",
-    "source_article_ids": [
-      "4b236bbb0f0f"
     ]
   },
   {
@@ -5299,16 +4617,7 @@
     "text": "Traditional historiography of the Expedition of the Thousand is criticized as hagiographic, tied to the deliberate erasure of Bourbon historical memory.",
     "topic": "historiography",
     "source_article_ids": [
-      "fcdea8b09540",
-      "3b74093b0462"
-    ]
-  },
-  {
-    "id": "dc1cf1365d",
-    "text": "The bibliography on Italian unification reveals a persistent tension between celebratory nationalist historiography and critical Southern Italian revisionism spanning 150+ years.",
-    "topic": "historiography",
-    "source_article_ids": [
-      "3b74093b0462"
+      "fcdea8b09540"
     ]
   },
   {
@@ -5317,57 +4626,6 @@
     "topic": "southern-question-origins",
     "source_article_ids": [
       "e3c9f676d665"
-    ]
-  },
-  {
-    "id": "04a12da955",
-    "text": "The 'Southern Question' (Questione Meridionale) emerged at Italian unification in 1860 as a structural problem of integrating the economically divergent South into a development model centered on the industrialized Northwest.",
-    "topic": "italian-unification",
-    "source_article_ids": [
-      "29924fd4cde0",
-      "fa6b7efa8115"
-    ]
-  },
-  {
-    "id": "a72c3ea345",
-    "text": "Whether the North-South economic gap pre-dated unification or was caused by it remains actively debated, with scholars like Eckaus, Felice, and Daniele-Malanima offering competing quantitative analyses.",
-    "topic": "economic-history",
-    "source_article_ids": [
-      "29924fd4cde0"
-    ]
-  },
-  {
-    "id": "9299304ff2",
-    "text": "Revisionist historians (Alianello, Guerri, Zitara) reframe Italian unification as a form of conquest or extraction rather than liberation, with the South treated as an internal colony.",
-    "topic": "italian-history",
-    "source_article_ids": [
-      "29924fd4cde0",
-      "fa6b7efa8115"
-    ]
-  },
-  {
-    "id": "ceef7c4037",
-    "text": "Multiple intellectual traditions offer fundamentally different explanations for the North-South divide: liberal (Nitti, Fortunato), Marxist (Gramsci), institutionalist/social capital (Putnam), and revisionist anti-Risorgimento frameworks.",
-    "topic": "political-theory",
-    "source_article_ids": [
-      "29924fd4cde0",
-      "fa6b7efa8115"
-    ]
-  },
-  {
-    "id": "dbb7324254",
-    "text": "The Southern Question has generated nearly 200 years of continuous scholarly debate (1832–2021), conducted almost entirely in Italian, reflecting its primarily domestic nature.",
-    "topic": "historiography",
-    "source_article_ids": [
-      "fa6b7efa8115"
-    ]
-  },
-  {
-    "id": "95c0f2655e",
-    "text": "Italian industrialization concentrated in Northwestern regions, reinforcing geographic inequality and creating a self-perpetuating structural divide.",
-    "topic": "economic-history",
-    "source_article_ids": [
-      "29924fd4cde0"
     ]
   },
   {
@@ -5459,8 +4717,7 @@
     "text": "Crispi deployed 40,000 troops and declared a state of siege/martial law in January 1894 to crush the Fasci Siciliani movement.",
     "topic": "state-repression",
     "source_article_ids": [
-      "e544a40f12d5",
-      "dd94b524b700"
+      "e544a40f12d5"
     ]
   },
   {
@@ -5484,8 +4741,7 @@
     "text": "Fasci leaders received sentences of 12–18 years but were pardoned after Crispi's fall from power in 1896.",
     "topic": "political-trials",
     "source_article_ids": [
-      "e544a40f12d5",
-      "dd94b524b700"
+      "e544a40f12d5"
     ]
   },
   {
@@ -5501,8 +4757,7 @@
     "text": "Women constituted a major force in the Fasci Siciliani, with over 1,000 female members in Piana degli Albanesi alone.",
     "topic": "women's-history",
     "source_article_ids": [
-      "e544a40f12d5",
-      "dd94b524b700"
+      "e544a40f12d5"
     ]
   },
   {
@@ -5562,45 +4817,10 @@
     ]
   },
   {
-    "id": "109fa3c8e1",
-    "text": "Hobsbawm classified the Fasci Siciliani as 'primitive rebels' — an archaic form of social protest predating modern labor organization — a framing that shaped English-language scholarship on the movement.",
-    "topic": "historiography",
-    "source_article_ids": [
-      "dd94b524b700",
-      "3fc6b0aa931e"
-    ]
-  },
-  {
-    "id": "91f7667bbc",
-    "text": "The word 'fascio' meant 'league' or 'bundle' in the context of the Fasci Siciliani and was ideologically unrelated to later Italian Fascism.",
-    "topic": "Italian-history",
-    "source_article_ids": [
-      "dd94b524b700"
-    ]
-  },
-  {
-    "id": "dbcf430900",
-    "text": "The Fasci Siciliani influenced transatlantic migration patterns, and Sicilian radicals carried political traditions to the United States, influencing Italian-American labor movements.",
-    "topic": "migration",
-    "source_article_ids": [
-      "dd94b524b700",
-      "3fc6b0aa931e"
-    ]
-  },
-  {
-    "id": "b207411ee0",
-    "text": "The Fasci Siciliani are studied at the intersection of three academic fields: Italian political history, Mafia studies, and migration/diaspora studies.",
-    "topic": "historiography",
-    "source_article_ids": [
-      "3fc6b0aa931e"
-    ]
-  },
-  {
     "id": "bdefe6fb84",
     "text": "Local case studies of towns like Corleone and Piana degli Albanesi reveal complex relationships between radical politics and Mafia power in 1890s Sicily.",
     "topic": "sicilian-history",
     "source_article_ids": [
-      "3fc6b0aa931e",
       "9fe03dd9b8c0"
     ]
   },
@@ -5682,8 +4902,7 @@
     "text": "The 'burning mirrors' heat ray attributed to Archimedes is a later addition not found in the earliest historical sources (Plutarch, Livy, Polybius), though a 2005 reconstruction confirmed his claw was a workable siege weapon.",
     "topic": "military-history",
     "source_article_ids": [
-      "89c1fe114171",
-      "bba5ada32995"
+      "89c1fe114171"
     ]
   },
   {
@@ -5767,32 +4986,7 @@
     "text": "The Archimedes Palimpsest, discovered in 1906, recovered works thought permanently lost and remains a critical source for reconstructing ancient mathematical knowledge.",
     "topic": "classical-scholarship",
     "source_article_ids": [
-      "02158cf3b656",
-      "bba5ada32995"
-    ]
-  },
-  {
-    "id": "78e927a4d6",
-    "text": "Dijksterhuis (1987) 'Archimedes' is the dominant modern scholarly reference on Archimedes, cited extensively in academic literature.",
-    "topic": "bibliography",
-    "source_article_ids": [
-      "bba5ada32995"
-    ]
-  },
-  {
-    "id": "dcb34ed8b4",
-    "text": "Archimedes built one of the earliest described astronomical instruments: a rod with movable colored pegs.",
-    "topic": "ancient-engineering",
-    "source_article_ids": [
-      "bba5ada32995"
-    ]
-  },
-  {
-    "id": "1ec6f075a5",
-    "text": "Archimedes credited Eudoxus specifically with volume proofs for pyramids and cones (Euclid XII.7, XII.10).",
-    "topic": "history-of-mathematics",
-    "source_article_ids": [
-      "bba5ada32995"
+      "02158cf3b656"
     ]
   },
   {
@@ -5833,72 +5027,6 @@
     "topic": "pre-socratic-philosophy",
     "source_article_ids": [
       "eae8bb966c6f"
-    ]
-  },
-  {
-    "id": "05b6d9878c",
-    "text": "Empedocles (c. 490s–430s BC) was a pre-Socratic pluralist philosopher from Acragas, Sicily, significant for early theories of elements and compounds.",
-    "topic": "pre-socratic philosophy",
-    "source_article_ids": [
-      "36a1b67543ce",
-      "d74ce55fe09b"
-    ]
-  },
-  {
-    "id": "2500636d8a",
-    "text": "Inwood (2001) is the dominant modern scholarly source on Empedocles, cited for biography, fragments, and interpretation.",
-    "topic": "classical philology",
-    "source_article_ids": [
-      "36a1b67543ce"
-    ]
-  },
-  {
-    "id": "a312b1eb6f",
-    "text": "Aristotle explicitly rejected Empedocles' theory that light travels through space, calling it contrary to argument and observation.",
-    "topic": "history of science",
-    "source_article_ids": [
-      "36a1b67543ce"
-    ]
-  },
-  {
-    "id": "e471dc6ccb",
-    "text": "Scholarship on Empedocles spans over 130 years, from Burnet (1892) to recent publications in the 2020s.",
-    "topic": "classical philology",
-    "source_article_ids": [
-      "36a1b67543ce",
-      "d74ce55fe09b"
-    ]
-  },
-  {
-    "id": "052458e9f5",
-    "text": "The Strasbourg papyrus (published 1999) represents a significant textual discovery for Empedocles scholarship.",
-    "topic": "classical philology",
-    "source_article_ids": [
-      "d74ce55fe09b"
-    ]
-  },
-  {
-    "id": "fb72a77e49",
-    "text": "Peter Kingsley's work links Empedocles to Pythagorean tradition, mystery religions, and magical practices.",
-    "topic": "pre-socratic philosophy",
-    "source_article_ids": [
-      "d74ce55fe09b"
-    ]
-  },
-  {
-    "id": "17d66eb7e9",
-    "text": "Ancient biographical tradition associates Empedocles with death by leaping into Mount Etna.",
-    "topic": "pre-socratic philosophy",
-    "source_article_ids": [
-      "d74ce55fe09b"
-    ]
-  },
-  {
-    "id": "3f85d8c35d",
-    "text": "Empedocles is studied both as a philosopher and as a poet, reflecting the inseparability of philosophy and verse in early Greek thought.",
-    "topic": "ancient Greek literature",
-    "source_article_ids": [
-      "d74ce55fe09b"
     ]
   },
   {
@@ -6028,8 +5156,6 @@
     "text": "Sicily was home to major figures across different eras of Greek and Italian culture, including Empedocles, Theocritus, and the Opera dei Pupi tradition.",
     "topic": "sicilian culture",
     "source_article_ids": [
-      "36a1b67543ce",
-      "d74ce55fe09b",
       "d7470c4b9b46",
       "c73700870267"
     ]
@@ -6040,9 +5166,7 @@
     "topic": "intangible-cultural-heritage",
     "source_article_ids": [
       "5f69e5a0d9b8",
-      "bdb356783c99",
-      "2eda07c3c8b4",
-      "fc92cf117589"
+      "bdb356783c99"
     ]
   },
   {
@@ -6067,8 +5191,7 @@
     "topic": "cultural-preservation",
     "source_article_ids": [
       "5f69e5a0d9b8",
-      "bdb356783c99",
-      "2eda07c3c8b4"
+      "bdb356783c99"
     ]
   },
   {
@@ -6093,25 +5216,7 @@
     "text": "The Opera dei Pupi tradition spread beyond Sicily to Campania, Apulia, Rome, and Naples, with adapted puppet mechanics and expanded repertoire, and Italian marionette traditions more broadly trace back to the 16th century.",
     "topic": "italian-folk-traditions",
     "source_article_ids": [
-      "bdb356783c99",
-      "fc92cf117589"
-    ]
-  },
-  {
-    "id": "a13748b3d6",
-    "text": "The term 'puparo' originally referred specifically to puppet manufacturers but has broadened in meaning over time.",
-    "topic": "sicilian-puppet-theatre",
-    "source_article_ids": [
-      "2eda07c3c8b4"
-    ]
-  },
-  {
-    "id": "82a5ed13eb",
-    "text": "Opera dei Pupi scholarship spans over 130 years from Giuseppe Pitrè (1889) to the present, with Antonio Pasqualino and Rosario Perricone as the principal scholars of the tradition.",
-    "topic": "cultural-preservation",
-    "source_article_ids": [
-      "2eda07c3c8b4",
-      "fc92cf117589"
+      "bdb356783c99"
     ]
   },
   {
@@ -6120,14 +5225,6 @@
     "topic": "performing-arts",
     "source_article_ids": [
       "bdb356783c99"
-    ]
-  },
-  {
-    "id": "2cf596c60c",
-    "text": "The Opera dei Pupi heritage community actively documents its own tradition alongside academic researchers, reflecting a participatory approach to cultural preservation.",
-    "topic": "cultural-preservation",
-    "source_article_ids": [
-      "fc92cf117589"
     ]
   },
   {
@@ -6458,24 +5555,7 @@
     "text": "Felice Romani wrote that he 'sweated for fifteen years to find a Bellini' and a single day took him away, while Verdi commented on Bellini's legacy as late as 1898 — over 60 years after his death.",
     "topic": "reception-history",
     "source_article_ids": [
-      "8b5ffafe4dc6",
-      "a15394490cfe"
-    ]
-  },
-  {
-    "id": "e9d38fe019",
-    "text": "Bellini was known as 'the Swan of Sicily/Catania' and remains widely performed today, with 671 performances of 146 productions staged in 95 cities between 2012–2015.",
-    "topic": "cultural-legacy",
-    "source_article_ids": [
-      "a15394490cfe"
-    ]
-  },
-  {
-    "id": "b496540cb7",
-    "text": "Bellini's extensive surviving correspondence provides a rich documentary record of early 19th-century Italian opera, with Weinstock (1971) and Galatopoulos (2002) being the most important English-language scholarly works.",
-    "topic": "musicology",
-    "source_article_ids": [
-      "a15394490cfe"
+      "8b5ffafe4dc6"
     ]
   },
   {

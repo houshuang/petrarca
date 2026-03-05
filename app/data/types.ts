@@ -53,7 +53,7 @@ export interface ReadingState {
   scroll_position_y: number;
 }
 
-export type ReadingDepth = 'unread' | 'summary' | 'claims' | 'sections' | 'full';
+export type ReadingDepth = 'unread' | 'summary' | 'claims' | 'concepts' | 'sections' | 'full';
 
 export interface UserSignal {
   article_id: string;
@@ -67,9 +67,13 @@ export interface UserSignal {
 
 export interface Concept {
   id: string;
-  text: string;
+  name: string;                    // Short entity name: "Garibaldi", "Greek colonization of Sicily"
+  description: string;             // 1-2 sentence explanation
+  text?: string;                   // Deprecated — old sentence-style concept text
   topic: string;
   source_article_ids: string[];
+  aliases?: string[];              // Alternative names for matching
+  related_concepts?: string[];     // IDs of related entities
 }
 
 export type ConceptKnowledgeLevel = 'unknown' | 'encountered' | 'known';

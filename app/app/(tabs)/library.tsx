@@ -11,6 +11,7 @@ const DEPTH_LABELS: Record<ReadingDepth, string> = {
   unread: '—',
   summary: 'Sum',
   claims: 'Clm',
+  concepts: 'Con',
   sections: 'Sec',
   full: 'Full',
 };

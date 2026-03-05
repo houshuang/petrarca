@@ -24,6 +24,7 @@ import * as Haptics from 'expo-haptics';
 import { logEvent } from '../data/logger';
 import { isSectionValid, parseInlineMarkdown, splitMarkdownBlocks, parseMarkdownBlock } from '../lib/markdown-utils';
 import { transcribeVoiceNote } from '../data/transcription';
+import { useIsDesktopWeb } from '../lib/use-responsive';
 import { colors, fonts, type as typeStyles, spacing, layout } from '../design/tokens';
 
 // --- Depth zone definitions ---
@@ -899,6 +900,7 @@ const landingStyles = StyleSheet.create({
 export default function BookReaderScreen() {
   const { bookId, sectionId } = useLocalSearchParams<{ bookId: string; sectionId: string }>();
   const router = useRouter();
+  const isDesktop = useIsDesktopWeb();
 
   const parsed = parseSectionId(sectionId || '');
   const book = getBookById(bookId || '');
@@ -980,9 +982,9 @@ export default function BookReaderScreen() {
           let knownCount = 0;
           let totalMatched = 0;
           for (const concept of allConcepts) {
-            const conceptText = concept.text.toLowerCase();
-            const matches = sectionTerms.some(t => conceptText.includes(t) || t.includes(conceptText))
-              || sectionClaimWords.some(c => c.includes(conceptText));
+            const cName = (concept.name || concept.text || '').toLowerCase();
+            const matches = sectionTerms.some(t => cName.includes(t) || t.includes(cName))
+              || sectionClaimWords.some(c => c.includes(cName));
             if (matches) {
               totalMatched++;
               const state = getConceptState(concept.id);
@@ -1288,13 +1290,13 @@ export default function BookReaderScreen() {
     const matched: { text: string; topic: string; known: boolean }[] = [];
     const seen = new Set<string>();
     for (const concept of allConcepts) {
-      const ct = concept.text.toLowerCase();
+      const ct = (concept.name || concept.text || '').toLowerCase();
       if (seen.has(ct)) continue;
       const relevant = sectionTerms.some(t => ct.includes(t) || t.includes(ct));
       if (relevant) {
         seen.add(ct);
         const cs = getConceptState(concept.id);
-        matched.push({ text: concept.text, topic: concept.topic, known: cs.state !== 'unknown' });
+        matched.push({ text: concept.name || concept.text || '', topic: concept.topic, known: cs.state !== 'unknown' });
       }
     }
     return {
@@ -1351,7 +1353,7 @@ export default function BookReaderScreen() {
   // --- Loading state ---
   if (loading) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, isDesktop && styles.desktopContainer]}>
         <View style={styles.topBar}>
           <Pressable onPress={() => router.back()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={22} color={colors.ink} />
@@ -1365,7 +1367,7 @@ export default function BookReaderScreen() {
   // --- Error state ---
   if (!section || !book || !parsed) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, isDesktop && styles.desktopContainer]}>
         <View style={styles.topBar}>
           <Pressable onPress={() => router.back()} style={styles.backButton}>
             <Ionicons name="arrow-back" size={22} color={colors.ink} />
@@ -1404,7 +1406,7 @@ export default function BookReaderScreen() {
   })();
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isDesktop && styles.desktopContainer]}>
       {/* Top bar */}
       <View style={styles.topBar}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
@@ -1826,10 +1828,11 @@ export default function BookReaderScreen() {
               </View>
 
               {section.key_terms.map((term, i) => {
-                const matchingConcepts = getConcepts().filter(c =>
-                  c.text.toLowerCase().includes(term.term.toLowerCase()) ||
-                  term.term.toLowerCase().includes(c.text.toLowerCase())
-                );
+                const matchingConcepts = getConcepts().filter(c => {
+                  const cName = (c.name || c.text || '').toLowerCase();
+                  return cName.includes(term.term.toLowerCase()) ||
+                    term.term.toLowerCase().includes(cName);
+                });
                 const knownConcept = matchingConcepts.find(c => {
                   const cs = getConceptState(c.id);
                   return cs.state === 'known' || cs.state === 'encountered';
@@ -2108,11 +2111,11 @@ export default function BookReaderScreen() {
                   const matchText = highlightAction.text.toLowerCase();
                   const concepts = getConcepts();
                   const matches = concepts.filter(c => {
-                    const ct = c.text.toLowerCase();
+                    const ct = (c.name || c.text || '').toLowerCase();
                     return matchText.includes(ct) || ct.split(' ').some(w => w.length > 4 && matchText.includes(w));
                   }).slice(0, 3);
                   if (matches.length > 0) {
-                    const info = matches.map(m => `${m.text} (${m.source_article_ids.length} articles)`).join(', ');
+                    const info = matches.map(m => `${(m.name || m.text || '')} (${m.source_article_ids.length} articles)`).join(', ');
                     // Show as a temporary personal thread entry
                     if (bookId && sectionId) {
                       addPersonalThreadEntry(bookId, {
@@ -2323,6 +2326,7 @@ const chapterTransitionStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.parchment },
+  desktopContainer: { maxWidth: layout.readingMeasure, alignSelf: 'center' as const, width: '100%' as any },
   topBar: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 16, paddingTop: Platform.OS === 'web' ? 12 : 56, paddingBottom: 8, gap: 8,

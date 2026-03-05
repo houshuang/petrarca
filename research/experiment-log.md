@@ -4,6 +4,26 @@
 
 ---
 
+## 2026-03-05 — Concept-Centric Reader: Entity concepts + concept chips + bottom sheet
+
+**What**: Major redesign shifting the knowledge unit from sentence-level claims to named entity concepts. Four changes:
+
+1. **Entity-style concepts**: Replaced 781 verbose sentence-concepts with 120 short named entities ("Garibaldi", "Greek colonization of Sicily", "Archimedes") extracted via `scripts/extract_entity_concepts.py` using Anthropic API. Each concept has: name (1-6 words), description, topic, aliases, related_concepts, source_article_ids.
+
+2. **Concept chips zone**: Reader's second depth zone changed from claim cards to a compact chip layout. Chips color-coded by knowledge state (neutral=unknown, green border=learning, dashed/dimmed=known). Tapping a chip opens the ConceptSheet.
+
+3. **ConceptSheet bottom sheet**: Slides up from bottom on chip tap. Shows: concept name + description, three-button state toggle (Unknown/Learning/Know this), "Also in" articles list (tappable → navigate), related concept chips (tappable → switch sheet), "Explore more" button (placeholder for exploration queue).
+
+4. **Full article zone fix**: Now renders LLM-generated `sections[].content` instead of raw `content_markdown` (which had broken Wikipedia formatting). Falls back to raw markdown only when <2 valid sections. Added "View original source →" link.
+
+**Entity extraction details**: `extract_entity_concepts.py` processes articles in batches of 5 via Anthropic API (claude -p can't run nested inside Claude Code). Extracts 5-12 entities per article, deduplicates by name/alias matching across batches, then runs a second pass for relationship extraction. 120 entities total, 77 with relationships.
+
+**Store matching changes**: `conceptMatchesText()` uses substring matching on short entity names + aliases (much more reliable than old word-overlap on full sentences). Fallback to word-overlap only for legacy long-form concepts (>6 words).
+
+**Result**: Reader feels much more natural — concepts map to real knowledge units. Chip taps → bottom sheet → navigate to related articles creates a clear exploration path. Full article text is readable now. TypeScript compiles clean across all 18 modified files.
+
+---
+
 ## 2026-03-04 — Design Explorer v5: Soniox transcription + UX fixes
 
 **What**: Three changes:

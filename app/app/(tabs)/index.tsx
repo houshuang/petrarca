@@ -72,6 +72,7 @@ const DEPTH_LABELS: Record<ReadingDepth, string> = {
   unread: '',
   summary: 'Summary',
   claims: 'Claims',
+  concepts: 'Concepts',
   sections: 'Sections',
   full: 'Full',
 };
@@ -80,6 +81,7 @@ const DEPTH_COLORS: Record<ReadingDepth, string> = {
   unread: colors.textMuted,
   summary: colors.info,
   claims: colors.rubric,
+  concepts: colors.rubric,
   sections: colors.warning,
   full: colors.success,
 };
@@ -178,6 +180,43 @@ function FeedCard({ article }: { article: Article }) {
             </Text>
           </>
         )}
+      </View>
+    </Pressable>
+  );
+}
+
+// --- Desktop Feed Card (card grid layout) ---
+
+function DesktopFeedCard({ article }: { article: Article }) {
+  const router = useRouter();
+
+  return (
+    <Pressable
+      style={({ hovered }: any) => [
+        styles.cardGridItem,
+        hovered && styles.cardGridItemHover,
+      ] as ViewStyle[]}
+      onPress={() => {
+        logEvent('feed_item_tap', { article_id: article.id, title: article.title, novelty: getNoveltyScore(article.id) });
+        router.push({ pathname: '/reader', params: { id: article.id } });
+      }}
+    >
+      <Text style={styles.cardSource}>
+        {article.hostname || 'Article'}
+      </Text>
+      <Text style={styles.cardTitle}>{getDisplayTitle(article)}</Text>
+      {article.one_line_summary && article.one_line_summary !== '[dry run]' && (
+        <Text style={styles.cardSummary} numberOfLines={3}>{article.one_line_summary}</Text>
+      )}
+      <View style={styles.cardFooter}>
+        <View style={styles.cardTags}>
+          {article.topics.slice(0, 3).map(t => (
+            <Text key={t} style={styles.cardTag}>{t}</Text>
+          ))}
+        </View>
+        {article.estimated_read_minutes ? (
+          <Text style={styles.cardTime}>{article.estimated_read_minutes} min</Text>
+        ) : null}
       </View>
     </Pressable>
   );
@@ -917,7 +956,13 @@ export default function FeedScreen() {
                       </Text>
                       <Text style={styles.explorationCount}>{explorationArticles.length}</Text>
                     </View>
-                    {sorted.slice(0, 8).map(a => <FeedCard key={a.id} article={a} />)}
+                    {isDesktop ? (
+                      <View style={styles.cardGrid}>
+                        {sorted.slice(0, 8).map(a => <DesktopFeedCard key={a.id} article={a} />)}
+                      </View>
+                    ) : (
+                      sorted.slice(0, 8).map(a => <FeedCard key={a.id} article={a} />)
+                    )}
                   </View>
                 );
               });
@@ -927,6 +972,10 @@ export default function FeedScreen() {
               <View style={styles.empty}>
                 <Text style={styles.emptyTitle}>All caught up</Text>
                 <Text style={styles.emptySubtitle}>No unread articles</Text>
+              </View>
+            ) : isDesktop ? (
+              <View style={styles.cardGrid}>
+                {listArticles.filter(a => !a.exploration_tag).map(a => <DesktopFeedCard key={a.id} article={a} />)}
               </View>
             ) : (
               listArticles.filter(a => !a.exploration_tag).map(a => <FeedCard key={a.id} article={a} />)
@@ -947,7 +996,10 @@ export default function FeedScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.parchment },
-  desktopContainer: { maxWidth: layout.contentMaxWidth, alignSelf: 'center' as const, width: '100%' as any },
+  desktopContainer: {
+    paddingHorizontal: 40,
+    paddingTop: 36,
+  },
 
   // Screen header — compact
   screenHeader: {
@@ -1115,6 +1167,75 @@ const styles = StyleSheet.create({
     color: colors.warning,
     marginTop: spacing.xs,
     fontStyle: 'italic' as const,
+  },
+
+  // Desktop card grid
+  cardGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+  cardGridItem: {
+    width: '48.5%' as any,
+    borderWidth: 1,
+    borderColor: colors.rule,
+    borderRadius: 6,
+    padding: 20,
+    backgroundColor: colors.parchment,
+  },
+  cardGridItemHover: {
+    borderColor: colors.textMuted,
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
+      transform: [{ translateY: -1 }],
+    } as any : {}),
+  },
+  cardSource: {
+    fontFamily: Platform.OS === 'web' ? "'DM Sans', sans-serif" : 'DMSans-SemiBold',
+    fontSize: 10,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase' as const,
+    color: colors.textMuted,
+    marginBottom: 6,
+    ...(Platform.OS === 'web' ? { fontWeight: '600' as any } : {}),
+  },
+  cardTitle: {
+    fontFamily: Platform.OS === 'web' ? "'EB Garamond', Georgia, serif" : 'EBGaramond-Medium',
+    fontSize: 16,
+    color: colors.ink,
+    marginBottom: 8,
+    lineHeight: 22,
+    ...(Platform.OS === 'web' ? { fontWeight: '500' as any } : {}),
+  },
+  cardSummary: {
+    fontFamily: Platform.OS === 'web' ? "'Crimson Pro', Georgia, serif" : 'CrimsonPro',
+    fontSize: 13,
+    color: colors.textBody,
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  cardTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    flex: 1,
+  },
+  cardTag: {
+    fontFamily: Platform.OS === 'web' ? "'EB Garamond', Georgia, serif" : 'EBGaramond-Italic',
+    fontSize: 12,
+    color: colors.rubric,
+    ...(Platform.OS === 'web' ? { fontStyle: 'italic' as any } : {}),
+  },
+  cardTime: {
+    fontFamily: Platform.OS === 'web' ? "'DM Sans', sans-serif" : 'DMSans',
+    fontSize: 11,
+    color: colors.textMuted,
   },
 
   // Continue Reading

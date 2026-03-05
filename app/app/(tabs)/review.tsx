@@ -113,7 +113,8 @@ function ReviewCard({ concept, review, reason, onComplete }: {
         <Text style={styles.topicTag}>{concept.topic}</Text>
 
         {/* Concept text */}
-        <Text style={styles.conceptText}>{concept.text}</Text>
+        <Text style={styles.conceptText}>{concept.name || concept.text}</Text>
+        {concept.description ? <Text style={styles.conceptDesc}>{concept.description}</Text> : null}
 
         {/* Review history info */}
         <View style={styles.statsRow}>
@@ -532,6 +533,13 @@ const styles = StyleSheet.create({
   conceptText: {
     ...type.reviewConcept,
     color: colors.textPrimary,
+    marginBottom: 4,
+  },
+  conceptDesc: {
+    fontFamily: fonts.body,
+    fontSize: 15,
+    color: colors.textSecondary,
+    lineHeight: 22,
     marginBottom: 12,
   },
   statsRow: { marginBottom: 16 },

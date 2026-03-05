@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Share, Animated } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Share, Animated, Linking, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getStats, getSignals, getArticles, getByTopic, getReadingState, getTopicKnowledgeStats, getConcepts, getVoiceNotes, getArticleById, getConceptReview } from '../../data/store';
@@ -215,7 +215,7 @@ function VoiceNotesSection({ onRefresh }: { onRefresh: () => void }) {
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
                       {matched.map(c => (
                         <View key={c.id} style={styles.conceptTag}>
-                          <Text style={styles.conceptTagText}>{c.text}</Text>
+                          <Text style={styles.conceptTagText}>{c.name || c.text}</Text>
                         </View>
                       ))}
                     </View>
@@ -364,12 +364,12 @@ export default function StatsScreen() {
   const timeLabel = totalTimeMin >= 60 ? `${totalTimeH}h` : `${totalTimeMin}m`;
 
   // Topic reading depth breakdown
-  const topicDepths = new Map<string, { summary: number; claims: number; sections: number; full: number }>();
+  const topicDepths = new Map<string, { summary: number; claims: number; concepts: number; sections: number; full: number }>();
   for (const a of articles) {
     const state = getReadingState(a.id);
     if (state.depth === 'unread') continue;
     for (const t of a.topics) {
-      if (!topicDepths.has(t)) topicDepths.set(t, { summary: 0, claims: 0, sections: 0, full: 0 });
+      if (!topicDepths.has(t)) topicDepths.set(t, { summary: 0, claims: 0, concepts: 0, sections: 0, full: 0 });
       topicDepths.get(t)![state.depth]++;
     }
   }
@@ -486,6 +486,21 @@ export default function StatsScreen() {
 
         {/* Event log */}
         <EventLogSection />
+
+        {/* User guide link */}
+        <Pressable
+          style={styles.actionBtn}
+          onPress={() => {
+            logEvent('user_guide_opened');
+            const guideUrl = Platform.OS === 'web'
+              ? '/guide/'
+              : 'https://alifstian.duckdns.org/guide/';
+            Linking.openURL(guideUrl);
+          }}
+        >
+          <Ionicons name="book-outline" size={16} color={colors.rubric} />
+          <Text style={styles.actionBtnText}>User Guide</Text>
+        </Pressable>
 
         <View style={{ height: 40 }} />
       </ScrollView>

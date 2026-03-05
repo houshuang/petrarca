@@ -33,6 +33,12 @@ export async function loadReadingStates(): Promise<Map<string, ReadingState>> {
     const raw = await AsyncStorage.getItem(READING_STATES_KEY);
     if (!raw) return new Map();
     const entries: [string, ReadingState][] = JSON.parse(raw);
+    // Migrate old 'claims' depth to 'concepts'
+    for (const [, state] of entries) {
+      if ((state.depth as string) === 'claims') {
+        state.depth = 'concepts';
+      }
+    }
     return new Map(entries);
   } catch (e) {
     console.warn('[persistence] failed to load reading states:', e);

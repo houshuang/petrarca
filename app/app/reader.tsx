@@ -7,14 +7,15 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
-import { getArticleById, getReadingState, updateReadingState, addSignal, processClaimSignalForConcepts, processImplicitEncounter, processTranscriptForConcepts, getRelatedArticles, getConceptConnections, addVoiceNote, getVoiceNotes, getHighlightBlockIndices, addHighlight, removeHighlight, updateHighlightNote, dismissArticle } from '../data/store';
-import { ReadingDepth, VoiceNote, Highlight } from '../data/types';
+import { getArticleById, getReadingState, updateReadingState, addSignal, processClaimSignalForConcepts, processImplicitEncounter, processTranscriptForConcepts, getRelatedArticles, getConceptConnections, addVoiceNote, getVoiceNotes, getHighlightBlockIndices, addHighlight, removeHighlight, updateHighlightNote, dismissArticle, getConceptsForArticleWithState, updateConceptState, getConceptState, getConcepts } from '../data/store';
+import { ReadingDepth, VoiceNote, Highlight, Concept, ConceptKnowledgeLevel } from '../data/types';
 import * as Haptics from 'expo-haptics';
 import { logEvent } from '../data/logger';
 import { isSectionValid, parseInlineMarkdown, splitMarkdownBlocks, parseMarkdownBlock } from '../lib/markdown-utils';
 import { transcribeVoiceNote } from '../data/transcription';
 import { triggerResearch, getResearchResultsForArticle } from '../data/research';
 import { getDisplayTitle } from '../lib/display-utils';
+import { useIsDesktopWeb } from '../lib/use-responsive';
 import { colors, fonts, type, spacing, layout } from '../design/tokens';
 
 // --- Local types for claim signal tracking ---
@@ -27,12 +28,12 @@ interface ClaimSignalState {
 
 // --- Depth zone definitions ---
 
-const DEPTH_ZONES = ['summary', 'claims', 'sections', 'full'] as const;
+const DEPTH_ZONES = ['summary', 'concepts', 'sections', 'full'] as const;
 type DepthZone = typeof DEPTH_ZONES[number];
 
 const DEPTH_LABELS: Record<DepthZone, string> = {
   summary: 'Summary',
-  claims: 'Claims',
+  concepts: 'Concepts',
   sections: 'Sections',
   full: 'Full Article',
 };
@@ -59,13 +60,13 @@ function stripLeadingTitle(text: string, title: string): string {
 
 // --- Floating Depth Indicator ---
 
-function FloatingDepthIndicator({ currentZone, claimCount, sectionCount }: {
+function FloatingDepthIndicator({ currentZone, conceptCount, sectionCount }: {
   currentZone: DepthZone;
-  claimCount: number;
+  conceptCount: number;
   sectionCount: number;
 }) {
   const zoneCounts: Partial<Record<DepthZone, number>> = {};
-  if (claimCount > 0) zoneCounts.claims = claimCount;
+  if (conceptCount > 0) zoneCounts.concepts = conceptCount;
   if (sectionCount > 0) zoneCounts.sections = sectionCount;
 
   return (
@@ -173,6 +174,124 @@ function ConnectionIndicator({ articleId, claimText }: {
         <Text style={styles.connectionMore}>+{count - 3} more</Text>
       )}
     </View>
+  );
+}
+
+// --- Concept detail sheet (bottom sheet overlay) ---
+
+function ConceptSheet({ concept, currentState, currentArticleId, onClose, onStateChange, onConceptTap }: {
+  concept: Concept;
+  currentState: ConceptKnowledgeLevel;
+  currentArticleId: string;
+  onClose: () => void;
+  onStateChange: (level: ConceptKnowledgeLevel) => void;
+  onConceptTap: (concept: Concept, state: ConceptKnowledgeLevel) => void;
+}) {
+  const router = useRouter();
+  const allConcepts = getConcepts();
+
+  const otherArticles = concept.source_article_ids
+    .filter(id => id !== currentArticleId)
+    .map(id => getArticleById(id))
+    .filter(Boolean);
+
+  const relatedConcepts = (concept.related_concepts || [])
+    .map(id => allConcepts.find(c => c.id === id))
+    .filter(Boolean)
+    .slice(0, 6);
+
+  const stateOptions: { level: ConceptKnowledgeLevel; label: string }[] = [
+    { level: 'unknown', label: 'Unknown' },
+    { level: 'encountered', label: 'Learning' },
+    { level: 'known', label: 'Know this' },
+  ];
+
+  return (
+    <Pressable style={styles.conceptSheetBackdrop} onPress={onClose}>
+      <Pressable style={styles.conceptSheetContainer} onPress={e => e.stopPropagation()}>
+        <View style={styles.conceptSheetHandle} />
+
+        <Text style={styles.conceptSheetName}>{concept.name || concept.text}</Text>
+        {concept.description ? (
+          <Text style={styles.conceptSheetDesc}>{concept.description}</Text>
+        ) : null}
+
+        <View style={styles.conceptSheetStateRow}>
+          {stateOptions.map(({ level, label }) => (
+            <Pressable
+              key={level}
+              style={[
+                styles.conceptSheetStateBtn,
+                currentState === level && styles.conceptSheetStateBtnActive,
+              ]}
+              onPress={() => {
+                logEvent('concept_state_change', { concept_id: concept.id, from: currentState, to: level });
+                onStateChange(level);
+              }}
+            >
+              <Text style={[
+                styles.conceptSheetStateBtnText,
+                currentState === level && styles.conceptSheetStateBtnTextActive,
+              ]}>{label}</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {otherArticles.length > 0 && (
+          <View style={styles.conceptSheetSection}>
+            <Text style={styles.conceptSheetSectionTitle}>Also in</Text>
+            {otherArticles.slice(0, 3).map(art => (
+              <Pressable
+                key={art!.id}
+                style={styles.conceptSheetArticleRow}
+                onPress={() => {
+                  logEvent('concept_sheet_article_tap', { concept_id: concept.id, target_article: art!.id });
+                  onClose();
+                  router.push({ pathname: '/reader', params: { id: art!.id } });
+                }}
+              >
+                <Text style={styles.conceptSheetArticleTitle} numberOfLines={1}>{art!.title}</Text>
+                <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+              </Pressable>
+            ))}
+          </View>
+        )}
+
+        {relatedConcepts.length > 0 && (
+          <View style={styles.conceptSheetSection}>
+            <Text style={styles.conceptSheetSectionTitle}>Related</Text>
+            <View style={styles.conceptSheetRelatedChips}>
+              {relatedConcepts.map(rc => {
+                const rcState = getConceptState(rc!.id)?.state || 'unknown';
+                return (
+                  <Pressable
+                    key={rc!.id}
+                    style={[styles.conceptChip, styles.conceptSheetRelatedChip]}
+                    onPress={() => {
+                      logEvent('concept_sheet_related_tap', { from_concept: concept.id, to_concept: rc!.id });
+                      onConceptTap(rc!, rcState);
+                    }}
+                  >
+                    <Text style={styles.conceptChipText}>{rc!.name || rc!.text}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        <Pressable
+          style={styles.conceptSheetExploreBtn}
+          onPress={() => {
+            logEvent('concept_explore_tap', { concept_id: concept.id, concept_name: concept.name || concept.text });
+            Alert.alert('Queued', `"${concept.name || concept.text}" added to exploration queue.`);
+          }}
+        >
+          <Ionicons name="compass-outline" size={16} color={colors.parchment} />
+          <Text style={styles.conceptSheetExploreBtnText}>Explore more</Text>
+        </Pressable>
+      </Pressable>
+    </Pressable>
   );
 }
 
@@ -695,6 +814,7 @@ function ResearchBanner({ transcript, articleId, articleTitle, articleSummary, c
 export default function ReaderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const isDesktop = useIsDesktopWeb();
   const article = getArticleById(id || '');
 
   // --- State ---
@@ -704,6 +824,7 @@ export default function ReaderScreen() {
   const [activeClaimPill, setActiveClaimPill] = useState<number | null>(null);
   const [signaledClaimCount, setSignaledClaimCount] = useState(0);
   const [researchBanner, setResearchBanner] = useState<{ transcript: string; noteId: string } | null>(null);
+  const [selectedConcept, setSelectedConcept] = useState<{ concept: Concept; state: ConceptKnowledgeLevel } | null>(null);
   const [highlightedBlocks, setHighlightedBlocks] = useState<Set<number>>(new Set());
   const [articleResearchCount, setArticleResearchCount] = useState(0);
   const [showRestoredIndicator, setShowRestoredIndicator] = useState(false);
@@ -718,7 +839,7 @@ export default function ReaderScreen() {
   // Section layout positions for depth zone tracking
   const zonePositions = useRef<Record<DepthZone, number>>({
     summary: 0,
-    claims: 0,
+    concepts: 0,
     sections: 0,
     full: 0,
   });
@@ -845,7 +966,7 @@ export default function ReaderScreen() {
       // Update reading state depth
       const depthMap: Record<DepthZone, ReadingDepth> = {
         summary: 'summary',
-        claims: 'claims',
+        concepts: 'concepts',
         sections: 'sections',
         full: 'full',
       };
@@ -966,7 +1087,7 @@ export default function ReaderScreen() {
       return next;
     });
     const mappedSignal = signal === 'interesting' ? 'interesting' : signal === 'save' ? 'save' : 'knew_it';
-    addSignal({ article_id: article.id, signal: mappedSignal, timestamp: Date.now(), depth: 'claims' });
+    addSignal({ article_id: article.id, signal: mappedSignal, timestamp: Date.now(), depth: 'concepts' });
     processClaimSignalForConcepts(article.id, article.key_claims[claimIndex] || '', mappedSignal);
     logEvent('reader_claim_signal_inline', {
       article_id: article.id,
@@ -1058,7 +1179,7 @@ export default function ReaderScreen() {
   // --- Error state ---
   if (!article) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, isDesktop && styles.desktopContainer]}>
         <Text style={styles.errorText}>Article not found</Text>
         <Pressable onPress={() => router.back()}>
           <Text style={styles.backLink}>Back to feed</Text>
@@ -1068,7 +1189,7 @@ export default function ReaderScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isDesktop && styles.desktopContainer]}>
       {/* Top bar */}
       <View style={styles.topBar}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
@@ -1161,7 +1282,7 @@ export default function ReaderScreen() {
       {/* Sticky floating depth indicator */}
       <FloatingDepthIndicator
         currentZone={currentZone}
-        claimCount={article.key_claims.length}
+        conceptCount={getConceptsForArticleWithState(article.id).length}
         sectionCount={article.sections.filter(isSectionValid).length}
       />
 
@@ -1211,7 +1332,7 @@ export default function ReaderScreen() {
             </View>
             <Text style={styles.timeGuideSep}>·</Text>
             <View style={styles.timeGuideItem}>
-              <Text style={styles.timeGuideText}>2m claims</Text>
+              <Text style={styles.timeGuideText}>1m concepts</Text>
             </View>
             {article.sections.length > 1 && (
               <>
@@ -1263,72 +1384,53 @@ export default function ReaderScreen() {
           })()}
         </View>
 
-        {/* ═══════════ CLAIMS ZONE ═══════════ */}
-        <View onLayout={onZoneLayout('claims')}>
-          {article.key_claims.length > 0 && (
-            <>
-              <View style={styles.divider}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>✦ KEY CLAIMS</Text>
-                <View style={styles.dividerLine} />
-              </View>
+        {/* ═══════════ CONCEPTS ZONE ═══════════ */}
+        <View onLayout={onZoneLayout('concepts')}>
+          {(() => {
+            const articleConcepts = getConceptsForArticleWithState(article.id);
+            if (articleConcepts.length === 0) return null;
+            return (
+              <>
+                <View style={styles.divider}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerText}>✦ CONCEPTS</Text>
+                  <View style={styles.dividerLine} />
+                </View>
 
-              {/* Claims progress */}
-              {totalClaims > 0 && (
-                <Text style={styles.claimsProgress}>
-                  {signaledClaimCount} of {totalClaims} claims reviewed
-                </Text>
-              )}
-
-              {article.key_claims.map((claim, i) => {
-                const signal = claimSignals[i];
-                return (
-                  <View key={i}>
-                    <View style={[
-                      styles.claimCard,
-                      signal === 'knew_it' && styles.claimCardKnew,
-                      signal === 'interesting' && styles.claimCardNew,
-                      signal === 'save' && styles.claimCardSave,
-                    ]}>
-                      <Text style={styles.claimCardText}>{claim}</Text>
-                      <View style={styles.claimActions}>
-                        <Pressable
-                          style={[styles.claimBtn, signal === 'knew_it' && styles.claimBtnActiveKnew]}
-                          onPress={() => handleClaimSignal(i, 'knew_it')}
-                        >
-                          <Text style={[styles.claimBtnText, signal === 'knew_it' && { color: colors.textMuted }]}>Knew this</Text>
-                        </Pressable>
-                        <Pressable
-                          style={[styles.claimBtn, styles.claimBtnNewBorder, signal === 'interesting' && styles.claimBtnActiveNew]}
-                          onPress={() => handleClaimSignal(i, 'interesting')}
-                        >
-                          <Text style={[styles.claimBtnText, { color: colors.claimNew }, signal === 'interesting' && { color: colors.parchment }]}>New to me</Text>
-                        </Pressable>
-                        <Pressable
-                          style={styles.claimResearchBtn}
-                          onPress={() => {
-                            logEvent('claim_research_tap', { article_id: article.id, claim_index: i });
-                            triggerResearch({
-                              query: claim,
-                              articleId: article.id,
-                              articleTitle: article.title,
-                              articleSummary: article.one_line_summary,
-                              concepts: article.topics,
-                            });
-                            setResearchBanner({ transcript: claim, noteId: `claim_${i}` });
-                          }}
-                        >
-                          <Ionicons name="search" size={12} color={colors.rubric} />
-                          <Text style={styles.claimResearchText}>Research</Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                    <ConnectionIndicator articleId={article.id} claimText={claim} />
-                  </View>
-                );
-              })}
-            </>
-          )}
+                <View style={styles.conceptChipsContainer}>
+                  {articleConcepts.map(({ concept, state }) => (
+                    <Pressable
+                      key={concept.id}
+                      style={[
+                        styles.conceptChip,
+                        state === 'unknown' && styles.conceptChipUnknown,
+                        state === 'encountered' && styles.conceptChipLearning,
+                        state === 'known' && styles.conceptChipKnown,
+                      ]}
+                      onPress={() => {
+                        logEvent('concept_chip_tap', { article_id: article.id, concept_id: concept.id, concept_name: concept.name || concept.text });
+                        setSelectedConcept({ concept, state });
+                      }}
+                    >
+                      <View style={[
+                        styles.conceptChipDot,
+                        state === 'unknown' && { backgroundColor: colors.textMuted },
+                        state === 'encountered' && { backgroundColor: colors.claimNew },
+                        state === 'known' && { backgroundColor: colors.textMuted },
+                      ]} />
+                      <Text style={[
+                        styles.conceptChipText,
+                        state === 'encountered' && { color: colors.claimNew },
+                        state === 'known' && { color: colors.textMuted, opacity: 0.7 },
+                      ]}>
+                        {concept.name || concept.text}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            );
+          })()}
         </View>
 
         {/* ═══════════ SECTIONS ZONE ═══════════ */}
@@ -1360,14 +1462,43 @@ export default function ReaderScreen() {
             <View style={styles.dividerLine} />
           </View>
 
-          <MarkdownText
-            content={article.content_markdown}
-            claimHighlights={article.key_claims}
-            claimSignals={claimSignals}
-            onClaimTap={handleInlineClaimTap}
-            highlightedBlocks={highlightedBlocks}
-            onBlockLongPress={handleBlockLongPress}
-          />
+          {/* Use clean LLM-generated sections when available, fall back to raw markdown */}
+          {article.sections.filter(isSectionValid).length > 1 ? (
+            article.sections.filter(isSectionValid).map((section, i) => (
+              <View key={i} style={{ marginBottom: spacing.lg }}>
+                <Text style={styles.fullSectionHeading}>{section.heading}</Text>
+                <MarkdownText
+                  content={section.content}
+                  claimHighlights={article.key_claims}
+                  claimSignals={claimSignals}
+                  onClaimTap={handleInlineClaimTap}
+                  highlightedBlocks={highlightedBlocks}
+                  onBlockLongPress={handleBlockLongPress}
+                />
+              </View>
+            ))
+          ) : (
+            <MarkdownText
+              content={article.content_markdown}
+              claimHighlights={article.key_claims}
+              claimSignals={claimSignals}
+              onClaimTap={handleInlineClaimTap}
+              highlightedBlocks={highlightedBlocks}
+              onBlockLongPress={handleBlockLongPress}
+            />
+          )}
+
+          {article.source_url && (
+            <Pressable
+              style={styles.viewOriginalLink}
+              onPress={() => {
+                logEvent('view_original_source', { article_id: article.id, url: article.source_url });
+                Linking.openURL(article.source_url);
+              }}
+            >
+              <Text style={styles.viewOriginalText}>View original source →</Text>
+            </Pressable>
+          )}
         </View>
 
         {/* Related articles (connection prompting) */}
@@ -1425,6 +1556,23 @@ export default function ReaderScreen() {
           currentSignal={claimSignals[activeClaimPill]}
           onSignal={handleInlineClaimSignal}
           onDismiss={() => setActiveClaimPill(null)}
+        />
+      )}
+
+      {/* Concept detail sheet */}
+      {selectedConcept && article && (
+        <ConceptSheet
+          concept={selectedConcept.concept}
+          currentState={selectedConcept.state}
+          currentArticleId={article.id}
+          onClose={() => setSelectedConcept(null)}
+          onStateChange={(level) => {
+            updateConceptState(selectedConcept.concept.id, level);
+            setSelectedConcept({ ...selectedConcept, state: level });
+          }}
+          onConceptTap={(concept, state) => {
+            setSelectedConcept({ concept, state });
+          }}
         />
       )}
 
@@ -1495,6 +1643,7 @@ export default function ReaderScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.parchment },
+  desktopContainer: { maxWidth: layout.readingMeasure, alignSelf: 'center' as const, width: '100%' as any },
   topBar: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: layout.screenPadding, paddingTop: Platform.OS === 'web' ? 12 : 56, paddingBottom: spacing.sm, gap: 12,
@@ -2059,5 +2208,188 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 14,
     textAlign: 'center' as const,
+  },
+
+  // Concept chips
+  conceptChipsContainer: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    gap: 8,
+    paddingVertical: spacing.sm,
+  },
+  conceptChip: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 4,
+    backgroundColor: colors.parchmentDark,
+    borderWidth: 1,
+    borderColor: colors.rule,
+  },
+  conceptChipUnknown: {},
+  conceptChipLearning: {
+    borderColor: colors.claimNew,
+    backgroundColor: 'transparent',
+  },
+  conceptChipKnown: {
+    borderColor: colors.rule,
+    borderStyle: 'dashed' as const,
+    opacity: 0.6,
+  },
+  conceptChipDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.textMuted,
+  },
+  conceptChipText: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.ink,
+  },
+
+  // Full article section headings
+  fullSectionHeading: {
+    fontFamily: fonts.bodyMedium,
+    color: colors.ink,
+    fontSize: 17,
+    ...(Platform.OS === 'web' ? { fontWeight: '600' } : {}),
+    marginBottom: spacing.sm,
+    lineHeight: 24,
+  },
+
+  // View original source link
+  viewOriginalLink: {
+    paddingVertical: spacing.lg,
+    alignItems: 'center' as const,
+    marginTop: spacing.md,
+  },
+  viewOriginalText: {
+    fontFamily: fonts.body,
+    color: colors.rubric,
+    fontSize: 13,
+  },
+
+  // Concept sheet (bottom sheet overlay)
+  conceptSheetBackdrop: {
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'flex-end' as const,
+    zIndex: 200,
+  },
+  conceptSheetContainer: {
+    backgroundColor: colors.parchment,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: 24,
+    paddingBottom: 40,
+    maxHeight: '70%' as any,
+    borderTopWidth: 1,
+    borderTopColor: colors.rule,
+  },
+  conceptSheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.rule,
+    alignSelf: 'center' as const,
+    marginBottom: 20,
+  },
+  conceptSheetName: {
+    fontFamily: fonts.bodyMedium,
+    color: colors.ink,
+    fontSize: 20,
+    ...(Platform.OS === 'web' ? { fontWeight: '600' } : {}),
+    marginBottom: 8,
+  },
+  conceptSheetDesc: {
+    fontFamily: fonts.reading,
+    color: colors.textSecondary,
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 20,
+  },
+  conceptSheetStateRow: {
+    flexDirection: 'row' as const,
+    gap: 8,
+    marginBottom: 24,
+  },
+  conceptSheetStateBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.rule,
+    alignItems: 'center' as const,
+    backgroundColor: 'transparent',
+  },
+  conceptSheetStateBtnActive: {
+    backgroundColor: colors.rubric,
+    borderColor: colors.rubric,
+  },
+  conceptSheetStateBtnText: {
+    fontFamily: fonts.body,
+    color: colors.textSecondary,
+    fontSize: 13,
+  },
+  conceptSheetStateBtnTextActive: {
+    color: colors.parchment,
+  },
+  conceptSheetSection: {
+    marginBottom: 20,
+  },
+  conceptSheetSectionTitle: {
+    fontFamily: fonts.ui,
+    color: colors.textMuted,
+    fontSize: 11,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 1,
+    marginBottom: 8,
+  },
+  conceptSheetArticleRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.rule,
+  },
+  conceptSheetArticleTitle: {
+    fontFamily: fonts.body,
+    color: colors.ink,
+    fontSize: 14,
+    flex: 1,
+    marginRight: 8,
+  },
+  conceptSheetRelatedChips: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    gap: 6,
+  },
+  conceptSheetRelatedChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  conceptSheetExploreBtn: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 8,
+    backgroundColor: colors.rubric,
+    paddingVertical: 12,
+    borderRadius: 4,
+    marginTop: 4,
+  },
+  conceptSheetExploreBtnText: {
+    fontFamily: fonts.body,
+    color: colors.parchment,
+    fontSize: 14,
+    fontWeight: '500' as const,
   },
 });
