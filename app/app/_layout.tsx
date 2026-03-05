@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Tabs } from 'expo-router';
 import { View, Text, ActivityIndicator, StyleSheet, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Font from 'expo-font';
 import { initStore, getReviewQueue } from '../data/store';
 import { startNewSession, logEvent } from '../data/logger';
 import { requestNotificationPermissions, scheduleDailyReviewReminder } from '../lib/notifications';
+import { useIsDesktopWeb } from '../lib/use-responsive';
+import { WebSidebar } from '../components/WebSidebar';
 import { colors } from '../design/tokens/colors';
 
 const fontAssets = {
@@ -40,6 +43,7 @@ function TabLabel({ label, focused }: { label: string; focused: boolean }) {
 
 export default function Layout() {
   const [ready, setReady] = useState(false);
+  const isDesktop = useIsDesktopWeb();
 
   useEffect(() => {
     (async () => {
@@ -68,18 +72,20 @@ export default function Layout() {
     );
   }
 
-  return (
+  const tabs = (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.ink,
         tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: {
-          backgroundColor: colors.parchmentDark,
-          borderTopColor: colors.ruleDark,
-          borderTopWidth: 1.5,
-          ...(Platform.OS === 'web' ? { height: 56 } : {}),
-        },
+        tabBarStyle: isDesktop
+          ? { display: 'none' }
+          : {
+              backgroundColor: colors.parchmentDark,
+              borderTopColor: colors.ruleDark,
+              borderTopWidth: 1.5,
+              ...(Platform.OS === 'web' ? { height: 56 } : {}),
+            },
         tabBarShowLabel: false,
       }}
       screenListeners={{
@@ -141,6 +147,21 @@ export default function Layout() {
       />
     </Tabs>
   );
+
+  if (isDesktop) {
+    return (
+      <View style={styles.desktopRoot}>
+        <WebSidebar />
+        <View style={styles.desktopContent}>{tabs}</View>
+      </View>
+    );
+  }
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.parchment }} edges={['top']}>
+      {tabs}
+    </SafeAreaView>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -157,6 +178,13 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'web' ? "'Cormorant Garamond', Georgia, serif" : 'CormorantGaramond',
     fontStyle: 'italic',
   },
+  desktopRoot: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  desktopContent: {
+    flex: 1,
+  },
 });
 
 const tabStyles = StyleSheet.create({
@@ -172,7 +200,7 @@ const tabStyles = StyleSheet.create({
   },
   label: {
     fontFamily: Platform.OS === 'web' ? "'EB Garamond', Georgia, serif" : 'EBGaramond',
-    fontSize: 11,
+    fontSize: 13,
     color: colors.textMuted,
   },
   labelActive: {
