@@ -1,25 +1,17 @@
 import { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Platform, ViewStyle } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { getLibraryArticles, getByTopic, getReadingState, getArticles, getHighlights, getArticleById, getBooks, getBookById, getBooksByTopic, getBookProgress, getBookReadingState, getBookChapterSections, getCachedBookSections, getBooksNeedingContextRestore, getSectionReadingState } from '../data/store';
 import { Article, ReadingDepth, Highlight, Book, BookChapterMeta, BookReadingDepth } from '../data/types';
 import { logEvent } from '../data/logger';
+import { colors, fonts, type } from '../design/tokens';
 
-const DEPTH_COLORS: Record<ReadingDepth, string> = {
-  unread: '#475569',
-  summary: '#3b82f6',
-  claims: '#8b5cf6',
-  sections: '#f59e0b',
-  full: '#10b981',
-};
-
-const DEPTH_ICONS: Record<ReadingDepth, string> = {
-  unread: 'ellipse-outline',
-  summary: 'eye-outline',
-  claims: 'list-outline',
-  sections: 'book-outline',
-  full: 'checkmark-circle',
+const DEPTH_LABELS: Record<ReadingDepth, string> = {
+  unread: '—',
+  summary: 'Sum',
+  claims: 'Clm',
+  sections: 'Sec',
+  full: 'Full',
 };
 
 function LibraryItem({ article }: { article: Article }) {
@@ -32,20 +24,13 @@ function LibraryItem({ article }: { article: Article }) {
     <Pressable
       style={({ hovered }: any) => [
         styles.item,
-        hovered && Platform.OS === 'web' && { backgroundColor: '#253347' },
+        hovered && Platform.OS === 'web' && { backgroundColor: colors.parchmentHover },
       ] as ViewStyle[]}
       onPress={() => {
         logEvent('library_item_tap', { article_id: article.id, depth: state.depth });
         router.push({ pathname: '/reader', params: { id: article.id } });
       }}
     >
-      <View style={styles.itemLeft}>
-        <Ionicons
-          name={DEPTH_ICONS[state.depth] as any}
-          size={20}
-          color={DEPTH_COLORS[state.depth]}
-        />
-      </View>
       <View style={styles.itemContent}>
         <Text style={styles.itemTitle} numberOfLines={2}>{article.title}</Text>
         <View style={styles.itemMeta}>
@@ -53,6 +38,13 @@ function LibraryItem({ article }: { article: Article }) {
           {timeMin > 0 && <Text style={styles.itemMetaText}>{timeMin} min spent</Text>}
           {lastRead && <Text style={styles.itemMetaText}>{lastRead}</Text>}
         </View>
+      </View>
+      <View style={styles.sidebar}>
+        <Text style={styles.sideLabel}>DEPTH</Text>
+        <Text style={[
+          styles.sideValue,
+          { color: state.depth === 'unread' ? colors.textMuted : state.depth === 'full' ? colors.rubric : colors.ink },
+        ]}>{DEPTH_LABELS[state.depth]}</Text>
       </View>
     </Pressable>
   );
@@ -69,7 +61,7 @@ function HighlightItem({ highlight }: { highlight: Highlight }) {
     <Pressable
       style={({ hovered }: any) => [
         styles.highlightItem,
-        hovered && Platform.OS === 'web' && { backgroundColor: '#253347' },
+        hovered && Platform.OS === 'web' && { backgroundColor: colors.parchmentHover },
       ] as ViewStyle[]}
       onPress={() => {
         logEvent('library_highlight_tap', { article_id: highlight.article_id, block_index: highlight.block_index });
@@ -89,7 +81,6 @@ function HighlightsView() {
   if (allHighlights.length === 0) {
     return (
       <View style={styles.empty}>
-        <Ionicons name="color-wand-outline" size={48} color="#475569" />
         <Text style={styles.emptyTitle}>No highlights yet</Text>
         <Text style={styles.emptySubtitle}>Long-press paragraphs while reading to highlight</Text>
       </View>
@@ -136,12 +127,12 @@ function ContextRestoreBanner({ items }: { items: Array<{ book: Book; lastSectio
             router.push({ pathname: '/book-reader', params: { bookId: book.id, sectionId: lastSectionId } });
           }}
         >
-          <Ionicons name="bookmark" size={14} color="#f59e0b" />
+          <View style={shelfStyles.restoreDot} />
           <View style={{ flex: 1 }}>
             <Text style={shelfStyles.restoreBookTitle} numberOfLines={1}>{book.title}</Text>
             <Text style={shelfStyles.restoreMeta}>{daysSince} days ago</Text>
           </View>
-          <Ionicons name="chevron-forward" size={14} color="#64748b" />
+          <Text style={shelfStyles.restoreChevron}>›</Text>
         </Pressable>
       ))}
     </View>
@@ -163,9 +154,9 @@ function ChapterRow({ bookId, chapter }: { bookId: string; chapter: BookChapterM
         {sectionIds.map((sid) => {
           const state = bookState.section_states[sid];
           const depth = state?.depth || 'unread';
-          const color = depth === 'unread' ? '#334155'
-            : depth === 'reflected' ? '#10b981'
-            : '#3b82f6';
+          const color = depth === 'unread' ? colors.textMuted
+            : depth === 'reflected' ? colors.success
+            : colors.ink;
           return (
             <Pressable
               key={sid}
@@ -207,10 +198,7 @@ function BookShelfItem({ book }: { book: Book }) {
     <View style={shelfStyles.bookItem}>
       <Pressable onPress={() => setExpanded(!expanded)} style={shelfStyles.bookHeader}>
         <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Ionicons name="book" size={16} color="#60a5fa" />
-            <Text style={shelfStyles.bookTitle} numberOfLines={1}>{book.title}</Text>
-          </View>
+          <Text style={shelfStyles.bookTitle} numberOfLines={1}>{book.title}</Text>
           <Text style={shelfStyles.bookAuthor}>{book.author}</Text>
           <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
             <Text style={shelfStyles.bookMeta}>{progress.pct}% read</Text>
@@ -221,7 +209,7 @@ function BookShelfItem({ book }: { book: Book }) {
             <View style={[shelfStyles.progressFill, { width: `${progress.pct}%` }]} />
           </View>
         </View>
-        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color="#64748b" />
+        <Text style={shelfStyles.chevron}>{expanded ? '‹' : '›'}</Text>
       </Pressable>
 
       {/* Suggested next section */}
@@ -233,11 +221,10 @@ function BookShelfItem({ book }: { book: Book }) {
             router.push({ pathname: '/book-reader', params: { bookId: book.id, sectionId: nextSection.sectionId } });
           }}
         >
-          <Ionicons name="play-circle-outline" size={16} color="#34d399" />
           <Text style={shelfStyles.suggestedNextText}>
             Continue: Ch {nextSection.chapterNum}, §{nextSection.sectionNum}
           </Text>
-          <Ionicons name="arrow-forward" size={12} color="#34d399" />
+          <Text style={shelfStyles.suggestedNextArrow}>→</Text>
         </Pressable>
       )}
 
@@ -250,7 +237,6 @@ function BookShelfItem({ book }: { book: Book }) {
               router.push({ pathname: '/book-reader', params: { bookId: book.id, sectionId: '' } });
             }}
           >
-            <Ionicons name="map-outline" size={14} color="#60a5fa" />
             <Text style={shelfStyles.openLandingText}>Book overview</Text>
           </Pressable>
           {book.chapters
@@ -278,7 +264,7 @@ function ShelfTopicGroup({ topic, books, articles }: { topic: string; books: Boo
         <Text style={styles.topicTitle}>{topic}</Text>
         <View style={styles.topicRight}>
           <Text style={styles.topicCount}>{books.length} books · {articles.length} articles</Text>
-          <Ionicons name={collapsed ? 'chevron-down' : 'chevron-up'} size={16} color="#64748b" />
+          <Text style={styles.chevronText}>{collapsed ? '›' : '‹'}</Text>
         </View>
       </Pressable>
       {!collapsed && (
@@ -286,7 +272,7 @@ function ShelfTopicGroup({ topic, books, articles }: { topic: string; books: Boo
           {books.map(book => <BookShelfItem key={book.id} book={book} />)}
           {articles.slice(0, 5).map(a => <LibraryItem key={a.id} article={a} />)}
           {articles.length > 5 && (
-            <Text style={{ color: '#64748b', fontSize: 12, padding: 14, textAlign: 'center' }}>
+            <Text style={styles.moreText}>
               +{articles.length - 5} more articles
             </Text>
           )}
@@ -304,7 +290,6 @@ function ShelfView() {
   if (books.length === 0) {
     return (
       <View style={styles.empty}>
-        <Ionicons name="book-outline" size={48} color="#475569" />
         <Text style={styles.emptyTitle}>No books yet</Text>
         <Text style={styles.emptySubtitle}>Books will appear here once ingested</Text>
       </View>
@@ -339,34 +324,34 @@ export default function LibraryScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Screen title */}
+      <View style={styles.header}>
+        <Text style={styles.screenTitle}>Library</Text>
+        <Text style={styles.screenSubtitle}>your reading collection</Text>
+        <View style={styles.doubleRule}>
+          <View style={styles.ruleThick} />
+          <View style={styles.ruleThin} />
+        </View>
+      </View>
+
+      {/* View mode pills */}
       <View style={styles.toggleRow}>
-        <Pressable
-          style={[styles.toggleBtn, viewMode === 'recent' && styles.toggleActive]}
-          onPress={() => { logEvent('library_view_mode', { mode: 'recent' }); setViewMode('recent'); }}
-        >
-          <Text style={[styles.toggleText, viewMode === 'recent' && styles.toggleTextActive]}>Recent</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.toggleBtn, viewMode === 'topic' && styles.toggleActive]}
-          onPress={() => { logEvent('library_view_mode', { mode: 'topic' }); setViewMode('topic'); }}
-        >
-          <Text style={[styles.toggleText, viewMode === 'topic' && styles.toggleTextActive]}>By Topic</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.toggleBtn, viewMode === 'shelf' && styles.toggleActive]}
-          onPress={() => { logEvent('library_view_mode', { mode: 'shelf' }); setViewMode('shelf'); }}
-        >
-          <Text style={[styles.toggleText, viewMode === 'shelf' && styles.toggleTextActive]}>Shelf</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.toggleBtn, viewMode === 'highlights' && styles.toggleActive]}
-          onPress={() => { logEvent('library_view_mode', { mode: 'highlights' }); setViewMode('highlights'); }}
-        >
-          <Text style={[styles.toggleText, viewMode === 'highlights' && styles.toggleTextActive]}>Highlights</Text>
-        </Pressable>
+        {(['recent', 'topic', 'shelf', 'highlights'] as const).map((mode) => {
+          const labels = { recent: 'Recent', topic: 'By Topic', shelf: 'Shelf', highlights: 'Highlights' };
+          const active = viewMode === mode;
+          return (
+            <Pressable
+              key={mode}
+              style={[styles.toggleBtn, active && styles.toggleActive]}
+              onPress={() => { logEvent('library_view_mode', { mode }); setViewMode(mode); }}
+            >
+              <Text style={[styles.toggleText, active && styles.toggleTextActive]}>{labels[mode]}</Text>
+            </Pressable>
+          );
+        })}
         <View style={{ flex: 1 }} />
         <Pressable onPress={() => forceUpdate(n => n + 1)}>
-          <Ionicons name="refresh" size={18} color="#64748b" />
+          <Text style={styles.refreshText}>✦</Text>
         </Pressable>
       </View>
 
@@ -374,7 +359,6 @@ export default function LibraryScreen() {
         {viewMode === 'recent' ? (
           library.length === 0 ? (
             <View style={styles.empty}>
-              <Ionicons name="library-outline" size={48} color="#475569" />
               <Text style={styles.emptyTitle}>Nothing here yet</Text>
               <Text style={styles.emptySubtitle}>Articles you read will appear here</Text>
             </View>
@@ -410,13 +394,13 @@ function TopicGroup({ topic, articles }: { topic: string; articles: Article[] })
         }}
         style={({ hovered }: any) => [
           styles.topicHeader,
-          hovered && Platform.OS === 'web' && { backgroundColor: '#253347' },
+          hovered && Platform.OS === 'web' && { backgroundColor: colors.parchmentHover },
         ] as ViewStyle[]}
       >
         <Text style={styles.topicTitle}>{topic}</Text>
         <View style={styles.topicRight}>
           <Text style={styles.topicCount}>{articles.length}</Text>
-          <Ionicons name={collapsed ? 'chevron-down' : 'chevron-up'} size={16} color="#64748b" />
+          <Text style={styles.chevronText}>{collapsed ? '›' : '‹'}</Text>
         </View>
       </Pressable>
       {!collapsed && articles.map(a => <LibraryItem key={a.id} article={a} />)}
@@ -425,124 +409,335 @@ function TopicGroup({ topic, articles }: { topic: string; articles: Article[] })
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
-  toggleRow: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, gap: 8, alignItems: 'center' },
-  toggleBtn: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20, backgroundColor: '#1e293b' },
-  toggleActive: { backgroundColor: '#2563eb' },
-  toggleText: { color: '#94a3b8', fontSize: 14 },
-  toggleTextActive: { color: '#f8fafc' },
-  scroll: { flex: 1, paddingHorizontal: 16, paddingTop: 8 },
-
-  item: { flexDirection: 'row', backgroundColor: '#1e293b', borderRadius: 10, padding: 14, marginBottom: 8, gap: 12 },
-  itemLeft: { paddingTop: 2 },
-  itemContent: { flex: 1 },
-  itemTitle: { color: '#f8fafc', fontSize: 15, fontWeight: '500', lineHeight: 20, marginBottom: 4 },
-  itemMeta: { flexDirection: 'row', gap: 8 },
-  itemMetaText: { color: '#64748b', fontSize: 12 },
-
-  topicGroup: { marginBottom: 4, borderRadius: 10, overflow: 'hidden', backgroundColor: '#1e293b' },
-  topicHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 14 },
-  topicTitle: { color: '#f8fafc', fontSize: 15, fontWeight: '600' },
-  topicRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  topicCount: { color: '#64748b', fontSize: 13, backgroundColor: '#334155', paddingHorizontal: 8, paddingVertical: 1, borderRadius: 10 },
-
-  empty: { justifyContent: 'center', alignItems: 'center', paddingTop: 100, gap: 8 },
-  emptyTitle: { color: '#f8fafc', fontSize: 20, fontWeight: '700' },
-  emptySubtitle: { color: '#94a3b8', fontSize: 14 },
-
-  highlightItem: {
-    backgroundColor: '#1e293b',
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: '#f59e0b',
+  container: {
+    flex: 1,
+    backgroundColor: colors.parchment,
   },
-  highlightArticleTitle: { color: '#60a5fa', fontSize: 12, fontWeight: '500', marginBottom: 4 },
-  highlightText: { color: '#e2e8f0', fontSize: 14, lineHeight: 20, marginBottom: 4 },
-  highlightMeta: { color: '#64748b', fontSize: 11 },
+  header: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 0,
+  },
+  screenTitle: {
+    ...type.screenTitle,
+    color: colors.ink,
+  },
+  screenSubtitle: {
+    ...type.screenSubtitle,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  doubleRule: {
+    marginTop: 10,
+    gap: 5,
+  },
+  ruleThick: {
+    height: 2,
+    backgroundColor: colors.ruleDark,
+  },
+  ruleThin: {
+    height: 1,
+    backgroundColor: colors.ruleDark,
+  },
+
+  toggleRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+    gap: 8,
+    alignItems: 'center',
+  },
+  toggleBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: 20,
+    backgroundColor: 'transparent',
+  },
+  toggleActive: {
+    backgroundColor: colors.rubric,
+  },
+  toggleText: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 13,
+    color: colors.textMuted,
+    ...(Platform.OS === 'web' ? { fontWeight: '500' } : {}),
+  },
+  toggleTextActive: {
+    color: colors.parchment,
+  },
+  refreshText: {
+    fontSize: 16,
+    color: colors.rubric,
+  },
+
+  scroll: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+  },
+
+  // Entry rows
+  item: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.rule,
+    paddingVertical: 12,
+  },
+  itemContent: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  itemTitle: {
+    ...type.entryTitle,
+    color: colors.textPrimary,
+    marginBottom: 4,
+  },
+  itemMeta: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  itemMetaText: {
+    ...type.metadata,
+    color: colors.textMuted,
+  },
+  sidebar: {
+    width: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderLeftWidth: 1,
+    borderLeftColor: colors.rule,
+    paddingLeft: 8,
+  },
+  sideLabel: {
+    ...type.sideLabel,
+    color: colors.textMuted,
+  },
+  sideValue: {
+    ...type.sideValue,
+    color: colors.ink,
+    marginTop: 2,
+  },
+
+  // Topic groups
+  topicGroup: {
+    marginBottom: 4,
+  },
+  topicHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.rule,
+  },
+  topicTitle: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 16,
+    color: colors.ink,
+    ...(Platform.OS === 'web' ? { fontWeight: '500' } : {}),
+  },
+  topicRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  topicCount: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 13,
+    color: colors.rubric,
+    ...(Platform.OS === 'web' ? { fontWeight: '500' } : {}),
+  },
+  chevronText: {
+    fontFamily: fonts.body,
+    fontSize: 18,
+    color: colors.textMuted,
+  },
+  moreText: {
+    ...type.metadata,
+    color: colors.textMuted,
+    padding: 14,
+    textAlign: 'center',
+  },
+
+  // Empty states
+  empty: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 100,
+    gap: 8,
+  },
+  emptyTitle: {
+    ...type.screenTitle,
+    color: colors.ink,
+    fontSize: 20,
+  },
+  emptySubtitle: {
+    ...type.entrySummary,
+    color: colors.textSecondary,
+  },
+
+  // Highlights
+  highlightItem: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.rule,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.warning,
+    paddingLeft: 12,
+  },
+  highlightArticleTitle: {
+    ...type.metadata,
+    color: colors.rubric,
+    marginBottom: 4,
+  },
+  highlightText: {
+    fontFamily: fonts.readingItalic,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.textBody,
+    marginBottom: 4,
+    ...(Platform.OS === 'web' ? { fontStyle: 'italic' } : {}),
+  },
+  highlightMeta: {
+    ...type.metadata,
+    color: colors.textMuted,
+  },
 });
 
 const shelfStyles = StyleSheet.create({
   bookItem: {
-    backgroundColor: '#1e293b',
-    borderRadius: 10,
-    marginHorizontal: 0,
-    marginBottom: 4,
     borderLeftWidth: 3,
-    borderLeftColor: '#60a5fa',
+    borderLeftColor: colors.rubric,
+    marginBottom: 4,
+    paddingLeft: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.rule,
   },
   bookHeader: {
     flexDirection: 'row',
-    padding: 14,
+    paddingVertical: 12,
     alignItems: 'center',
     gap: 12,
   },
-  bookTitle: { color: '#f8fafc', fontSize: 15, fontWeight: '600' },
-  bookAuthor: { color: '#94a3b8', fontSize: 13 },
-  bookMeta: { color: '#64748b', fontSize: 12 },
+  bookTitle: {
+    ...type.entryTitle,
+    color: colors.textPrimary,
+  },
+  bookAuthor: {
+    ...type.entrySummary,
+    color: colors.textSecondary,
+  },
+  bookMeta: {
+    ...type.metadata,
+    color: colors.textMuted,
+  },
+  chevron: {
+    fontFamily: fonts.body,
+    fontSize: 18,
+    color: colors.textMuted,
+  },
   progressBar: {
     height: 3,
-    backgroundColor: '#334155',
-    borderRadius: 2,
+    backgroundColor: colors.rule,
     marginTop: 6,
   },
   progressFill: {
     height: 3,
-    backgroundColor: '#3b82f6',
-    borderRadius: 2,
+    backgroundColor: colors.ink,
   },
-  chapterList: { paddingHorizontal: 14, paddingBottom: 10 },
+  chapterList: {
+    paddingHorizontal: 0,
+    paddingBottom: 10,
+  },
   openLandingBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingVertical: 8,
-    paddingHorizontal: 10,
-    backgroundColor: '#0f172a',
-    borderRadius: 8,
-    marginBottom: 8,
   },
-  openLandingText: { color: '#60a5fa', fontSize: 13, fontWeight: '500' },
-  chapterRow: { paddingVertical: 6 },
-  chapterTitle: { color: '#94a3b8', fontSize: 13, marginBottom: 4 },
-  sectionDots: { flexDirection: 'row', gap: 4, flexWrap: 'wrap' },
+  openLandingText: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 13,
+    color: colors.rubric,
+    ...(Platform.OS === 'web' ? { fontWeight: '500' } : {}),
+  },
+  chapterRow: {
+    paddingVertical: 6,
+  },
+  chapterTitle: {
+    ...type.entrySummary,
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  sectionDots: {
+    flexDirection: 'row',
+    gap: 4,
+    flexWrap: 'wrap',
+  },
   sectionDot: {
     width: 12,
     height: 12,
     borderRadius: 6,
   },
   restoreBanner: {
-    backgroundColor: '#1e293b',
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 12,
+    paddingVertical: 12,
+    marginBottom: 8,
     borderLeftWidth: 3,
-    borderLeftColor: '#f59e0b',
+    borderLeftColor: colors.warning,
+    paddingLeft: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.rule,
   },
-  restoreTitle: { color: '#f59e0b', fontSize: 14, fontWeight: '600', marginBottom: 8 },
+  restoreTitle: {
+    ...type.sectionHead,
+    color: colors.rubric,
+    marginBottom: 8,
+  },
+  restoreDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.rubric,
+  },
   restoreItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     paddingVertical: 6,
   },
-  restoreBookTitle: { color: '#f8fafc', fontSize: 14 },
-  restoreMeta: { color: '#64748b', fontSize: 12 },
+  restoreBookTitle: {
+    ...type.entryTitle,
+    fontSize: 14,
+    color: colors.textPrimary,
+  },
+  restoreMeta: {
+    ...type.metadata,
+    color: colors.textMuted,
+  },
+  restoreChevron: {
+    fontFamily: fonts.body,
+    fontSize: 16,
+    color: colors.textMuted,
+  },
   suggestedNext: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: 6,
-    paddingHorizontal: 14,
     paddingVertical: 8,
-    backgroundColor: '#052e16',
     borderTopWidth: 1,
-    borderTopColor: '#064e3b',
+    borderTopColor: colors.rule,
   },
   suggestedNextText: {
-    color: '#34d399',
+    fontFamily: fonts.readingMedium,
     fontSize: 13,
-    fontWeight: '500' as const,
+    color: colors.rubric,
     flex: 1,
+    ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}),
+  },
+  suggestedNextArrow: {
+    fontFamily: fonts.body,
+    fontSize: 14,
+    color: colors.rubric,
   },
 });

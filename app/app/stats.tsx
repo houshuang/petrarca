@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Share } from 'react-native';
+import { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, Share, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getStats, getSignals, getArticles, getByTopic, getReadingState, getTopicKnowledgeStats, getConcepts, getVoiceNotes, getArticleById, getConceptReview } from '../data/store';
 import { logEvent, getLogFiles, exportAllLogs, getLogDirectory } from '../data/logger';
 import { transcribeAllPending } from '../data/transcription';
 import { ResearchResult } from '../data/types';
 import { getResearchResults, fetchResearchResults } from '../data/research';
+import { colors, fonts, type, spacing, layout } from '../design/tokens';
 
 function EventLogSection() {
   const [logFileList, setLogFileList] = useState<string[]>([]);
@@ -28,7 +29,7 @@ function EventLogSection() {
   return (
     <View style={styles.section}>
       <Pressable onPress={() => setExpanded(!expanded)}>
-        <Text style={styles.sectionTitle}>Event Log</Text>
+        <Text style={styles.sectionHead}>✦ EVENT LOG</Text>
       </Pressable>
       <Text style={styles.sectionSubtitle}>
         {logFileList.length} log file{logFileList.length !== 1 ? 's' : ''} · {getLogDirectory()}
@@ -37,11 +38,11 @@ function EventLogSection() {
       {expanded && (
         <View style={{ marginTop: 8 }}>
           {logFileList.map(f => (
-            <Text key={f} style={{ color: '#cbd5e1', fontSize: 13, marginBottom: 2 }}>{f}</Text>
+            <Text key={f} style={styles.logFileName}>{f}</Text>
           ))}
-          <Pressable style={[styles.refreshBtn, { marginTop: 8 }]} onPress={handleExport}>
-            <Ionicons name="share-outline" size={16} color="#60a5fa" />
-            <Text style={styles.refreshText}>Export all logs</Text>
+          <Pressable style={[styles.actionBtn, { marginTop: 8 }]} onPress={handleExport}>
+            <Ionicons name="share-outline" size={16} color={colors.rubric} />
+            <Text style={styles.actionBtnText}>Export all logs</Text>
           </Pressable>
         </View>
       )}
@@ -53,59 +54,74 @@ function KnowledgeDashboard() {
   const concepts = getConcepts();
   const stats = getStats();
   const topicStats = getTopicKnowledgeStats();
+  const barAnims = useRef<Animated.Value[]>([]);
+
+  const sortedTopics = concepts.length > 0
+    ? [...topicStats.entries()].sort((a, b) => b[1].total - a[1].total)
+    : [];
+
+  // Initialize animation values
+  if (barAnims.current.length !== sortedTopics.length) {
+    barAnims.current = sortedTopics.map(() => new Animated.Value(0));
+  }
+
+  useEffect(() => {
+    if (sortedTopics.length === 0) return;
+    const animations = barAnims.current.map((anim, i) =>
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 400,
+        delay: i * 60,
+        useNativeDriver: false,
+      })
+    );
+    Animated.parallel(animations).start();
+  }, [sortedTopics.length]);
 
   if (concepts.length === 0) {
     return (
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Knowledge Map</Text>
+        <Text style={styles.sectionHead}>✦ KNOWLEDGE BY TOPIC</Text>
         <Text style={styles.sectionSubtitle}>Concept tracking will appear here as you read and signal on claims</Text>
       </View>
     );
   }
 
-  const sortedTopics = [...topicStats.entries()]
-    .sort((a, b) => b[1].total - a[1].total);
-
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Knowledge Map</Text>
+      <Text style={styles.sectionHead}>✦ KNOWLEDGE BY TOPIC</Text>
       <Text style={styles.sectionSubtitle}>
         {stats.knownConcepts} known · {stats.encounteredConcepts} encountered · {concepts.length} total concepts
       </Text>
 
-      {/* Overall progress */}
-      <View style={[styles.progressBar, { marginTop: 8, marginBottom: 16 }]}>
-        <View style={[styles.progressFill, {
-          width: `${Math.round(((stats.knownConcepts + stats.encounteredConcepts) / Math.max(1, concepts.length)) * 100)}%`,
-          backgroundColor: '#10b981',
-        }]} />
-      </View>
-
-      {/* Per-topic breakdown */}
-      {sortedTopics.map(([topic, counts]) => {
-        const knownPct = counts.total > 0 ? (counts.known / counts.total) * 100 : 0;
-        const encounteredPct = counts.total > 0 ? (counts.encountered / counts.total) * 100 : 0;
+      {sortedTopics.map(([topic, counts], idx) => {
+        const pct = counts.total > 0 ? ((counts.known + counts.encountered) / counts.total) * 100 : 0;
+        const anim = barAnims.current[idx];
+        const animatedWidth = anim
+          ? anim.interpolate({ inputRange: [0, 1], outputRange: ['0%', `${pct}%`] })
+          : `${pct}%` as `${number}%`;
         return (
           <View key={topic} style={styles.topicRow}>
-            <Text style={styles.topicName} numberOfLines={1}>{topic}</Text>
-            <View style={styles.topicBar}>
-              {counts.known > 0 && <View style={[styles.topicSegment, { width: `${knownPct}%`, backgroundColor: '#10b981' }]} />}
-              {counts.encountered > 0 && <View style={[styles.topicSegment, { width: `${encounteredPct}%`, backgroundColor: '#f59e0b' }]} />}
+            <View style={styles.topicLabelRow}>
+              <Text style={styles.topicName} numberOfLines={1}>{topic}</Text>
+              <Text style={styles.topicCount}>{counts.known + counts.encountered}</Text>
             </View>
-            <Text style={styles.topicCount}>{counts.known + counts.encountered}/{counts.total}</Text>
+            <View style={styles.topicBar}>
+              <Animated.View style={[styles.topicFill, { width: animatedWidth }]} />
+            </View>
           </View>
         );
       })}
 
       {sortedTopics.length > 0 && (
-        <View style={{ flexDirection: 'row', gap: 16, marginTop: 8 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10b981' }} />
-            <Text style={{ color: '#64748b', fontSize: 11 }}>Known</Text>
+        <View style={styles.legendRow}>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: colors.ink }]} />
+            <Text style={styles.legendLabel}>Known</Text>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#f59e0b' }} />
-            <Text style={{ color: '#64748b', fontSize: 11 }}>Encountered</Text>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: colors.rubric }]} />
+            <Text style={styles.legendLabel}>Encountered</Text>
           </View>
         </View>
       )}
@@ -114,10 +130,10 @@ function KnowledgeDashboard() {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: '#64748b',
-  processing: '#3b82f6',
-  completed: '#10b981',
-  failed: '#ef4444',
+  pending: colors.textMuted,
+  processing: colors.info,
+  completed: colors.success,
+  failed: colors.rubric,
 };
 
 function VoiceNotesSection({ onRefresh }: { onRefresh: () => void }) {
@@ -143,7 +159,7 @@ function VoiceNotesSection({ onRefresh }: { onRefresh: () => void }) {
 
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Voice Notes</Text>
+      <Text style={styles.sectionHead}>✦ VOICE NOTES</Text>
       <Text style={styles.sectionSubtitle}>
         {notes.length} note{notes.length !== 1 ? 's' : ''} · {totalDuration}s total · {uniqueArticles} article{uniqueArticles !== 1 ? 's' : ''}
         {transcribed > 0 ? ` · ${transcribed} transcribed` : ''}
@@ -151,12 +167,12 @@ function VoiceNotesSection({ onRefresh }: { onRefresh: () => void }) {
 
       {pending > 0 && (
         <Pressable
-          style={[styles.refreshBtn, { marginBottom: 8, opacity: transcribing ? 0.5 : 1 }]}
+          style={[styles.actionBtn, { marginBottom: 8, opacity: transcribing ? 0.5 : 1 }]}
           onPress={handleTranscribeAll}
           disabled={transcribing}
         >
-          <Ionicons name={transcribing ? 'hourglass-outline' : 'cloud-upload-outline'} size={16} color="#60a5fa" />
-          <Text style={styles.refreshText}>
+          <Ionicons name={transcribing ? 'hourglass-outline' : 'cloud-upload-outline'} size={16} color={colors.rubric} />
+          <Text style={styles.actionBtnText}>
             {transcribing ? 'Transcribing...' : `Transcribe All (${pending})`}
           </Text>
         </Pressable>
@@ -165,7 +181,7 @@ function VoiceNotesSection({ onRefresh }: { onRefresh: () => void }) {
       {notes.slice(0, 10).map(n => {
         const article = getArticleById(n.article_id);
         const isExpanded = expandedNote === n.id;
-        const statusColor = STATUS_COLORS[n.transcription_status] || '#64748b';
+        const statusColor = STATUS_COLORS[n.transcription_status] || colors.textMuted;
         return (
           <Pressable
             key={n.id}
@@ -173,18 +189,18 @@ function VoiceNotesSection({ onRefresh }: { onRefresh: () => void }) {
             style={{ marginBottom: 8 }}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Ionicons name="mic" size={14} color="#60a5fa" />
-              <Text style={{ color: '#cbd5e1', fontSize: 13, flex: 1 }} numberOfLines={1}>
+              <View style={styles.rubricDot} />
+              <Text style={styles.voiceNoteTitle} numberOfLines={1}>
                 {article?.title || n.article_id}
               </Text>
-              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: statusColor }} />
-              <Text style={{ color: '#64748b', fontSize: 11 }}>
+              <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+              <Text style={styles.voiceNoteDuration}>
                 {Math.round(n.duration_ms / 1000)}s
               </Text>
             </View>
             {isExpanded && n.transcript && (
-              <View style={{ marginLeft: 22, marginTop: 4 }}>
-                <Text style={{ color: '#94a3b8', fontSize: 13, lineHeight: 19 }}>
+              <View style={{ marginLeft: 20, marginTop: 4 }}>
+                <Text style={styles.voiceNoteTranscript}>
                   {n.transcript}
                 </Text>
                 {(() => {
@@ -196,8 +212,8 @@ function VoiceNotesSection({ onRefresh }: { onRefresh: () => void }) {
                   return (
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
                       {matched.map(c => (
-                        <View key={c.id} style={{ backgroundColor: '#3b1f7e', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 }}>
-                          <Text style={{ color: '#c4b5fd', fontSize: 11 }}>{c.text}</Text>
+                        <View key={c.id} style={styles.conceptTag}>
+                          <Text style={styles.conceptTagText}>{c.text}</Text>
                         </View>
                       ))}
                     </View>
@@ -206,7 +222,7 @@ function VoiceNotesSection({ onRefresh }: { onRefresh: () => void }) {
               </View>
             )}
             {isExpanded && !n.transcript && (
-              <Text style={{ color: '#64748b', fontSize: 12, marginTop: 4, marginLeft: 22, fontStyle: 'italic' }}>
+              <Text style={styles.voiceNoteStatus}>
                 {n.transcription_status === 'pending' ? 'Pending transcription' :
                  n.transcription_status === 'processing' ? 'Transcribing...' :
                  n.transcription_status === 'failed' ? 'Transcription failed' : 'No transcript'}
@@ -241,29 +257,29 @@ function ResearchResultsSection({ onRefresh }: { onRefresh: () => void }) {
   if (results.length === 0) return null;
 
   const completed = results.filter(r => r.status === 'completed');
-  const pending = results.filter(r => r.status === 'pending' || r.status === 'processing');
+  const pendingResults = results.filter(r => r.status === 'pending' || r.status === 'processing');
 
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Research Results</Text>
+      <Text style={styles.sectionHead}>✦ RESEARCH</Text>
       <Text style={styles.sectionSubtitle}>
-        {completed.length} completed{pending.length > 0 ? ` · ${pending.length} in progress` : ''}
+        {completed.length} completed{pendingResults.length > 0 ? ` · ${pendingResults.length} in progress` : ''}
       </Text>
 
       <Pressable
-        style={[styles.refreshBtn, { marginBottom: 8, opacity: fetching ? 0.5 : 1 }]}
+        style={[styles.actionBtn, { marginBottom: 8, opacity: fetching ? 0.5 : 1 }]}
         onPress={handleFetch}
         disabled={fetching}
       >
-        <Ionicons name={fetching ? 'hourglass-outline' : 'cloud-download-outline'} size={16} color="#8b5cf6" />
-        <Text style={[styles.refreshText, { color: '#8b5cf6' }]}>
+        <Ionicons name={fetching ? 'hourglass-outline' : 'cloud-download-outline'} size={16} color={colors.rubric} />
+        <Text style={styles.actionBtnText}>
           {fetching ? 'Checking...' : 'Check for new results'}
         </Text>
       </Pressable>
 
       {results.slice(0, 10).map(r => {
         const isExpanded = expandedResult === r.id;
-        const statusColor = STATUS_COLORS[r.status] || '#64748b';
+        const statusColor = STATUS_COLORS[r.status] || colors.textMuted;
         return (
           <Pressable
             key={r.id}
@@ -276,13 +292,12 @@ function ResearchResultsSection({ onRefresh }: { onRefresh: () => void }) {
             style={styles.researchCard}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Ionicons name="search" size={14} color="#8b5cf6" />
-              <Text style={{ color: '#cbd5e1', fontSize: 13, flex: 1 }} numberOfLines={1}>
+              <Text style={styles.researchTitle} numberOfLines={1}>
                 {r.article_title}
               </Text>
-              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: statusColor }} />
+              <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
             </View>
-            <Text style={{ color: '#94a3b8', fontSize: 12, marginTop: 4 }} numberOfLines={isExpanded ? undefined : 1}>
+            <Text style={styles.researchQuery} numberOfLines={isExpanded ? undefined : 1}>
               {r.query}
             </Text>
 
@@ -316,13 +331,13 @@ function ResearchResultsSection({ onRefresh }: { onRefresh: () => void }) {
             )}
 
             {isExpanded && r.status === 'failed' && r.error && (
-              <Text style={{ color: '#ef4444', fontSize: 12, marginTop: 6, fontStyle: 'italic' }}>
+              <Text style={styles.researchError}>
                 {r.error}
               </Text>
             )}
 
             {isExpanded && (r.status === 'pending' || r.status === 'processing') && (
-              <Text style={{ color: '#f59e0b', fontSize: 12, marginTop: 6, fontStyle: 'italic' }}>
+              <Text style={styles.researchPending}>
                 Research in progress...
               </Text>
             )}
@@ -341,6 +356,8 @@ export default function StatsScreen() {
   const topicMap = getByTopic();
 
   const totalTimeMin = Math.round(stats.totalTimeMs / 60000);
+  const totalTimeH = Math.round(totalTimeMin / 60) || totalTimeMin;
+  const timeLabel = totalTimeMin >= 60 ? `${totalTimeH}h` : `${totalTimeMin}m`;
 
   // Topic reading depth breakdown
   const topicDepths = new Map<string, { summary: number; claims: number; sections: number; full: number }>();
@@ -353,55 +370,53 @@ export default function StatsScreen() {
     }
   }
 
-  const pct = stats.total > 0 ? Math.round((stats.read / stats.total) * 100) : 0;
+  const concepts = getConcepts();
+  const crossLinks = concepts.filter(c => c.source_article_ids && c.source_article_ids.length > 1).length;
 
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Reading progress */}
-        <View style={styles.progressSection}>
-          <Text style={styles.sectionTitle}>Reading Progress</Text>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, { width: `${pct}%` }]} />
-          </View>
-          <Text style={styles.progressLabel}>{stats.read} / {stats.total} articles ({pct}%)</Text>
+        {/* Header */}
+        <Text style={styles.screenTitle}>Progress</Text>
+        <Text style={styles.screenSubtitle}>Your reading journey at a glance</Text>
+
+        {/* Double rule */}
+        <View style={styles.doubleRule}>
+          <View style={styles.ruleTop} />
+          <View style={styles.ruleBottom} />
         </View>
 
-        {/* Stats grid */}
-        <View style={styles.statsGrid}>
-          <View style={[styles.statBox, { borderLeftColor: '#2563eb' }]}>
+        {/* Stats row */}
+        <View style={styles.statsRow}>
+          <View style={styles.statItem}>
             <Text style={styles.statNumber}>{stats.total}</Text>
-            <Text style={styles.statLabel}>Articles</Text>
+            <Text style={styles.statLabel}>ARTICLES</Text>
           </View>
-          <View style={[styles.statBox, { borderLeftColor: '#10b981' }]}>
-            <Text style={styles.statNumber}>{stats.full}</Text>
-            <Text style={styles.statLabel}>Finished</Text>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{concepts.length}</Text>
+            <Text style={styles.statLabel}>CONCEPTS</Text>
           </View>
-          <View style={[styles.statBox, { borderLeftColor: '#f59e0b' }]}>
-            <Text style={styles.statNumber}>{stats.read - stats.full}</Text>
-            <Text style={styles.statLabel}>In Progress</Text>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{crossLinks}</Text>
+            <Text style={styles.statLabel}>LINKS</Text>
           </View>
-          <View style={[styles.statBox, { borderLeftColor: '#8b5cf6' }]}>
-            <Text style={styles.statNumber}>{totalTimeMin}</Text>
-            <Text style={styles.statLabel}>Min Spent</Text>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{timeLabel}</Text>
+            <Text style={styles.statLabel}>READING</Text>
           </View>
         </View>
 
-        {/* Depth breakdown */}
+        {/* Reading depth */}
         {stats.read > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Reading Depth</Text>
-            <Text style={styles.sectionSubtitle}>How deep you've gone into articles</Text>
-            <View style={styles.depthBreakdown}>
-              {([['Summary', stats.summary, '#3b82f6'], ['Claims', stats.claims, '#8b5cf6'],
-                ['Sections', stats.sections, '#f59e0b'], ['Full', stats.full, '#10b981']] as const).map(([label, count, color]) => (
-                count > 0 && (
-                  <View key={label} style={styles.depthRow}>
-                    <View style={[styles.depthDot, { backgroundColor: color }]} />
-                    <Text style={styles.depthLabel}>{label}</Text>
-                    <Text style={styles.depthCount}>{count}</Text>
-                  </View>
-                )
+            <Text style={styles.sectionHead}>✦ READING DEPTH</Text>
+            <View style={styles.depthGrid}>
+              {([['Summary', stats.summary, false], ['Claims', stats.claims, true],
+                ['Sections', stats.sections, false], ['Full', stats.full, false]] as const).map(([label, count, highlighted]) => (
+                <View key={label} style={styles.depthCell}>
+                  <Text style={[styles.depthNumber, highlighted && { color: colors.rubric }]}>{count}</Text>
+                  <Text style={styles.depthLabel}>{label}</Text>
+                </View>
               ))}
             </View>
           </View>
@@ -410,21 +425,21 @@ export default function StatsScreen() {
         {/* Topic coverage */}
         {topicDepths.size > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Topics Explored</Text>
+            <Text style={styles.sectionHead}>✦ TOPICS EXPLORED</Text>
             {[...topicDepths.entries()]
               .sort((a, b) => Object.values(b[1]).reduce((s, n) => s + n, 0) - Object.values(a[1]).reduce((s, n) => s + n, 0))
               .map(([topic, counts]) => {
                 const total = Object.values(counts).reduce((s, n) => s + n, 0);
+                const pct = stats.read > 0 ? (total / stats.read) * 100 : 0;
                 return (
                   <View key={topic} style={styles.topicRow}>
-                    <Text style={styles.topicName}>{topic}</Text>
-                    <View style={styles.topicBar}>
-                      {counts.summary > 0 && <View style={[styles.topicSegment, { width: `${(counts.summary / total) * 100}%`, backgroundColor: '#3b82f6' }]} />}
-                      {counts.claims > 0 && <View style={[styles.topicSegment, { width: `${(counts.claims / total) * 100}%`, backgroundColor: '#8b5cf6' }]} />}
-                      {counts.sections > 0 && <View style={[styles.topicSegment, { width: `${(counts.sections / total) * 100}%`, backgroundColor: '#f59e0b' }]} />}
-                      {counts.full > 0 && <View style={[styles.topicSegment, { width: `${(counts.full / total) * 100}%`, backgroundColor: '#10b981' }]} />}
+                    <View style={styles.topicLabelRow}>
+                      <Text style={styles.topicName} numberOfLines={1}>{topic}</Text>
+                      <Text style={styles.topicCount}>{total}</Text>
                     </View>
-                    <Text style={styles.topicCount}>{total}</Text>
+                    <View style={styles.topicBar}>
+                      <View style={[styles.topicFill, { width: `${Math.min(pct, 100)}%` }]} />
+                    </View>
                   </View>
                 );
               })}
@@ -433,19 +448,19 @@ export default function StatsScreen() {
 
         {/* Content sources */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Content Sources</Text>
+          <Text style={styles.sectionHead}>✦ CONTENT SOURCES</Text>
           {[...topicMap.entries()]
             .sort((a, b) => b[1].length - a[1].length)
             .slice(0, 10)
             .map(([topic, arts]) => (
-              <View key={topic} style={styles.coverageRow}>
-                <Text style={styles.coverageTopic}>{topic}</Text>
-                <Text style={styles.coverageCount}>{arts.length} articles</Text>
+              <View key={topic} style={styles.sourceRow}>
+                <Text style={styles.sourceTopic} numberOfLines={1}>{topic}</Text>
+                <Text style={styles.sourceCount}>{arts.length}</Text>
               </View>
             ))}
         </View>
 
-        {/* Research results — promoted to top for visibility */}
+        {/* Research results */}
         <ResearchResultsSection onRefresh={() => forceUpdate(n => n + 1)} />
 
         {/* Knowledge dashboard */}
@@ -455,9 +470,9 @@ export default function StatsScreen() {
         <VoiceNotesSection onRefresh={() => forceUpdate(n => n + 1)} />
 
         {/* Refresh */}
-        <Pressable style={styles.refreshBtn} onPress={() => { logEvent('stats_refresh'); forceUpdate(n => n + 1); }}>
-          <Ionicons name="refresh" size={16} color="#60a5fa" />
-          <Text style={styles.refreshText}>Refresh stats</Text>
+        <Pressable style={styles.actionBtn} onPress={() => { logEvent('stats_refresh'); forceUpdate(n => n + 1); }}>
+          <Ionicons name="refresh" size={16} color={colors.rubric} />
+          <Text style={styles.actionBtnText}>Refresh stats</Text>
         </Pressable>
 
         {/* Event log */}
@@ -470,59 +485,297 @@ export default function StatsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
-  scroll: { flex: 1, paddingHorizontal: 16, paddingTop: 12 },
-  section: { marginBottom: 20 },
-  sectionTitle: { color: '#f8fafc', fontSize: 18, fontWeight: '700', marginBottom: 4 },
-  sectionSubtitle: { color: '#64748b', fontSize: 13, marginBottom: 12 },
-  progressSection: { marginBottom: 20 },
-  progressBar: { height: 8, backgroundColor: '#1e293b', borderRadius: 4, marginTop: 8, overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: '#2563eb', borderRadius: 4 },
-  progressLabel: { color: '#94a3b8', fontSize: 13, marginTop: 4 },
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
-  statBox: { flex: 1, minWidth: '45%', backgroundColor: '#1e293b', borderRadius: 12, padding: 14, borderLeftWidth: 3 },
-  statNumber: { color: '#f8fafc', fontSize: 28, fontWeight: '700' },
-  statLabel: { color: '#94a3b8', fontSize: 13 },
-  depthBreakdown: { gap: 6 },
-  depthRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  depthDot: { width: 10, height: 10, borderRadius: 5 },
-  depthLabel: { color: '#cbd5e1', fontSize: 14, flex: 1 },
-  depthCount: { color: '#64748b', fontSize: 14, fontWeight: '600' },
-  topicRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
-  topicName: { color: '#cbd5e1', fontSize: 13, width: 100 },
-  topicBar: { flex: 1, height: 12, backgroundColor: '#1e293b', borderRadius: 6, flexDirection: 'row', overflow: 'hidden' },
-  topicSegment: { height: '100%' },
-  topicCount: { color: '#64748b', fontSize: 12, width: 24, textAlign: 'right' },
-  coverageRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#1e293b' },
-  coverageTopic: { color: '#cbd5e1', fontSize: 14 },
-  coverageCount: { color: '#64748b', fontSize: 13 },
-  refreshBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, marginTop: 8 },
-  refreshText: { color: '#60a5fa', fontSize: 14 },
+  container: { flex: 1, backgroundColor: colors.parchment },
+  scroll: { flex: 1, paddingHorizontal: layout.screenPadding, paddingTop: 12 },
+
+  // Header
+  screenTitle: {
+    ...type.screenTitle,
+    color: colors.ink,
+  },
+  screenSubtitle: {
+    ...type.screenSubtitle,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+
+  // Double rule
+  doubleRule: {
+    marginTop: 12,
+    marginBottom: 16,
+    gap: layout.doubleRuleGap,
+  },
+  ruleTop: {
+    height: layout.doubleRuleTop,
+    backgroundColor: colors.ink,
+  },
+  ruleBottom: {
+    height: layout.doubleRuleBottom,
+    backgroundColor: colors.ink,
+  },
+
+  // Stats row
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingBottom: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.rule,
+    marginBottom: 20,
+  },
+  statItem: {
+    alignItems: 'center',
+  },
+  statNumber: {
+    ...type.statNumber,
+    color: colors.ink,
+  },
+  statLabel: {
+    ...type.statLabel,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+
+  // Sections
+  section: { marginBottom: 24 },
+  sectionHead: {
+    ...type.sectionHead,
+    color: colors.rubric,
+    marginBottom: 4,
+  },
+  sectionSubtitle: {
+    fontFamily: fonts.ui,
+    fontSize: 11,
+    color: colors.textMuted,
+    marginBottom: 12,
+  },
+
+  // Reading depth
+  depthGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  depthCell: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  depthNumber: {
+    fontFamily: fonts.body,
+    fontSize: 18,
+    color: colors.ink,
+  },
+  depthLabel: {
+    fontFamily: fonts.ui,
+    fontSize: 8,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 2,
+  },
+
+  // Topic rows (shared by Topics Explored and Knowledge By Topic)
+  topicRow: {
+    marginBottom: 10,
+  },
+  topicLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 3,
+  },
+  topicName: {
+    fontFamily: fonts.body,
+    fontSize: 13.5,
+    color: colors.ink,
+    flex: 1,
+    marginRight: 8,
+  },
+  topicCount: {
+    fontFamily: fonts.ui,
+    fontSize: 11,
+    color: colors.textMuted,
+  },
+  topicBar: {
+    height: layout.progressBarHeight,
+    backgroundColor: colors.rule,
+    overflow: 'hidden',
+  },
+  topicFill: {
+    height: '100%',
+    backgroundColor: colors.ink,
+  },
+
+  // Source rows
+  sourceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.rule,
+  },
+  sourceTopic: {
+    fontFamily: fonts.body,
+    fontSize: 13.5,
+    color: colors.ink,
+    flex: 1,
+    marginRight: 8,
+  },
+  sourceCount: {
+    fontFamily: fonts.ui,
+    fontSize: 11,
+    color: colors.textMuted,
+  },
+
+  // Legend
+  legendRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginTop: 8,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  legendDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  legendLabel: {
+    fontFamily: fonts.ui,
+    fontSize: 9,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+
+  // Action buttons
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    marginTop: 8,
+  },
+  actionBtnText: {
+    fontFamily: fonts.ui,
+    fontSize: 12,
+    color: colors.rubric,
+  },
+
+  // Status dot
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+
+  // Rubric dot
+  rubricDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.rubric,
+  },
+
+  // Voice notes
+  voiceNoteTitle: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.ink,
+    flex: 1,
+  },
+  voiceNoteDuration: {
+    fontFamily: fonts.ui,
+    fontSize: 11,
+    color: colors.textMuted,
+  },
+  voiceNoteTranscript: {
+    fontFamily: fonts.reading,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.textSecondary,
+  },
+  voiceNoteStatus: {
+    fontFamily: fonts.readingItalic,
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 4,
+    marginLeft: 20,
+  },
+  conceptTag: {
+    backgroundColor: colors.parchmentDark,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.rule,
+  },
+  conceptTagText: {
+    fontFamily: fonts.body,
+    fontSize: 11,
+    color: colors.rubric,
+  },
 
   // Research results
   researchCard: {
-    backgroundColor: '#1e293b',
-    borderRadius: 10,
-    padding: 12,
+    paddingVertical: 10,
+    paddingLeft: 12,
     marginBottom: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: '#7c3aed',
+    borderLeftWidth: 2,
+    borderLeftColor: colors.rubric,
+  },
+  researchTitle: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.ink,
+    flex: 1,
+  },
+  researchQuery: {
+    fontFamily: fonts.reading,
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 4,
   },
   researchSubhead: {
-    color: '#a78bfa',
-    fontSize: 12,
-    fontWeight: '600' as const,
-    textTransform: 'uppercase' as const,
+    fontFamily: fonts.uiMedium,
+    fontSize: 9,
+    color: colors.rubric,
+    textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 6,
   },
   researchItem: {
-    color: '#cbd5e1',
+    fontFamily: fonts.reading,
     fontSize: 13,
     lineHeight: 20,
+    color: colors.textBody,
     marginBottom: 8,
     paddingLeft: 8,
-    borderLeftWidth: 2,
-    borderLeftColor: '#334155',
+    borderLeftWidth: 1,
+    borderLeftColor: colors.rule,
+  },
+  researchError: {
+    fontFamily: fonts.readingItalic,
+    fontSize: 12,
+    color: colors.rubric,
+    marginTop: 6,
+  },
+  researchPending: {
+    fontFamily: fonts.readingItalic,
+    fontSize: 12,
+    color: colors.warning,
+    marginTop: 6,
+  },
+
+  // Event log
+  logFileName: {
+    fontFamily: fonts.ui,
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 2,
   },
 });

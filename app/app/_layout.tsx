@@ -1,10 +1,42 @@
 import { useEffect, useState } from 'react';
 import { Tabs } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { View, Text, ActivityIndicator, StyleSheet, Platform } from 'react-native';
+import * as Font from 'expo-font';
 import { initStore, getReviewQueue } from '../data/store';
 import { startNewSession, logEvent } from '../data/logger';
 import { requestNotificationPermissions, scheduleDailyReviewReminder } from '../lib/notifications';
+import { colors } from '../design/tokens/colors';
+
+const fontAssets = {
+  'CormorantGaramond': require('../assets/fonts/CormorantGaramond-Regular.ttf'),
+  'CormorantGaramond-Medium': require('../assets/fonts/CormorantGaramond-Medium.ttf'),
+  'CormorantGaramond-SemiBold': require('../assets/fonts/CormorantGaramond-SemiBold.ttf'),
+  'CormorantGaramond-Bold': require('../assets/fonts/CormorantGaramond-Bold.ttf'),
+  'CormorantGaramond-Italic': require('../assets/fonts/CormorantGaramond-Italic.ttf'),
+  'EBGaramond': require('../assets/fonts/EBGaramond-Regular.ttf'),
+  'EBGaramond-Medium': require('../assets/fonts/EBGaramond-Medium.ttf'),
+  'EBGaramond-SemiBold': require('../assets/fonts/EBGaramond-SemiBold.ttf'),
+  'EBGaramond-Italic': require('../assets/fonts/EBGaramond-Italic.ttf'),
+  'CrimsonPro': require('../assets/fonts/CrimsonPro-Regular.ttf'),
+  'CrimsonPro-Italic': require('../assets/fonts/CrimsonPro-Italic.ttf'),
+  'CrimsonPro-Medium': require('../assets/fonts/CrimsonPro-Medium.ttf'),
+  'DMSans': require('../assets/fonts/DMSans-Regular.ttf'),
+  'DMSans-Medium': require('../assets/fonts/DMSans-Medium.ttf'),
+  'DMSans-SemiBold': require('../assets/fonts/DMSans-SemiBold.ttf'),
+  'DMSans-Bold': require('../assets/fonts/DMSans-Bold.ttf'),
+};
+
+/** Tab bar label using EB Garamond serif font */
+function TabLabel({ label, focused }: { label: string; focused: boolean }) {
+  return (
+    <View style={tabStyles.labelWrap}>
+      {focused && <View style={tabStyles.dot} />}
+      <Text style={[tabStyles.label, focused && tabStyles.labelActive]}>
+        {label}
+      </Text>
+    </View>
+  );
+}
 
 export default function Layout() {
   const [ready, setReady] = useState(false);
@@ -12,7 +44,10 @@ export default function Layout() {
   useEffect(() => {
     (async () => {
       startNewSession();
-      await initStore();
+      await Promise.all([
+        initStore(),
+        Font.loadAsync(fontAssets),
+      ]);
       setReady(true);
 
       const granted = await requestNotificationPermissions();
@@ -27,7 +62,7 @@ export default function Layout() {
   if (!ready) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator color="#2563eb" size="large" />
+        <ActivityIndicator color={colors.rubric} size="large" />
         <Text style={styles.loadingText}>Loading...</Text>
       </View>
     );
@@ -36,16 +71,16 @@ export default function Layout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#2563eb',
-        tabBarInactiveTintColor: '#94a3b8',
+        headerShown: false,
+        tabBarActiveTintColor: colors.ink,
+        tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: {
-          backgroundColor: '#0f172a',
-          borderTopColor: '#1e293b',
-          borderTopWidth: 1,
-          ...(Platform.OS === 'web' ? { height: 52 } : {}),
+          backgroundColor: colors.parchmentDark,
+          borderTopColor: colors.ruleDark,
+          borderTopWidth: 1.5,
+          ...(Platform.OS === 'web' ? { height: 56 } : {}),
         },
-        headerStyle: { backgroundColor: '#0f172a' },
-        headerTintColor: '#f8fafc',
+        tabBarShowLabel: false,
       }}
       screenListeners={{
         tabPress: (e) => {
@@ -57,28 +92,28 @@ export default function Layout() {
         name="index"
         options={{
           title: 'Feed',
-          tabBarIcon: ({ color, size }) => <Ionicons name="newspaper-outline" size={size} color={color} />,
+          tabBarIcon: ({ focused }) => <TabLabel label="Feed" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="library"
         options={{
           title: 'Library',
-          tabBarIcon: ({ color, size }) => <Ionicons name="library-outline" size={size} color={color} />,
+          tabBarIcon: ({ focused }) => <TabLabel label="Library" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="review"
         options={{
           title: 'Review',
-          tabBarIcon: ({ color, size }) => <Ionicons name="bulb-outline" size={size} color={color} />,
+          tabBarIcon: ({ focused }) => <TabLabel label="Review" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="stats"
         options={{
           title: 'Progress',
-          tabBarIcon: ({ color, size }) => <Ionicons name="analytics-outline" size={size} color={color} />,
+          tabBarIcon: ({ focused }) => <TabLabel label="Progress" focused={focused} />,
         }}
       />
       <Tabs.Screen
@@ -109,6 +144,38 @@ export default function Layout() {
 }
 
 const styles = StyleSheet.create({
-  loading: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f172a', gap: 12 },
-  loadingText: { color: '#94a3b8', fontSize: 14 },
+  loading: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.parchment,
+    gap: 12,
+  },
+  loadingText: {
+    color: colors.textMuted,
+    fontSize: 14,
+    fontFamily: Platform.OS === 'web' ? "'Cormorant Garamond', Georgia, serif" : 'CormorantGaramond',
+    fontStyle: 'italic',
+  },
+});
+
+const tabStyles = StyleSheet.create({
+  labelWrap: {
+    alignItems: 'center',
+    gap: 3,
+  },
+  dot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.rubric,
+  },
+  label: {
+    fontFamily: Platform.OS === 'web' ? "'EB Garamond', Georgia, serif" : 'EBGaramond',
+    fontSize: 11,
+    color: colors.textMuted,
+  },
+  labelActive: {
+    color: colors.ink,
+  },
 });

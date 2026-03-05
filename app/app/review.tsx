@@ -1,10 +1,9 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, TextInput,
   KeyboardAvoidingView, Platform, ViewStyle,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import {
   getReviewQueue, submitReview, getConceptReview,
   getArticleById, getConcepts, getStats, getVoiceNoteById,
@@ -12,6 +11,7 @@ import {
 } from '../data/store';
 import { Concept, ConceptReview, ReviewRating } from '../data/types';
 import { logEvent } from '../data/logger';
+import { colors, fonts, type } from '../design/tokens';
 
 // --- Prompt Tiers ---
 
@@ -59,6 +59,13 @@ function daysAgoText(dueAt: number, stabilityDays: number): string {
   return `${daysAgo} days ago`;
 }
 
+const RATING_CONFIG = [
+  { rating: 1 as const, label: 'Again', hint: '<1d', borderColor: colors.ratingAgainBorder, textColor: colors.ratingAgain },
+  { rating: 2 as const, label: 'Hard', hint: '2d', borderColor: colors.ratingHardBorder, textColor: colors.ratingHard },
+  { rating: 3 as const, label: 'Good', hint: '8d', borderColor: colors.ratingGoodBorder, textColor: colors.ratingGood },
+  { rating: 4 as const, label: 'Easy', hint: '21d', borderColor: colors.ratingEasyBorder, textColor: colors.ratingEasy },
+] as const;
+
 // --- Review Card ---
 
 function ReviewCard({ concept, review, reason, onComplete }: {
@@ -78,13 +85,13 @@ function ReviewCard({ concept, review, reason, onComplete }: {
   const promptTier = getPromptTier(review.engagement_count);
 
   // Log prompt tier on mount
-  useState(() => {
+  useEffect(() => {
     logEvent('review_prompt_tier', {
       concept_id: concept.id,
       tier: promptTier,
       engagement_count: review.engagement_count,
     });
-  });
+  }, [concept.id]);
 
   const matchingClaims = getMatchingClaims(concept.id, 3);
 
@@ -101,14 +108,10 @@ function ReviewCard({ concept, review, reason, onComplete }: {
   return (
     <ScrollView style={styles.cardScroll} showsVerticalScrollIndicator={false}>
       <View style={styles.card}>
-        {/* Concept header */}
-        <View style={styles.conceptHeader}>
-          <View style={styles.topicPill}>
-            <Text style={styles.topicText}>{concept.topic}</Text>
-          </View>
-          <Text style={styles.reasonText}>{reason}</Text>
-        </View>
+        {/* Topic tag */}
+        <Text style={styles.topicTag}>{concept.topic}</Text>
 
+        {/* Concept text */}
         <Text style={styles.conceptText}>{concept.text}</Text>
 
         {/* Review history info */}
@@ -117,22 +120,21 @@ function ReviewCard({ concept, review, reason, onComplete }: {
             <Text style={styles.statText}>
               Review #{review.engagement_count + 1} · Last reviewed {daysAgoText(review.due_at, review.stability_days)}
               {review.understanding > 0 && RATING_LABELS[review.understanding]
-                ? ` · Previous: ${RATING_LABELS[review.understanding].emoji} ${RATING_LABELS[review.understanding].label}`
+                ? ` · Previous: ${RATING_LABELS[review.understanding].label}`
                 : ''}
             </Text>
           ) : (
-            <Text style={styles.statText}>Review #1</Text>
+            <Text style={styles.statText}>First review</Text>
           )}
         </View>
 
         {/* Recent notes */}
         {recentNotes.length > 0 && (
           <View style={{ marginBottom: 16 }}>
-            <Text style={styles.lastNoteLabel}>Your notes</Text>
             {recentNotes.map(note => (
-              <View key={note.id} style={styles.lastNoteBox}>
-                <Text style={styles.lastNoteText}>{note.text}</Text>
-                <Text style={styles.lastNoteDate}>
+              <View key={note.id} style={styles.noteBox}>
+                <Text style={styles.noteText}>{note.text}</Text>
+                <Text style={styles.noteDate}>
                   {new Date(note.created_at).toLocaleDateString()}
                 </Text>
               </View>
@@ -149,14 +151,10 @@ function ReviewCard({ concept, review, reason, onComplete }: {
           if (voiceNotes.length === 0) return null;
           return voiceNotes.map(({ note, voiceNote }) => (
             <View key={note.id} style={styles.voiceNoteBox}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <Ionicons name="mic" size={14} color="#a78bfa" />
-                <Text style={styles.lastNoteLabel}>Voice note</Text>
-                <Text style={{ color: '#475569', fontSize: 11 }}>
-                  {Math.round(voiceNote.duration_ms / 1000)}s · {new Date(voiceNote.recorded_at).toLocaleDateString()}
-                </Text>
-              </View>
-              <Text style={styles.lastNoteText}>{voiceNote.transcript}</Text>
+              <Text style={styles.voiceNoteLabel}>
+                Voice note · {Math.round(voiceNote.duration_ms / 1000)}s · {new Date(voiceNote.recorded_at).toLocaleDateString()}
+              </Text>
+              <Text style={styles.noteText}>{voiceNote.transcript}</Text>
             </View>
           ));
         })()}
@@ -184,7 +182,7 @@ function ReviewCard({ concept, review, reason, onComplete }: {
         {/* Source articles */}
         {sourceArticles.length > 0 && (
           <View style={styles.sourcesSection}>
-            <Text style={styles.sourcesLabel}>From articles:</Text>
+            <Text style={styles.sourcesLabel}>From:</Text>
             {sourceArticles.slice(0, 3).map(a => a && (
               <Pressable
                 key={a.id}
@@ -195,7 +193,6 @@ function ReviewCard({ concept, review, reason, onComplete }: {
                 }}
               >
                 <Text style={styles.sourceLinkText} numberOfLines={1}>{a.title}</Text>
-                <Ionicons name="chevron-forward" size={14} color="#64748b" />
               </Pressable>
             ))}
           </View>
@@ -209,24 +206,23 @@ function ReviewCard({ concept, review, reason, onComplete }: {
             </Text>
             <View style={styles.promptActions}>
               <Pressable
-                style={({ hovered }: any) => [
+                style={({ pressed }: any) => [
                   styles.actionBtn,
-                  hovered && Platform.OS === 'web' && { backgroundColor: '#253347' },
+                  pressed && { opacity: 0.7 },
                 ] as ViewStyle[]}
                 onPress={() => setPhase('respond')}
               >
-                <Ionicons name="create-outline" size={18} color="#60a5fa" />
                 <Text style={styles.actionBtnText}>Add a note</Text>
               </Pressable>
               <Pressable
-                style={({ hovered }: any) => [
+                style={({ pressed }: any) => [
                   styles.actionBtn,
-                  hovered && Platform.OS === 'web' && { backgroundColor: '#253347' },
+                  styles.actionBtnPrimary,
+                  pressed && { opacity: 0.7 },
                 ] as ViewStyle[]}
                 onPress={() => setPhase('rate')}
               >
-                <Ionicons name="checkmark-circle-outline" size={18} color="#10b981" />
-                <Text style={[styles.actionBtnText, { color: '#10b981' }]}>Just rate</Text>
+                <Text style={[styles.actionBtnText, { color: colors.rubric }]}>Just rate</Text>
               </Pressable>
             </View>
           </View>
@@ -238,7 +234,7 @@ function ReviewCard({ concept, review, reason, onComplete }: {
             <TextInput
               style={styles.noteInput}
               placeholder="Your thoughts on this concept..."
-              placeholderTextColor="#475569"
+              placeholderTextColor={colors.textMuted}
               multiline
               value={noteText}
               onChangeText={setNoteText}
@@ -256,25 +252,20 @@ function ReviewCard({ concept, review, reason, onComplete }: {
         {/* Phase: Rate understanding */}
         {phase === 'rate' && (
           <View style={styles.phaseSection}>
-            <Text style={styles.rateLabel}>How well do you understand this?</Text>
+            <Text style={styles.ratePrompt}>How well do you understand this?</Text>
             <View style={styles.ratingGrid}>
-              {([
-                [1, 'Again', 'Confused or forgot', '#ef4444'],
-                [2, 'Hard', 'Getting it but fuzzy', '#f59e0b'],
-                [3, 'Good', 'Solid understanding', '#10b981'],
-                [4, 'Easy', 'Could teach this', '#3b82f6'],
-              ] as const).map(([rating, label, desc, color]) => (
+              {RATING_CONFIG.map(({ rating, label, hint, borderColor, textColor }) => (
                 <Pressable
                   key={rating}
-                  style={({ hovered }: any) => [
+                  style={({ pressed }: any) => [
                     styles.ratingBtn,
-                    { borderColor: color },
-                    hovered && Platform.OS === 'web' && { backgroundColor: '#253347', borderWidth: 2 },
+                    { borderColor },
+                    pressed && { borderWidth: 2, backgroundColor: `${textColor}1a` },
                   ] as ViewStyle[]}
                   onPress={() => handleRate(rating)}
                 >
-                  <Text style={[styles.ratingLabel, { color }]}>{label}</Text>
-                  <Text style={styles.ratingDesc}>{desc}</Text>
+                  <Text style={[styles.ratingLabel, { color: textColor }]}>{label}</Text>
+                  <Text style={styles.ratingHint}>{hint}</Text>
                 </Pressable>
               ))}
             </View>
@@ -313,8 +304,15 @@ export default function ReviewScreen() {
   if (allConcepts.length === 0) {
     return (
       <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Review</Text>
+          <Text style={styles.subtitle}>Spaced attention</Text>
+          <View style={styles.doubleRule}>
+            <View style={styles.ruleThick} />
+            <View style={styles.ruleThin} />
+          </View>
+        </View>
         <View style={styles.emptyState}>
-          <Ionicons name="bulb-outline" size={48} color="#334155" />
           <Text style={styles.emptyTitle}>No concepts yet</Text>
           <Text style={styles.emptySubtitle}>
             Start reading and signaling on claims to build your knowledge map
@@ -331,9 +329,16 @@ export default function ReviewScreen() {
   if (currentIndex >= queue.length || queue.length === 0) {
     return (
       <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Review</Text>
+          <Text style={styles.subtitle}>Spaced attention</Text>
+          <View style={styles.doubleRule}>
+            <View style={styles.ruleThick} />
+            <View style={styles.ruleThin} />
+          </View>
+        </View>
         <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
           <View style={styles.completedSection}>
-            <Ionicons name="checkmark-circle" size={48} color="#10b981" />
             <Text style={styles.completedTitle}>
               {totalDueCount === 0 ? 'Nothing due right now' : 'Done for now'}
             </Text>
@@ -361,7 +366,6 @@ export default function ReviewScreen() {
                 forceUpdate(n => n + 1);
               }}
             >
-              <Ionicons name="refresh" size={16} color="#60a5fa" />
               <Text style={styles.refreshQueueText}>
                 {extraDue > 0 ? 'Continue reviewing' : 'Check again'}
               </Text>
@@ -409,21 +413,30 @@ export default function ReviewScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      {/* Progress header */}
-      <View style={styles.progressHeader}>
-        <Text style={styles.progressText}>
-          {currentIndex + 1} of {queue.length}
-        </Text>
-        <Pressable onPress={() => {
-          logEvent('review_session_end_early', {
-            reviewed: currentIndex,
-            session_size: queue.length,
-            total_due: totalDueCount,
-          });
-          setCurrentIndex(queue.length);
-        }}>
-          <Text style={styles.skipAllText}>Done for now</Text>
-        </Pressable>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.title}>Review</Text>
+            <Text style={styles.subtitle}>
+              Spaced attention — {currentIndex + 1} of {queue.length}
+            </Text>
+          </View>
+          <Pressable onPress={() => {
+            logEvent('review_session_end_early', {
+              reviewed: currentIndex,
+              session_size: queue.length,
+              total_due: totalDueCount,
+            });
+            setCurrentIndex(queue.length);
+          }}>
+            <Text style={styles.skipAllText}>Done</Text>
+          </Pressable>
+        </View>
+        <View style={styles.doubleRule}>
+          <View style={styles.ruleThick} />
+          <View style={styles.ruleThin} />
+        </View>
       </View>
 
       <ReviewCard
@@ -440,131 +453,302 @@ export default function ReviewScreen() {
 // --- Styles ---
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: { flex: 1, backgroundColor: colors.parchment },
   scroll: { flex: 1 },
-  cardScroll: { flex: 1, paddingHorizontal: 16 },
+  cardScroll: { flex: 1, paddingHorizontal: 20 },
 
-  // Progress header
-  progressHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 10,
-    borderBottomWidth: 1, borderBottomColor: '#1e293b',
+  // Header
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
   },
-  progressText: { color: '#94a3b8', fontSize: 13 },
-  skipAllText: { color: '#64748b', fontSize: 13 },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  title: {
+    ...type.screenTitle,
+    color: colors.ink,
+  },
+  subtitle: {
+    ...type.screenSubtitle,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  doubleRule: {
+    marginTop: 12,
+    marginBottom: 4,
+    gap: 5,
+  },
+  ruleThick: {
+    height: 2,
+    backgroundColor: colors.ink,
+  },
+  ruleThin: {
+    height: 1,
+    backgroundColor: colors.ink,
+  },
+  skipAllText: {
+    ...type.metadata,
+    color: colors.textMuted,
+    marginTop: 6,
+  },
 
   // Review card
-  card: { paddingTop: 16, paddingBottom: 40 },
-  conceptHeader: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12,
+  card: { paddingTop: 20, paddingBottom: 40 },
+  topicTag: {
+    ...type.topicTag,
+    color: colors.rubric,
+    marginBottom: 10,
   },
-  topicPill: {
-    backgroundColor: '#334155', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10,
-  },
-  topicText: { color: '#94a3b8', fontSize: 12 },
-  reasonText: { color: '#64748b', fontSize: 12, fontStyle: 'italic' },
   conceptText: {
-    color: '#f8fafc', fontSize: 18, fontWeight: '600', lineHeight: 26, marginBottom: 12,
+    ...type.reviewConcept,
+    color: colors.textPrimary,
+    marginBottom: 12,
   },
   statsRow: { marginBottom: 16 },
-  statText: { color: '#64748b', fontSize: 12 },
-
-  // Last note
-  lastNoteBox: {
-    backgroundColor: '#1e293b', borderRadius: 12, padding: 14,
-    marginBottom: 8, borderLeftWidth: 3, borderLeftColor: '#8b5cf6',
+  statText: {
+    ...type.metadata,
+    color: colors.textMuted,
   },
-  lastNoteLabel: { color: '#a78bfa', fontSize: 11, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
-  lastNoteText: { color: '#cbd5e1', fontSize: 14, lineHeight: 20 },
-  lastNoteDate: { color: '#475569', fontSize: 11, marginTop: 6 },
+
+  // Notes
+  noteBox: {
+    borderLeftWidth: 2,
+    borderLeftColor: colors.rubric,
+    paddingLeft: 12,
+    marginBottom: 10,
+  },
+  noteText: {
+    fontFamily: fonts.readingItalic,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.textSecondary,
+    ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}),
+  },
+  noteDate: {
+    ...type.metadata,
+    color: colors.textMuted,
+    marginTop: 4,
+  },
   voiceNoteBox: {
-    backgroundColor: '#1e293b', borderRadius: 12, padding: 14,
-    marginBottom: 16, borderLeftWidth: 3, borderLeftColor: '#a78bfa',
+    borderLeftWidth: 2,
+    borderLeftColor: colors.rubric,
+    paddingLeft: 12,
+    marginBottom: 16,
+  },
+  voiceNoteLabel: {
+    ...type.metadata,
+    color: colors.textMuted,
+    marginBottom: 4,
   },
 
   // Claims
   claimsSection: { marginBottom: 16 },
-  claimsLabel: { color: '#64748b', fontSize: 12, marginBottom: 6 },
-  claimBox: {
-    backgroundColor: '#1e293b', borderRadius: 8, padding: 12,
-    marginBottom: 4, borderLeftWidth: 2, borderLeftColor: '#475569',
+  claimsLabel: {
+    ...type.sectionHead,
+    color: colors.rubric,
+    marginBottom: 8,
   },
-  claimText: { color: '#94a3b8', fontSize: 13, lineHeight: 18, fontStyle: 'italic' },
-  claimSource: { color: '#64748b', fontSize: 11, marginTop: 4 },
+  claimBox: {
+    borderLeftWidth: 2,
+    borderLeftColor: colors.rule,
+    paddingLeft: 12,
+    paddingVertical: 6,
+    marginBottom: 4,
+  },
+  claimText: {
+    ...type.claimText,
+    color: colors.textBody,
+    fontStyle: 'italic',
+  },
+  claimSource: {
+    ...type.metadata,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
 
   // Source articles
   sourcesSection: { marginBottom: 16 },
-  sourcesLabel: { color: '#64748b', fontSize: 12, marginBottom: 6 },
-  sourceLink: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 8, paddingHorizontal: 12,
-    backgroundColor: '#1e293b', borderRadius: 8, marginBottom: 4,
+  sourcesLabel: {
+    ...type.metadata,
+    color: colors.textMuted,
+    marginBottom: 6,
   },
-  sourceLinkText: { color: '#cbd5e1', fontSize: 13, flex: 1, marginRight: 8 },
+  sourceLink: {
+    paddingVertical: 4,
+  },
+  sourceLinkText: {
+    ...type.metadata,
+    color: colors.rubric,
+  },
 
   // Phase sections
-  phaseSection: { marginTop: 8 },
-  promptText: { color: '#94a3b8', fontSize: 15, lineHeight: 22, marginBottom: 16 },
+  phaseSection: { marginTop: 12 },
+  promptText: {
+    fontFamily: fonts.readingItalic,
+    fontSize: 14,
+    lineHeight: 21,
+    color: colors.textSecondary,
+    marginBottom: 16,
+    ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}),
+  },
   promptActions: { flexDirection: 'row', gap: 12 },
   actionBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 16, paddingVertical: 12,
-    backgroundColor: '#1e293b', borderRadius: 12, flex: 1, justifyContent: 'center',
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderWidth: 1.5,
+    borderColor: colors.rule,
+    borderRadius: 3,
   },
-  actionBtnText: { color: '#60a5fa', fontSize: 14, fontWeight: '500' },
+  actionBtnPrimary: {
+    borderColor: colors.ratingAgainBorder,
+  },
+  actionBtnText: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
 
   // Note input
   noteInput: {
-    backgroundColor: '#1e293b', borderRadius: 12, padding: 14,
-    color: '#f8fafc', fontSize: 15, lineHeight: 22,
-    minHeight: 100, textAlignVertical: 'top',
+    borderWidth: 1,
+    borderColor: colors.rule,
+    borderRadius: 3,
+    padding: 14,
+    fontFamily: fonts.reading,
+    color: colors.textBody,
+    fontSize: 15,
+    lineHeight: 22,
+    minHeight: 100,
+    textAlignVertical: 'top',
     marginBottom: 12,
+    backgroundColor: colors.parchment,
   },
   submitBtn: {
-    backgroundColor: '#2563eb', borderRadius: 10, paddingVertical: 12,
+    backgroundColor: colors.ink,
+    borderRadius: 3,
+    paddingVertical: 12,
     alignItems: 'center',
   },
-  submitBtnDisabled: { opacity: 0.4 },
-  submitBtnText: { color: '#ffffff', fontSize: 14, fontWeight: '600' },
+  submitBtnDisabled: { opacity: 0.3 },
+  submitBtnText: {
+    fontFamily: fonts.uiMedium,
+    color: colors.parchment,
+    fontSize: 13,
+    ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}),
+  },
 
   // Rating
-  rateLabel: { color: '#94a3b8', fontSize: 14, marginBottom: 12 },
-  ratingGrid: { gap: 8 },
-  ratingBtn: {
-    borderWidth: 1, borderRadius: 12, padding: 14,
-    backgroundColor: '#1e293b',
+  ratePrompt: {
+    fontFamily: fonts.readingItalic,
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: 12,
+    ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}),
   },
-  ratingLabel: { fontSize: 16, fontWeight: '700', marginBottom: 2 },
-  ratingDesc: { color: '#64748b', fontSize: 13 },
+  ratingGrid: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  ratingBtn: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderRadius: 3,
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  ratingLabel: {
+    ...type.ratingLabel,
+    marginBottom: 2,
+  },
+  ratingHint: {
+    ...type.ratingHint,
+    color: colors.textMuted,
+  },
 
   // Empty / completed states
   emptyState: {
-    flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32, gap: 12,
+    flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32, gap: 8,
   },
-  emptyTitle: { color: '#f8fafc', fontSize: 20, fontWeight: '700' },
-  emptySubtitle: { color: '#94a3b8', fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  emptyTitle: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 18,
+    color: colors.textMuted,
+    ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}),
+  },
+  emptySubtitle: {
+    fontFamily: fonts.reading,
+    fontSize: 14,
+    color: colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
 
-  completedSection: { alignItems: 'center', paddingTop: 60, paddingBottom: 32, gap: 8 },
-  completedTitle: { color: '#f8fafc', fontSize: 20, fontWeight: '700' },
-  completedSubtitle: { color: '#94a3b8', fontSize: 14 },
-  completedHint: { color: '#475569', fontSize: 13, textAlign: 'center', paddingHorizontal: 32, marginTop: 8, lineHeight: 18 },
-  refreshQueueBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 16, paddingVertical: 10,
-    marginTop: 16,
+  completedSection: { alignItems: 'center', paddingTop: 48, paddingBottom: 32, gap: 6 },
+  completedTitle: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 18,
+    color: colors.textSecondary,
+    ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}),
   },
-  refreshQueueText: { color: '#60a5fa', fontSize: 14 },
+  completedSubtitle: {
+    ...type.metadata,
+    color: colors.textMuted,
+  },
+  completedHint: {
+    fontFamily: fonts.reading,
+    fontSize: 13,
+    color: colors.textMuted,
+    textAlign: 'center',
+    paddingHorizontal: 32,
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  refreshQueueBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginTop: 12,
+    borderWidth: 1.5,
+    borderColor: colors.rule,
+    borderRadius: 3,
+  },
+  refreshQueueText: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.rubric,
+  },
 
   // Topic overview
-  topicOverview: { paddingHorizontal: 16, paddingBottom: 40 },
-  overviewTitle: { color: '#f8fafc', fontSize: 16, fontWeight: '700', marginBottom: 12 },
+  topicOverview: { paddingHorizontal: 20, paddingBottom: 40 },
+  overviewTitle: {
+    ...type.sectionHead,
+    color: colors.rubric,
+    marginBottom: 12,
+  },
   topicOverviewRow: {
     flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8,
   },
-  topicOverviewName: { color: '#cbd5e1', fontSize: 13, width: 120 },
-  topicOverviewBar: {
-    flex: 1, height: 8, backgroundColor: '#1e293b', borderRadius: 4, overflow: 'hidden',
+  topicOverviewName: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.textBody,
+    width: 120,
   },
-  topicOverviewFill: { height: '100%', backgroundColor: '#10b981', borderRadius: 4 },
-  topicOverviewCount: { color: '#64748b', fontSize: 12, width: 32, textAlign: 'right' },
+  topicOverviewBar: {
+    flex: 1, height: 3, backgroundColor: colors.rule, overflow: 'hidden',
+  },
+  topicOverviewFill: {
+    height: '100%',
+    backgroundColor: colors.ink,
+  },
+  topicOverviewCount: {
+    ...type.metadata,
+    color: colors.textMuted,
+    width: 32,
+    textAlign: 'right',
+  },
 });

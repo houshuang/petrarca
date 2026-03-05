@@ -4,6 +4,101 @@
 
 ---
 
+## 2026-03-04 — Design Explorer v5: Soniox transcription + UX fixes
+
+**What**: Three changes:
+1. Replaced local whisper-cpp transcription with Soniox cloud API (`stt-async-v4`). Zero local deps needed — just API key.
+2. Replaced confusing 1-5 rating buttons with binary thumbs up/down (👎/👍). Users mistook numbered buttons for navigation tabs.
+3. Fixed drawing regression: draw mode now persists across SSE reloads (saved to localStorage), canvas z-index raised to 50 to ensure it's above mockup content, MutationObserver auto-initializes canvases for dynamically-added sections.
+
+**Result**: Transcription should be much faster (cloud GPUs vs local whisper-cpp). Simpler rating UX. Drawing should survive page reloads.
+
+---
+
+## 2026-03-04 — Design Explorer v4: Fragment architecture
+
+**What**: Refactored from single `designs.html` monolith to individual `mockup-N.html` fragment files assembled by the server at request time.
+
+**Problem with monolith**: Claude had to read/write a single huge file containing the harness (300+ lines CSS/JS) plus all mockup sections. Every edit required finding the right mockup in a big file. Appending mockups meant passing the whole file context. The harness boilerplate wasted tokens on every read.
+
+**New architecture**:
+- Each mockup is a standalone `<section>` fragment: `mockup-1.html`, `mockup-2.html`, etc. (~20-40 lines each)
+- Server reads the harness template (CSS/JS) from `assets/harness-template.html`
+- On `GET /`, server globs `mockup-*.html` from the working dir, sorts numerically, injects them into the template
+- `fs.watch` on the directory (not a single file) — triggers SSE reload when any `mockup-*.html` changes
+
+**Benefits for LLM workflow**:
+- Write: one 20-line file per mockup, no boilerplate
+- Edit: read + edit one small file
+- Delete: delete the file, page auto-removes it
+- Parallel: 5 mockups = 5 parallel Write tool calls
+- Never touch harness: CSS/JS updates go to the template, separate from content
+
+**Server changes**: Replaced `DESIGNS_FILE` constant with `assemblePage()` function that globs + sorts + injects fragments. Watcher changed from `fs.watch(file)` to `fs.watch(dir)` with filename filter. Health endpoint now returns `mockupFiles` array.
+
+**SKILL.md**: Updated to reflect fragment workflow — Claude writes `mockup-N.html` files directly.
+
+---
+
+## 2026-03-04 — Design Explorer v3: Fixing persistent UX issues
+
+**What**: Third iteration on the Design Explorer skill. Real-world testing revealed v2 fixes didn't fully solve the core issues — rating buttons still non-interactive, waveform still invisible, audio still recording silence.
+
+**Root causes identified**:
+
+1. **Rating buttons not working**: `initRatings()` attached event handlers per-button at init time. If mockup sections were injected by SSE reload or after script execution, handlers wouldn't attach. **Fix**: Switched to document-level event delegation (`document.addEventListener('click', ...)` with `.closest()`) — works regardless of when mockups appear in DOM. Same for notes and feedback toggles.
+
+2. **Waveform invisible**: `AudioContext` was being created but never resumed. Modern browsers suspend `AudioContext` until a user gesture + explicit `.resume()`. The `AnalyserNode` was connected but returning silence (all 128s in time domain data = flat line). **Fix**: Added `await audioCtx.resume()` immediately after creation. Also made waveform canvas bigger (200x32, was 120x24), added visible border + background, draws center reference line.
+
+3. **Blank audio / wrong mic**: `getUserMedia({ audio: true })` was selecting whatever macOS considers "default" — with headphones plugged in, this could be a non-functional virtual device or headphone port with no mic. **Fix**: Added audio device enumeration dropdown (`enumerateDevices()`), shows all available audio inputs. Shows active device label during recording. User can explicitly select their mic before recording.
+
+4. **Audio level bar CSS bug**: Fill element used `position: relative; bottom: 0` which doesn't anchor to bottom. **Fix**: Changed to `position: absolute; bottom: 0` so the green bar grows upward from the bottom like a real VU meter.
+
+5. **Annotation position context**: composite capture via SVG foreignObject is unreliable (CORS, inline style depth). Even when it works, Claude can't always interpret the image. **Fix**: Now includes `strokeRegions` metadata — bounding box of each stroke as percentages of mockup dimensions (e.g., `{xPct: 15, yPct: 30, wPct: 40, hPct: 20}`). Claude can map these back to the HTML it generated.
+
+**Key architectural lesson**: Event delegation is essential for any UI where DOM elements may be added dynamically (SSE reload, Claude appending mockups). Per-element `addEventListener` in init functions is fragile.
+
+**Status**: Template updated. Needs testing with fresh designs.html generated from new template.
+
+---
+
+## 2026-03-04 — Design Explorer Skill: Build + v2 Fixes
+
+**What**: Built a Claude Code skill (`/design-explorer`) for rapid visual design iteration — local Node.js server + HTML harness that lets users rate, annotate, and voice-critique design mockups, with Claude reading structured feedback and iterating.
+
+**Architecture**:
+- Zero-dep Node.js server (`~/.claude/skills/design-explorer/assets/server.js`) with SSE file watching, feedback storage, whisper-cpp transcription
+- Single-file HTML harness with embedded CSS/JS — mockup sections appended by Claude
+- SKILL.md defines the workflow: generate mockups → wait for feedback → iterate
+
+**v1 issues found during first real use**:
+1. Browser didn't auto-open when skill activated
+2. Global draw canvas (`position: fixed; z-index: 9999`) blocked ALL clicks — couldn't rate or type notes
+3. Annotations disappeared after each stroke (canvas cleared)
+4. Annotation images were strokes on transparent background — no context of what was circled
+5. No waveform or audio level feedback during recording
+6. Headphones plugged in → no mic detected, but no warning shown
+7. Voice critiqueSessions array was empty — recording pipeline had issues
+8. Claude didn't know when user finished reviewing — had to be manually prompted
+
+**v2 fixes**:
+- Auto-open browser on server start (macOS `open`, Linux `xdg-open`)
+- Per-mockup `<canvas>` overlays inside `.mockup-content` divs — headers/buttons remain clickable. `body.draw-mode .annotation-canvas { pointer-events: auto }` toggles interaction
+- Strokes persist in localStorage, redrawn on reload via stored point arrays. `Ctrl+Z` undo support
+- Composite annotation capture: SVG `<foreignObject>` renders mockup HTML to canvas, then overlays strokes. Falls back to strokes-only if browser blocks it
+- Real-time waveform via Web Audio API `AnalyserNode` + audio level bar
+- "No audio detected" warning after 3 seconds of silence
+- `/feedback/wait` long-poll endpoint — Claude blocks until user clicks Submit, creating a closed iteration loop
+- Better error handling: blob size check, chunked base64 encoding, toast notifications
+
+**Key insight**: The global canvas pattern (common in drawing tools) is wrong for this use case where you need mixed interaction — rating buttons, text notes, AND drawing. Per-element canvas overlays with CSS-toggled `pointer-events` is the right approach.
+
+**Key insight**: Long-poll (`/feedback/wait`) turns the workflow from "Claude generates, user manually prompts Claude" into a closed loop. Claude blocks on curl, wakes up when feedback arrives, reads it, iterates.
+
+**Status**: Server endpoints verified (health, feedback, long-poll notification). Browser UX needs real-world testing of drawing + voice together.
+
+---
+
 ## 2026-03-04 — Book Reader: UX Polish Pass (Session 3)
 
 **What**: Third iteration on the Book Reader, implementing remaining research priorities. Focus: adaptive depth, Socratic reflection, concept familiarity indicators, suggested next sections, and enhanced feed integration.

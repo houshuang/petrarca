@@ -496,6 +496,52 @@ def _call_claude(prompt: str, timeout: int = 180) -> str | None:
     return _call_llm(prompt, provider="gemini")
 
 
+def clean_markdown(text: str) -> str:
+    """Clean Wikipedia artifacts from markdown content.
+
+    Fixes: run-together link text, [edit] links, citation markers, empty links.
+    """
+    # Remove Wikipedia [edit] section links (various bracket patterns)
+    text = re.sub(r'\s*\[?\[edit\]\([^)]*\)\]?', '', text)
+    text = re.sub(r'\s*\[\[?edit\]?\]', '', text)
+
+    # Fix run-together markdown links: )[  →  ) [  (add space between adjacent links)
+    text = re.sub(r'\)\[', ') [', text)
+
+    # Fix run-together link-then-text: ](...) followed immediately by [ or letter
+    # e.g. [Italy](/wiki/Italy)[Capital] → [Italy](/wiki/Italy) [Capital]
+    text = re.sub(r'(\])\(([^)]+)\)([A-Za-z\[])', r'\1(\2) \3', text)
+
+    # Strip inline citation markers like [1], [23], [citation needed]
+    text = re.sub(r'\[(\d{1,3})\]', '', text)
+    text = re.sub(r'\[citation needed\]', '', text, flags=re.IGNORECASE)
+
+    # Remove empty link references like [](/wiki/...) or [ ](/wiki/...)
+    text = re.sub(r'\[\s*\]\([^)]+\)', '', text)
+
+    # Collapse multiple spaces left by removals
+    text = re.sub(r'  +', ' ', text)
+    # Collapse multiple blank lines
+    text = re.sub(r'\n{3,}', '\n\n', text)
+
+    return text.strip()
+
+
+def _is_bibliography_section(heading: str, content: str) -> bool:
+    """Check if a section is a bibliography/reference-only section with no reading value."""
+    bib_headings = {
+        'bibliography', 'references', 'further reading', 'external links',
+        'see also', 'notes', 'footnotes', 'citations', 'sources',
+        'note e riferimenti', 'riferimenti bibliografici', 'bibliografia',
+        'collegamenti esterni', 'voci correlate',
+    }
+    h_lower = heading.lower().strip()
+    for bib in bib_headings:
+        if bib in h_lower:
+            return True
+    return False
+
+
 def _article_id(url: str, fallback: str = "") -> str:
     src = url or fallback
     return hashlib.sha256(src.encode()).hexdigest()[:12]
@@ -629,7 +675,7 @@ def build_articles(candidates: list[dict], existing_articles: list[dict],
             "source_url": best["source_url"],
             "hostname": best.get("hostname", urlparse(best["source_url"]).netloc),
             "date": best.get("date", "") or cand.get("_date", "")[:10],
-            "content_markdown": best["text"],
+            "content_markdown": clean_markdown(best["text"]),
             "sections": section_contents,
             "one_line_summary": llm.get("one_line_summary", ""),
             "full_summary": llm.get("full_summary", ""),
@@ -698,6 +744,8 @@ def _split_into_sections(content: str, llm_sections: list[dict]) -> list[dict]:
                 heading = match.group(2).strip()
 
                 if not _is_valid_section(heading, section_content):
+                    continue
+                if _is_bibliography_section(heading, section_content):
                     continue
 
                 llm_match = None

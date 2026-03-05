@@ -11,6 +11,8 @@ import { getArticles, getFeedArticles, getInProgressArticles, getReadingState, g
 import { fetchResearchResults, getResearchResults } from '../data/research';
 import { Article, ReadingDepth, Book } from '../data/types';
 import { logEvent } from '../data/logger';
+import { getDisplayTitle } from '../lib/display-utils';
+import { colors, fonts, type, spacing, layout } from '../design/tokens';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -21,13 +23,6 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 type ViewMode = 'list' | 'topics' | 'triage';
 type TriageState = 'untriaged' | 'read_later' | 'skipped';
-
-function getDisplayTitle(article: Article): string {
-  if (/^Thread by @/i.test(article.title) && article.one_line_summary && article.one_line_summary !== '[dry run]') {
-    return article.one_line_summary;
-  }
-  return article.title;
-}
 
 // --- Triage persistence (local to this module) ---
 
@@ -74,47 +69,19 @@ const ROTATION_FACTOR = 15; // degrees of rotation at full swipe
 
 const DEPTH_LABELS: Record<ReadingDepth, string> = {
   unread: '',
-  summary: 'Read summary',
-  claims: 'Reviewed claims',
-  sections: 'Reading',
-  full: 'Finished',
+  summary: 'Summary',
+  claims: 'Claims',
+  sections: 'Sections',
+  full: 'Full',
 };
 
 const DEPTH_COLORS: Record<ReadingDepth, string> = {
-  unread: '#475569',
-  summary: '#3b82f6',
-  claims: '#8b5cf6',
-  sections: '#f59e0b',
-  full: '#10b981',
+  unread: colors.textMuted,
+  summary: colors.info,
+  claims: colors.rubric,
+  sections: colors.warning,
+  full: colors.success,
 };
-
-// --- Helpers ---
-
-const CONTENT_TYPE_COLORS: Record<string, string> = {
-  research: '#8b5cf6',
-  analysis: '#3b82f6',
-  tutorial: '#10b981',
-  opinion: '#f59e0b',
-  news: '#64748b',
-  reference: '#06b6d4',
-};
-
-function getContentTypeColor(contentType?: string): string {
-  if (!contentType) return '#334155';
-  return CONTENT_TYPE_COLORS[contentType.toLowerCase()] || '#334155';
-}
-
-function getTopicColor(topic: string): { bg: string; border: string; text: string } {
-  if (Platform.OS !== 'web') return { bg: '#334155', border: '#334155', text: '#94a3b8' };
-  let hash = 0;
-  for (let i = 0; i < topic.length; i++) hash = topic.charCodeAt(i) + ((hash << 5) - hash);
-  const hue = ((hash % 360) + 360) % 360;
-  return {
-    bg: `hsla(${hue}, 40%, 20%, 0.5)`,
-    border: `hsl(${hue}, 50%, 40%)`,
-    text: `hsl(${hue}, 60%, 70%)`,
-  };
-}
 
 // --- Feed Card (used in List and Topic modes) ---
 
@@ -122,106 +89,95 @@ function NoveltyBadge({ articleId }: { articleId: string }) {
   const score = getNoveltyScore(articleId);
   if (score === null) return null;
   const pct = Math.round(score * 100);
-  let color: string, label: string;
-  if (pct >= 90) { color = '#10b981'; label = 'Mostly new'; }
-  else if (pct > 60) { color = '#10b981'; label = `${pct}% new`; }
-  else if (pct > 30) { color = '#f59e0b'; label = 'Partly familiar'; }
-  else { color = '#64748b'; label = 'Mostly known'; }
+  let label: string;
+  if (pct >= 90) { label = 'Mostly new'; }
+  else if (pct > 60) { label = `${pct}% new`; }
+  else if (pct > 30) { label = 'Partly familiar'; }
+  else { label = 'Mostly known'; }
   return (
-    <View style={[styles.noveltyBadge, { borderColor: color }]}>
-      <Text style={[styles.noveltyText, { color }]}>{label}</Text>
-    </View>
+    <Text style={styles.noveltyText}>{label}</Text>
   );
 }
 
-const TIER_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  foundational: { label: 'Start here', color: '#10b981', bg: '#10b98120' },
-  intermediate: { label: 'Building on', color: '#f59e0b', bg: '#f59e0b20' },
-  deep: { label: 'Deep dive', color: '#a78bfa', bg: '#a78bfa20' },
+const TIER_CONFIG: Record<string, { label: string }> = {
+  foundational: { label: 'Start here' },
+  intermediate: { label: 'Building on' },
+  deep: { label: 'Deep dive' },
 };
 
 function TierBadge({ readingOrder }: { readingOrder?: string }) {
   if (!readingOrder || !TIER_CONFIG[readingOrder]) return null;
-  const { label, color, bg } = TIER_CONFIG[readingOrder];
+  const { label } = TIER_CONFIG[readingOrder];
   return (
-    <View style={[styles.tierBadge, { backgroundColor: bg, borderColor: color }]}>
-      <Text style={[styles.tierText, { color }]}>{label}</Text>
-    </View>
+    <Text style={styles.tierText}>{label}</Text>
   );
 }
 
 function FeedCard({ article }: { article: Article }) {
   const router = useRouter();
   const state = getReadingState(article.id);
-  const accentColor = getContentTypeColor((article as any).content_type);
+
+  const metaParts: string[] = [];
+  if (article.hostname) metaParts.push(article.hostname);
+  if (article.estimated_read_minutes) metaParts.push(`${article.estimated_read_minutes} min`);
+  if (article.author) metaParts.push(article.author);
 
   return (
     <Pressable
       style={({ hovered }: any) => [
-        styles.card,
-        { borderTopWidth: 2, borderTopColor: accentColor },
-        Platform.OS === 'web' && { padding: 20, marginBottom: 14 },
-        hovered && Platform.OS === 'web' && { backgroundColor: '#253347', transform: [{ translateY: -1 }] },
+        styles.entryRow,
+        hovered && Platform.OS === 'web' && { backgroundColor: colors.parchmentHover },
       ] as ViewStyle[]}
       onPress={() => {
         logEvent('feed_item_tap', { article_id: article.id, title: article.title, novelty: getNoveltyScore(article.id) });
         router.push({ pathname: '/reader', params: { id: article.id } });
       }}
     >
-      <View style={styles.cardHeader}>
-        <Text style={styles.hostname}>{article.hostname}</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+      <View style={styles.entryContent}>
+        <Text style={styles.entryTitle}>{getDisplayTitle(article)}</Text>
+
+        {article.one_line_summary && article.one_line_summary !== '[dry run]' && (
+          <Text style={styles.entrySummary} numberOfLines={2}>{article.one_line_summary}</Text>
+        )}
+
+        <View style={styles.entryTopics}>
+          {article.topics.slice(0, 3).map(t => (
+            <Text key={t} style={styles.topicTag}>{t}</Text>
+          ))}
           <TierBadge readingOrder={article.reading_order || article.exploration_tier} />
-          <Text style={styles.readTime}>{article.estimated_read_minutes} min</Text>
+          <NoveltyBadge articleId={article.id} />
         </View>
+
+        <Text style={styles.entryMeta}>{metaParts.join(' \u00B7 ')}</Text>
+
+        {/* Dedup indicator */}
+        {article.similar_articles && article.similar_articles.length > 0 && (() => {
+          const readSimilar = article.similar_articles!.filter(sa => {
+            const s = getReadingState(sa.id);
+            return s.depth !== 'unread';
+          });
+          if (readSimilar.length === 0) return null;
+          return (
+            <Text style={styles.dedupIndicator}>
+              Similar to: {readSimilar[0].title}
+            </Text>
+          );
+        })()}
       </View>
 
-      <Text style={styles.title}>{getDisplayTitle(article)}</Text>
-
-      {article.one_line_summary && article.one_line_summary !== '[dry run]' && (
-        <Text style={styles.summary} numberOfLines={2}>{article.one_line_summary}</Text>
-      )}
-
-      <View style={styles.cardFooter}>
-        <View style={styles.topics}>
-          {article.topics.slice(0, 3).map(t => {
-            const tc = getTopicColor(t);
-            return (
-              <View key={t} style={[styles.topicPill, { backgroundColor: tc.bg, borderWidth: 1, borderColor: tc.border }]}>
-                <Text style={[styles.topicText, { color: tc.text }]}>{t}</Text>
-              </View>
-            );
-          })}
-        </View>
-
-        <NoveltyBadge articleId={article.id} />
+      <View style={styles.entrySidebar}>
+        <Text style={styles.sideLabel}>TIME</Text>
+        <Text style={styles.sideValue}>{article.estimated_read_minutes} min</Text>
 
         {state.depth !== 'unread' && (
-          <View style={[styles.depthBadge, { borderColor: DEPTH_COLORS[state.depth] }]}>
-            <Text style={[styles.depthText, { color: DEPTH_COLORS[state.depth] }]}>
+          <>
+            <Text style={[styles.sideLabel, { marginTop: 8 }]}>DEPTH</Text>
+            <Text style={[styles.sideNote, { color: DEPTH_COLORS[state.depth] }]}>
               {DEPTH_LABELS[state.depth]}
             </Text>
-          </View>
+          </>
         )}
       </View>
-
-      {/* Dedup indicator */}
-      {article.similar_articles && article.similar_articles.length > 0 && (() => {
-        const readSimilar = article.similar_articles!.filter(sa => {
-          const s = getReadingState(sa.id);
-          return s.depth !== 'unread';
-        });
-        if (readSimilar.length === 0) return null;
-        return (
-          <Text style={styles.dedupIndicator}>
-            Similar to: {readSimilar[0].title}
-          </Text>
-        );
-      })()}
-
-      {article.author ? (
-        <Text style={styles.author}>{article.author}</Text>
-      ) : null}
     </Pressable>
   );
 }
@@ -357,16 +313,13 @@ function TriageCard({
         {isTop && (
           <>
             <Animated.View style={[styles.actionLabel, styles.actionLabelRight, { opacity: rightOpacity }]}>
-              <Ionicons name="bookmark" size={28} color="#10b981" />
-              <Text style={[styles.actionLabelText, { color: '#10b981' }]}>Read Later</Text>
+              <Text style={[styles.actionLabelText, { color: colors.success }]}>Read Later</Text>
             </Animated.View>
             <Animated.View style={[styles.actionLabel, styles.actionLabelLeft, { opacity: leftOpacity }]}>
-              <Ionicons name="close-circle" size={28} color="#ef4444" />
-              <Text style={[styles.actionLabelText, { color: '#ef4444' }]}>Skip</Text>
+              <Text style={[styles.actionLabelText, { color: colors.danger }]}>Skip</Text>
             </Animated.View>
             <Animated.View style={[styles.actionLabel, styles.actionLabelTop, { opacity: upOpacity }]}>
-              <Ionicons name="book" size={28} color="#60a5fa" />
-              <Text style={[styles.actionLabelText, { color: '#60a5fa' }]}>Read Now</Text>
+              <Text style={[styles.actionLabelText, { color: colors.info }]}>Read Now</Text>
             </Animated.View>
           </>
         )}
@@ -386,9 +339,7 @@ function TriageCard({
 
           <View style={styles.triageTopics}>
             {article.topics.slice(0, 5).map(t => (
-              <View key={t} style={styles.triageTopicPill}>
-                <Text style={styles.triageTopicText}>{t}</Text>
-              </View>
+              <Text key={t} style={styles.triageTopicTag}>{t}</Text>
             ))}
           </View>
 
@@ -401,15 +352,15 @@ function TriageCard({
         {isTop && Platform.OS !== 'web' && (
           <View style={styles.swipeHints}>
             <View style={styles.swipeHint}>
-              <Ionicons name="arrow-back" size={14} color="#64748b" />
+              <Ionicons name="arrow-back" size={14} color={colors.textMuted} />
               <Text style={styles.swipeHintText}>Skip</Text>
             </View>
             <View style={styles.swipeHint}>
-              <Ionicons name="arrow-up" size={14} color="#64748b" />
+              <Ionicons name="arrow-up" size={14} color={colors.textMuted} />
               <Text style={styles.swipeHintText}>Read Now</Text>
             </View>
             <View style={styles.swipeHint}>
-              <Ionicons name="arrow-forward" size={14} color="#64748b" />
+              <Ionicons name="arrow-forward" size={14} color={colors.textMuted} />
               <Text style={styles.swipeHintText}>Save</Text>
             </View>
           </View>
@@ -420,34 +371,31 @@ function TriageCard({
               style={({ hovered }: any) => [
                 styles.webTriageBtn,
                 styles.webTriageBtnSkip,
-                hovered && { backgroundColor: '#7f1d1d' },
+                hovered && { backgroundColor: 'rgba(139,37,0,0.08)' },
               ] as ViewStyle[]}
               onPress={() => onSwipe('left')}
             >
-              <Ionicons name="close-circle" size={18} color="#ef4444" />
-              <Text style={[styles.webTriageBtnText, { color: '#ef4444' }]}>Skip</Text>
+              <Text style={[styles.webTriageBtnText, { color: colors.danger }]}>Skip</Text>
             </Pressable>
             <Pressable
               style={({ hovered }: any) => [
                 styles.webTriageBtn,
                 styles.webTriageBtnRead,
-                hovered && { backgroundColor: '#1e3a5f' },
+                hovered && { backgroundColor: 'rgba(42,74,106,0.08)' },
               ] as ViewStyle[]}
               onPress={() => onSwipe('up')}
             >
-              <Ionicons name="book" size={18} color="#60a5fa" />
-              <Text style={[styles.webTriageBtnText, { color: '#60a5fa' }]}>Read Now</Text>
+              <Text style={[styles.webTriageBtnText, { color: colors.info }]}>Read Now</Text>
             </Pressable>
             <Pressable
               style={({ hovered }: any) => [
                 styles.webTriageBtn,
                 styles.webTriageBtnSave,
-                hovered && { backgroundColor: '#065f46' },
+                hovered && { backgroundColor: 'rgba(42,122,74,0.08)' },
               ] as ViewStyle[]}
               onPress={() => onSwipe('right')}
             >
-              <Ionicons name="bookmark" size={18} color="#10b981" />
-              <Text style={[styles.webTriageBtnText, { color: '#10b981' }]}>Save</Text>
+              <Text style={[styles.webTriageBtnText, { color: colors.success }]}>Save</Text>
             </Pressable>
           </View>
         )}
@@ -549,10 +497,9 @@ function TriageModeView() {
 
     return (
       <View style={styles.triageComplete}>
-        <Ionicons name="checkmark-circle" size={64} color="#10b981" />
-        <Text style={styles.triageCompleteTitle}>All caught up!</Text>
+        <Text style={styles.triageCompleteTitle}>All caught up</Text>
         <Text style={styles.triageCompleteSubtitle}>
-          {readLaterCount} saved{readLaterCount > 0 ? '' : ''} · {skippedCount} skipped
+          {readLaterCount} saved · {skippedCount} skipped
         </Text>
         <Pressable
           style={styles.triageResetButton}
@@ -578,7 +525,7 @@ function TriageModeView() {
     <View style={styles.triageContainer}>
       <View style={styles.triageCounter}>
         <Text style={styles.triageCounterText}>
-          {processedCount + 1} of {articles.length} remaining
+          {totalUntriaged} remaining
         </Text>
       </View>
 
@@ -618,14 +565,13 @@ function SynthesisCard({ topic, articleCount }: { topic: string; articleCount: n
       }}
     >
       <View style={styles.synthesisHeader}>
-        <Ionicons name="layers" size={16} color="#a78bfa" />
         <Text style={styles.synthesisTitle}>
           Synthesis across {articleCount} articles
         </Text>
         <Ionicons
           name={expanded ? 'chevron-up' : 'chevron-down'}
-          size={16}
-          color="#94a3b8"
+          size={14}
+          color={colors.textMuted}
         />
       </View>
       {expanded && (
@@ -688,14 +634,12 @@ function TopicsModeView() {
               <View style={styles.clusterHeaderLeft}>
                 <Ionicons
                   name={isExpanded ? 'chevron-down' : 'chevron-forward'}
-                  size={18}
-                  color="#94a3b8"
+                  size={16}
+                  color={colors.textMuted}
                 />
                 <Text style={styles.clusterTopic}>{cluster.topic}</Text>
               </View>
-              <View style={styles.clusterBadge}>
-                <Text style={styles.clusterCount}>{cluster.articles.length}</Text>
-              </View>
+              <Text style={styles.clusterCount}>{cluster.articles.length}</Text>
             </Pressable>
             {isExpanded && (
               <View style={styles.clusterArticles}>
@@ -766,6 +710,19 @@ export default function FeedScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Screen title */}
+      <View style={styles.screenHeader}>
+        <Text style={styles.screenTitle}>Petrarca</Text>
+        <Text style={styles.screenSubtitle}>
+          {allArticles.length} texts · {stats.totalConcepts || 0} concepts
+        </Text>
+        {/* Double rule */}
+        <View style={styles.doubleRule}>
+          <View style={styles.doubleRuleTop} />
+          <View style={styles.doubleRuleBottom} />
+        </View>
+      </View>
+
       {/* View mode toggle */}
       <View style={styles.viewModeRow}>
         {(['list', 'topics', 'triage'] as ViewMode[]).map(mode => (
@@ -774,15 +731,6 @@ export default function FeedScreen() {
             style={[styles.viewModeButton, viewMode === mode && styles.viewModeButtonActive]}
             onPress={() => handleViewModeChange(mode)}
           >
-            <Ionicons
-              name={
-                mode === 'list' ? 'list' :
-                mode === 'topics' ? 'grid-outline' :
-                'layers-outline'
-              }
-              size={16}
-              color={viewMode === mode ? '#f8fafc' : '#64748b'}
-            />
             <Text style={[styles.viewModeText, viewMode === mode && styles.viewModeTextActive]}>
               {mode === 'list' ? 'List' : mode === 'topics' ? 'Topics' : 'Triage'}
             </Text>
@@ -802,11 +750,10 @@ export default function FeedScreen() {
               router.push('/review');
             }}
           >
-            <Ionicons name="bulb-outline" size={16} color="#f59e0b" />
             <Text style={styles.webReviewBannerText}>
-              You have {reviewCount} concept{reviewCount !== 1 ? 's' : ''} to review
+              {reviewCount} concept{reviewCount !== 1 ? 's' : ''} to review
             </Text>
-            <Ionicons name="chevron-forward" size={14} color="#64748b" />
+            <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
           </Pressable>
         );
       })()}
@@ -814,9 +761,6 @@ export default function FeedScreen() {
       {viewMode === 'list' && (
         <>
           <View style={styles.headerRow}>
-            <Text style={styles.headerTitle}>
-              {listArticles.length} article{listArticles.length !== 1 ? 's' : ''}
-            </Text>
             <Pressable onPress={() => {
               logEvent('feed_toggle_filter', { show_all: !showAll });
               setShowAll(!showAll);
@@ -824,7 +768,7 @@ export default function FeedScreen() {
               <Text style={styles.filterToggle}>{showAll ? 'Unread only' : 'Show all'}</Text>
             </Pressable>
             <Pressable onPress={() => forceUpdate(n => n + 1)}>
-              <Ionicons name="refresh" size={18} color="#64748b" />
+              <Text style={styles.filterToggle}>Refresh</Text>
             </Pressable>
           </View>
 
@@ -848,11 +792,10 @@ export default function FeedScreen() {
                   router.push('/stats');
                 }}
               >
-                <Ionicons name="flask-outline" size={16} color="#a78bfa" />
                 <Text style={styles.researchResultsBannerText}>
                   {newResearchCount} research result{newResearchCount !== 1 ? 's' : ''} ready
                 </Text>
-                <Ionicons name="chevron-forward" size={14} color="#64748b" />
+                <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
               </Pressable>
             )}
 
@@ -867,7 +810,7 @@ export default function FeedScreen() {
               if (inProgress.length === 0 && inProgressBooks.length === 0) return null;
               return (
                 <View style={styles.continueSection}>
-                  <Text style={styles.continueSectionTitle}>Continue Reading</Text>
+                  <Text style={styles.sectionHeading}>{'\u2726'} CONTINUE READING</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
                     {inProgressBooks.map(book => {
                       const progress = getBookProgress(book.id);
@@ -890,7 +833,7 @@ export default function FeedScreen() {
                       return (
                         <Pressable
                           key={`book-${book.id}`}
-                          style={[styles.continueCard, { borderLeftWidth: 3, borderLeftColor: '#60a5fa' }]}
+                          style={[styles.continueCard, { borderLeftColor: colors.info }]}
                           onPress={() => {
                             logEvent('continue_book_tap', { book_id: book.id, pct: progress.pct });
                             if (restoreInfo) {
@@ -902,19 +845,14 @@ export default function FeedScreen() {
                             }
                           }}
                         >
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
-                            <Ionicons name="book" size={12} color="#60a5fa" />
-                            <Text style={{ color: '#60a5fa', fontSize: 11, fontWeight: '600' }}>BOOK</Text>
-                          </View>
+                          <Text style={styles.continueCardLabel}>BOOK</Text>
                           <Text style={styles.continueCardTitle} numberOfLines={2}>{book.title}</Text>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
-                            <Text style={styles.continueCardDepth}>{progress.pct}% · {progress.read}/{progress.total} sections</Text>
-                          </View>
+                          <Text style={styles.continueCardDepth}>{progress.pct}% · {progress.read}/{progress.total} sections</Text>
                           {nextSectionLabel && (
-                            <Text style={{ color: '#34d399', fontSize: 11, marginTop: 2 }}>Next: {nextSectionLabel}</Text>
+                            <Text style={[styles.continueCardDepth, { color: colors.success }]}>Next: {nextSectionLabel}</Text>
                           )}
                           {restoreInfo && restoreInfo.daysSince >= 2 && (
-                            <Text style={{ color: '#f59e0b', fontSize: 11, marginTop: 2 }}>{restoreInfo.daysSince}d ago</Text>
+                            <Text style={[styles.continueCardDepth, { color: colors.warning }]}>{restoreInfo.daysSince}d ago</Text>
                           )}
                         </Pressable>
                       );
@@ -931,10 +869,7 @@ export default function FeedScreen() {
                           }}
                         >
                           <Text style={styles.continueCardTitle} numberOfLines={2}>{a.title}</Text>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
-                            <View style={[styles.depthDot, { backgroundColor: DEPTH_COLORS[state.depth] }]} />
-                            <Text style={styles.continueCardDepth}>{DEPTH_LABELS[state.depth]}</Text>
-                          </View>
+                          <Text style={[styles.continueCardDepth, { color: DEPTH_COLORS[state.depth] }]}>{DEPTH_LABELS[state.depth]}</Text>
                         </Pressable>
                       );
                     })}
@@ -969,8 +904,9 @@ export default function FeedScreen() {
                 return (
                   <View key={tag} style={styles.explorationSection}>
                     <View style={styles.explorationHeader}>
-                      <Ionicons name="compass-outline" size={16} color="#10b981" />
-                      <Text style={styles.explorationTitle}>Exploring: {tag}</Text>
+                      <Text style={styles.sectionHeading}>
+                        {'\u2726'} EXPLORING: {tag.replace(/[-—]+/g, ' — ').replace(/,\s*/g, ', ').replace(/\s+/g, ' ').trim().toUpperCase()}
+                      </Text>
                       <Text style={styles.explorationCount}>{explorationArticles.length}</Text>
                     </View>
                     {sorted.slice(0, 8).map(a => <FeedCard key={a.id} article={a} />)}
@@ -981,8 +917,7 @@ export default function FeedScreen() {
 
             {listArticles.length === 0 ? (
               <View style={styles.empty}>
-                <Ionicons name="checkmark-circle" size={48} color="#10b981" />
-                <Text style={styles.emptyTitle}>All caught up!</Text>
+                <Text style={styles.emptyTitle}>All caught up</Text>
                 <Text style={styles.emptySubtitle}>No unread articles</Text>
               </View>
             ) : (
@@ -1003,164 +938,282 @@ export default function FeedScreen() {
 // --- Styles ---
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: { flex: 1, backgroundColor: colors.parchment },
+
+  // Screen header
+  screenHeader: {
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
+  },
+  screenTitle: {
+    ...type.screenTitle,
+    color: colors.ink,
+  },
+  screenSubtitle: {
+    ...type.screenSubtitle,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  doubleRule: {
+    marginTop: spacing.sm,
+  },
+  doubleRuleTop: {
+    height: layout.doubleRuleTop,
+    backgroundColor: colors.ink,
+  },
+  doubleRuleBottom: {
+    height: layout.doubleRuleBottom,
+    backgroundColor: colors.ink,
+    marginTop: layout.doubleRuleGap,
+  },
 
   // View mode toggle
   viewModeRow: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 4,
-    gap: 8,
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+    gap: spacing.sm,
   },
   viewModeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: '#1e293b',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: colors.textMuted,
   },
   viewModeButtonActive: {
-    backgroundColor: '#2563eb',
+    backgroundColor: colors.rubric,
+    borderColor: colors.rubric,
   },
   viewModeText: {
-    color: '#64748b',
-    fontSize: 13,
-    fontWeight: '500',
+    ...type.metadata,
+    color: colors.textMuted,
   },
   viewModeTextActive: {
-    color: '#f8fafc',
+    color: colors.parchment,
   },
 
   // List mode header
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, gap: 12 },
-  headerTitle: { color: '#f8fafc', fontSize: 16, fontWeight: '600', flex: 1 },
-  filterToggle: { color: '#60a5fa', fontSize: 13 },
-  progressRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 8, gap: 8 },
-  progressBar: { flex: 1, height: 4, backgroundColor: '#1e293b', borderRadius: 2, overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: '#2563eb', borderRadius: 2 },
-  progressLabel: { color: '#64748b', fontSize: 12 },
-  scroll: { flex: 1, paddingHorizontal: 16 },
-
-  // Feed card
-  card: {
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 10,
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xs,
+    gap: spacing.lg,
   },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  hostname: { color: '#60a5fa', fontSize: 12, fontWeight: '500' },
-  readTime: { color: '#64748b', fontSize: 12 },
-  title: { color: '#f8fafc', fontSize: 17, fontWeight: '600', lineHeight: 23, marginBottom: 4 },
-  summary: { color: '#94a3b8', fontSize: 14, lineHeight: 20, marginBottom: 8 },
-  author: { color: '#64748b', fontSize: 12, marginTop: 4 },
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  topics: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, flex: 1 },
-  topicPill: { backgroundColor: '#334155', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
-  topicText: { color: '#94a3b8', fontSize: 11 },
-  depthBadge: { borderWidth: 1, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
-  depthText: { fontSize: 11, fontWeight: '500' },
-  noveltyBadge: { borderWidth: 1, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, marginRight: 4 },
-  noveltyText: { fontSize: 11, fontWeight: '500' },
-  tierBadge: { borderWidth: 1, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
-  tierText: { fontSize: 11, fontWeight: '600' },
-  dedupIndicator: { color: '#f59e0b', fontSize: 11, marginTop: 6, fontStyle: 'italic' as const },
-  // Continue Reading
-  continueSection: { marginBottom: 8, paddingHorizontal: 16 },
-  continueSectionTitle: { color: '#94a3b8', fontSize: 13, fontWeight: '600', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
-  continueCard: { width: 200, backgroundColor: '#1e293b', borderRadius: 12, padding: 12, marginRight: 10, borderLeftWidth: 3, borderLeftColor: '#f59e0b' },
-  continueCardTitle: { color: '#f8fafc', fontSize: 14, fontWeight: '600', lineHeight: 18 },
-  continueCardDepth: { color: '#94a3b8', fontSize: 11 },
-  depthDot: { width: 6, height: 6, borderRadius: 3 },
+  filterToggle: {
+    ...type.metadata,
+    color: colors.rubric,
+  },
+  progressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: layout.screenPadding,
+    paddingBottom: spacing.sm,
+    gap: spacing.sm,
+  },
+  progressBar: {
+    flex: 1,
+    height: layout.progressBarHeight,
+    backgroundColor: colors.rule,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.ink,
+  },
+  progressLabel: {
+    ...type.metadata,
+    color: colors.textMuted,
+  },
+  scroll: { flex: 1, paddingHorizontal: layout.screenPadding },
 
-  empty: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 100, gap: 8 },
-  emptyTitle: { color: '#f8fafc', fontSize: 20, fontWeight: '700' },
-  emptySubtitle: { color: '#94a3b8', fontSize: 14 },
+  // Section heading (✦ CONTINUE READING, ✦ NEW, etc.)
+  sectionHeading: {
+    ...type.sectionHead,
+    color: colors.rubric,
+    marginBottom: spacing.sm,
+    marginTop: spacing.md,
+  },
+
+  // Entry row (two-column: content + sidebar)
+  entryRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.rule,
+    paddingVertical: spacing.md,
+  },
+  entryContent: {
+    flex: 1,
+    paddingRight: spacing.md,
+  },
+  entryTitle: {
+    ...type.entryTitle,
+    color: colors.textPrimary,
+    marginBottom: 2,
+  },
+  entrySummary: {
+    ...type.entrySummary,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  entryTopics: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  topicTag: {
+    ...type.topicTag,
+    color: colors.rubric,
+    marginRight: 2,
+  },
+  entryMeta: {
+    ...type.metadata,
+    color: colors.textMuted,
+  },
+  entrySidebar: {
+    width: layout.sidebarWidth,
+    borderLeftWidth: 1,
+    borderLeftColor: colors.rule,
+    paddingLeft: spacing.sm,
+    justifyContent: 'flex-start',
+  },
+  sideLabel: {
+    ...type.sideLabel,
+    color: colors.textMuted,
+    marginBottom: 2,
+  },
+  sideValue: {
+    ...type.sideValue,
+    color: colors.ink,
+  },
+  sideNote: {
+    ...type.sideNote,
+    color: colors.rubric,
+  },
+  noveltyText: {
+    ...type.metadata,
+    color: colors.textMuted,
+  },
+  tierText: {
+    ...type.metadata,
+    color: colors.rubric,
+  },
+  dedupIndicator: {
+    ...type.metadata,
+    color: colors.warning,
+    marginTop: spacing.xs,
+    fontStyle: 'italic' as const,
+  },
+
+  // Continue Reading
+  continueSection: { marginBottom: spacing.sm },
+  continueCard: {
+    width: 200,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.rubric,
+    padding: spacing.md,
+    marginRight: spacing.sm,
+  },
+  continueCardLabel: {
+    ...type.sideLabel,
+    color: colors.info,
+    marginBottom: 2,
+  },
+  continueCardTitle: {
+    ...type.entryTitle,
+    color: colors.textPrimary,
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  continueCardDepth: {
+    ...type.metadata,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
+  },
+
+  empty: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 100, gap: spacing.sm },
+  emptyTitle: {
+    ...type.screenTitle,
+    color: colors.ink,
+  },
+  emptySubtitle: {
+    ...type.entrySummary,
+    color: colors.textSecondary,
+  },
 
   // Topic clustering
   clusterContainer: {
-    marginBottom: 4,
+    marginBottom: 2,
   },
   clusterHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#1e293b',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 10,
-    marginBottom: 2,
+    paddingHorizontal: layout.screenPadding,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.rule,
   },
   clusterHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: spacing.sm,
     flex: 1,
   },
   clusterTopic: {
-    color: '#f8fafc',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  clusterBadge: {
-    backgroundColor: '#334155',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 12,
+    ...type.entryTitle,
+    color: colors.textPrimary,
   },
   clusterCount: {
-    color: '#94a3b8',
-    fontSize: 12,
-    fontWeight: '600',
+    ...type.metadata,
+    color: colors.textMuted,
   },
   clusterArticles: {
-    paddingLeft: 8,
-    paddingTop: 4,
+    paddingLeft: spacing.sm,
+    paddingTop: spacing.xs,
   },
 
   // Synthesis card
   synthesisCard: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
-    borderLeftWidth: 3,
-    borderLeftColor: '#a78bfa',
+    borderLeftWidth: 2,
+    borderLeftColor: colors.rubric,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
   },
   synthesisHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: spacing.sm,
   },
   synthesisTitle: {
-    color: '#a78bfa',
-    fontSize: 13,
-    fontWeight: '600',
+    ...type.entrySummary,
+    color: colors.rubric,
     flex: 1,
   },
   synthesisText: {
-    color: '#cbd5e1',
-    fontSize: 14,
-    lineHeight: 22,
-    marginTop: 12,
+    ...type.entrySummary,
+    color: colors.textBody,
+    marginTop: spacing.md,
   },
 
   // Triage mode
   triageContainer: {
     flex: 1,
-    paddingHorizontal: 16,
+    paddingHorizontal: layout.screenPadding,
   },
   triageCounter: {
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: spacing.md,
   },
   triageCounterText: {
-    color: '#94a3b8',
-    fontSize: 14,
-    fontWeight: '500',
+    ...type.metadata,
+    color: colors.textMuted,
   },
   triageStack: {
     flex: 1,
@@ -1174,14 +1227,14 @@ const styles = StyleSheet.create({
     maxHeight: SCREEN_HEIGHT * 0.65,
   },
   triageCard: {
-    backgroundColor: '#1e293b',
-    borderRadius: 16,
-    padding: 24,
+    backgroundColor: colors.parchment,
+    borderRadius: 3,
+    padding: spacing.xxl,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: colors.rule,
   },
   triageCardContent: {
-    gap: 12,
+    gap: spacing.md,
   },
   triageSourceRow: {
     flexDirection: 'row',
@@ -1189,45 +1242,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   triageHostname: {
-    color: '#60a5fa',
-    fontSize: 14,
-    fontWeight: '500',
+    ...type.metadata,
+    color: colors.textMuted,
   },
   triageReadTime: {
-    color: '#64748b',
-    fontSize: 13,
+    ...type.metadata,
+    color: colors.textMuted,
   },
   triageTitle: {
-    color: '#f8fafc',
+    ...type.screenTitle,
+    color: colors.ink,
     fontSize: 22,
-    fontWeight: '700',
     lineHeight: 30,
   },
   triageSummary: {
-    color: '#94a3b8',
-    fontSize: 16,
-    lineHeight: 24,
+    ...type.entrySummary,
+    color: colors.textSecondary,
+    fontSize: 15,
+    lineHeight: 22,
   },
   triageTopics: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 4,
+    gap: spacing.sm,
+    marginTop: spacing.xs,
   },
-  triageTopicPill: {
-    backgroundColor: '#334155',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  triageTopicText: {
-    color: '#94a3b8',
-    fontSize: 13,
+  triageTopicTag: {
+    ...type.topicTag,
+    color: colors.rubric,
   },
   triageAuthor: {
-    color: '#64748b',
-    fontSize: 14,
-    marginTop: 4,
+    ...type.metadata,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
   },
 
   // Action labels
@@ -1237,45 +1284,46 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    padding: 8,
+    padding: spacing.sm,
   },
   actionLabelRight: {
-    top: 16,
-    left: 16,
+    top: spacing.lg,
+    left: spacing.lg,
   },
   actionLabelLeft: {
-    top: 16,
-    right: 16,
+    top: spacing.lg,
+    right: spacing.lg,
   },
   actionLabelTop: {
-    bottom: 16,
+    bottom: spacing.lg,
     alignSelf: 'center',
     left: 0,
     right: 0,
     justifyContent: 'center',
   },
   actionLabelText: {
+    fontFamily: fonts.bodyMedium,
     fontSize: 18,
-    fontWeight: '700',
+    ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}),
   },
 
   // Swipe hints
   swipeHints: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 16,
-    paddingTop: 12,
+    marginTop: spacing.lg,
+    paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: '#334155',
+    borderTopColor: colors.rule,
   },
   swipeHint: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.xs,
   },
   swipeHintText: {
-    color: '#64748b',
-    fontSize: 12,
+    ...type.metadata,
+    color: colors.textMuted,
   },
 
   // Triage complete
@@ -1283,125 +1331,106 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 32,
+    gap: spacing.md,
+    paddingHorizontal: spacing.xxxl,
   },
   triageCompleteTitle: {
-    color: '#f8fafc',
-    fontSize: 24,
-    fontWeight: '700',
+    ...type.screenTitle,
+    color: colors.ink,
   },
   triageCompleteSubtitle: {
-    color: '#94a3b8',
-    fontSize: 16,
+    ...type.entrySummary,
+    color: colors.textSecondary,
     textAlign: 'center',
   },
   triageResetButton: {
-    marginTop: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: '#1e293b',
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.rubric,
+    borderRadius: 3,
   },
   triageResetText: {
-    color: '#60a5fa',
-    fontSize: 14,
-    fontWeight: '500',
+    ...type.metadata,
+    color: colors.rubric,
   },
 
   // Research results banner
   researchResultsBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#1a1a2e',
-    borderLeftWidth: 3,
-    borderLeftColor: '#a78bfa',
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 10,
+    gap: spacing.sm,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.rubric,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.sm,
   },
   researchResultsBannerText: {
-    color: '#a78bfa',
-    fontSize: 13,
-    fontWeight: '600',
+    ...type.entrySummary,
+    color: colors.rubric,
     flex: 1,
   },
 
   // Exploration section
   explorationSection: {
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#10b98133',
-    borderRadius: 12,
-    padding: 12,
+    marginBottom: spacing.lg,
+    paddingTop: spacing.xs,
   },
   explorationHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  explorationTitle: {
-    color: '#10b981',
-    fontSize: 15,
-    fontWeight: '600',
-    flex: 1,
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
   explorationCount: {
-    color: '#64748b',
-    fontSize: 12,
-    backgroundColor: '#1e293b',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    overflow: 'hidden',
+    ...type.metadata,
+    color: colors.textMuted,
   },
 
   // Web triage buttons
   webTriageButtons: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 16,
-    paddingTop: 12,
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+    paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: '#334155',
+    borderTopColor: colors.rule,
   },
   webTriageBtn: {
     flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: '#1e293b',
+    paddingVertical: spacing.sm,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: colors.rule,
   },
-  webTriageBtnSkip: { borderWidth: 1, borderColor: '#ef444440' },
-  webTriageBtnRead: { borderWidth: 1, borderColor: '#60a5fa40' },
-  webTriageBtnSave: { borderWidth: 1, borderColor: '#10b98140' },
+  webTriageBtnSkip: {},
+  webTriageBtnRead: {},
+  webTriageBtnSave: {},
   webTriageBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontFamily: fonts.bodyMedium,
+    fontSize: 13,
+    ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}),
   },
 
   // Web review banner
   webReviewBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#1a1a0e',
-    borderLeftWidth: 3,
-    borderLeftColor: '#f59e0b',
-    padding: 12,
-    marginHorizontal: 16,
-    marginTop: 4,
-    borderRadius: 10,
+    gap: spacing.sm,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.warning,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginHorizontal: layout.screenPadding,
+    marginTop: spacing.xs,
   },
   webReviewBannerText: {
-    color: '#f59e0b',
-    fontSize: 13,
-    fontWeight: '600',
+    ...type.entrySummary,
+    color: colors.warning,
     flex: 1,
   },
 });

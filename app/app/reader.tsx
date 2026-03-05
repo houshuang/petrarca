@@ -14,6 +14,8 @@ import { logEvent } from '../data/logger';
 import { isSectionValid, parseInlineMarkdown, splitMarkdownBlocks, parseMarkdownBlock } from '../lib/markdown-utils';
 import { transcribeVoiceNote } from '../data/transcription';
 import { triggerResearch, getResearchResultsForArticle } from '../data/research';
+import { getDisplayTitle } from '../lib/display-utils';
+import { colors, fonts, type, spacing, layout } from '../design/tokens';
 
 // --- Local types for claim signal tracking ---
 
@@ -24,13 +26,6 @@ interface ClaimSignalState {
 }
 
 // --- Depth zone definitions ---
-
-function getDisplayTitle(article: { title: string; one_line_summary: string }): string {
-  if (/^Thread by @/i.test(article.title) && article.one_line_summary && article.one_line_summary !== '[dry run]') {
-    return article.one_line_summary;
-  }
-  return article.title;
-}
 
 const DEPTH_ZONES = ['summary', 'claims', 'sections', 'full'] as const;
 type DepthZone = typeof DEPTH_ZONES[number];
@@ -77,25 +72,19 @@ function FloatingDepthIndicator({ currentZone, claimCount, sectionCount }: {
     <View style={styles.depthIndicator}>
       {DEPTH_ZONES.map((zone, i) => {
         const active = zone === currentZone;
-        const idx = DEPTH_ZONES.indexOf(zone);
-        const currentIdx = DEPTH_ZONES.indexOf(currentZone);
-        const reached = idx <= currentIdx;
         const count = zoneCounts[zone];
         return (
           <View key={zone} style={styles.depthIndicatorItem}>
-            {i > 0 && (
-              <View style={[styles.depthConnector, reached && styles.depthConnectorReached]} />
-            )}
             <Text style={[
               styles.depthLabel,
               active && styles.depthLabelActive,
-              reached && !active && styles.depthLabelReached,
             ]}>
               {DEPTH_LABELS[zone]}
               {count != null && (
                 <Text style={styles.depthCount}> ({count})</Text>
               )}
             </Text>
+            {active && <View style={styles.depthUnderline} />}
           </View>
         );
       })}
@@ -114,19 +103,19 @@ function ClaimSignalPill({ currentSignal, onSignal, onDismiss }: {
     <Pressable style={styles.pillBackdrop} onPress={onDismiss}>
       <View style={styles.pillContainer}>
         {currentSignal && (
-          <Text style={{ color: '#64748b', fontSize: 11, marginBottom: 4 }}>
+          <Text style={{ color: colors.textMuted, fontFamily: fonts.ui, fontSize: 11, marginBottom: 4 }}>
             Already marked · tap to change
           </Text>
         )}
         <View style={{ flexDirection: 'row', gap: 4 }}>
-          <Pressable style={[styles.pillBtn, currentSignal === 'knew_it' && { backgroundColor: '#334155' }]} onPress={() => onSignal('knew_it')}>
+          <Pressable style={[styles.pillBtn, currentSignal === 'knew_it' && { backgroundColor: colors.rule }]} onPress={() => onSignal('knew_it')}>
             <Text style={styles.pillBtnText}>{currentSignal === 'knew_it' ? '✓ ' : ''}Knew this</Text>
           </Pressable>
-          <Pressable style={[styles.pillBtn, styles.pillBtnNew, currentSignal === 'interesting' && { backgroundColor: '#064e3b' }]} onPress={() => onSignal('interesting')}>
-            <Text style={[styles.pillBtnText, { color: '#34d399' }]}>{currentSignal === 'interesting' ? '✓ ' : ''}New to me</Text>
+          <Pressable style={[styles.pillBtn, styles.pillBtnNew, currentSignal === 'interesting' && { backgroundColor: '#d4edda' }]} onPress={() => onSignal('interesting')}>
+            <Text style={[styles.pillBtnText, { color: colors.claimNew }]}>{currentSignal === 'interesting' ? '✓ ' : ''}New to me</Text>
           </Pressable>
-          <Pressable style={[styles.pillBtn, styles.pillBtnSave, currentSignal === 'save' && { backgroundColor: '#1e3a5f' }]} onPress={() => onSignal('save')}>
-            <Text style={[styles.pillBtnText, { color: '#60a5fa' }]}>{currentSignal === 'save' ? '✓ ' : ''}Save</Text>
+          <Pressable style={[styles.pillBtn, styles.pillBtnSave, currentSignal === 'save' && { backgroundColor: '#f5e6d0' }]} onPress={() => onSignal('save')}>
+            <Text style={[styles.pillBtnText, { color: colors.rubric }]}>{currentSignal === 'save' ? '✓ ' : ''}Save</Text>
           </Pressable>
         </View>
       </View>
@@ -142,24 +131,25 @@ function ConnectionIndicator({ articleId, claimText }: {
 }) {
   const router = useRouter();
   const connection = getConceptConnections(articleId, claimText);
+
+  useEffect(() => {
+    if (!connection) return;
+    logEvent('reader_connection_shown', {
+      article_id: articleId,
+      concept_id: connection.concept.id,
+      other_article_count: connection.otherArticles.length,
+    });
+  }, [articleId, claimText]);
+
   if (!connection) return null;
 
   const { concept, otherArticles } = connection;
   const count = otherArticles.length;
   const displayArticles = otherArticles.slice(0, 3);
 
-  useEffect(() => {
-    logEvent('reader_connection_shown', {
-      article_id: articleId,
-      concept_id: concept.id,
-      other_article_count: count,
-    });
-  }, []);
-
   return (
     <View style={styles.connectionCard}>
       <View style={styles.connectionHeader}>
-        <Ionicons name="git-network-outline" size={14} color="#a78bfa" />
         <Text style={styles.connectionLabel}>Also explored in:</Text>
       </View>
       {displayArticles.map(a => (
@@ -176,7 +166,7 @@ function ConnectionIndicator({ articleId, claimText }: {
           }}
         >
           <Text style={styles.connectionArticleTitle} numberOfLines={1}>{a.title}</Text>
-          <Ionicons name="chevron-forward" size={12} color="#64748b" />
+          <Ionicons name="chevron-forward" size={12} color={colors.textMuted} />
         </Pressable>
       ))}
       {count > 3 && (
@@ -277,7 +267,7 @@ function MarkdownText({ content, claimHighlights, claimSignals, onClaimTap, high
                 )}
                 {(block.items || []).map((item, j) => (
                   <View key={j} style={styles.markdownListItem}>
-                    <Text style={styles.markdownBullet}>{'\u00B7'}</Text>
+                    <Text style={styles.markdownBullet}>{'·'}</Text>
                     <Text style={styles.markdownText}>
                       {renderInlineMarkdown(item)}
                     </Text>
@@ -439,7 +429,7 @@ function SectionCard({ section, index, expanded, onToggle }: {
             <Text style={styles.sectionSummary} numberOfLines={Platform.OS === 'web' ? undefined : 2}>{section.summary}</Text>
           )}
         </View>
-        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color="#64748b" />
+        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
       </Pressable>
 
       {expanded && (
@@ -495,7 +485,7 @@ function TextNoteInput({ articleId, currentDepth, onNoteSubmitted }: {
   if (!expanded) {
     return (
       <Pressable style={styles.textNoteBtn} onPress={() => setExpanded(true)}>
-        <Ionicons name="create-outline" size={16} color="#60a5fa" />
+        <Ionicons name="create-outline" size={16} color={colors.rubric} />
         <Text style={styles.textNoteBtnText}>Add note</Text>
       </Pressable>
     );
@@ -506,7 +496,7 @@ function TextNoteInput({ articleId, currentDepth, onNoteSubmitted }: {
       <TextInput
         style={styles.textNoteInput}
         placeholder="Your thoughts..."
-        placeholderTextColor="#475569"
+        placeholderTextColor={colors.textMuted}
         multiline
         value={text}
         onChangeText={setText}
@@ -521,7 +511,7 @@ function TextNoteInput({ articleId, currentDepth, onNoteSubmitted }: {
           onPress={handleSubmit}
           disabled={!text.trim()}
         >
-          <Ionicons name="send" size={14} color="#f8fafc" />
+          <Ionicons name="send" size={14} color={colors.parchment} />
           <Text style={styles.textNoteSubmitText}>Save</Text>
         </Pressable>
       </View>
@@ -622,7 +612,7 @@ function VoiceRecordButton({ articleId, currentDepth, onTranscribed }: {
       <Ionicons
         name={isRecording ? 'stop' : transcribing ? 'hourglass-outline' : 'mic-outline'}
         size={18}
-        color={isRecording ? '#ef4444' : transcribing ? '#f59e0b' : '#60a5fa'}
+        color={isRecording ? colors.rubric : transcribing ? colors.warning : colors.ink}
       />
       {isRecording ? (
         <Text style={styles.voiceTimer}>{recordingDuration}s</Text>
@@ -670,7 +660,7 @@ function ResearchBanner({ transcript, articleId, articleTitle, articleSummary, c
   if (sent) {
     return (
       <View style={styles.researchBanner}>
-        <Ionicons name="checkmark-circle" size={16} color="#10b981" />
+        <Ionicons name="checkmark-circle" size={16} color={colors.success} />
         <Text style={styles.researchBannerText}>Research agent dispatched</Text>
       </View>
     );
@@ -685,13 +675,13 @@ function ResearchBanner({ transcript, articleId, articleTitle, articleSummary, c
           onPress={handleResearch}
           disabled={sending}
         >
-          <Ionicons name="search" size={14} color="#f8fafc" />
+          <Ionicons name="search" size={14} color={colors.parchment} />
           <Text style={styles.researchBtnText}>
             {sending ? 'Sending...' : 'Research this?'}
           </Text>
         </Pressable>
         <Pressable style={styles.researchDismissBtn} onPress={onDismiss}>
-          <Ionicons name="close" size={14} color="#64748b" />
+          <Ionicons name="close" size={14} color={colors.textMuted} />
         </Pressable>
       </View>
     </View>
@@ -1082,7 +1072,7 @@ export default function ReaderScreen() {
       {/* Top bar */}
       <View style={styles.topBar}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={22} color="#f8fafc" />
+          <Text style={styles.backLinkText}>{'← Feed'}</Text>
         </Pressable>
         <View style={{ flex: 1 }} />
         {Platform.OS === 'web' ? (
@@ -1109,7 +1099,7 @@ export default function ReaderScreen() {
               router.push('/stats');
             }}
           >
-            <Ionicons name="flask" size={14} color="#a78bfa" />
+            <Ionicons name="flask" size={14} color={colors.rubric} />
             <Text style={styles.researchBadgeText}>{articleResearchCount}</Text>
           </Pressable>
         )}
@@ -1126,13 +1116,13 @@ export default function ReaderScreen() {
           }
           logEvent('dismiss_menu_open', { article_id: article.id });
         }}>
-          <Ionicons name="flag-outline" size={20} color="#64748b" />
+          <Ionicons name="flag-outline" size={20} color={colors.rubric} />
         </Pressable>
         <Pressable onPress={() => {
           logEvent('reader_open_source', { article_id: article.id, url: article.source_url });
           Linking.openURL(article.source_url);
         }}>
-          <Ionicons name="open-outline" size={20} color="#60a5fa" />
+          <Ionicons name="open-outline" size={20} color={colors.textMuted} />
         </Pressable>
       </View>
 
@@ -1159,10 +1149,10 @@ export default function ReaderScreen() {
               </Pressable>
             ))}
             <Pressable
-              style={[styles.dismissMenuItem, { borderTopWidth: 1, borderTopColor: '#334155' }]}
+              style={[styles.dismissMenuItem, { borderTopWidth: 1, borderTopColor: colors.rule }]}
               onPress={() => setShowDismissMenu(false)}
             >
-              <Text style={[styles.dismissMenuItemText, { color: '#64748b' }]}>Cancel</Text>
+              <Text style={[styles.dismissMenuItemText, { color: colors.textMuted }]}>Cancel</Text>
             </Pressable>
           </View>
         </View>
@@ -1217,21 +1207,22 @@ export default function ReaderScreen() {
           {/* Time guidance */}
           <View style={styles.timeGuideRow}>
             <View style={styles.timeGuideItem}>
-              <Ionicons name="flash-outline" size={12} color="#3b82f6" />
               <Text style={styles.timeGuideText}>30s summary</Text>
             </View>
+            <Text style={styles.timeGuideSep}>·</Text>
             <View style={styles.timeGuideItem}>
-              <Ionicons name="bulb-outline" size={12} color="#8b5cf6" />
               <Text style={styles.timeGuideText}>2m claims</Text>
             </View>
             {article.sections.length > 1 && (
-              <View style={styles.timeGuideItem}>
-                <Ionicons name="document-text-outline" size={12} color="#f59e0b" />
-                <Text style={styles.timeGuideText}>{Math.ceil(article.estimated_read_minutes / 2)}m sections</Text>
-              </View>
+              <>
+                <Text style={styles.timeGuideSep}>·</Text>
+                <View style={styles.timeGuideItem}>
+                  <Text style={styles.timeGuideText}>{Math.ceil(article.estimated_read_minutes / 2)}m sections</Text>
+                </View>
+              </>
             )}
+            <Text style={styles.timeGuideSep}>·</Text>
             <View style={styles.timeGuideItem}>
-              <Ionicons name="book-outline" size={12} color="#10b981" />
               <Text style={styles.timeGuideText}>{article.estimated_read_minutes}m full</Text>
             </View>
           </View>
@@ -1263,7 +1254,7 @@ export default function ReaderScreen() {
                   router.push({ pathname: '/reader', params: { id: readSimilar[0].id } });
                 }}
               >
-                <Ionicons name="copy-outline" size={14} color="#f59e0b" />
+                <Ionicons name="copy-outline" size={14} color={colors.warning} />
                 <Text style={styles.dedupBannerText}>
                   Similar to: {readSimilar[0].title}
                 </Text>
@@ -1278,10 +1269,7 @@ export default function ReaderScreen() {
             <>
               <View style={styles.divider}>
                 <View style={styles.dividerLine} />
-                <View style={styles.dividerLabelRow}>
-                  <Ionicons name="bulb-outline" size={14} color="#8b5cf6" />
-                  <Text style={styles.dividerText}>Key Claims</Text>
-                </View>
+                <Text style={styles.dividerText}>✦ KEY CLAIMS</Text>
                 <View style={styles.dividerLine} />
               </View>
 
@@ -1308,13 +1296,13 @@ export default function ReaderScreen() {
                           style={[styles.claimBtn, signal === 'knew_it' && styles.claimBtnActiveKnew]}
                           onPress={() => handleClaimSignal(i, 'knew_it')}
                         >
-                          <Text style={[styles.claimBtnText, signal === 'knew_it' && { color: '#94a3b8' }]}>Knew this</Text>
+                          <Text style={[styles.claimBtnText, signal === 'knew_it' && { color: colors.textMuted }]}>Knew this</Text>
                         </Pressable>
                         <Pressable
                           style={[styles.claimBtn, styles.claimBtnNewBorder, signal === 'interesting' && styles.claimBtnActiveNew]}
                           onPress={() => handleClaimSignal(i, 'interesting')}
                         >
-                          <Text style={[styles.claimBtnText, { color: '#34d399' }, signal === 'interesting' && { color: '#ffffff' }]}>New to me</Text>
+                          <Text style={[styles.claimBtnText, { color: colors.claimNew }, signal === 'interesting' && { color: colors.parchment }]}>New to me</Text>
                         </Pressable>
                         <Pressable
                           style={styles.claimResearchBtn}
@@ -1330,7 +1318,7 @@ export default function ReaderScreen() {
                             setResearchBanner({ transcript: claim, noteId: `claim_${i}` });
                           }}
                         >
-                          <Ionicons name="search" size={12} color="#a78bfa" />
+                          <Ionicons name="search" size={12} color={colors.rubric} />
                           <Text style={styles.claimResearchText}>Research</Text>
                         </Pressable>
                       </View>
@@ -1348,10 +1336,7 @@ export default function ReaderScreen() {
           <View onLayout={onZoneLayout('sections')}>
             <View style={styles.divider}>
               <View style={styles.dividerLine} />
-              <View style={styles.dividerLabelRow}>
-                <Ionicons name="document-text-outline" size={14} color="#f59e0b" />
-                <Text style={styles.dividerText}>Sections</Text>
-              </View>
+              <Text style={styles.dividerText}>✦ SECTIONS</Text>
               <View style={styles.dividerLine} />
             </View>
 
@@ -1371,10 +1356,7 @@ export default function ReaderScreen() {
         <View onLayout={onZoneLayout('full')}>
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
-            <View style={styles.dividerLabelRow}>
-              <Ionicons name="book-outline" size={14} color="#10b981" />
-              <Text style={styles.dividerText}>Full Article</Text>
-            </View>
+            <Text style={styles.dividerText}>✦ FULL ARTICLE</Text>
             <View style={styles.dividerLine} />
           </View>
 
@@ -1396,7 +1378,7 @@ export default function ReaderScreen() {
             <View style={styles.relatedSection}>
               <View style={styles.divider}>
                 <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>Related Reading</Text>
+                <Text style={styles.dividerText}>✦ RELATED READING</Text>
                 <View style={styles.dividerLine} />
               </View>
               {related.map(({ article: rel, sharedConcepts }) => (
@@ -1454,7 +1436,7 @@ export default function ReaderScreen() {
               <TextInput
                 style={styles.highlightNoteInput}
                 placeholder="Your note on this passage..."
-                placeholderTextColor="#475569"
+                placeholderTextColor={colors.textMuted}
                 value={highlightNoteText}
                 onChangeText={setHighlightNoteText}
                 autoFocus
@@ -1462,7 +1444,7 @@ export default function ReaderScreen() {
               />
               <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 6 }}>
                 <Pressable onPress={() => { setHighlightNoteMode(false); setHighlightNoteText(''); }}>
-                  <Text style={{ color: '#64748b', fontSize: 13 }}>Cancel</Text>
+                  <Text style={{ color: colors.textMuted, fontFamily: fonts.body, fontSize: 13 }}>Cancel</Text>
                 </Pressable>
                 <Pressable
                   style={[styles.highlightNoteSaveBtn, !highlightNoteText.trim() && { opacity: 0.4 }]}
@@ -1477,27 +1459,27 @@ export default function ReaderScreen() {
                   }}
                   disabled={!highlightNoteText.trim()}
                 >
-                  <Text style={{ color: '#f8fafc', fontSize: 13, fontWeight: '600' }}>Save</Text>
+                  <Text style={{ color: colors.parchment, fontFamily: fonts.body, fontSize: 13, fontWeight: '600' }}>Save</Text>
                 </Pressable>
               </View>
             </View>
           ) : (
             <>
-              <Ionicons name="checkmark-circle" size={16} color="#f59e0b" />
+              <Ionicons name="checkmark-circle" size={16} color={colors.warning} />
               <Text style={styles.highlightActionText}>Highlighted</Text>
               <Pressable
                 style={styles.highlightNoteBtn}
                 onPress={() => setHighlightNoteMode(true)}
               >
-                <Ionicons name="create-outline" size={14} color="#60a5fa" />
+                <Ionicons name="create-outline" size={14} color={colors.rubric} />
                 <Text style={styles.highlightNoteLabel}>Note</Text>
               </Pressable>
               <Pressable style={styles.highlightResearchBtn} onPress={handleResearchHighlight}>
-                <Ionicons name="search" size={14} color="#a78bfa" />
+                <Ionicons name="search" size={14} color={colors.rubric} />
                 <Text style={styles.highlightResearchText}>Research</Text>
               </Pressable>
               <Pressable onPress={() => setHighlightAction(null)}>
-                <Ionicons name="close" size={16} color="#64748b" />
+                <Ionicons name="close" size={16} color={colors.textMuted} />
               </Pressable>
             </>
           )}
@@ -1512,164 +1494,188 @@ export default function ReaderScreen() {
 // ============================================================
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: { flex: 1, backgroundColor: colors.parchment },
   topBar: {
     flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingTop: Platform.OS === 'web' ? 12 : 56, paddingBottom: 8, gap: 12,
+    paddingHorizontal: layout.screenPadding, paddingTop: Platform.OS === 'web' ? 12 : 56, paddingBottom: spacing.sm, gap: 12,
   },
   backButton: { padding: 4 },
+  backLinkText: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.textMuted,
+    ...(Platform.OS === 'web' ? {} : {}),
+  },
   scroll: { flex: 1, paddingHorizontal: Platform.OS === 'web' ? 40 : 20 },
-  errorText: { color: '#ef4444', fontSize: 16, textAlign: 'center', marginTop: 100 },
-  backLink: { color: '#60a5fa', fontSize: 14, textAlign: 'center', marginTop: 12 },
+  errorText: { color: colors.rubric, fontFamily: fonts.reading, fontSize: 16, textAlign: 'center', marginTop: 100 },
+  backLink: { color: colors.rubric, fontFamily: fonts.body, fontSize: 14, textAlign: 'center', marginTop: 12 },
 
   // Floating depth indicator
   depthIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    backgroundColor: '#0f172aee',
-    ...(Platform.OS === 'web' ? { borderBottomWidth: 1, borderBottomColor: '#1e293b' } : {}),
+    paddingVertical: spacing.sm,
+    paddingHorizontal: layout.screenPadding,
+    backgroundColor: colors.parchment,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.rule,
+    gap: spacing.xl,
   },
-  depthIndicatorItem: { flexDirection: 'row', alignItems: 'center' },
-  depthConnector: { width: 16, height: 2, backgroundColor: '#334155', marginHorizontal: 6, borderRadius: 1 },
-  depthConnectorReached: { backgroundColor: '#475569' },
-  depthLabel: { color: '#475569', fontSize: 12, fontWeight: '500' },
-  depthLabelActive: { color: '#f8fafc', fontWeight: '700' },
-  depthLabelReached: { color: '#94a3b8' },
-  depthCount: { color: '#64748b', fontSize: 11, fontWeight: '400' as const },
+  depthIndicatorItem: { alignItems: 'center' },
+  depthLabel: {
+    fontFamily: fonts.body,
+    color: colors.textFaint,
+    fontSize: 11.5,
+  },
+  depthLabelActive: { color: colors.rubric },
+  depthUnderline: {
+    height: layout.depthUnderlineHeight,
+    backgroundColor: colors.rubric,
+    width: '100%',
+    marginTop: 4,
+    borderRadius: 1,
+  },
+  depthCount: { fontFamily: fonts.body, color: colors.textMuted, fontSize: 11, fontWeight: '400' as const },
 
   // Article header
   articleTitle: {
-    color: '#f8fafc',
-    fontSize: Platform.OS === 'web' ? 32 : 26,
-    fontWeight: '700',
-    lineHeight: Platform.OS === 'web' ? 42 : 34,
+    ...type.readerTitle,
+    color: colors.ink,
     marginBottom: 10,
-    letterSpacing: -0.3,
-    ...(Platform.OS === 'web' ? { fontFamily: 'Georgia, "Times New Roman", serif' } : {}),
   },
-  metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
-  metaText: { color: '#64748b', fontSize: 13 },
-  topicsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 20 },
-  topicPill: { backgroundColor: '#334155', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  topicText: { color: '#94a3b8', fontSize: 12 },
+  metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: 10 },
+  metaText: { ...type.metadata, color: colors.textMuted },
+  topicsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: spacing.xl },
+  topicPill: { paddingHorizontal: 0, paddingVertical: 2 },
+  topicText: { ...type.topicTag, color: colors.rubric },
 
   // Summary
   fullSummary: {
-    color: '#e2e8f0',
-    fontSize: Platform.OS === 'web' ? 18 : 17,
-    lineHeight: Platform.OS === 'web' ? 30 : 28,
-    marginBottom: 24,
-    letterSpacing: 0.1,
-    ...(Platform.OS === 'web' ? { fontFamily: 'Georgia, "Times New Roman", serif' } : {}),
+    ...type.readerBody,
+    color: colors.textBody,
+    marginBottom: spacing.xxl,
   },
 
-  // Dividers between zones
+  // Dividers between zones — rubric star markers
   divider: {
     flexDirection: 'row', alignItems: 'center',
-    marginTop: 28, marginBottom: 20, gap: 12,
+    marginTop: 28, marginBottom: spacing.xl, gap: 12,
   },
-  dividerLine: { flex: 1, height: 1, backgroundColor: '#1e293b' },
-  dividerLabelRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
-  dividerText: { color: '#64748b', fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: colors.rule },
+  dividerText: {
+    ...type.sectionHead,
+    color: colors.rubric,
+  },
 
   // Claims progress
   claimsProgress: {
-    color: '#64748b', fontSize: 12, marginBottom: 12,
+    fontFamily: fonts.ui,
+    fontSize: 10,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 1,
+    color: colors.textMuted,
+    marginBottom: 12,
     textAlign: 'center',
   },
 
-  // Claims list
+  // Claims list — left border, no background
   claimCard: {
-    backgroundColor: '#1e293b', borderRadius: 12, padding: 16,
-    marginBottom: 10, borderLeftWidth: 3, borderLeftColor: '#334155',
+    backgroundColor: 'transparent',
+    borderRadius: 0,
+    padding: spacing.lg,
+    marginBottom: 10,
+    borderLeftWidth: layout.claimBorderWidth,
+    borderLeftColor: colors.claimDefault,
   },
-  claimCardKnew: { borderLeftColor: '#64748b', opacity: 0.7 },
-  claimCardNew: { borderLeftColor: '#34d399' },
-  claimCardSave: { borderLeftColor: '#60a5fa' },
-  claimCardText: { color: '#e2e8f0', fontSize: 15, lineHeight: 23, marginBottom: 10 },
-  claimActions: { flexDirection: 'row', gap: 8 },
+  claimCardKnew: { borderLeftColor: colors.claimKnown, opacity: colors.claimKnownOpacity },
+  claimCardNew: { borderLeftColor: colors.claimNew },
+  claimCardSave: { borderLeftColor: colors.rubric },
+  claimCardText: { ...type.claimText, color: colors.textBody, marginBottom: 10 },
+  claimActions: { flexDirection: 'row', gap: spacing.sm },
   claimBtn: {
     paddingHorizontal: 14, paddingVertical: 6,
-    borderRadius: 8, backgroundColor: '#334155',
+    borderRadius: 4, backgroundColor: 'transparent',
+    borderWidth: 1, borderColor: colors.rule,
   },
-  claimBtnNewBorder: { borderColor: '#34d399', borderWidth: 1, backgroundColor: 'transparent' },
-  claimBtnActiveKnew: { backgroundColor: '#475569' },
-  claimBtnActiveNew: { backgroundColor: '#065f46', borderColor: '#34d399' },
-  claimBtnText: { color: '#94a3b8', fontSize: 12, fontWeight: '500' },
+  claimBtnNewBorder: { borderColor: colors.claimNew, backgroundColor: 'transparent' },
+  claimBtnActiveKnew: { backgroundColor: colors.rule },
+  claimBtnActiveNew: { backgroundColor: colors.claimNew, borderColor: colors.claimNew },
+  claimBtnText: { fontFamily: fonts.body, color: colors.textSecondary, fontSize: 11, fontWeight: '500' as const },
 
   // Section cards
-  sectionCard: { backgroundColor: '#1e293b', borderRadius: 12, marginBottom: 10, overflow: 'hidden' },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 8 },
-  sectionHeading: { color: '#f8fafc', fontSize: 15, fontWeight: '600' },
-  sectionSummary: { color: '#94a3b8', fontSize: 13, lineHeight: 18, marginTop: 4 },
-  sectionContent: { paddingHorizontal: 16, paddingBottom: 16 },
+  sectionCard: { backgroundColor: 'transparent', borderRadius: 0, marginBottom: 10, borderBottomWidth: 1, borderBottomColor: colors.rule },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.lg, gap: spacing.sm },
+  sectionHeading: { fontFamily: fonts.bodyMedium, color: colors.ink, fontSize: 15, ...(Platform.OS === 'web' ? { fontWeight: '500' } : {}) },
+  sectionSummary: { fontFamily: fonts.reading, color: colors.textSecondary, fontSize: 13, lineHeight: 18, marginTop: 4 },
+  sectionContent: { paddingBottom: spacing.lg },
   sectionClaims: { marginBottom: 12, paddingLeft: 4 },
   claimRow: { flexDirection: 'row', marginBottom: 6 },
-  claimArrow: { color: '#60a5fa', marginRight: 8, fontSize: 13 },
-  claimRowText: { color: '#94a3b8', fontSize: 13, lineHeight: 19, flex: 1 },
+  claimArrow: { color: colors.rubric, marginRight: 8, fontFamily: fonts.body, fontSize: 13 },
+  claimRowText: { fontFamily: fonts.reading, color: colors.textSecondary, fontSize: 13, lineHeight: 19, flex: 1 },
 
   // Markdown rendering
   markdownHeading: {
-    color: '#f8fafc', fontWeight: '700',
+    fontFamily: fonts.bodyMedium,
+    color: colors.ink,
+    ...(Platform.OS === 'web' ? { fontWeight: '500' } : {}),
     marginTop: 20, marginBottom: 10, lineHeight: 28,
   },
   markdownText: {
-    color: '#cbd5e1',
-    fontSize: Platform.OS === 'web' ? 18 : 16,
-    lineHeight: Platform.OS === 'web' ? 30 : 26,
+    ...type.readerBody,
+    color: colors.textBody,
     marginBottom: 14,
-    letterSpacing: 0.15,
-    ...(Platform.OS === 'web' ? { fontFamily: 'Georgia, "Times New Roman", serif' } : {}),
   },
   markdownList: { marginBottom: 14 },
   markdownListItem: { flexDirection: 'row', marginBottom: 6, paddingRight: 8 },
-  markdownBullet: { color: '#60a5fa', marginRight: 10, fontSize: 16 },
-  markdownOrderedBullet: { color: '#60a5fa', marginRight: 10, fontSize: 14, minWidth: 20 },
-  codeBlock: { backgroundColor: '#1e293b', borderRadius: 8, padding: 14, marginBottom: 14 },
-  codeText: { color: '#94a3b8', fontSize: 13, fontFamily: 'monospace' },
-  markdownLink: { color: '#60a5fa', textDecorationLine: 'underline' as const },
-  markdownBold: { color: '#f8fafc', fontWeight: '700' as const },
-  markdownItalic: { color: '#cbd5e1', fontStyle: 'italic' as const },
-  markdownInlineCode: { color: '#94a3b8', fontFamily: 'monospace', backgroundColor: '#1e293b', paddingHorizontal: 4 },
+  markdownBullet: { color: colors.rubric, marginRight: 10, fontSize: 16 },
+  markdownOrderedBullet: { color: colors.rubric, marginRight: 10, fontSize: 14, minWidth: 20, fontFamily: fonts.body },
+  codeBlock: { backgroundColor: colors.parchmentDark, borderRadius: 4, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: colors.rule },
+  codeText: { color: colors.textSecondary, fontSize: 13, fontFamily: 'monospace' },
+  markdownLink: { color: colors.info, textDecorationLine: 'underline' as const },
+  markdownBold: { color: colors.ink, fontWeight: '700' as const },
+  markdownItalic: { color: colors.textBody, fontStyle: 'italic' as const },
+  markdownInlineCode: { color: colors.textSecondary, fontFamily: 'monospace', backgroundColor: colors.parchmentDark, paddingHorizontal: 4 },
   markdownBlockquote: {
-    borderLeftWidth: 3, borderLeftColor: '#475569',
+    borderLeftWidth: 3, borderLeftColor: colors.rubric,
     paddingLeft: 14, marginBottom: 14, marginLeft: 4,
   },
   markdownBlockquoteText: {
-    color: '#94a3b8', fontSize: 15, lineHeight: 24, fontStyle: 'italic' as const,
+    fontFamily: fonts.readingItalic,
+    color: colors.textSecondary, fontSize: 15, lineHeight: 24,
+    ...(Platform.OS === 'web' ? { fontStyle: 'italic' } : {}),
   },
-  markdownHr: { height: 1, backgroundColor: '#334155', marginVertical: 20 },
+  markdownHr: { height: 1, backgroundColor: colors.rule, marginVertical: 20 },
   tableContainer: {
     marginBottom: 14,
-    borderRadius: 8,
+    borderRadius: 4,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: colors.rule,
   },
   tableRow: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: colors.rule,
   },
-  tableRowAlt: { backgroundColor: '#0f172a' },
+  tableRowAlt: { backgroundColor: colors.parchmentDark },
   tableCell: {
     flex: 1,
     paddingVertical: 8,
     paddingHorizontal: 10,
   },
   tableHeaderCell: {
-    backgroundColor: '#1e293b',
+    backgroundColor: colors.parchmentDark,
   },
   tableHeaderText: {
-    color: '#f8fafc',
+    fontFamily: fonts.bodyMedium,
+    color: colors.ink,
     fontSize: 13,
-    fontWeight: '600',
+    ...(Platform.OS === 'web' ? { fontWeight: '500' } : {}),
   },
   tableCellText: {
-    color: '#cbd5e1',
+    fontFamily: fonts.reading,
+    color: colors.textBody,
     fontSize: 13,
     lineHeight: 18,
   },
@@ -1679,105 +1685,108 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#78350f30',
+    backgroundColor: 'transparent',
     borderLeftWidth: 3,
-    borderLeftColor: '#f59e0b',
+    borderLeftColor: colors.warning,
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 0,
     marginTop: 12,
   },
   dedupBannerText: {
-    color: '#fbbf24',
+    fontFamily: fonts.reading,
+    color: colors.warning,
     fontSize: 13,
     flex: 1,
   },
 
-  // Paragraph highlighting (long-press)
+  // Paragraph highlighting (long-press) — amber left border
   paragraphHighlight: {
-    backgroundColor: '#78350f20',
+    backgroundColor: 'transparent',
     borderLeftWidth: 3,
-    borderLeftColor: '#f59e0b',
+    borderLeftColor: colors.warning,
     paddingLeft: 8,
-    borderRadius: 4,
+    borderRadius: 0,
     marginLeft: -8,
   },
 
   // Inline claim highlights in full text
   claimHighlightUnsignaled: {
-    backgroundColor: '#1e3a5f20', borderRadius: 4,
+    backgroundColor: 'transparent', borderRadius: 0,
     paddingHorizontal: 4, paddingVertical: 2,
-    borderLeftWidth: 3, borderLeftColor: '#3b82f680',
+    borderLeftWidth: 3, borderLeftColor: colors.claimDefault,
   },
   claimHighlightKnew: {
-    backgroundColor: '#47556920', borderRadius: 4,
+    backgroundColor: 'transparent', borderRadius: 0,
     paddingHorizontal: 4, paddingVertical: 2,
-    borderLeftWidth: 3, borderLeftColor: '#64748b',
+    borderLeftWidth: 3, borderLeftColor: colors.claimKnown, opacity: colors.claimKnownOpacity,
   },
   claimHighlightNew: {
-    backgroundColor: '#065f4620', borderRadius: 4,
+    backgroundColor: 'transparent', borderRadius: 0,
     paddingHorizontal: 4, paddingVertical: 2,
-    borderLeftWidth: 3, borderLeftColor: '#34d399',
+    borderLeftWidth: 3, borderLeftColor: colors.claimNew,
   },
   claimHighlightSave: {
-    backgroundColor: '#1e40af20', borderRadius: 4,
+    backgroundColor: 'transparent', borderRadius: 0,
     paddingHorizontal: 4, paddingVertical: 2,
-    borderLeftWidth: 3, borderLeftColor: '#60a5fa',
+    borderLeftWidth: 3, borderLeftColor: colors.rubric,
   },
 
   // Floating signal pill
   pillBackdrop: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: '#00000060', justifyContent: 'center', alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center',
   },
   pillContainer: {
-    flexDirection: 'row', backgroundColor: '#1e293b',
-    borderRadius: 16, padding: 6, gap: 4,
+    flexDirection: 'row', backgroundColor: colors.parchment,
+    borderRadius: 8, padding: 6, gap: 4,
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3, shadowRadius: 12, elevation: 8,
+    shadowOpacity: 0.15, shadowRadius: 12, elevation: 8,
+    borderWidth: 1, borderColor: colors.rule,
   },
   pillBtn: {
     paddingHorizontal: 16, paddingVertical: 10,
-    borderRadius: 12, backgroundColor: '#334155',
+    borderRadius: 4, backgroundColor: colors.parchmentDark,
   },
-  pillBtnNew: { backgroundColor: '#065f46' },
-  pillBtnSave: { backgroundColor: '#1e3a5f' },
-  pillBtnText: { color: '#e2e8f0', fontSize: 13, fontWeight: '600' },
+  pillBtnNew: { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.claimNew },
+  pillBtnSave: { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.rubric },
+  pillBtnText: { fontFamily: fonts.body, color: colors.ink, fontSize: 13 },
 
   // Source attribution
   sourceBox: {
-    backgroundColor: '#1e293b', borderRadius: 12, padding: 16,
-    marginTop: 24, borderLeftWidth: 3, borderLeftColor: '#334155',
+    backgroundColor: 'transparent', borderRadius: 0, padding: 16,
+    marginTop: 24, borderLeftWidth: 3, borderLeftColor: colors.rule,
   },
-  sourceLabel: { color: '#60a5fa', fontSize: 12, marginBottom: 6 },
-  sourceText: { color: '#64748b', fontSize: 13, lineHeight: 19 },
+  sourceLabel: { fontFamily: fonts.body, color: colors.rubric, fontSize: 12, marginBottom: 6 },
+  sourceText: { fontFamily: fonts.reading, color: colors.textMuted, fontSize: 13, lineHeight: 19 },
 
   // Time guidance
   timeGuideRow: {
-    flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12,
-    paddingVertical: 8, paddingHorizontal: 12,
-    backgroundColor: '#1e293b', borderRadius: 8,
+    flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: 12,
+    paddingVertical: spacing.sm, paddingHorizontal: 0,
+    alignItems: 'center',
   },
   timeGuideItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  timeGuideText: { color: '#94a3b8', fontSize: 12 },
+  timeGuideText: { fontFamily: fonts.ui, color: colors.textMuted, fontSize: 11 },
+  timeGuideSep: { color: colors.textMuted, fontSize: 11 },
 
   // Related articles
   relatedSection: { marginTop: 16 },
   relatedCard: {
-    backgroundColor: '#1e293b', borderRadius: 12, padding: 14,
-    marginBottom: 8, borderLeftWidth: 3, borderLeftColor: '#8b5cf6',
+    backgroundColor: 'transparent', borderRadius: 0, padding: 14,
+    marginBottom: 8, borderLeftWidth: 3, borderLeftColor: colors.rubric,
   },
-  relatedTitle: { color: '#f8fafc', fontSize: 14, fontWeight: '600', marginBottom: 4 },
-  relatedConnection: { color: '#a78bfa', fontSize: 12, lineHeight: 16 },
+  relatedTitle: { fontFamily: fonts.bodyMedium, color: colors.ink, fontSize: 14, ...(Platform.OS === 'web' ? { fontWeight: '500' } : {}), marginBottom: 4 },
+  relatedConnection: { fontFamily: fonts.reading, color: colors.rubric, fontSize: 12, lineHeight: 16 },
 
-  // Connection callout card
+  // Connection callout card — rubric left border
   connectionCard: {
     marginTop: -2,
     marginBottom: 12,
     padding: 12,
-    backgroundColor: 'rgba(147, 51, 234, 0.06)',
-    borderRadius: 10,
+    backgroundColor: 'transparent',
+    borderRadius: 0,
     borderLeftWidth: 3,
-    borderLeftColor: '#7c3aed',
+    borderLeftColor: colors.rubric,
   },
   connectionHeader: {
     flexDirection: 'row' as const,
@@ -1786,9 +1795,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   connectionLabel: {
-    color: '#a78bfa',
+    fontFamily: fonts.body,
+    color: colors.rubric,
     fontSize: 12,
-    fontWeight: '600' as const,
   },
   connectionArticleRow: {
     flexDirection: 'row' as const,
@@ -1798,13 +1807,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   connectionArticleTitle: {
-    color: '#c4b5fd',
+    fontFamily: fonts.body,
+    color: colors.ink,
     fontSize: 13,
     flex: 1,
     marginRight: 8,
   },
   connectionMore: {
-    color: '#7c6fa8',
+    fontFamily: fonts.ui,
+    color: colors.textMuted,
     fontSize: 11,
     marginTop: 4,
     paddingHorizontal: 4,
@@ -1814,63 +1825,68 @@ const styles = StyleSheet.create({
   voiceBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 10, paddingVertical: 6,
-    borderRadius: 16, backgroundColor: '#1e293b', marginRight: 10,
+    borderRadius: 4, backgroundColor: colors.parchmentDark, marginRight: 10,
+    borderWidth: 1, borderColor: colors.rule,
   },
-  voiceBtnRecording: { backgroundColor: '#7f1d1d' },
-  voiceTimer: { color: '#ef4444', fontSize: 12, fontWeight: '700' },
-  voiceCount: { color: '#64748b', fontSize: 11 },
+  voiceBtnRecording: { backgroundColor: '#fce4e4', borderColor: colors.rubric },
+  voiceTimer: { fontFamily: fonts.ui, color: colors.rubric, fontSize: 12, fontWeight: '700' as const },
+  voiceCount: { fontFamily: fonts.ui, color: colors.textMuted, fontSize: 11 },
 
   // Restored position indicator
   restoredIndicator: {
     alignItems: 'center',
     paddingVertical: 6,
-    backgroundColor: '#1e293b',
+    backgroundColor: colors.parchmentDark,
   },
   restoredText: {
-    color: '#94a3b8',
+    fontFamily: fonts.ui,
+    color: colors.textMuted,
     fontSize: 12,
   },
 
-  // Research banner
+  // Research banner — rubric left border
   researchBanner: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.parchmentDark,
     borderLeftWidth: 3,
-    borderLeftColor: '#8b5cf6',
-    marginHorizontal: 16,
-    marginVertical: 8,
+    borderLeftColor: colors.rubric,
+    marginHorizontal: layout.screenPadding,
+    marginVertical: spacing.sm,
     padding: 12,
-    borderRadius: 10,
+    borderRadius: 0,
   },
   researchTranscript: {
-    color: '#cbd5e1',
+    fontFamily: fonts.readingItalic,
+    color: colors.textBody,
     fontSize: 13,
     lineHeight: 19,
-    fontStyle: 'italic' as const,
+    ...(Platform.OS === 'web' ? { fontStyle: 'italic' } : {}),
   },
   researchBtn: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: 6,
-    backgroundColor: '#7c3aed',
+    backgroundColor: colors.rubric,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 8,
+    borderRadius: 4,
   },
   researchBtnText: {
-    color: '#f8fafc',
+    fontFamily: fonts.body,
+    color: colors.parchment,
     fontSize: 13,
-    fontWeight: '600' as const,
   },
   researchDismissBtn: {
     paddingHorizontal: 10,
     paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: '#1e293b',
+    borderRadius: 4,
+    backgroundColor: colors.parchmentDark,
+    borderWidth: 1,
+    borderColor: colors.rule,
   },
   researchBannerText: {
-    color: '#10b981',
+    fontFamily: fonts.body,
+    color: colors.success,
     fontSize: 13,
-    fontWeight: '500' as const,
   },
 
   // Highlight action bar
@@ -1882,118 +1898,127 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
+    backgroundColor: colors.parchment,
+    borderRadius: 4,
     padding: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.15,
     shadowRadius: 12,
     elevation: 8,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: colors.rule,
   },
   highlightActionText: {
-    color: '#f59e0b',
+    fontFamily: fonts.body,
+    color: colors.warning,
     fontSize: 13,
-    fontWeight: '600' as const,
     flex: 1,
   },
   highlightNoteBtn: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: 4,
-    backgroundColor: '#1e293b',
+    backgroundColor: 'transparent',
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.rule,
   },
   highlightNoteLabel: {
-    color: '#60a5fa',
+    fontFamily: fonts.body,
+    color: colors.rubric,
     fontSize: 12,
-    fontWeight: '500' as const,
   },
   highlightNoteInput: {
-    color: '#f8fafc',
+    fontFamily: fonts.reading,
+    color: colors.ink,
     fontSize: 14,
     lineHeight: 20,
     minHeight: 36,
   },
   highlightNoteSaveBtn: {
-    backgroundColor: '#2563eb',
+    backgroundColor: colors.rubric,
     paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: 4,
   },
   highlightResearchBtn: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: 4,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: 'transparent',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.rule,
   },
   highlightResearchText: {
-    color: '#a78bfa',
+    fontFamily: fonts.body,
+    color: colors.rubric,
     fontSize: 12,
-    fontWeight: '500' as const,
   },
 
   // Text note input (web)
   textNoteBtn: {
     flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4,
     paddingHorizontal: 10, paddingVertical: 6,
-    borderRadius: 16, backgroundColor: '#1e293b', marginRight: 10,
+    borderRadius: 4, backgroundColor: colors.parchmentDark, marginRight: 10,
+    borderWidth: 1, borderColor: colors.rule,
   },
-  textNoteBtnText: { color: '#60a5fa', fontSize: 12, fontWeight: '500' as const },
+  textNoteBtnText: { fontFamily: fonts.body, color: colors.rubric, fontSize: 12 },
   textNoteContainer: {
     position: 'absolute' as const, top: '100%' as any, right: 0,
-    width: 300, backgroundColor: '#1e293b', borderRadius: 12, padding: 12,
+    width: 300, backgroundColor: colors.parchment, borderRadius: 4, padding: 12,
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3, shadowRadius: 12, elevation: 8,
-    borderWidth: 1, borderColor: '#334155', zIndex: 100,
+    shadowOpacity: 0.15, shadowRadius: 12, elevation: 8,
+    borderWidth: 1, borderColor: colors.rule, zIndex: 100,
   },
   textNoteInput: {
-    color: '#f8fafc', fontSize: 14, lineHeight: 20,
+    fontFamily: fonts.reading, color: colors.ink, fontSize: 14, lineHeight: 20,
     minHeight: 60, textAlignVertical: 'top' as const,
     marginBottom: 8,
   },
   textNoteActions: {
     flexDirection: 'row' as const, justifyContent: 'flex-end' as const, gap: 8,
   },
-  textNoteCancelBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  textNoteCancelText: { color: '#64748b', fontSize: 13 },
+  textNoteCancelBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 4 },
+  textNoteCancelText: { fontFamily: fonts.body, color: colors.textMuted, fontSize: 13 },
   textNoteSubmitBtn: {
     flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4,
-    backgroundColor: '#2563eb', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
+    backgroundColor: colors.rubric, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 4,
   },
-  textNoteSubmitText: { color: '#f8fafc', fontSize: 13, fontWeight: '600' as const },
+  textNoteSubmitText: { fontFamily: fonts.body, color: colors.parchment, fontSize: 13 },
 
   // Claim research button
   claimResearchBtn: {
     flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4,
     paddingHorizontal: 10, paddingVertical: 6,
-    borderRadius: 8, backgroundColor: '#1a1a2e',
+    borderRadius: 4, backgroundColor: 'transparent',
+    borderWidth: 1, borderColor: colors.rule,
     marginLeft: 'auto' as any,
   },
-  claimResearchText: { color: '#a78bfa', fontSize: 12, fontWeight: '500' as const },
+  claimResearchText: { fontFamily: fonts.body, color: colors.rubric, fontSize: 11 },
 
   // Research results badge in top bar
   researchBadge: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: 4,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.parchmentDark,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 4,
     marginRight: 4,
+    borderWidth: 1,
+    borderColor: colors.rule,
   },
   researchBadgeText: {
-    color: '#a78bfa',
+    fontFamily: fonts.body,
+    color: colors.rubric,
     fontSize: 11,
-    fontWeight: '600' as const,
   },
 
   // Dismiss menu (web)
@@ -2003,31 +2028,35 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.3)',
     justifyContent: 'center' as const,
     alignItems: 'center' as const,
     zIndex: 100,
   },
   dismissMenu: {
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
+    backgroundColor: colors.parchment,
+    borderRadius: 4,
     width: 260,
     overflow: 'hidden' as const,
+    borderWidth: 1,
+    borderColor: colors.rule,
   },
   dismissMenuTitle: {
-    color: '#f8fafc',
+    fontFamily: fonts.bodyMedium,
+    color: colors.ink,
     fontSize: 15,
-    fontWeight: '600' as const,
+    ...(Platform.OS === 'web' ? { fontWeight: '500' } : {}),
     padding: 16,
     textAlign: 'center' as const,
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    borderBottomColor: colors.rule,
   },
   dismissMenuItem: {
     padding: 14,
   },
   dismissMenuItemText: {
-    color: '#f8fafc',
+    fontFamily: fonts.body,
+    color: colors.ink,
     fontSize: 14,
     textAlign: 'center' as const,
   },

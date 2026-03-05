@@ -6,6 +6,11 @@ const LOG_STORAGE_PREFIX = '@petrarca/log_';
 let sessionId: string | null = null;
 let writeQueue: Promise<void> = Promise.resolve();
 
+// Buffer for batched native writes — avoids O(n²) read-append-write per event
+let nativeBuffer: string[] = [];
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+const FLUSH_INTERVAL_MS = 2000;
+
 // Lazy-load expo-file-system only on native
 let NativeFS: any = null;
 function getNativeFS() {
@@ -82,7 +87,30 @@ export function getSessionId(): string {
 export function startNewSession(): string {
   sessionId = generateSessionId();
   logEvent('session_start');
+  flushNativeBuffer();
   return sessionId;
+}
+
+function flushNativeBuffer() {
+  if (nativeBuffer.length === 0) return;
+  const lines = nativeBuffer.join('');
+  nativeBuffer = [];
+
+  writeQueue = writeQueue.then(async () => {
+    try {
+      ensureLogDir();
+      const file = getLogFile();
+      if (file.exists) {
+        const existing = await file.text();
+        file.write(existing + lines);
+      } else {
+        file.create();
+        file.write(lines);
+      }
+    } catch (e) {
+      console.warn('[logger] write failed:', e);
+    }
+  });
 }
 
 export function logEvent(event: string, data?: Record<string, any>) {
@@ -93,26 +121,15 @@ export function logEvent(event: string, data?: Record<string, any>) {
     ...data,
   };
 
-  writeQueue = writeQueue.then(async () => {
-    try {
-      const line = JSON.stringify(entry) + '\n';
-      if (Platform.OS === 'web') {
-        webAppendLog(line);
-      } else {
-        ensureLogDir();
-        const file = getLogFile();
-        if (file.exists) {
-          const existing = await file.text();
-          file.write(existing + line);
-        } else {
-          file.create();
-          file.write(line);
-        }
-      }
-    } catch (e) {
-      console.warn('[logger] write failed:', e);
-    }
-  });
+  const line = JSON.stringify(entry) + '\n';
+
+  if (Platform.OS === 'web') {
+    webAppendLog(line);
+  } else {
+    nativeBuffer.push(line);
+    if (flushTimer) clearTimeout(flushTimer);
+    flushTimer = setTimeout(flushNativeBuffer, FLUSH_INTERVAL_MS);
+  }
 }
 
 export async function getLogFiles(): Promise<string[]> {

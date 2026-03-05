@@ -24,6 +24,7 @@ import * as Haptics from 'expo-haptics';
 import { logEvent } from '../data/logger';
 import { isSectionValid, parseInlineMarkdown, splitMarkdownBlocks, parseMarkdownBlock } from '../lib/markdown-utils';
 import { transcribeVoiceNote } from '../data/transcription';
+import { colors, fonts, type as typeStyles, spacing, layout } from '../design/tokens';
 
 // --- Depth zone definitions ---
 
@@ -256,19 +257,19 @@ function ClaimSignalPill({ currentSignal, onSignal, onDismiss }: {
     <Pressable style={styles.pillBackdrop} onPress={onDismiss}>
       <View style={styles.pillContainer}>
         {currentSignal && (
-          <Text style={{ color: '#64748b', fontSize: 11, marginBottom: 4 }}>
+          <Text style={{ color: colors.textMuted, fontSize: 11, marginBottom: 4 }}>
             Already marked - tap to change
           </Text>
         )}
         <View style={{ flexDirection: 'row', gap: 4 }}>
-          <Pressable style={[styles.pillBtn, currentSignal === 'knew_it' && { backgroundColor: '#334155' }]} onPress={() => onSignal('knew_it')}>
+          <Pressable style={[styles.pillBtn, currentSignal === 'knew_it' && { backgroundColor: colors.rule }]} onPress={() => onSignal('knew_it')}>
             <Text style={styles.pillBtnText}>{currentSignal === 'knew_it' ? 'v ' : ''}Knew this</Text>
           </Pressable>
-          <Pressable style={[styles.pillBtn, styles.pillBtnNew, currentSignal === 'interesting' && { backgroundColor: '#064e3b' }]} onPress={() => onSignal('interesting')}>
-            <Text style={[styles.pillBtnText, { color: '#34d399' }]}>{currentSignal === 'interesting' ? 'v ' : ''}New to me</Text>
+          <Pressable style={[styles.pillBtn, styles.pillBtnNew, currentSignal === 'interesting' && { backgroundColor: 'rgba(42,122,74,0.15)' }]} onPress={() => onSignal('interesting')}>
+            <Text style={[styles.pillBtnText, { color: colors.success }]}>{currentSignal === 'interesting' ? 'v ' : ''}New to me</Text>
           </Pressable>
-          <Pressable style={[styles.pillBtn, styles.pillBtnSave, currentSignal === 'save' && { backgroundColor: '#1e3a5f' }]} onPress={() => onSignal('save')}>
-            <Text style={[styles.pillBtnText, { color: '#60a5fa' }]}>{currentSignal === 'save' ? 'v ' : ''}Save</Text>
+          <Pressable style={[styles.pillBtn, styles.pillBtnSave, currentSignal === 'save' && { backgroundColor: 'rgba(42,74,106,0.15)' }]} onPress={() => onSignal('save')}>
+            <Text style={[styles.pillBtnText, { color: colors.info }]}>{currentSignal === 'save' ? 'v ' : ''}Save</Text>
           </Pressable>
         </View>
       </View>
@@ -310,7 +311,7 @@ function TextNoteInput({ sectionId, bookId, onNoteSubmitted }: {
   if (!expanded) {
     return (
       <Pressable style={styles.textNoteBtn} onPress={() => setExpanded(true)}>
-        <Ionicons name="create-outline" size={16} color="#60a5fa" />
+        <Ionicons name="create-outline" size={16} color={colors.info} />
         <Text style={styles.textNoteBtnText}>Add note</Text>
       </Pressable>
     );
@@ -321,7 +322,7 @@ function TextNoteInput({ sectionId, bookId, onNoteSubmitted }: {
       <TextInput
         style={styles.textNoteInput}
         placeholder="Your thoughts..."
-        placeholderTextColor="#475569"
+        placeholderTextColor={colors.textMuted}
         multiline
         value={text}
         onChangeText={setText}
@@ -336,7 +337,7 @@ function TextNoteInput({ sectionId, bookId, onNoteSubmitted }: {
           onPress={handleSubmit}
           disabled={!text.trim()}
         >
-          <Ionicons name="send" size={14} color="#f8fafc" />
+          <Ionicons name="send" size={14} color={colors.ink} />
           <Text style={styles.textNoteSubmitText}>Save</Text>
         </Pressable>
       </View>
@@ -428,7 +429,7 @@ function VoiceRecordButton({ sectionId, bookId, onTranscribed }: {
       <Ionicons
         name={isRecording ? 'stop' : transcribing ? 'hourglass-outline' : 'mic-outline'}
         size={18}
-        color={isRecording ? '#ef4444' : transcribing ? '#f59e0b' : '#60a5fa'}
+        color={isRecording ? colors.danger : transcribing ? colors.warning : colors.info}
       />
       {isRecording ? (
         <Text style={styles.voiceTimer}>{recordingDuration}s</Text>
@@ -442,11 +443,11 @@ function VoiceRecordButton({ sectionId, bookId, onTranscribed }: {
 // --- Cross-book connection card ---
 
 const CONNECTION_STYLES: Record<string, { color: string; icon: string; label: string; bg: string }> = {
-  agrees: { color: '#10b981', icon: 'checkmark-circle-outline', label: 'Supports:', bg: '#10b98115' },
-  disagrees: { color: '#f59e0b', icon: 'flash-outline', label: 'Tension:', bg: '#f59e0b15' },
-  extends: { color: '#60a5fa', icon: 'arrow-forward-circle-outline', label: 'Extends:', bg: '#60a5fa15' },
-  provides_evidence: { color: '#8b5cf6', icon: 'document-text-outline', label: 'Evidence:', bg: '#8b5cf615' },
-  same_topic: { color: '#94a3b8', icon: 'link-outline', label: 'Also discusses:', bg: '#94a3b810' },
+  agrees: { color: colors.success, icon: 'checkmark-circle-outline', label: 'Supports:', bg: 'rgba(42,122,74,0.08)' },
+  disagrees: { color: colors.warning, icon: 'flash-outline', label: 'Tension:', bg: 'rgba(146,96,14,0.08)' },
+  extends: { color: colors.info, icon: 'arrow-forward-circle-outline', label: 'Extends:', bg: 'rgba(42,74,106,0.08)' },
+  provides_evidence: { color: '#7a5195', icon: 'document-text-outline', label: 'Evidence:', bg: 'rgba(122,81,149,0.08)' },
+  same_topic: { color: colors.textMuted, icon: 'link-outline', label: 'Also discusses:', bg: 'rgba(176,168,152,0.06)' },
 };
 
 function CrossBookConnectionCard({ connection }: { connection: CrossBookConnection }) {
@@ -480,7 +481,7 @@ function CrossBookConnectionCard({ connection }: { connection: CrossBookConnecti
         "{connection.target_claim_text}"
       </Text>
       <View style={styles.connectionSource}>
-        <Ionicons name="arrow-forward" size={12} color="#64748b" />
+        <Ionicons name="arrow-forward" size={12} color={colors.textMuted} />
         <Text style={styles.connectionSourceText} numberOfLines={1}>
           {connection.target_book_title}
         </Text>
@@ -553,7 +554,7 @@ function BookLandingPage({ book }: { book: Book }) {
     <View style={styles.container}>
       <View style={styles.topBar}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={22} color="#f8fafc" />
+          <Ionicons name="arrow-back" size={22} color={colors.ink} />
         </Pressable>
         <View style={{ flex: 1, marginLeft: 8 }}>
           <Text style={styles.topBarTitle} numberOfLines={1}>{book.title}</Text>
@@ -581,7 +582,7 @@ function BookLandingPage({ book }: { book: Book }) {
         {(relatedBooks.size > 0 || Object.keys(relatedArticleCount).length > 0 || personalThread.length > 0) && (
           <View style={landingStyles.whatYouBringCard}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-              <Ionicons name="compass" size={16} color="#60a5fa" />
+              <Ionicons name="compass" size={16} color={colors.info} />
               <Text style={landingStyles.whatYouBringTitle}>What You Bring</Text>
             </View>
             {relatedBooks.size > 0 && (
@@ -596,7 +597,7 @@ function BookLandingPage({ book }: { book: Book }) {
             )}
             {personalThread.length > 0 && (
               <View style={{ marginTop: 8 }}>
-                <Text style={[landingStyles.whatYouBringText, { color: '#a78bfa', fontWeight: '600', marginBottom: 4 }]}>
+                <Text style={[landingStyles.whatYouBringText, { color: '#7a5195', fontWeight: '600', marginBottom: 4 }]}>
                   Your notes ({personalThread.length}):
                 </Text>
                 {personalThread.slice(-3).map(entry => (
@@ -671,7 +672,7 @@ function BookLandingPage({ book }: { book: Book }) {
                 return (
                   <View key={entry.id} style={landingStyles.timelineItem}>
                     <View style={landingStyles.timelineDot}>
-                      <Ionicons name={icon} size={10} color="#a78bfa" />
+                      <Ionicons name={icon} size={10} color={'#7a5195'} />
                     </View>
                     {i < personalThread.slice(-8).length - 1 && (
                       <View style={landingStyles.timelineLine} />
@@ -722,9 +723,9 @@ function BookLandingPage({ book }: { book: Book }) {
                   {sectionIds.map(sid => {
                     const s = bookState.section_states[sid];
                     const depth = s?.depth || 'unread';
-                    const color = depth === 'unread' ? '#334155'
-                      : depth === 'reflected' ? '#10b981'
-                      : '#3b82f6';
+                    const color = depth === 'unread' ? colors.rule
+                      : depth === 'reflected' ? colors.success
+                      : colors.info;
                     return <View key={sid} style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: color }} />;
                   })}
                 </View>
@@ -732,7 +733,7 @@ function BookLandingPage({ book }: { book: Book }) {
               <View style={{ alignItems: 'flex-end' }}>
                 <Text style={landingStyles.chapterProgress}>{readCount}/{ch.section_count}</Text>
                 {ch.processing_status === 'pending' && (
-                  <Text style={{ color: '#f59e0b', fontSize: 11 }}>Processing...</Text>
+                  <Text style={{ color: colors.warning, fontSize: 11 }}>Processing...</Text>
                 )}
               </View>
             </Pressable>
@@ -749,20 +750,20 @@ function BookLandingPage({ book }: { book: Book }) {
                 router.push({ pathname: '/book-reader', params: { bookId: book.id, sectionId: lastReadSection } });
               }}
             >
-              <Ionicons name="play" size={18} color="#f8fafc" />
+              <Ionicons name="play" size={18} color={colors.ink} />
               <Text style={landingStyles.actionBtnText}>Continue where you left off</Text>
             </Pressable>
           )}
           {nextUnreadSection && nextUnreadSection !== lastReadSection && (
             <Pressable
-              style={[landingStyles.actionBtn, { backgroundColor: '#1e293b' }]}
+              style={[landingStyles.actionBtn, { backgroundColor: colors.parchmentDark }]}
               onPress={() => {
                 logEvent('book_landing_next_unread', { book_id: book.id, section_id: nextUnreadSection });
                 router.push({ pathname: '/book-reader', params: { bookId: book.id, sectionId: nextUnreadSection! } });
               }}
             >
-              <Ionicons name="arrow-forward" size={18} color="#60a5fa" />
-              <Text style={[landingStyles.actionBtnText, { color: '#60a5fa' }]}>Next unread section</Text>
+              <Ionicons name="arrow-forward" size={18} color={colors.info} />
+              <Text style={[landingStyles.actionBtnText, { color: colors.info }]}>Next unread section</Text>
             </Pressable>
           )}
           {!lastReadSection && nextUnreadSection && (
@@ -773,7 +774,7 @@ function BookLandingPage({ book }: { book: Book }) {
                 router.push({ pathname: '/book-reader', params: { bookId: book.id, sectionId: nextUnreadSection! } });
               }}
             >
-              <Ionicons name="play" size={18} color="#f8fafc" />
+              <Ionicons name="play" size={18} color={colors.ink} />
               <Text style={landingStyles.actionBtnText}>Start reading</Text>
             </Pressable>
           )}
@@ -785,50 +786,50 @@ function BookLandingPage({ book }: { book: Book }) {
 
 const landingStyles = StyleSheet.create({
   progressCard: {
-    backgroundColor: '#1e293b',
+    backgroundColor: colors.parchmentDark,
     borderRadius: 10,
     padding: 14,
     marginBottom: 12,
   },
-  progressLabel: { color: '#f8fafc', fontSize: 16, fontWeight: '700' },
-  progressDetail: { color: '#64748b', fontSize: 13 },
+  progressLabel: { color: colors.ink, fontSize: 16, fontWeight: '700' },
+  progressDetail: { color: colors.textMuted, fontSize: 13 },
   progressBar: {
     height: 4,
-    backgroundColor: '#334155',
+    backgroundColor: colors.rule,
     borderRadius: 2,
   },
   progressFill: {
     height: 4,
-    backgroundColor: '#3b82f6',
+    backgroundColor: colors.info,
     borderRadius: 2,
   },
   whatYouBringCard: {
-    backgroundColor: '#172554',
+    backgroundColor: 'rgba(42,74,106,0.08)',
     borderRadius: 10,
     padding: 14,
     marginBottom: 12,
     borderLeftWidth: 3,
-    borderLeftColor: '#60a5fa',
+    borderLeftColor: colors.info,
   },
-  whatYouBringTitle: { color: '#60a5fa', fontSize: 15, fontWeight: '700' },
-  whatYouBringText: { color: '#94a3b8', fontSize: 14, lineHeight: 20, marginTop: 4 },
-  threadEntry: { color: '#cbd5e1', fontSize: 13, fontStyle: 'italic', marginLeft: 8, marginBottom: 4 },
+  whatYouBringTitle: { color: colors.info, fontSize: 15, fontWeight: '700' },
+  whatYouBringText: { color: colors.textMuted, fontSize: 14, lineHeight: 20, marginTop: 4 },
+  threadEntry: { color: colors.textSecondary, fontSize: 13, fontStyle: 'italic', marginLeft: 8, marginBottom: 4 },
   thesisCard: {
-    backgroundColor: '#1e293b',
+    backgroundColor: colors.parchmentDark,
     borderRadius: 10,
     padding: 14,
     marginBottom: 12,
     borderLeftWidth: 3,
-    borderLeftColor: '#a78bfa',
+    borderLeftColor: '#7a5195',
   },
-  thesisLabel: { color: '#a78bfa', fontSize: 12, fontWeight: '700', textTransform: 'uppercase', marginBottom: 6 },
-  thesisText: { color: '#e2e8f0', fontSize: 15, lineHeight: 22, fontStyle: 'italic' },
-  sectionLabel: { color: '#94a3b8', fontSize: 13, fontWeight: '700', textTransform: 'uppercase', marginBottom: 10, letterSpacing: 1 },
+  thesisLabel: { color: '#7a5195', fontSize: 12, fontWeight: '700', textTransform: 'uppercase', marginBottom: 6 },
+  thesisText: { color: colors.textBody, fontSize: 15, lineHeight: 22, fontStyle: 'italic' },
+  sectionLabel: { color: colors.textMuted, fontSize: 13, fontWeight: '700', textTransform: 'uppercase', marginBottom: 10, letterSpacing: 1 },
   argumentItem: { flexDirection: 'row', gap: 10, marginBottom: 8 },
-  argumentChapter: { color: '#64748b', fontSize: 12, fontWeight: '700', width: 36 },
-  argumentText: { color: '#cbd5e1', fontSize: 13, lineHeight: 18, flex: 1 },
+  argumentChapter: { color: colors.textMuted, fontSize: 12, fontWeight: '700', width: 36 },
+  argumentText: { color: colors.textSecondary, fontSize: 13, lineHeight: 18, flex: 1 },
   timelineContainer: {
-    backgroundColor: '#1e293b',
+    backgroundColor: colors.parchmentDark,
     borderRadius: 10,
     padding: 12,
   },
@@ -840,7 +841,7 @@ const landingStyles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: '#2d1b69',
+    backgroundColor: 'rgba(122,81,149,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
@@ -851,44 +852,44 @@ const landingStyles = StyleSheet.create({
     top: 22,
     bottom: 0,
     width: 2,
-    backgroundColor: '#334155',
+    backgroundColor: colors.rule,
   },
   timelineContent: {
     flex: 1,
     marginLeft: 10,
     paddingBottom: 10,
   },
-  timelineMeta: { color: '#64748b', fontSize: 11, marginBottom: 2 },
-  timelineText: { color: '#cbd5e1', fontSize: 13, lineHeight: 18 },
+  timelineMeta: { color: colors.textMuted, fontSize: 11, marginBottom: 2 },
+  timelineText: { color: colors.textSecondary, fontSize: 13, lineHeight: 18 },
   chapterItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: colors.parchmentDark,
     borderRadius: 8,
     padding: 12,
     marginBottom: 6,
   },
-  chapterTitle: { color: '#f8fafc', fontSize: 14, fontWeight: '500' },
-  chapterProgress: { color: '#64748b', fontSize: 12 },
+  chapterTitle: { color: colors.ink, fontSize: 14, fontWeight: '500' },
+  chapterProgress: { color: colors.textMuted, fontSize: 12 },
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#2563eb',
+    backgroundColor: colors.info,
     borderRadius: 10,
     paddingVertical: 14,
     paddingHorizontal: 20,
   },
-  actionBtnText: { color: '#f8fafc', fontSize: 15, fontWeight: '600' },
+  actionBtnText: { color: colors.ink, fontSize: 15, fontWeight: '600' },
   engagementCard: {
-    backgroundColor: '#1e293b',
+    backgroundColor: colors.parchmentDark,
     borderRadius: 10,
     padding: 16,
     marginBottom: 12,
   },
-  engagementNumber: { color: '#f8fafc', fontSize: 20, fontWeight: '700' },
-  engagementLabel: { color: '#64748b', fontSize: 11, marginTop: 2 },
+  engagementNumber: { color: colors.ink, fontSize: 20, fontWeight: '700' },
+  engagementLabel: { color: colors.textMuted, fontSize: 11, marginTop: 2 },
 });
 
 // ============================================================
@@ -1353,7 +1354,7 @@ export default function BookReaderScreen() {
       <View style={styles.container}>
         <View style={styles.topBar}>
           <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={22} color="#f8fafc" />
+            <Ionicons name="arrow-back" size={22} color={colors.ink} />
           </Pressable>
           <Text style={styles.loadingText}>Loading section...</Text>
         </View>
@@ -1367,7 +1368,7 @@ export default function BookReaderScreen() {
       <View style={styles.container}>
         <View style={styles.topBar}>
           <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={22} color="#f8fafc" />
+            <Ionicons name="arrow-back" size={22} color={colors.ink} />
           </Pressable>
         </View>
         <Text style={styles.errorText}>Section not found</Text>
@@ -1407,7 +1408,7 @@ export default function BookReaderScreen() {
       {/* Top bar */}
       <View style={styles.topBar}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={22} color="#f8fafc" />
+          <Ionicons name="arrow-back" size={22} color={colors.ink} />
         </Pressable>
         <View style={{ flex: 1, marginLeft: 8 }}>
           <Text style={styles.topBarTitle} numberOfLines={1}>{book.title}</Text>
@@ -1473,7 +1474,7 @@ export default function BookReaderScreen() {
         {showWelcomeBack && welcomeBackData && (
           <View style={welcomeStyles.card}>
             <View style={welcomeStyles.header}>
-              <Ionicons name="time-outline" size={16} color="#f59e0b" />
+              <Ionicons name="time-outline" size={16} color={colors.warning} />
               <Text style={welcomeStyles.title}>Welcome back — {welcomeBackData.daysSince} days since last visit</Text>
             </View>
 
@@ -1509,7 +1510,7 @@ export default function BookReaderScreen() {
               }}
             >
               <Text style={welcomeStyles.dismissText}>Resume reading</Text>
-              <Ionicons name="arrow-forward" size={14} color="#f59e0b" />
+              <Ionicons name="arrow-forward" size={14} color={colors.warning} />
             </Pressable>
           </View>
         )}
@@ -1518,7 +1519,7 @@ export default function BookReaderScreen() {
         {isChapterStart && previousChapterMeta && (
           <View style={chapterTransitionStyles.card}>
             <View style={chapterTransitionStyles.header}>
-              <Ionicons name="flag-outline" size={16} color="#10b981" />
+              <Ionicons name="flag-outline" size={16} color={colors.success} />
               <Text style={chapterTransitionStyles.headerText}>
                 Chapter {previousChapterMeta.chapter_number} Complete
               </Text>
@@ -1564,7 +1565,7 @@ export default function BookReaderScreen() {
               logEvent('adaptive_depth_accepted', { zone: adaptiveDepthSuggestion.zone });
             }}
           >
-            <Ionicons name="flash-outline" size={16} color="#8b5cf6" />
+            <Ionicons name="flash-outline" size={16} color={'#7a5195'} />
             <View style={{ flex: 1 }}>
               <Text style={styles.adaptiveDepthText}>
                 Skip to {DEPTH_LABELS[adaptiveDepthSuggestion.zone]}
@@ -1579,7 +1580,7 @@ export default function BookReaderScreen() {
               }}
               hitSlop={8}
             >
-              <Ionicons name="close" size={16} color="#64748b" />
+              <Ionicons name="close" size={16} color={colors.textMuted} />
             </Pressable>
           </Pressable>
         )}
@@ -1589,7 +1590,7 @@ export default function BookReaderScreen() {
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
             <View style={styles.dividerLabelRow}>
-              <Ionicons name="compass-outline" size={14} color="#3b82f6" />
+              <Ionicons name="compass-outline" size={14} color={colors.info} />
               <Text style={styles.dividerText}>Briefing</Text>
             </View>
             <View style={styles.dividerLine} />
@@ -1612,13 +1613,13 @@ export default function BookReaderScreen() {
           {familiarityAnalysis.familiar.length > 0 && (
             <View style={styles.familiarityCard}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                <Ionicons name="library-outline" size={14} color="#10b981" />
+                <Ionicons name="library-outline" size={14} color={colors.success} />
                 <Text style={styles.familiarityTitle}>What you bring</Text>
               </View>
               <View style={styles.familiarityChips}>
                 {familiarityAnalysis.familiar.map((c, i) => (
                   <View key={i} style={styles.familiarityChip}>
-                    <Ionicons name="checkmark" size={10} color="#10b981" />
+                    <Ionicons name="checkmark" size={10} color={colors.success} />
                     <Text style={styles.familiarityChipText}>{c.text}</Text>
                   </View>
                 ))}
@@ -1635,7 +1636,7 @@ export default function BookReaderScreen() {
           {earlierThreadNotes.length > 0 && (
             <View style={styles.threadBriefingCard}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                <Ionicons name="journal-outline" size={14} color="#a78bfa" />
+                <Ionicons name="journal-outline" size={14} color={'#7a5195'} />
                 <Text style={styles.threadBriefingTitle}>Your earlier thoughts</Text>
               </View>
               {earlierThreadNotes.map(note => (
@@ -1663,7 +1664,7 @@ export default function BookReaderScreen() {
               <View style={styles.divider}>
                 <View style={styles.dividerLine} />
                 <View style={styles.dividerLabelRow}>
-                  <Ionicons name="bulb-outline" size={14} color="#8b5cf6" />
+                  <Ionicons name="bulb-outline" size={14} color={'#7a5195'} />
                   <Text style={styles.dividerText}>Claims</Text>
                 </View>
                 <View style={styles.dividerLine} />
@@ -1682,8 +1683,8 @@ export default function BookReaderScreen() {
                       logEvent('skeleton_view_toggle', { enabled: !showSkeletonView, section_id: sectionId });
                     }}
                   >
-                    <Ionicons name="git-branch-outline" size={14} color={showSkeletonView ? '#f8fafc' : '#64748b'} />
-                    <Text style={[styles.skeletonToggleText, showSkeletonView && { color: '#f8fafc' }]}>
+                    <Ionicons name="git-branch-outline" size={14} color={showSkeletonView ? colors.ink : colors.textMuted} />
+                    <Text style={[styles.skeletonToggleText, showSkeletonView && { color: colors.ink }]}>
                       Skeleton
                     </Text>
                   </Pressable>
@@ -1707,16 +1708,16 @@ export default function BookReaderScreen() {
                           { marginBottom: supports.length > 0 ? 0 : 10, borderBottomLeftRadius: supports.length > 0 ? 0 : 12, borderBottomRightRadius: supports.length > 0 ? 0 : 12 },
                         ]}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                            <Ionicons name="diamond-outline" size={12} color="#8b5cf6" />
-                            <Text style={{ color: '#8b5cf6', fontSize: 11, fontWeight: '700', textTransform: 'uppercase' }}>Main Claim</Text>
+                            <Ionicons name="diamond-outline" size={12} color={'#7a5195'} />
+                            <Text style={{ color: '#7a5195', fontSize: 11, fontWeight: '700', textTransform: 'uppercase' }}>Main Claim</Text>
                           </View>
                           <Text style={styles.claimCardText}>{mainClaim.text}</Text>
                           <View style={styles.claimActions}>
                             <Pressable style={[styles.claimBtn, signal === 'knew_it' && styles.claimBtnActiveKnew]} onPress={() => handleClaimSignal(mainClaim.claim_id, 'knew_it', mainClaim.text)}>
-                              <Text style={[styles.claimBtnText, signal === 'knew_it' && { color: '#94a3b8' }]}>Knew this</Text>
+                              <Text style={[styles.claimBtnText, signal === 'knew_it' && { color: colors.textMuted }]}>Knew this</Text>
                             </Pressable>
                             <Pressable style={[styles.claimBtn, styles.claimBtnNewBorder, signal === 'interesting' && styles.claimBtnActiveNew]} onPress={() => handleClaimSignal(mainClaim.claim_id, 'interesting', mainClaim.text)}>
-                              <Text style={[styles.claimBtnText, { color: '#34d399' }, signal === 'interesting' && { color: '#ffffff' }]}>New to me</Text>
+                              <Text style={[styles.claimBtnText, { color: colors.success }, signal === 'interesting' && { color: colors.parchment }]}>New to me</Text>
                             </Pressable>
                           </View>
                         </View>
@@ -1726,13 +1727,13 @@ export default function BookReaderScreen() {
                           return (
                             <View key={sub.claim_id} style={[
                               styles.claimCard,
-                              { marginLeft: 20, borderTopLeftRadius: 0, borderTopRightRadius: 0, borderLeftColor: '#475569', borderLeftWidth: 2, marginBottom: 0, marginTop: 0, paddingTop: 10, paddingBottom: 10 },
+                              { marginLeft: 20, borderTopLeftRadius: 0, borderTopRightRadius: 0, borderLeftColor: colors.rule, borderLeftWidth: 2, marginBottom: 0, marginTop: 0, paddingTop: 10, paddingBottom: 10 },
                               subSignal === 'knew_it' && { opacity: 0.6 },
-                              subSignal === 'interesting' && { borderLeftColor: '#34d399' },
+                              subSignal === 'interesting' && { borderLeftColor: colors.success },
                             ]}>
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-                                <Ionicons name="return-down-forward-outline" size={12} color="#64748b" />
-                                <Text style={{ color: '#64748b', fontSize: 10, fontWeight: '600', textTransform: 'uppercase' }}>Evidence</Text>
+                                <Ionicons name="return-down-forward-outline" size={12} color={colors.textMuted} />
+                                <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '600', textTransform: 'uppercase' }}>Evidence</Text>
                               </View>
                               <Text style={[styles.claimCardText, { fontSize: 14 }]}>{sub.text}</Text>
                               {sub.source_passage && (
@@ -1742,10 +1743,10 @@ export default function BookReaderScreen() {
                               )}
                               <View style={styles.claimActions}>
                                 <Pressable style={[styles.claimBtn, subSignal === 'knew_it' && styles.claimBtnActiveKnew]} onPress={() => handleClaimSignal(sub.claim_id, 'knew_it', sub.text)}>
-                                  <Text style={[styles.claimBtnText, subSignal === 'knew_it' && { color: '#94a3b8' }]}>Knew</Text>
+                                  <Text style={[styles.claimBtnText, subSignal === 'knew_it' && { color: colors.textMuted }]}>Knew</Text>
                                 </Pressable>
                                 <Pressable style={[styles.claimBtn, styles.claimBtnNewBorder, subSignal === 'interesting' && styles.claimBtnActiveNew]} onPress={() => handleClaimSignal(sub.claim_id, 'interesting', sub.text)}>
-                                  <Text style={[styles.claimBtnText, { color: '#34d399' }, subSignal === 'interesting' && { color: '#ffffff' }]}>New</Text>
+                                  <Text style={[styles.claimBtnText, { color: colors.success }, subSignal === 'interesting' && { color: colors.parchment }]}>New</Text>
                                 </Pressable>
                               </View>
                             </View>
@@ -1787,19 +1788,19 @@ export default function BookReaderScreen() {
                         style={[styles.claimBtn, signal === 'knew_it' && styles.claimBtnActiveKnew]}
                         onPress={() => handleClaimSignal(claim.claim_id, 'knew_it', claim.text)}
                       >
-                        <Text style={[styles.claimBtnText, signal === 'knew_it' && { color: '#94a3b8' }]}>Knew this</Text>
+                        <Text style={[styles.claimBtnText, signal === 'knew_it' && { color: colors.textMuted }]}>Knew this</Text>
                       </Pressable>
                       <Pressable
                         style={[styles.claimBtn, styles.claimBtnNewBorder, signal === 'interesting' && styles.claimBtnActiveNew]}
                         onPress={() => handleClaimSignal(claim.claim_id, 'interesting', claim.text)}
                       >
-                        <Text style={[styles.claimBtnText, { color: '#34d399' }, signal === 'interesting' && { color: '#ffffff' }]}>New to me</Text>
+                        <Text style={[styles.claimBtnText, { color: colors.success }, signal === 'interesting' && { color: colors.parchment }]}>New to me</Text>
                       </Pressable>
                       <Pressable
                         style={[styles.claimBtn, styles.claimBtnSaveBorder, signal === 'save' && styles.claimBtnActiveSave]}
                         onPress={() => handleClaimSignal(claim.claim_id, 'save', claim.text)}
                       >
-                        <Text style={[styles.claimBtnText, { color: '#60a5fa' }, signal === 'save' && { color: '#ffffff' }]}>Save</Text>
+                        <Text style={[styles.claimBtnText, { color: colors.info }, signal === 'save' && { color: colors.parchment }]}>Save</Text>
                       </Pressable>
                     </View>
                   </View>
@@ -1818,7 +1819,7 @@ export default function BookReaderScreen() {
               <View style={styles.divider}>
                 <View style={styles.dividerLine} />
                 <View style={styles.dividerLabelRow}>
-                  <Ionicons name="book-outline" size={14} color="#f59e0b" />
+                  <Ionicons name="book-outline" size={14} color={colors.warning} />
                   <Text style={styles.dividerText}>Key Terms</Text>
                 </View>
                 <View style={styles.dividerLine} />
@@ -1839,7 +1840,7 @@ export default function BookReaderScreen() {
                       <Text style={styles.termName}>{term.term}</Text>
                       {knownConcept && (
                         <View style={styles.termFamiliarBadge}>
-                          <Ionicons name="checkmark-circle" size={12} color="#10b981" />
+                          <Ionicons name="checkmark-circle" size={12} color={colors.success} />
                           <Text style={styles.termFamiliarText}>Familiar</Text>
                         </View>
                       )}
@@ -1847,7 +1848,7 @@ export default function BookReaderScreen() {
                     <Text style={styles.termDefinition}>{term.definition}</Text>
                     {term.conflicts_with && (
                       <View style={styles.termConflict}>
-                        <Ionicons name="warning-outline" size={14} color="#f59e0b" />
+                        <Ionicons name="warning-outline" size={14} color={colors.warning} />
                         <Text style={styles.termConflictText}>
                           Different usage in {term.conflicts_with}
                         </Text>
@@ -1870,7 +1871,7 @@ export default function BookReaderScreen() {
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
             <View style={styles.dividerLabelRow}>
-              <Ionicons name="document-text-outline" size={14} color="#10b981" />
+              <Ionicons name="document-text-outline" size={14} color={colors.success} />
               <Text style={styles.dividerText}>Full Text</Text>
             </View>
             <View style={styles.dividerLine} />
@@ -1886,7 +1887,7 @@ export default function BookReaderScreen() {
         {/* ====== REFLECTION CARD ====== */}
         <View style={styles.reflectionCard}>
           <View style={styles.reflectionHeader}>
-            <Ionicons name="sparkles-outline" size={18} color="#a78bfa" />
+            <Ionicons name="sparkles-outline" size={18} color={'#7a5195'} />
             <Text style={styles.reflectionTitle}>Section Complete</Text>
           </View>
 
@@ -1894,13 +1895,13 @@ export default function BookReaderScreen() {
           <View style={styles.sessionStatsRow}>
             {sessionClaimCount > 0 && (
               <View style={styles.sessionStat}>
-                <Ionicons name="bulb-outline" size={14} color="#8b5cf6" />
+                <Ionicons name="bulb-outline" size={14} color={'#7a5195'} />
                 <Text style={styles.sessionStatText}>{sessionClaimCount} claims reviewed</Text>
               </View>
             )}
             {highlightedBlocks.size > 0 && (
               <View style={styles.sessionStat}>
-                <Ionicons name="brush-outline" size={14} color="#f59e0b" />
+                <Ionicons name="brush-outline" size={14} color={colors.warning} />
                 <Text style={styles.sessionStatText}>{highlightedBlocks.size} highlighted</Text>
               </View>
             )}
@@ -1913,7 +1914,7 @@ export default function BookReaderScreen() {
           {/* Socratic prompt */}
           {socraticQuestion && !reflectionSubmitted && (
             <View style={styles.socraticCard}>
-              <Ionicons name="help-circle-outline" size={16} color="#f59e0b" />
+              <Ionicons name="help-circle-outline" size={16} color={colors.warning} />
               <Text style={styles.socraticText}>{socraticQuestion}</Text>
             </View>
           )}
@@ -1923,7 +1924,7 @@ export default function BookReaderScreen() {
               <TextInput
                 style={styles.reflectionInput}
                 placeholder="Your reflection on this section..."
-                placeholderTextColor="#475569"
+                placeholderTextColor={colors.textMuted}
                 multiline
                 value={reflectionText}
                 onChangeText={setReflectionText}
@@ -1934,14 +1935,14 @@ export default function BookReaderScreen() {
                   onPress={handleReflectionSubmit}
                   disabled={!reflectionText.trim()}
                 >
-                  <Ionicons name="send" size={14} color="#f8fafc" />
+                  <Ionicons name="send" size={14} color={colors.ink} />
                   <Text style={styles.reflectionSubmitText}>Save reflection</Text>
                 </Pressable>
               </View>
             </View>
           ) : (
             <View style={styles.reflectionDone}>
-              <Ionicons name="checkmark-circle" size={16} color="#10b981" />
+              <Ionicons name="checkmark-circle" size={16} color={colors.success} />
               <Text style={styles.reflectionDoneText}>Reflection saved</Text>
             </View>
           )}
@@ -1949,7 +1950,7 @@ export default function BookReaderScreen() {
           {!isLastSection && (
             <Pressable style={styles.nextSectionBtn} onPress={handleNextSection}>
               <Text style={styles.nextSectionText}>Next section</Text>
-              <Ionicons name="arrow-forward" size={16} color="#f8fafc" />
+              <Ionicons name="arrow-forward" size={16} color={colors.ink} />
             </Pressable>
           )}
         </View>
@@ -1958,7 +1959,7 @@ export default function BookReaderScreen() {
         {isLastSection && bookCompletionStats && book && (
           <View style={completionStyles.card}>
             <View style={completionStyles.header}>
-              <Ionicons name="trophy-outline" size={24} color="#f59e0b" />
+              <Ionicons name="trophy-outline" size={24} color={colors.warning} />
               <Text style={completionStyles.title}>Book Complete</Text>
             </View>
             <Text style={completionStyles.bookTitle}>{book.title}</Text>
@@ -2008,7 +2009,7 @@ export default function BookReaderScreen() {
                             entry.type === 'voice_note' ? 'mic-outline' :
                             entry.type === 'connection' ? 'link-outline' : 'chatbubble-outline'}
                       size={12}
-                      color="#a78bfa"
+                      color={'#7a5195'}
                     />
                     <Text style={completionStyles.threadText} numberOfLines={2}>{entry.text}</Text>
                   </View>
@@ -2029,7 +2030,7 @@ export default function BookReaderScreen() {
                 router.back();
               }}
             >
-              <Ionicons name="library" size={18} color="#f8fafc" />
+              <Ionicons name="library" size={18} color={colors.ink} />
               <Text style={completionStyles.doneBtnText}>Back to Library</Text>
             </Pressable>
           </View>
@@ -2059,7 +2060,7 @@ export default function BookReaderScreen() {
               <TextInput
                 style={styles.highlightNoteInput}
                 placeholder="Your note on this passage..."
-                placeholderTextColor="#475569"
+                placeholderTextColor={colors.textMuted}
                 value={highlightNoteText}
                 onChangeText={setHighlightNoteText}
                 autoFocus
@@ -2067,7 +2068,7 @@ export default function BookReaderScreen() {
               />
               <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 6 }}>
                 <Pressable onPress={() => { setHighlightNoteMode(false); setHighlightNoteText(''); }}>
-                  <Text style={{ color: '#64748b', fontSize: 13 }}>Cancel</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 13 }}>Cancel</Text>
                 </Pressable>
                 <Pressable
                   style={[styles.highlightNoteSaveBtn, !highlightNoteText.trim() && { opacity: 0.4 }]}
@@ -2086,19 +2087,19 @@ export default function BookReaderScreen() {
                   }}
                   disabled={!highlightNoteText.trim()}
                 >
-                  <Text style={{ color: '#f8fafc', fontSize: 13, fontWeight: '600' }}>Save</Text>
+                  <Text style={{ color: colors.ink, fontSize: 13, fontWeight: '600' }}>Save</Text>
                 </Pressable>
               </View>
             </View>
           ) : (
             <>
-              <Ionicons name="checkmark-circle" size={16} color="#f59e0b" />
+              <Ionicons name="checkmark-circle" size={16} color={colors.warning} />
               <Text style={styles.highlightActionText}>Highlighted</Text>
               <Pressable
                 style={styles.highlightNoteBtn}
                 onPress={() => setHighlightNoteMode(true)}
               >
-                <Ionicons name="create-outline" size={14} color="#60a5fa" />
+                <Ionicons name="create-outline" size={14} color={colors.info} />
                 <Text style={styles.highlightNoteLabel}>Note</Text>
               </Pressable>
               <Pressable
@@ -2131,11 +2132,11 @@ export default function BookReaderScreen() {
                   setHighlightAction(null);
                 }}
               >
-                <Ionicons name="link-outline" size={14} color="#a78bfa" />
-                <Text style={[styles.highlightNoteLabel, { color: '#a78bfa' }]}>Connect</Text>
+                <Ionicons name="link-outline" size={14} color={'#7a5195'} />
+                <Text style={[styles.highlightNoteLabel, { color: '#7a5195' }]}>Connect</Text>
               </Pressable>
               <Pressable onPress={() => setHighlightAction(null)}>
-                <Ionicons name="close" size={16} color="#64748b" />
+                <Ionicons name="close" size={16} color={colors.textMuted} />
               </Pressable>
             </>
           )}
@@ -2149,7 +2150,7 @@ export default function BookReaderScreen() {
           onPress={() => prevSection && navigateToSection(prevSection)}
           disabled={!prevSection}
         >
-          <Ionicons name="chevron-back" size={20} color={prevSection ? '#f8fafc' : '#334155'} />
+          <Ionicons name="chevron-back" size={20} color={prevSection ? colors.ink : colors.rule} />
         </Pressable>
         <View style={styles.navCenter}>
           <Text style={styles.navChapterLabel}>Ch {parsed.chapterNum}</Text>
@@ -2178,7 +2179,7 @@ export default function BookReaderScreen() {
           onPress={() => nextSection && navigateToSection(nextSection)}
           disabled={!nextSection}
         >
-          <Ionicons name="chevron-forward" size={20} color={nextSection ? '#f8fafc' : '#334155'} />
+          <Ionicons name="chevron-forward" size={20} color={nextSection ? colors.ink : colors.rule} />
         </Pressable>
       </View>
     </View>
@@ -2191,26 +2192,26 @@ export default function BookReaderScreen() {
 
 const welcomeStyles = StyleSheet.create({
   card: {
-    backgroundColor: '#1e293b',
+    backgroundColor: colors.parchmentDark,
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
     borderLeftWidth: 3,
-    borderLeftColor: '#f59e0b',
+    borderLeftColor: colors.warning,
   },
   header: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
-  title: { color: '#f59e0b', fontSize: 14, fontWeight: '700' },
-  subtitle: { color: '#64748b', fontSize: 13, marginBottom: 8 },
+  title: { color: colors.warning, fontSize: 14, fontWeight: '700' },
+  subtitle: { color: colors.textMuted, fontSize: 13, marginBottom: 8 },
   argumentBox: {
-    backgroundColor: '#0f172a',
+    backgroundColor: colors.parchment,
     borderRadius: 8,
     padding: 10,
     marginTop: 4,
   },
-  argumentLabel: { color: '#94a3b8', fontSize: 12, fontWeight: '600', marginBottom: 4 },
-  argumentText: { color: '#cbd5e1', fontSize: 13, lineHeight: 18, marginBottom: 4 },
-  notesLabel: { color: '#a78bfa', fontSize: 12, fontWeight: '600', marginBottom: 4 },
-  noteText: { color: '#94a3b8', fontSize: 13, fontStyle: 'italic', marginBottom: 4 },
+  argumentLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '600', marginBottom: 4 },
+  argumentText: { color: colors.textSecondary, fontSize: 13, lineHeight: 18, marginBottom: 4 },
+  notesLabel: { color: '#7a5195', fontSize: 12, fontWeight: '600', marginBottom: 4 },
+  noteText: { color: colors.textMuted, fontSize: 13, fontStyle: 'italic', marginBottom: 4 },
   dismissBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2219,9 +2220,9 @@ const welcomeStyles = StyleSheet.create({
     marginTop: 12,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#f59e0b20',
+    backgroundColor: 'rgba(146,96,14,0.08)',
   },
-  dismissText: { color: '#f59e0b', fontSize: 14, fontWeight: '600' },
+  dismissText: { color: colors.warning, fontSize: 14, fontWeight: '600' },
 });
 
 // ============================================================
@@ -2230,17 +2231,17 @@ const welcomeStyles = StyleSheet.create({
 
 const completionStyles = StyleSheet.create({
   card: {
-    backgroundColor: '#1e293b',
+    backgroundColor: colors.parchmentDark,
     borderRadius: 16,
     padding: 24,
     marginTop: 24,
     borderWidth: 1,
-    borderColor: '#f59e0b30',
+    borderColor: 'rgba(146,96,14,0.15)',
   },
   header: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
-  title: { color: '#f59e0b', fontSize: 22, fontWeight: '700' },
-  bookTitle: { color: '#f8fafc', fontSize: 18, fontWeight: '600', marginBottom: 2 },
-  bookAuthor: { color: '#94a3b8', fontSize: 14, marginBottom: 16 },
+  title: { color: colors.warning, fontSize: 22, fontWeight: '700' },
+  bookTitle: { color: colors.ink, fontSize: 18, fontWeight: '600', marginBottom: 2 },
+  bookAuthor: { color: colors.textMuted, fontSize: 14, marginBottom: 16 },
   statsGrid: {
     flexDirection: 'row',
     gap: 8,
@@ -2248,39 +2249,39 @@ const completionStyles = StyleSheet.create({
   },
   statBox: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: colors.parchment,
     borderRadius: 10,
     padding: 12,
     alignItems: 'center',
   },
-  statNumber: { color: '#f8fafc', fontSize: 20, fontWeight: '700' },
-  statLabel: { color: '#64748b', fontSize: 11, marginTop: 2 },
+  statNumber: { color: colors.ink, fontSize: 20, fontWeight: '700' },
+  statLabel: { color: colors.textMuted, fontSize: 11, marginTop: 2 },
   argumentSection: {
-    backgroundColor: '#0f172a',
+    backgroundColor: colors.parchment,
     borderRadius: 10,
     padding: 14,
     marginBottom: 16,
   },
-  argumentTitle: { color: '#60a5fa', fontSize: 14, fontWeight: '700', marginBottom: 10 },
+  argumentTitle: { color: colors.info, fontSize: 14, fontWeight: '700', marginBottom: 10 },
   argumentRow: { flexDirection: 'row', gap: 8, marginBottom: 6 },
-  argumentChNum: { color: '#475569', fontSize: 12, fontWeight: '700', width: 36 },
-  argumentText: { color: '#cbd5e1', fontSize: 13, lineHeight: 18, flex: 1 },
+  argumentChNum: { color: colors.textMuted, fontSize: 12, fontWeight: '700', width: 36 },
+  argumentText: { color: colors.textSecondary, fontSize: 13, lineHeight: 18, flex: 1 },
   threadSection: {
     marginBottom: 16,
   },
-  threadTitle: { color: '#a78bfa', fontSize: 14, fontWeight: '700', marginBottom: 8 },
+  threadTitle: { color: '#7a5195', fontSize: 14, fontWeight: '700', marginBottom: 8 },
   threadItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginBottom: 6 },
-  threadText: { color: '#94a3b8', fontSize: 13, lineHeight: 18, flex: 1, fontStyle: 'italic' },
+  threadText: { color: colors.textMuted, fontSize: 13, lineHeight: 18, flex: 1, fontStyle: 'italic' },
   doneBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#2563eb',
+    backgroundColor: colors.info,
     borderRadius: 12,
     paddingVertical: 14,
   },
-  doneBtnText: { color: '#f8fafc', fontSize: 16, fontWeight: '600' },
+  doneBtnText: { color: colors.ink, fontSize: 16, fontWeight: '600' },
 });
 
 // ============================================================
@@ -2289,31 +2290,31 @@ const completionStyles = StyleSheet.create({
 
 const chapterTransitionStyles = StyleSheet.create({
   card: {
-    backgroundColor: '#1e293b',
+    backgroundColor: colors.parchmentDark,
     borderRadius: 12,
     padding: 16,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#10b98130',
+    borderColor: 'rgba(42,122,74,0.15)',
   },
   header: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
-  headerText: { color: '#10b981', fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
-  chapterTitle: { color: '#f8fafc', fontSize: 16, fontWeight: '600', marginBottom: 8 },
+  headerText: { color: colors.success, fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  chapterTitle: { color: colors.ink, fontSize: 16, fontWeight: '600', marginBottom: 8 },
   argumentBox: {
-    backgroundColor: '#0f172a',
+    backgroundColor: colors.parchment,
     borderRadius: 8,
     padding: 10,
     marginBottom: 10,
   },
-  argumentLabel: { color: '#94a3b8', fontSize: 11, fontWeight: '600', textTransform: 'uppercase', marginBottom: 4 },
-  argumentText: { color: '#cbd5e1', fontSize: 14, lineHeight: 20 },
+  argumentLabel: { color: colors.textMuted, fontSize: 11, fontWeight: '600', textTransform: 'uppercase', marginBottom: 4 },
+  argumentText: { color: colors.textSecondary, fontSize: 14, lineHeight: 20 },
   newChapterBadge: {
-    backgroundColor: '#2563eb15',
+    backgroundColor: 'rgba(42,74,106,0.08)',
     borderRadius: 6,
     paddingVertical: 6,
     paddingHorizontal: 10,
   },
-  newChapterText: { color: '#60a5fa', fontSize: 13, fontWeight: '600' },
+  newChapterText: { color: colors.info, fontSize: 13, fontWeight: '600' },
 });
 
 // ============================================================
@@ -2321,84 +2322,84 @@ const chapterTransitionStyles = StyleSheet.create({
 // ============================================================
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: { flex: 1, backgroundColor: colors.parchment },
   topBar: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 16, paddingTop: Platform.OS === 'web' ? 12 : 56, paddingBottom: 8, gap: 8,
   },
   backButton: { padding: 4 },
-  topBarTitle: { color: '#f8fafc', fontSize: 14, fontWeight: '600' },
-  topBarSubtitle: { color: '#64748b', fontSize: 12 },
+  topBarTitle: { color: colors.ink, fontSize: 14, fontWeight: '600' },
+  topBarSubtitle: { color: colors.textMuted, fontSize: 12 },
   scroll: { flex: 1, paddingHorizontal: Platform.OS === 'web' ? 40 : 20 },
-  loadingText: { color: '#94a3b8', fontSize: 14, marginLeft: 12 },
-  errorText: { color: '#ef4444', fontSize: 16, textAlign: 'center', marginTop: 100 },
-  backLink: { color: '#60a5fa', fontSize: 14, textAlign: 'center', marginTop: 12 },
+  loadingText: { color: colors.textMuted, fontSize: 14, marginLeft: 12 },
+  errorText: { color: colors.danger, fontSize: 16, textAlign: 'center', marginTop: 100 },
+  backLink: { color: colors.info, fontSize: 14, textAlign: 'center', marginTop: 12 },
 
   // Section title
   sectionTitle: {
-    color: '#f8fafc',
+    color: colors.ink,
     fontSize: Platform.OS === 'web' ? 28 : 24,
     fontWeight: '700',
     lineHeight: Platform.OS === 'web' ? 38 : 32,
     marginBottom: 8,
     letterSpacing: -0.3,
-    ...(Platform.OS === 'web' ? { fontFamily: 'Georgia, "Times New Roman", serif' } : {}),
+    ...(Platform.OS === 'web' ? { fontFamily: fonts.reading } : {}),
   },
   sectionMeta: { flexDirection: 'row', gap: 12, marginBottom: 16 },
-  metaText: { color: '#64748b', fontSize: 13 },
+  metaText: { color: colors.textMuted, fontSize: 13 },
 
   // Progress badge
   progressBadge: {
-    backgroundColor: '#1e293b',
+    backgroundColor: colors.parchmentDark,
     paddingHorizontal: 8, paddingVertical: 4,
     borderRadius: 10,
   },
-  progressBadgeText: { color: '#94a3b8', fontSize: 11, fontWeight: '600' },
+  progressBadgeText: { color: colors.textMuted, fontSize: 11, fontWeight: '600' },
 
   // Floating depth indicator
   depthIndicator: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     paddingVertical: 8, paddingHorizontal: 16,
-    backgroundColor: '#0f172aee',
-    ...(Platform.OS === 'web' ? { borderBottomWidth: 1, borderBottomColor: '#1e293b' } : {}),
+    backgroundColor: 'rgba(247,244,236,0.93)',
+    ...(Platform.OS === 'web' ? { borderBottomWidth: 1, borderBottomColor: colors.parchmentDark } : {}),
   },
   depthIndicatorItem: { flexDirection: 'row', alignItems: 'center' },
-  depthConnector: { width: 16, height: 2, backgroundColor: '#334155', marginHorizontal: 6, borderRadius: 1 },
-  depthConnectorReached: { backgroundColor: '#475569' },
-  depthLabel: { color: '#475569', fontSize: 12, fontWeight: '500' },
-  depthLabelActive: { color: '#f8fafc', fontWeight: '700' },
-  depthLabelReached: { color: '#94a3b8' },
-  depthCount: { color: '#64748b', fontSize: 11, fontWeight: '400' as const },
+  depthConnector: { width: 16, height: 2, backgroundColor: colors.rule, marginHorizontal: 6, borderRadius: 1 },
+  depthConnectorReached: { backgroundColor: colors.rule },
+  depthLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '500' },
+  depthLabelActive: { color: colors.ink, fontWeight: '700' },
+  depthLabelReached: { color: colors.textMuted },
+  depthCount: { color: colors.textMuted, fontSize: 11, fontWeight: '400' as const },
 
   // Dividers
   divider: {
     flexDirection: 'row', alignItems: 'center',
     marginTop: 28, marginBottom: 20, gap: 12,
   },
-  dividerLine: { flex: 1, height: 1, backgroundColor: '#1e293b' },
+  dividerLine: { flex: 1, height: 1, backgroundColor: colors.parchmentDark },
   dividerLabelRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
-  dividerText: { color: '#64748b', fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1 },
+  dividerText: { color: colors.textMuted, fontSize: 13, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1 },
 
   // Briefing zone
   briefingCard: {
-    backgroundColor: '#1e293b', borderRadius: 12, padding: 16,
-    borderLeftWidth: 4, borderLeftColor: '#2563eb', marginBottom: 12,
+    backgroundColor: colors.parchmentDark, borderRadius: 12, padding: 16,
+    borderLeftWidth: 4, borderLeftColor: colors.info, marginBottom: 12,
   },
   briefingText: {
-    color: '#e2e8f0',
+    color: colors.textBody,
     fontSize: Platform.OS === 'web' ? 17 : 16,
     lineHeight: Platform.OS === 'web' ? 28 : 26,
-    ...(Platform.OS === 'web' ? { fontFamily: 'Georgia, "Times New Roman", serif' } : {}),
+    ...(Platform.OS === 'web' ? { fontFamily: fonts.reading } : {}),
   },
   argumentCard: {
-    backgroundColor: '#1e293b', borderRadius: 12, padding: 16, marginBottom: 12,
+    backgroundColor: colors.parchmentDark, borderRadius: 12, padding: 16, marginBottom: 12,
   },
   argumentLabel: {
-    color: '#94a3b8', fontSize: 12, fontWeight: '600',
+    color: colors.textMuted, fontSize: 12, fontWeight: '600',
     textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8,
   },
   argumentText: {
-    color: '#cbd5e1', fontSize: 15, lineHeight: 24,
+    color: colors.textSecondary, fontSize: 15, lineHeight: 24,
   },
 
   // Cross-book connections
@@ -2409,75 +2410,75 @@ const styles = StyleSheet.create({
   connectionHeader: {
     flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, marginBottom: 6,
   },
-  connectionLabel: { color: '#a78bfa', fontSize: 12, fontWeight: '600' as const },
+  connectionLabel: { color: '#7a5195', fontSize: 12, fontWeight: '600' as const },
   connectionQuote: {
-    color: '#c4b5fd', fontSize: 14, lineHeight: 21,
+    color: '#9a7bc0', fontSize: 14, lineHeight: 21,
     fontStyle: 'italic' as const, marginBottom: 8,
   },
   connectionSource: {
     flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6,
   },
-  connectionSourceText: { color: '#64748b', fontSize: 12 },
+  connectionSourceText: { color: colors.textMuted, fontSize: 12 },
 
   // Claims
   claimsProgress: {
-    color: '#64748b', fontSize: 12, marginBottom: 12, textAlign: 'center',
+    color: colors.textMuted, fontSize: 12, marginBottom: 12, textAlign: 'center',
   },
   claimCard: {
-    backgroundColor: '#1e293b', borderRadius: 12, padding: 16,
-    marginBottom: 10, borderLeftWidth: 3, borderLeftColor: '#334155',
+    backgroundColor: colors.parchmentDark, borderRadius: 12, padding: 16,
+    marginBottom: 10, borderLeftWidth: 3, borderLeftColor: colors.rule,
   },
   claimCardMain: { borderLeftWidth: 5 },
-  claimCardKnew: { borderLeftColor: '#64748b', opacity: 0.7 },
-  claimCardNew: { borderLeftColor: '#34d399' },
-  claimCardSave: { borderLeftColor: '#60a5fa' },
-  claimCardText: { color: '#e2e8f0', fontSize: 15, lineHeight: 23, marginBottom: 8 },
+  claimCardKnew: { borderLeftColor: colors.textMuted, opacity: 0.7 },
+  claimCardNew: { borderLeftColor: colors.success },
+  claimCardSave: { borderLeftColor: colors.info },
+  claimCardText: { color: colors.textBody, fontSize: 15, lineHeight: 23, marginBottom: 8 },
   claimSourcePassage: {
-    borderLeftWidth: 2, borderLeftColor: '#475569',
+    borderLeftWidth: 2, borderLeftColor: colors.rule,
     paddingLeft: 12, marginBottom: 10, marginLeft: 4,
   },
   claimSourceText: {
-    color: '#94a3b8', fontSize: 13, lineHeight: 20, fontStyle: 'italic' as const,
+    color: colors.textMuted, fontSize: 13, lineHeight: 20, fontStyle: 'italic' as const,
   },
   confidenceBadge: {
     alignSelf: 'flex-start' as const,
-    backgroundColor: '#064e3b', paddingHorizontal: 8, paddingVertical: 3,
+    backgroundColor: 'rgba(42,122,74,0.15)', paddingHorizontal: 8, paddingVertical: 3,
     borderRadius: 6, marginBottom: 10,
   },
-  confidenceText: { color: '#34d399', fontSize: 11, fontWeight: '600' },
+  confidenceText: { color: colors.success, fontSize: 11, fontWeight: '600' },
   claimActions: { flexDirection: 'row', gap: 8 },
   claimBtn: {
     paddingHorizontal: 14, paddingVertical: 6,
-    borderRadius: 8, backgroundColor: '#334155',
+    borderRadius: 8, backgroundColor: colors.rule,
   },
-  claimBtnNewBorder: { borderColor: '#34d399', borderWidth: 1, backgroundColor: 'transparent' },
-  claimBtnSaveBorder: { borderColor: '#60a5fa', borderWidth: 1, backgroundColor: 'transparent' },
-  claimBtnActiveKnew: { backgroundColor: '#475569' },
-  claimBtnActiveNew: { backgroundColor: '#065f46', borderColor: '#34d399' },
-  claimBtnActiveSave: { backgroundColor: '#1e3a5f', borderColor: '#60a5fa' },
-  claimBtnText: { color: '#94a3b8', fontSize: 12, fontWeight: '500' },
+  claimBtnNewBorder: { borderColor: colors.success, borderWidth: 1, backgroundColor: 'transparent' },
+  claimBtnSaveBorder: { borderColor: colors.info, borderWidth: 1, backgroundColor: 'transparent' },
+  claimBtnActiveKnew: { backgroundColor: colors.rule },
+  claimBtnActiveNew: { backgroundColor: 'rgba(42,122,74,0.12)', borderColor: colors.success },
+  claimBtnActiveSave: { backgroundColor: 'rgba(42,74,106,0.15)', borderColor: colors.info },
+  claimBtnText: { color: colors.textMuted, fontSize: 12, fontWeight: '500' },
 
   // Key Terms
   termCard: {
-    backgroundColor: '#1e293b', borderRadius: 12, padding: 16, marginBottom: 10,
+    backgroundColor: colors.parchmentDark, borderRadius: 12, padding: 16, marginBottom: 10,
   },
-  termName: { color: '#f8fafc', fontSize: 16, fontWeight: '700', marginBottom: 6 },
-  termDefinition: { color: '#cbd5e1', fontSize: 15, lineHeight: 23 },
+  termName: { color: colors.ink, fontSize: 16, fontWeight: '700', marginBottom: 6 },
+  termDefinition: { color: colors.textSecondary, fontSize: 15, lineHeight: 23 },
   termConflict: {
     flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6,
-    marginTop: 10, backgroundColor: '#78350f20', padding: 8, borderRadius: 6,
+    marginTop: 10, backgroundColor: 'rgba(146,96,14,0.08)', padding: 8, borderRadius: 6,
   },
-  termConflictText: { color: '#fbbf24', fontSize: 12, flex: 1 },
+  termConflictText: { color: colors.warning, fontSize: 12, flex: 1 },
   familiarityCard: {
-    backgroundColor: '#022c22',
+    backgroundColor: 'rgba(42,122,74,0.06)',
     borderRadius: 12,
     padding: 14,
     marginHorizontal: 16,
     marginTop: 10,
     borderWidth: 1,
-    borderColor: '#064e3b',
+    borderColor: 'rgba(42,122,74,0.15)',
   },
-  familiarityTitle: { color: '#10b981', fontSize: 13, fontWeight: '700' as const },
+  familiarityTitle: { color: colors.success, fontSize: 13, fontWeight: '700' as const },
   familiarityChips: {
     flexDirection: 'row' as const,
     flexWrap: 'wrap' as const,
@@ -2487,231 +2488,231 @@ const styles = StyleSheet.create({
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: 4,
-    backgroundColor: '#052e16',
+    backgroundColor: 'rgba(42,122,74,0.08)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#065f46',
+    borderColor: 'rgba(42,122,74,0.12)',
   },
-  familiarityChipText: { color: '#6ee7b7', fontSize: 12 },
-  familiarityNovel: { color: '#34d399', fontSize: 12, marginTop: 8, fontStyle: 'italic' as const },
-  termCardFamiliar: { borderLeftColor: '#10b981', borderLeftWidth: 3 },
+  familiarityChipText: { color: colors.success, fontSize: 12 },
+  familiarityNovel: { color: colors.success, fontSize: 12, marginTop: 8, fontStyle: 'italic' as const },
+  termCardFamiliar: { borderLeftColor: colors.success, borderLeftWidth: 3 },
   termFamiliarBadge: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: 3,
-    backgroundColor: '#052e16',
+    backgroundColor: 'rgba(42,122,74,0.08)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 8,
   },
-  termFamiliarText: { color: '#10b981', fontSize: 10, fontWeight: '600' as const },
-  termConceptCount: { color: '#64748b', fontSize: 11, marginTop: 6 },
+  termFamiliarText: { color: colors.success, fontSize: 10, fontWeight: '600' as const },
+  termConceptCount: { color: colors.textMuted, fontSize: 11, marginTop: 6 },
 
   // Markdown rendering
   markdownHeading: {
-    color: '#f8fafc', fontWeight: '700',
+    color: colors.ink, fontWeight: '700',
     marginTop: 20, marginBottom: 10, lineHeight: 28,
   },
   markdownText: {
-    color: '#cbd5e1',
+    color: colors.textSecondary,
     fontSize: Platform.OS === 'web' ? 18 : 16,
     lineHeight: Platform.OS === 'web' ? 30 : 26,
     marginBottom: 14, letterSpacing: 0.15,
-    ...(Platform.OS === 'web' ? { fontFamily: 'Georgia, "Times New Roman", serif' } : {}),
+    ...(Platform.OS === 'web' ? { fontFamily: fonts.reading } : {}),
   },
   markdownList: { marginBottom: 14 },
   markdownListItem: { flexDirection: 'row', marginBottom: 6, paddingRight: 8 },
-  markdownBullet: { color: '#60a5fa', marginRight: 10, fontSize: 16 },
-  markdownOrderedBullet: { color: '#60a5fa', marginRight: 10, fontSize: 14, minWidth: 20 },
-  codeBlock: { backgroundColor: '#1e293b', borderRadius: 8, padding: 14, marginBottom: 14 },
-  codeText: { color: '#94a3b8', fontSize: 13, fontFamily: 'monospace' },
-  markdownLink: { color: '#60a5fa', textDecorationLine: 'underline' as const },
-  markdownBold: { color: '#f8fafc', fontWeight: '700' as const },
-  markdownItalic: { color: '#cbd5e1', fontStyle: 'italic' as const },
-  markdownInlineCode: { color: '#94a3b8', fontFamily: 'monospace', backgroundColor: '#1e293b', paddingHorizontal: 4 },
+  markdownBullet: { color: colors.info, marginRight: 10, fontSize: 16 },
+  markdownOrderedBullet: { color: colors.info, marginRight: 10, fontSize: 14, minWidth: 20 },
+  codeBlock: { backgroundColor: colors.parchmentDark, borderRadius: 8, padding: 14, marginBottom: 14 },
+  codeText: { color: colors.textMuted, fontSize: 13, fontFamily: 'monospace' },
+  markdownLink: { color: colors.info, textDecorationLine: 'underline' as const },
+  markdownBold: { color: colors.ink, fontWeight: '700' as const },
+  markdownItalic: { color: colors.textSecondary, fontStyle: 'italic' as const },
+  markdownInlineCode: { color: colors.textMuted, fontFamily: 'monospace', backgroundColor: colors.parchmentDark, paddingHorizontal: 4 },
   markdownBlockquote: {
-    borderLeftWidth: 3, borderLeftColor: '#475569',
+    borderLeftWidth: 3, borderLeftColor: colors.rule,
     paddingLeft: 14, marginBottom: 14, marginLeft: 4,
   },
   markdownBlockquoteText: {
-    color: '#94a3b8', fontSize: 15, lineHeight: 24, fontStyle: 'italic' as const,
+    color: colors.textMuted, fontSize: 15, lineHeight: 24, fontStyle: 'italic' as const,
   },
-  markdownHr: { height: 1, backgroundColor: '#334155', marginVertical: 20 },
+  markdownHr: { height: 1, backgroundColor: colors.rule, marginVertical: 20 },
   tableContainer: {
     marginBottom: 14, borderRadius: 8, overflow: 'hidden',
-    borderWidth: 1, borderColor: '#334155',
+    borderWidth: 1, borderColor: colors.rule,
   },
-  tableRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#1e293b' },
-  tableRowAlt: { backgroundColor: '#0f172a' },
+  tableRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: colors.parchmentDark },
+  tableRowAlt: { backgroundColor: colors.parchment },
   tableCell: { flex: 1, paddingVertical: 8, paddingHorizontal: 10 },
-  tableHeaderCell: { backgroundColor: '#1e293b' },
-  tableHeaderText: { color: '#f8fafc', fontSize: 13, fontWeight: '600' },
-  tableCellText: { color: '#cbd5e1', fontSize: 13, lineHeight: 18 },
+  tableHeaderCell: { backgroundColor: colors.parchmentDark },
+  tableHeaderText: { color: colors.ink, fontSize: 13, fontWeight: '600' },
+  tableCellText: { color: colors.textSecondary, fontSize: 13, lineHeight: 18 },
 
   // Paragraph highlighting
   paragraphHighlight: {
-    backgroundColor: '#78350f20',
-    borderLeftWidth: 3, borderLeftColor: '#f59e0b',
+    backgroundColor: 'rgba(146,96,14,0.08)',
+    borderLeftWidth: 3, borderLeftColor: colors.warning,
     paddingLeft: 8, borderRadius: 4, marginLeft: -8,
   },
 
   // Reflection card
   reflectionCard: {
-    backgroundColor: '#1e293b', borderRadius: 12, padding: 20,
-    marginTop: 28, borderWidth: 1, borderColor: '#334155',
+    backgroundColor: colors.parchmentDark, borderRadius: 12, padding: 20,
+    marginTop: 28, borderWidth: 1, borderColor: colors.rule,
   },
   reflectionHeader: {
     flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 12,
   },
-  reflectionTitle: { color: '#f8fafc', fontSize: 18, fontWeight: '700' },
+  reflectionTitle: { color: colors.ink, fontSize: 18, fontWeight: '700' },
   reflectionTakeaway: {
-    color: '#a78bfa', fontSize: 15, lineHeight: 22,
+    color: '#7a5195', fontSize: 15, lineHeight: 22,
     fontStyle: 'italic' as const, marginBottom: 16,
   },
   reflectionInputArea: { marginBottom: 16 },
   reflectionInput: {
-    color: '#f8fafc', fontSize: 15, lineHeight: 22,
+    color: colors.ink, fontSize: 15, lineHeight: 22,
     minHeight: 60, textAlignVertical: 'top' as const,
-    backgroundColor: '#0f172a', borderRadius: 8, padding: 12,
-    borderWidth: 1, borderColor: '#334155',
+    backgroundColor: colors.parchment, borderRadius: 8, padding: 12,
+    borderWidth: 1, borderColor: colors.rule,
   },
   reflectionActions: {
     flexDirection: 'row' as const, justifyContent: 'flex-end' as const, marginTop: 8,
   },
   reflectionSubmitBtn: {
     flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6,
-    backgroundColor: '#7c3aed', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8,
+    backgroundColor: colors.rubric, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8,
   },
-  reflectionSubmitText: { color: '#f8fafc', fontSize: 13, fontWeight: '600' },
+  reflectionSubmitText: { color: colors.ink, fontSize: 13, fontWeight: '600' },
   reflectionDone: {
     flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, marginBottom: 16,
   },
-  reflectionDoneText: { color: '#10b981', fontSize: 14, fontWeight: '500' },
+  reflectionDoneText: { color: colors.success, fontSize: 14, fontWeight: '500' },
   nextSectionBtn: {
     flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const,
-    gap: 8, backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 10,
+    gap: 8, backgroundColor: colors.info, paddingVertical: 12, borderRadius: 10,
   },
-  nextSectionText: { color: '#f8fafc', fontSize: 15, fontWeight: '600' },
+  nextSectionText: { color: colors.ink, fontSize: 15, fontWeight: '600' },
 
   // Floating signal pill
   pillBackdrop: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: '#00000060', justifyContent: 'center', alignItems: 'center',
+    backgroundColor: 'rgba(42,36,32,0.35)', justifyContent: 'center', alignItems: 'center',
   },
   pillContainer: {
-    flexDirection: 'row', backgroundColor: '#1e293b',
+    flexDirection: 'row', backgroundColor: colors.parchmentDark,
     borderRadius: 16, padding: 6, gap: 4,
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3, shadowRadius: 12, elevation: 8,
   },
   pillBtn: {
     paddingHorizontal: 16, paddingVertical: 10,
-    borderRadius: 12, backgroundColor: '#334155',
+    borderRadius: 12, backgroundColor: colors.rule,
   },
-  pillBtnNew: { backgroundColor: '#065f46' },
-  pillBtnSave: { backgroundColor: '#1e3a5f' },
-  pillBtnText: { color: '#e2e8f0', fontSize: 13, fontWeight: '600' },
+  pillBtnNew: { backgroundColor: 'rgba(42,122,74,0.12)' },
+  pillBtnSave: { backgroundColor: 'rgba(42,74,106,0.15)' },
+  pillBtnText: { color: colors.textBody, fontSize: 13, fontWeight: '600' },
 
   // Highlight action bar
   highlightActionBar: {
     position: 'absolute', bottom: 72, left: 16, right: 16,
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: '#1e293b', borderRadius: 12, padding: 12,
+    backgroundColor: colors.parchmentDark, borderRadius: 12, padding: 12,
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3, shadowRadius: 12, elevation: 8,
-    borderWidth: 1, borderColor: '#334155',
+    borderWidth: 1, borderColor: colors.rule,
   },
-  highlightActionText: { color: '#f59e0b', fontSize: 13, fontWeight: '600' as const, flex: 1 },
+  highlightActionText: { color: colors.warning, fontSize: 13, fontWeight: '600' as const, flex: 1 },
   highlightNoteBtn: {
     flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4,
-    backgroundColor: '#1e293b', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
+    backgroundColor: colors.parchmentDark, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
   },
-  highlightNoteLabel: { color: '#60a5fa', fontSize: 12, fontWeight: '500' as const },
-  highlightNoteInput: { color: '#f8fafc', fontSize: 14, lineHeight: 20, minHeight: 36 },
+  highlightNoteLabel: { color: colors.info, fontSize: 12, fontWeight: '500' as const },
+  highlightNoteInput: { color: colors.ink, fontSize: 14, lineHeight: 20, minHeight: 36 },
   highlightNoteSaveBtn: {
-    backgroundColor: '#2563eb', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8,
+    backgroundColor: colors.info, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8,
   },
 
   // Voice recording
   voiceBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 10, paddingVertical: 6,
-    borderRadius: 16, backgroundColor: '#1e293b',
+    borderRadius: 16, backgroundColor: colors.parchmentDark,
   },
-  voiceBtnRecording: { backgroundColor: '#7f1d1d' },
-  voiceTimer: { color: '#ef4444', fontSize: 12, fontWeight: '700' },
-  voiceCount: { color: '#64748b', fontSize: 11 },
+  voiceBtnRecording: { backgroundColor: 'rgba(139,37,0,0.15)' },
+  voiceTimer: { color: colors.danger, fontSize: 12, fontWeight: '700' },
+  voiceCount: { color: colors.textMuted, fontSize: 11 },
 
   // Text note input
   textNoteBtn: {
     flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4,
     paddingHorizontal: 10, paddingVertical: 6,
-    borderRadius: 16, backgroundColor: '#1e293b',
+    borderRadius: 16, backgroundColor: colors.parchmentDark,
   },
-  textNoteBtnText: { color: '#60a5fa', fontSize: 12, fontWeight: '500' as const },
+  textNoteBtnText: { color: colors.info, fontSize: 12, fontWeight: '500' as const },
   textNoteContainer: {
     position: 'absolute' as const, top: '100%' as any, right: 0,
-    width: 300, backgroundColor: '#1e293b', borderRadius: 12, padding: 12,
+    width: 300, backgroundColor: colors.parchmentDark, borderRadius: 12, padding: 12,
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3, shadowRadius: 12, elevation: 8,
-    borderWidth: 1, borderColor: '#334155', zIndex: 100,
+    borderWidth: 1, borderColor: colors.rule, zIndex: 100,
   },
   textNoteInput: {
-    color: '#f8fafc', fontSize: 14, lineHeight: 20,
+    color: colors.ink, fontSize: 14, lineHeight: 20,
     minHeight: 60, textAlignVertical: 'top' as const, marginBottom: 8,
   },
   textNoteActions: {
     flexDirection: 'row' as const, justifyContent: 'flex-end' as const, gap: 8,
   },
   textNoteCancelBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  textNoteCancelText: { color: '#64748b', fontSize: 13 },
+  textNoteCancelText: { color: colors.textMuted, fontSize: 13 },
   textNoteSubmitBtn: {
     flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4,
-    backgroundColor: '#2563eb', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
+    backgroundColor: colors.info, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8,
   },
-  textNoteSubmitText: { color: '#f8fafc', fontSize: 13, fontWeight: '600' as const },
+  textNoteSubmitText: { color: colors.ink, fontSize: 13, fontWeight: '600' as const },
 
   // Navigation footer
   navFooter: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 20, paddingVertical: 12,
-    backgroundColor: '#0f172a', borderTopWidth: 1, borderTopColor: '#1e293b',
+    backgroundColor: colors.parchment, borderTopWidth: 1, borderTopColor: colors.parchmentDark,
     paddingBottom: Platform.OS === 'web' ? 12 : 28,
   },
   navBtn: {
     width: 44, height: 44, borderRadius: 22,
-    backgroundColor: '#1e293b', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.parchmentDark, alignItems: 'center', justifyContent: 'center',
   },
   navBtnDisabled: { opacity: 0.3 },
-  navLabel: { color: '#94a3b8', fontSize: 13, fontWeight: '500' },
+  navLabel: { color: colors.textMuted, fontSize: 13, fontWeight: '500' },
   navCenter: { flex: 1, alignItems: 'center' as const },
-  navChapterLabel: { color: '#64748b', fontSize: 11, fontWeight: '600', marginBottom: 4 },
+  navChapterLabel: { color: colors.textMuted, fontSize: 11, fontWeight: '600', marginBottom: 4 },
   sectionMiniMap: { flexDirection: 'row' as const, gap: 6, alignItems: 'center' as const },
   miniMapDot: {
     width: 8, height: 8, borderRadius: 4,
-    backgroundColor: '#334155',
+    backgroundColor: colors.rule,
   },
   miniMapDotCurrent: {
     width: 12, height: 12, borderRadius: 6,
-    backgroundColor: '#3b82f6',
-    borderWidth: 2, borderColor: '#60a5fa',
+    backgroundColor: colors.info,
+    borderWidth: 2, borderColor: colors.info,
   },
-  miniMapDotRead: { backgroundColor: '#475569' },
-  miniMapDotReflected: { backgroundColor: '#10b981' },
+  miniMapDotRead: { backgroundColor: colors.rule },
+  miniMapDotReflected: { backgroundColor: colors.success },
 
   // Personal thread in briefing
   threadBriefingCard: {
-    backgroundColor: '#1e1338',
+    backgroundColor: 'rgba(122,81,149,0.08)',
     borderRadius: 10,
     padding: 12,
     marginTop: 8,
     borderLeftWidth: 3,
-    borderLeftColor: '#a78bfa',
+    borderLeftColor: '#7a5195',
   },
-  threadBriefingTitle: { color: '#a78bfa', fontSize: 13, fontWeight: '600' },
-  threadBriefingNote: { color: '#94a3b8', fontSize: 13, fontStyle: 'italic' as const, marginTop: 4 },
+  threadBriefingTitle: { color: '#7a5195', fontSize: 13, fontWeight: '600' },
+  threadBriefingNote: { color: colors.textMuted, fontSize: 13, fontStyle: 'italic' as const, marginTop: 4 },
 
   // Session stats in reflection
   sessionStatsRow: {
@@ -2720,7 +2721,7 @@ const styles = StyleSheet.create({
   sessionStat: {
     flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4,
   },
-  sessionStatText: { color: '#64748b', fontSize: 12 },
+  sessionStatText: { color: colors.textMuted, fontSize: 12 },
   claimsHeaderRow: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
@@ -2734,16 +2735,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
-    backgroundColor: '#1e293b',
+    backgroundColor: colors.parchmentDark,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: colors.rule,
   },
   skeletonToggleActive: {
-    backgroundColor: '#4c1d95',
-    borderColor: '#7c3aed',
+    backgroundColor: 'rgba(122,81,149,0.15)',
+    borderColor: '#7a5195',
   },
   skeletonToggleText: {
-    color: '#64748b',
+    color: colors.textMuted,
     fontSize: 12,
     fontWeight: '600' as const,
   },
@@ -2751,21 +2752,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: 10,
-    backgroundColor: '#1e1b4b',
+    backgroundColor: 'rgba(122,81,149,0.08)',
     borderRadius: 12,
     padding: 12,
     marginHorizontal: 16,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#4c1d95',
+    borderColor: 'rgba(122,81,149,0.15)',
   },
   adaptiveDepthText: {
-    color: '#c4b5fd',
+    color: '#9a7bc0',
     fontSize: 14,
     fontWeight: '600' as const,
   },
   adaptiveDepthReason: {
-    color: '#7c3aed',
+    color: '#7a5195',
     fontSize: 12,
     marginTop: 2,
   },
@@ -2773,15 +2774,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row' as const,
     alignItems: 'flex-start' as const,
     gap: 8,
-    backgroundColor: '#1c1917',
+    backgroundColor: 'rgba(146,96,14,0.06)',
     borderRadius: 10,
     padding: 12,
     marginBottom: 14,
     borderLeftWidth: 3,
-    borderLeftColor: '#f59e0b',
+    borderLeftColor: colors.warning,
   },
   socraticText: {
-    color: '#fbbf24',
+    color: colors.warning,
     fontSize: 14,
     lineHeight: 20,
     flex: 1,
