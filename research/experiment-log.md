@@ -4,6 +4,49 @@
 
 ---
 
+## 2026-03-07 — Pipeline testing framework + clean_markdown hardening
+
+**What**: Built a comprehensive testing framework for the article processing pipeline and used it to systematically harden `clean_markdown()` from ~15 patterns to 60+, achieving 25/25 fixture pass rate across diverse content types.
+
+### Pipeline testing framework (`scripts/pipeline-tests/`)
+Built a CLI framework with 4 test layers:
+- **Layer 1: clean_markdown** — deterministic checks (no nav links, no cookie banners, no HTML residue, content preserved)
+- **Layer 2: article_extraction** — LLM extraction with structural validation (required fields, section coverage, claim specificity)
+- **Layer 3: entity_concepts** — batch concept extraction with deduplication checks
+- **Layer 4: end_to_end** — full fetch→clean→extract pipeline on live URLs
+
+Architecture: fixture-based inputs (HTML/markdown + metadata.json), session persistence (12-char UUID dirs with config/output/evaluation JSON), CLI via argparse with subcommands (`clean`, `extract`, `e2e`, `list`, `inspect`, `compare`, `fixture-list`). LLM calls use litellm with an instrumented wrapper capturing timing + token usage.
+
+### clean_markdown() hardening
+Expanded from handling 5 content types to 25+ verified fixture types. Key pattern categories added:
+
+- **Academic**: arXiv nav links (`[View PDF]`, `[HTML...]`), metadata lines (Subjects, Cite as), PDF page headers/footers (`Author et al. — N — Month Year`), author affiliations
+- **Platform chrome**: Substack (paywall gates, "Start Writing"), Medium (Member-only, claps, Recommended), Reddit (voting, awards, app CTA), GitHub (badges, Toggle navigation), HN (Guidelines footer)
+- **Email**: forwarded message headers (block pattern), unsubscribe/opt-out footers, "sent from my" lines
+- **Navigation**: Menu/hamburger, Sign in/up (both standalone and markdown link format), Search prompts
+- **Ads/engagement**: ADVERTISEMENT/SPONSORED markers, app store badges, follower counts, emoji CTAs, vote/award lines
+- **HTML residue**: `<div>`, `<span>`, `<footer>` tags, `<script>`/`<style>` with content, `<button>` elements, CSS class annotations
+- **Multilingual**: NO/SV/DA/DE/FR/ES/IT/ID patterns for subscribe, follow, copyright, nav footers
+
+Notable bugs found and fixed:
+- **Regex ordering**: `Subjects?:` arXiv pattern was matching email `Subject:` headers, breaking forwarded-message block detection. Fix: moved email header block stripping before arXiv metadata stripping.
+- **Optional group greed**: `<button>.*?(?:</button>)?` failed because non-greedy `.*?` matched empty string when closing tag was optional. Fix: split into separate `<input.../>` and `<button>content</button>` patterns.
+- **Wikipedia [[edit]](URL)**: Double-bracket format left orphaned `(URL)` because existing regex only handled single brackets.
+
+### Test results
+- 25/25 clean_markdown fixtures pass (5 original + 8 synthetic platform types + 3 structural edge cases + 9 live URL captures)
+- 7/7 end-to-end fixtures complete with good extraction quality
+- 56 real fetched articles + 47 processed articles validated with 0 issues
+- Table content preservation verified (123 pipe chars in → 123 out)
+- Minimal content survival verified (2-paragraph article not stripped by aggressive cleaning)
+
+### Fixtures created
+**Synthetic**: substack-newsletter, medium-article, pdf-extraction, reddit-thread, github-readme, news-article, corrupted-html, hn-discussion, double-encoding, table-heavy, minimal-content
+**Live URL captures**: simonwillison, arxiv, wikipedia (14K words), github/litellm, stackoverflow, codinghorror, paulgraham, gwern (12K words), martinfowler
+**End-to-end**: simonwillison, stackoverflow, paulgraham, arxiv, gwern, codinghorror, martinfowler
+
+---
+
 ## 2026-03-05 — Concept-Centric Reader: Entity concepts + concept chips + bottom sheet
 
 **What**: Major redesign shifting the knowledge unit from sentence-level claims to named entity concepts. Four changes:

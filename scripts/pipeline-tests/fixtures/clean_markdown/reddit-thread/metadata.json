@@ -1,0 +1,5 @@
+{
+  "title": "Reddit Thread — upvotes, comments, awards, footer",
+  "description": "Vote counts, awards, reply chains with scores, View remaining comments, Related Posts section, Reddit footer with legal links, app store CTAs, subreddit chrome, Sort by, Edit: notes",
+  "expected_removed": ["Reddit, Inc", "Get the Reddit app", "Reddit app.*Reddit coins", "View remaining.*comments"]
+}

@@ -1,0 +1,5 @@
+{
+  "title": "Table-heavy article — markdown tables, data, minimal cruft",
+  "description": "Tests that tables are preserved intact, no data corruption. Minimal cruft — mainly tests that clean_markdown doesn't break valid content",
+  "expected_removed": []
+}

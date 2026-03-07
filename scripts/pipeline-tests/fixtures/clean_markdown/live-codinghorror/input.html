@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+    <title>The Best Code is No Code At All</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link rel="preload" as="style" href="https://blog.codinghorror.com/assets/built/screen.css?v=cc5eb33be3">
+    <link rel="preload" as="style" href="https://blog.codinghorror.com/assets/built/custom.css?v=cc5eb33be3">
+    <link rel="preload" as="script" href="https://blog.codinghorror.com/assets/built/source.js?v=cc5eb33be3">
+
+    <link rel="preload" as="font" type="font/woff2" href="https://blog.codinghorror.com/assets/fonts/inter-roman.woff2?v=cc5eb33be3" crossorigin="anonymous">
+<style>
+    @font-face {
+        font-family: "Inter";
+        font-style: normal;
+        font-weight: 100 900;
+        font-display: optional;
+        src: url(https://blog.codinghorror.com/assets/fonts/inter-roman.woff2?v=cc5eb33be3) format("woff2");
+        unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    }
+</style><link rel="preload" as="font" type="font/woff2" href="https://blog.codinghorror.com/assets/fonts/frutiger.woff2?v=cc5eb33be3" crossorigin="anonymous">
+<style>
+    @font-face {
+        font-family: "Frutiger";
+        src: url(https://blog.codinghorror.com/assets/fonts/frutiger.woff2?v=cc5eb33be3) format("woff2");
+        font-display: swap;
+    }
+    :root {
+        --gh-font-heading: 'Frutiger';
+    }
+</style>
+
+
+    <link rel="stylesheet" type="text/css" href="https://blog.codinghorror.com/assets/built/screen.css?v=cc5eb33be3">
+    <link rel="stylesheet" type="text/css" href="https://blog.codinghorror.com/assets/built/custom.css?v=cc5eb33be3">
+
+    <style>
+        :root {
+            --background-color: #ffffff;
+            --content-spacing-factor: 0.5;
+        }
+    </style>
+
+    <script>
+        /* The script for calculating the color contrast has been taken from
+        https://gomakethings.com/dynamically-changing-the-text-color-based-on-background-color-contrast-with-vanilla-js/ */
+        var accentColor = getComputedStyle(document.documentElement).getPropertyValue('--background-color');
+        accentColor = accentColor.trim().slice(1);
+
+        if (accentColor.length === 3) {
+            accentColor = accentColor[0] + accentColor[0] + accentColor[1] + accentColor[1] + accentColor[2] + accentColor[2];
+        }
+
+        var r = parseInt(accentColor.substr(0, 2), 16);
+        var g = parseInt(accentColor.substr(2, 2), 16);
+        var b = parseInt(accentColor.substr(4, 2), 16);
+        var yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+        var textColor = (yiq >= 128) ? 'dark' : 'light';
+
+        document.documentElement.className = `has-${textColor}-text`;
+    </script>
+
+    <link rel="icon" href="https://blog.codinghorror.com/content/images/size/w256h256/2020/06/3cffc4b347c3587f19fe222caaac69f63b9a5e73.png" type="image/png">
+    <link rel="canonical" href="https://blog.codinghorror.com/the-best-code-is-no-code-at-all/">
+    <meta name="referrer" content="no-referrer-when-downgrade">
+    
+    <meta property="og:site_name" content="Coding Horror">
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="The Best Code is No Code At All">
+    <meta property="og:description" content="Rich Skrenta writes that code is our enemy.
+
+Code is bad. It rots. It requires periodic maintenance. It has bugs that need to be found. New features mean old code has to be adapted. The more code you have, the more places there are for bugs to hide. The longer">
+    <meta property="og:url" content="https://blog.codinghorror.com/the-best-code-is-no-code-at-all/">
+    <meta property="og:image" content="https://blog.codinghorror.com/content/images/2025/09/viewing-yourself-in-the-rear-view-car-mirror.jpg">
+    <meta property="article:published_time" content="2007-05-30T12:00:00.000Z">
+    <meta property="article:modified_time" content="2025-09-28T07:05:39.000Z">
+    <meta property="article:tag" content="software development concepts">
+    <meta property="article:tag" content="programming languages">
+    <meta property="article:tag" content="technical practices">
+    
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="The Best Code is No Code At All">
+    <meta name="twitter:description" content="Rich Skrenta writes that code is our enemy.
+
+Code is bad. It rots. It requires periodic maintenance. It has bugs that need to be found. New features mean old code has to be adapted. The more code you have, the more places there are for bugs to hide. The longer">
+    <meta name="twitter:url" content="https://blog.codinghorror.com/the-best-code-is-no-code-at-all/">
+    <meta name="twitter:image" content="https://blog.codinghorror.com/content/images/2025/09/viewing-yourself-in-the-rear-view-car-mirror.jpg">
+    <meta name="twitter:label1" content="Written by">
+    <meta name="twitter:data1" content="Jeff Atwood">
+    <meta name="twitter:label2" content="Filed under">
+    <meta name="twitter:data2" content="software development concepts, programming languages, technical practices">
+    <meta property="og:image:width" content="440">
+    <meta property="og:image:height" content="480">
+    
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "publisher": {
+        "@type": "Organization",
+        "name": "Coding Horror",
+        "url": "https://blog.codinghorror.com/",
+        "logo": {
+            "@type": "ImageObject",
+            "url": "https://blog.codinghorror.com/content/images/2025/01/codinghorror-landscape.png"
+        }
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Jeff Atwood",
+        "image": {
+            "@type": "ImageObject",
+            "url": "https://blog.codinghorror.com/content/images/2025/01/coding-horror-logo-transparency.png",
+            "width": 1052,
+            "height": 895
+        },
+        "url": "https://blog.codinghorror.com/author/jeff-atwood/",
+        "sameAs": [
+            "https://infosec.exchange/@codinghorror"
+        ]
+    },
+    "headline": "The Best Code is No Code At All",
+    "url": "https://blog.codinghorror.com/the-best-code-is-no-code-at-all/",
+    "datePublished": "2007-05-30T12:00:00.000Z",
+    "dateModified": "2025-09-28T07:05:39.000Z",
+    "image": {
+        "@type": "ImageObject",
+        "url": "https://blog.codinghorror.com/content/images/2025/09/viewing-yourself-in-the-rear-view-car-mirror.jpg",
+        "width": 440,
+        "height": 480
+    },
+    "keywords": "software development concepts, programming languages, technical practices",
+    "description": "Rich Skrenta writes that code is our enemy.\n\nCode is bad. It rots. It requires periodic maintenance. It has bugs that need to be found. New features mean old code has to be adapted. The more code you have, the more places there are for bugs to hide. The longer checkouts or compiles take. The longer it takes a new employee to make sense of your system. If you have to refactor there’s more stuff to move around.\n\nCode is produced by engineers. To make more code requires more engineers. Engineers ha",
+    "mainEntityOfPage": "https://blog.codinghorror.com/the-best-code-is-no-code-at-all/"
+}
+    </script>
+
+    <meta name="generator" content="Ghost 6.21">
+    <link rel="alternate" type="application/rss+xml" title="Coding Horror" href="https://blog.codinghorror.com/rss/">
+    <script defer src="https://cdn.jsdelivr.net/ghost/portal@~2.65/umd/portal.min.js" data-i18n="true" data-ghost="https://blog.codinghorror.com/" data-key="4cdc4eb742c4969fd6d5cc1b82" data-api="https://codinghorror.ghost.io/ghost/api/content/" data-locale="en" crossorigin="anonymous"></script><style id="gh-members-styles">.gh-post-upgrade-cta-content,
+.gh-post-upgrade-cta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    text-align: center;
+    width: 100%;
+    color: #ffffff;
+    font-size: 16px;
+}
+
+.gh-post-upgrade-cta-content {
+    border-radius: 8px;
+    padding: 40px 4vw;
+}
+
+.gh-post-upgrade-cta h2 {
+    color: #ffffff;
+    font-size: 28px;
+    letter-spacing: -0.2px;
+    margin: 0;
+    padding: 0;
+}
+
+.gh-post-upgrade-cta p {
+    margin: 20px 0 0;
+    padding: 0;
+}
+
+.gh-post-upgrade-cta small {
+    font-size: 16px;
+    letter-spacing: -0.2px;
+}
+
+.gh-post-upgrade-cta a {
+    color: #ffffff;
+    cursor: pointer;
+    font-weight: 500;
+    box-shadow: none;
+    text-decoration: underline;
+}
+
+.gh-post-upgrade-cta a:hover {
+    color: #ffffff;
+    opacity: 0.8;
+    box-shadow: none;
+    text-decoration: underline;
+}
+
+.gh-post-upgrade-cta a.gh-btn {
+    display: block;
+    background: #ffffff;
+    text-decoration: none;
+    margin: 28px 0 0;
+    padding: 8px 18px;
+    border-radius: 4px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.gh-post-upgrade-cta a.gh-btn:hover {
+    opacity: 0.92;
+}</style><script async src="https://js.stripe.com/v3/"></script>
+    <script defer src="https://cdn.jsdelivr.net/ghost/sodo-search@~1.8/umd/sodo-search.min.js" data-key="4cdc4eb742c4969fd6d5cc1b82" data-styles="https://cdn.jsdelivr.net/ghost/sodo-search@~1.8/umd/main.css" data-sodo-search="https://codinghorror.ghost.io/" data-locale="en" crossorigin="anonymous"></script>
+    
+    <link href="https://blog.codinghorror.com/webmentions/receive/" rel="webmention">
+    <script defer src="/public/cards.min.js?v=cc5eb33be3"></script>
+    <link rel="stylesheet" type="text/css" href="/public/cards.min.css?v=cc5eb33be3">
+    <script defer src="/public/ghost-stats.min.js?v=cc5eb33be3" data-stringify-payload="false" data-datasource="analytics_events" data-storage="localStorage" data-host="https://blog.codinghorror.com/.ghost/analytics/api/v1/page_hit"  tb_site_uuid="ebaa2665-01a8-4415-8825-69d1f0e8fd19" tb_post_uuid="a2b7fe96-23b1-4723-98b2-1f5df044a7b8" tb_post_type="post" tb_member_uuid="undefined" tb_member_status="undefined"></script><style>:root {--ghost-accent-color: #143e7c;}</style>
+    <meta name="fediverse:creator" content="@codinghorror@infosec.exchange">
+<meta name="google-site-verification" content="bjsmFxELsrDwK1Uwr3bRYsofOI9RPVmHH8FNcbzWmr0" />
+
+</head>
+<body class="post-template tag-software-development-concepts tag-programming-languages tag-technical-practices has-sans-title has-sans-body">
+
+<div class="gh-viewport">
+
+    <header id="gh-navigation" class="gh-navigation is-stacked gh-outer">
+    <div class="gh-navigation-inner gh-inner">
+
+        <div class="gh-navigation-brand">
+            <a class="gh-navigation-logo is-title" href="https://blog.codinghorror.com">
+                    <img src="https://blog.codinghorror.com/content/images/2025/01/codinghorror-landscape.png" alt="Coding Horror">
+            </a>
+            <button class="gh-search gh-icon-button" aria-label="Search this site" data-ghost-search>
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" width="20" height="20"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg></button>            <button class="gh-burger gh-icon-button" aria-label="Menu">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 256 256"><path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128ZM40,72H216a8,8,0,0,0,0-16H40a8,8,0,0,0,0,16ZM216,184H40a8,8,0,0,0,0,16H216a8,8,0,0,0,0-16Z"></path></svg>                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 256 256"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"></path></svg>            </button>
+        </div>
+
+        <nav class="gh-navigation-menu">
+            <ul class="nav">
+    <li class="nav-archive"><a href="https://blog.codinghorror.com/page/2/">Archive</a></li>
+    <li class="nav-discourse"><a href="https://www.discourse.org/">Discourse</a></li>
+    <li class="nav-stack"><a href="https://www.stackexchange.com/">Stack</a></li>
+    <li class="nav-rgmii"><a href="https://rgmii.org/">RGMII</a></li>
+    <li class="nav-reading"><a href="https://blog.codinghorror.com/recommended-reading-for-developers/">Reading</a></li>
+    <li class="nav-about"><a href="https://blog.codinghorror.com/about-me/">About</a></li>
+    <li class="nav-shop"><a href="https://blog.codinghorror.com/own-a-coding-horror/">Shop</a></li>
+</ul>
+
+            <a class="gh-header-icon" href="https://infosec.exchange/@codinghorror" target="_blank">
+                <svg xmlns="http://www.w3.org/2000/svg" width="61.076954mm" height="65.47831mm" viewBox="0 0 216.4144 232.00976">
+    <path fill="#000" d="M211.80734 139.0875c-3.18125 16.36625-28.4925 34.2775-57.5625 37.74875-15.15875 1.80875-30.08375 3.47125-45.99875 2.74125-26.0275-1.1925-46.565-6.2125-46.565-6.2125 0 2.53375.15625 4.94625.46875 7.2025 3.38375 25.68625 25.47 27.225 46.39125 27.9425 21.11625.7225 39.91875-5.20625 39.91875-5.20625l.8675 19.09s-14.77 7.93125-41.08125 9.39c-14.50875.7975-32.52375-.365-53.50625-5.91875C9.23234 213.82 1.40609 165.31125.20859 116.09125c-.365-14.61375-.14-28.39375-.14-39.91875 0-50.33 32.97625-65.0825 32.97625-65.0825C49.67234 3.45375 78.20359.2425 107.86484 0h.72875c29.66125.2425 58.21125 3.45375 74.8375 11.09 0 0 32.975 14.7525 32.975 65.0825 0 0 .41375 37.13375-4.59875 62.915"/>
+    <path fill="#fff" d="M177.50984 80.077v60.94125h-24.14375v-59.15c0-12.46875-5.24625-18.7975-15.74-18.7975-11.6025 0-17.4175 7.5075-17.4175 22.3525v32.37625H96.20734V85.42325c0-14.845-5.81625-22.3525-17.41875-22.3525-10.49375 0-15.74 6.32875-15.74 18.7975v59.15H38.90484V80.077c0-12.455 3.17125-22.3525 9.54125-29.675 6.56875-7.3225 15.17125-11.07625 25.85-11.07625 12.355 0 21.71125 4.74875 27.8975 14.2475l6.01375 10.08125 6.015-10.08125c6.185-9.49875 15.54125-14.2475 27.8975-14.2475 10.6775 0 19.28 3.75375 25.85 11.07625 6.36875 7.3225 9.54 17.22 9.54 29.675"/>
+</svg>
+            </a>
+            <a class="gh-header-icon" href="https://blog.codinghorror.com/rss" target="_blank">
+                <svg width="20px" height="20px" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M5 11C9.41828 11 13 14.5817 13 19M5 5C12.732 5 19 11.268 19 19M7 18C7 18.5523 6.55228 19 6 19C5.44772 19 5 18.5523 5 18C5 17.4477 5.44772 17 6 17C6.55228 17 7 17.4477 7 18Z" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </a>
+        </nav>
+
+        <div class="gh-navigation-actions">
+                <button class="gh-search gh-icon-button" aria-label="Search this site" data-ghost-search>
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" width="20" height="20"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg></button>        </div>
+
+    </div>
+</header>
+
+    
+    <main class="gh-main">
+
+        <article class="gh-article post tag-software-development-concepts tag-programming-languages tag-technical-practices">
+
+            <header class="gh-article-header gh-canvas">
+                <h1 class="gh-article-title is-title">The Best Code is No Code At All</h1>
+
+                    <div class="gh-article-meta">
+                        <div class="gh-article-author-image instapaper_ignore">
+                                    <a href="/author/jeff-atwood/">
+                                        <img class="author-profile-image" src="/content/images/size/w160/2025/01/coding-horror-logo-transparency.png" alt="Jeff Atwood">
+                                    </a>
+                        </div>
+                        <div class="gh-article-meta-wrapper">
+                            <h4 class="gh-article-author-name"><a href="/author/jeff-atwood/">Jeff Atwood</a></h4>
+                            <div class="gh-article-meta-content">
+                                <time class="gh-article-meta-date" datetime="2007-05-30">30 May 2007</time>
+                                    <span class="gh-article-meta-length"><span class="bull">—</span> 3 min read</span>
+                                <a href="//blog.codinghorror.com/the-best-code-is-no-code-at-all/#discourse-comments"><span class="bull">—</span> Comments</a>
+                            </div>
+                        </div>
+                    </div>
+            </header>
+
+            <section class="gh-content gh-canvas is-body">
+                <p>Rich Skrenta writes that&nbsp;<a href="https://web.archive.org/web/20070602152648/http://www.skrenta.com/2007/05/code_is_our_enemy.html" rel="noreferrer">code is our enemy</a>.</p><blockquote>Code is bad. It rots. It requires periodic maintenance. It has bugs that need to be found. New features mean old code has to be adapted. The more code you have, the more places there are for bugs to hide. The longer checkouts or compiles take. The longer it takes a new employee to make sense of your system. If you have to refactor there’s more stuff to move around.<br><br>Code is produced by engineers. To make more code requires more engineers. Engineers have n^2 communication costs, and all that code they add to the system, while expanding its capability, also increases a whole basket of costs. You should do whatever possible to increase the productivity of individual programmers in terms of the expressive power of the code they write. Less code to do the same thing (and possibly better). Less programmers to hire. Less organizational communication costs.</blockquote><p>Rich hints at it here, but the real problem isn’t the code. The code, like a newborn babe, is blameless and innocent the minute it is written into the world. Code isn’t our enemy. You want to see the real enemy? <a href="https://blog.codinghorror.com/on-the-meaning-of-coding-horror/" rel="noreferrer">Go look in the mirror</a>. There’s your problem, right there.</p><figure class="kg-card kg-image-card"><img src="https://blog.codinghorror.com/content/images/2025/09/viewing-yourself-in-the-rear-view-car-mirror-1.jpg" class="kg-image" alt="" loading="lazy" width="440" height="480"></figure><p><strong>As a software developer, you are your own worst enemy. The sooner you realize that, the better off you’ll be.</strong></p><p>I know you have the best of intentions. We all do. We’re software developers; we love writing code. It’s what we do. We never met a problem we couldn’t solve with some duct tape, a jury-rigged coat hanger, and a pinch of code. But Wil Shipley argues that we should&nbsp;<a href="https://web.archive.org/web/20070601154320/http://wilshipley.com/blog/2007/05/pimp-my-code-part-14-be-inflexible.html" rel="noreferrer">rein in our natural tendencies</a> to write lots of code:</p>
+<!--kg-card-begin: html-->
+<blockquote> <p>
+  The fundamental nature of coding is that our task, as programmers, is to recognize that every decision we make is a trade-off. To be a master programmer is to understand the nature of these trade-offs, and be conscious of them in everything we write. </p>
+<p>
+In coding, you have many dimensions in which you can rate code: </p>
+  <p>
+   <ul>
+      <li>Brevity of code</li>
+      <li>Featurefulness</li>
+     <li>Speed of execution</li>
+     <li>Time spent coding</li>
+     <li>Robustness</li>
+     <li>Flexibility</li>
+   </ul> </p>
+  <p> Now, remember, these dimensions are all in opposition to one another. You can spend three days writing a routine which is really beautiful and fast, so you’ve gotten two of your dimensions up, but you’ve spent three days, so the “time spent coding” dimension is way down. </p>
+  <p> So, when is this worth it? How do we make these decisions? The answer turns out to be very sane, very simple, and also the one nobody, ever, listens to: <b>Start with brevity. Increase the other dimensions as required by testing.</b>
+  </p> </blockquote>
+<!--kg-card-end: html-->
+<p>I couldn’t agree more. I’ve given similar advice when I&nbsp;<a href="https://blog.codinghorror.com/code-smaller/">exhorted developers to Code Smaller</a>. And I’m not talking about a&nbsp;<a href="http://en.wikipedia.org/wiki/Reductio_ad_absurdum" rel="noopener noreferrer">reductio ad absurdum</a>&nbsp;contest where we use up all the clever tricks in our books to make the code fit into less physical space.&nbsp;<strong>I’m talking about practical, sensible strategies to reduce the volume of code an individual programmer has to read to understand how a program works.</strong>&nbsp;Here’s a trivial little example of what I’m talking about:</p>
+<!--kg-card-begin: html-->
+<pre>
+if (s == String.Empty)
+if (s == "") 
+</pre>
+<!--kg-card-end: html-->
+<p>It seems obvious to me that the latter case is better because it’s just plain&nbsp;<em>smaller</em>. And yet I’m virtually guaranteed to encounter developers who will fight me, almost&nbsp;<a href="https://blog.codinghorror.com/are-you-there-god-its-me-microsoft/">literally to the death</a>, because they’re absolutely convinced that the verbosity of&nbsp;<code>String.Empty</code>&nbsp;is somehow friendlier to the compiler. As if I care about that. As if&nbsp;<em>anyone</em>&nbsp;cared about that!</p><p>It’s painful for most software developers to acknowledge this, because they love code so much, but&nbsp;<strong>the best code is no code at all</strong>. Every new line of code you willingly bring into the world is code that has to be debugged, code that has to be read and understood, code that has to be supported. Every time you write new code, you should do so reluctantly, under duress, because you completely exhausted all your other options. Code is only our enemy because there are so many of us programmers writing so damn much of it. If you&nbsp;<em>can’t</em>&nbsp;get away with no code, the next best thing is to&nbsp;<strong>start with brevity</strong>.</p><p>If you love writing code – really, truly&nbsp;<em>love to write code</em>&nbsp;– you’ll love it enough to write as little of it as possible.</p>
+            </section>
+
+                <section class="gh-post-tags gh-canvas">
+                    <div class="gh-tags-list">
+                            <a href="/tag/software-development-concepts/" class="gh-tag">software development concepts</a>
+                            <a href="/tag/programming-languages/" class="gh-tag">programming languages</a>
+                            <a href="/tag/technical-practices/" class="gh-tag">technical practices</a>
+                    </div>
+                </section>
+
+            <footer class="gh-author-box">
+                <section class="gh-author">
+                        <a href="/author/jeff-atwood/">
+                            <img class="gh-author-image" src="/assets/images/codinghorror.png" alt="Jeff Atwood">
+                        </a>
+                    <div class="gh-author-details">
+                        <h4>Written by Jeff Atwood</h4>
+                        <p>Indoor enthusiast. Co-founder of Stack Overflow and Discourse. Disclaimer: I have no idea what I&#x27;m talking about. Let&#x27;s be kind to each other. Find me  <a href="https://infosec.exchange/@codinghorror">https://infosec.exchange/@codinghorror</a></p>
+                    </div>
+                </section>
+                <form data-members-form="subscribe" class="gh-subscribe-form gh-compagh-form gh-compact-form-lg">
+    <input data-members-email type="email" required="true" placeholder="Your email address" aria-label="Your email address">
+    <button type="submit" class="gh-btn">
+        ✉️ Subscribe
+    </button>
+    <p class="loading">⏲️ Busy signing you up.</p>
+    <p class="error">❗ Something's gone wrong. Please try again.</p>
+    <p class="success">✅ Success! Check your inbox (and your spam folder, just in case).</p>
+</form>
+            </footer>
+        </article>
+
+        <div class="gh-comments gh-canvas">
+            <div id="discourse-comments"></div>
+
+            <script>
+                var discourseUrl = "https://discourse.codinghorror.com/",
+                        discourseEmbedUrl = 'https://blog.codinghorror.com/the-best-code-is-no-code-at-all/';
+
+                (function() {
+                    var d = document.createElement('script'); d.type = 'text/javascript'; d.async = true;
+                    d.src = discourseUrl + 'javascripts/embed.js';
+                    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(d);
+
+                    var d = document.createElement('script'); d.type = 'text/javascript'; d.async = true;
+                    d.src = discourseUrl + 'javascripts/count.js';
+                    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(d);
+                })();
+            </script>
+        </div>
+
+    </main>
+
+        <footer>
+            <div class="gh-post-navigation">
+                <div class="gh-post-navigation-inner">
+                        <a href="/lets-build-a-grid/" class="gh-post-nav-prev gh-post-card">
+                            <div class="gh-post-nav-header">
+                                <span class="gh-post-nav-label">&larr; Previous Post</span>
+                                <h2 class="gh-post-nav-title">Let’s Build a Grid</h2>
+                            </div>
+                        </a>
+
+                        <a href="/gates-and-jobs-then-and-now/" class="gh-post-nav-next gh-post-card">
+                            <div class="gh-post-nav-header">
+                                <span class="gh-post-nav-label">Next Post &rarr;</span>
+                                <h2 class="gh-post-nav-title">Gates and Jobs, Then and Now</h2>
+                            </div>
+                        </a>
+                </div>
+            </div>
+        </footer>
+
+                    <section class="gh-container is-grid gh-outer">
+                        <div class="gh-container-inner gh-inner">
+                            <h2 class="gh-container-title">Related posts</h2>
+                            <div class="gh-feed">
+                                    <article class="gh-card post">
+
+            <a href="/complaint-driven-development/">
+                <figure class="gh-card-image">
+                    <img
+                        srcset="/content/images/size/w160/format/webp/2025/05/456d95c4-d289-490f-98a6-70bbc6c27bd9.png 160w,
+                                /content/images/size/w320/format/webp/2025/05/456d95c4-d289-490f-98a6-70bbc6c27bd9.png 320w,
+                                /content/images/size/w600/format/webp/2025/05/456d95c4-d289-490f-98a6-70bbc6c27bd9.png 600w,
+                                /content/images/size/w960/format/webp/2025/05/456d95c4-d289-490f-98a6-70bbc6c27bd9.png 960w,
+                                /content/images/size/w1200/format/webp/2025/05/456d95c4-d289-490f-98a6-70bbc6c27bd9.png 1200w,
+                                /content/images/size/w2000/format/webp/2025/05/456d95c4-d289-490f-98a6-70bbc6c27bd9.png 2000w"
+                        sizes="320px"
+                        src="/content/images/size/w600/2025/05/456d95c4-d289-490f-98a6-70bbc6c27bd9.png"
+                        alt="Complaint-Driven Development"
+                        loading="lazy"
+                    >
+                </figure>
+            </a>
+        <div class="gh-card-wrapper">
+            <h3 class="gh-card-title is-title">
+                <a href="/complaint-driven-development/">
+                    Complaint-Driven Development
+                </a>
+            </h3>
+                    <p class="gh-card-excerpt is-body">If I haven’t blogged much in the last year, it’s because we’ve been busy building that civilized discourse construction kit thing I talked about.
+
+(Yes, that’s actually the name of the company. This is what happens when you put me in charge of naming things. Pinball</p>
+            <footer class="gh-card-meta">
+                    <span class="gh-card-author">By Jeff Atwood</span>
+                &middot;
+                    <time class="gh-card-date" datetime="2014-02-17">17 Feb 2014</time>
+                <br />
+                <a class="gh-comment-count" href="//blog.codinghorror.com/complaint-driven-development/#discourse-comments">Comments</a>
+            </footer>
+        </div>
+</article>
+                                    <article class="gh-card post">
+
+            <a href="/rule-of-three/">
+                <figure class="gh-card-image">
+                    <img
+                        srcset="/content/images/size/w160/format/webp/2025/09/3-is-a-magic-number-schoolhouse-rock.jpg 160w,
+                                /content/images/size/w320/format/webp/2025/09/3-is-a-magic-number-schoolhouse-rock.jpg 320w,
+                                /content/images/size/w600/format/webp/2025/09/3-is-a-magic-number-schoolhouse-rock.jpg 600w,
+                                /content/images/size/w960/format/webp/2025/09/3-is-a-magic-number-schoolhouse-rock.jpg 960w,
+                                /content/images/size/w1200/format/webp/2025/09/3-is-a-magic-number-schoolhouse-rock.jpg 1200w,
+                                /content/images/size/w2000/format/webp/2025/09/3-is-a-magic-number-schoolhouse-rock.jpg 2000w"
+                        sizes="320px"
+                        src="/content/images/size/w600/2025/09/3-is-a-magic-number-schoolhouse-rock.jpg"
+                        alt="The Rule of Three"
+                        loading="lazy"
+                    >
+                </figure>
+            </a>
+        <div class="gh-card-wrapper">
+            <h3 class="gh-card-title is-title">
+                <a href="/rule-of-three/">
+                    The Rule of Three
+                </a>
+            </h3>
+                    <p class="gh-card-excerpt is-body">Every programmer ever born thinks whatever idea just popped out of their head into their editor is the most generalized, most flexible, most one-size-fits all solution that has ever been conceived. We think we’ve built software that is a general purpose solution to some set of problems, but we</p>
+            <footer class="gh-card-meta">
+                    <span class="gh-card-author">By Jeff Atwood</span>
+                &middot;
+                    <time class="gh-card-date" datetime="2013-07-18">18 Jul 2013</time>
+                <br />
+                <a class="gh-comment-count" href="//blog.codinghorror.com/rule-of-three/#discourse-comments">Comments</a>
+            </footer>
+        </div>
+</article>
+                                    <article class="gh-card post">
+
+            <a href="/today-is-goof-off-at-work-day/">
+                <figure class="gh-card-image">
+                    <img
+                        srcset="/content/images/size/w160/format/webp/2025/05/image-659.png 160w,
+                                /content/images/size/w320/format/webp/2025/05/image-659.png 320w,
+                                /content/images/size/w600/format/webp/2025/05/image-659.png 600w,
+                                /content/images/size/w960/format/webp/2025/05/image-659.png 960w,
+                                /content/images/size/w1200/format/webp/2025/05/image-659.png 1200w,
+                                /content/images/size/w2000/format/webp/2025/05/image-659.png 2000w"
+                        sizes="320px"
+                        src="/content/images/size/w600/2025/05/image-659.png"
+                        alt="Today is Goof Off at Work Day"
+                        loading="lazy"
+                    >
+                </figure>
+            </a>
+        <div class="gh-card-wrapper">
+            <h3 class="gh-card-title is-title">
+                <a href="/today-is-goof-off-at-work-day/">
+                    Today is Goof Off at Work Day
+                </a>
+            </h3>
+                    <p class="gh-card-excerpt is-body">When you’re hired at Google, you only have to do the job you were hired for 80% of the time. The other 20% of the time, you can work on whatever you like – provided it advances Google in some way. At least, that’s the theory.
+
+Google’s 20</p>
+            <footer class="gh-card-meta">
+                    <span class="gh-card-author">By Jeff Atwood</span>
+                &middot;
+                    <time class="gh-card-date" datetime="2012-08-01">01 Aug 2012</time>
+                <br />
+                <a class="gh-comment-count" href="//blog.codinghorror.com/today-is-goof-off-at-work-day/#discourse-comments">Comments</a>
+            </footer>
+        </div>
+</article>
+                                    <article class="gh-card post">
+
+            <a href="/coding-horror-the-book/">
+                <figure class="gh-card-image">
+                    <img
+                        srcset="/content/images/size/w160/format/webp/2025/02/jeff-atwood-effective-programming-more-than-writing-code-book-cover.jpg 160w,
+                                /content/images/size/w320/format/webp/2025/02/jeff-atwood-effective-programming-more-than-writing-code-book-cover.jpg 320w,
+                                /content/images/size/w600/format/webp/2025/02/jeff-atwood-effective-programming-more-than-writing-code-book-cover.jpg 600w,
+                                /content/images/size/w960/format/webp/2025/02/jeff-atwood-effective-programming-more-than-writing-code-book-cover.jpg 960w,
+                                /content/images/size/w1200/format/webp/2025/02/jeff-atwood-effective-programming-more-than-writing-code-book-cover.jpg 1200w,
+                                /content/images/size/w2000/format/webp/2025/02/jeff-atwood-effective-programming-more-than-writing-code-book-cover.jpg 2000w"
+                        sizes="320px"
+                        src="/content/images/size/w600/2025/02/jeff-atwood-effective-programming-more-than-writing-code-book-cover.jpg"
+                        alt="Coding Horror: The Book"
+                        loading="lazy"
+                    >
+                </figure>
+            </a>
+        <div class="gh-card-wrapper">
+            <h3 class="gh-card-title is-title">
+                <a href="/coding-horror-the-book/">
+                    Coding Horror: The Book
+                </a>
+            </h3>
+                    <p class="gh-card-excerpt is-body">If I had to make a list of the top 10 things I’ve done in my life that I regret, “writing a book” would definitely be on it. I took on the book project mostly because it was an opportunity to work with a few friends whose company I</p>
+            <footer class="gh-card-meta">
+                    <span class="gh-card-author">By Jeff Atwood</span>
+                &middot;
+                    <time class="gh-card-date" datetime="2012-07-10">10 Jul 2012</time>
+                <br />
+                <a class="gh-comment-count" href="//blog.codinghorror.com/coding-horror-the-book/#discourse-comments">Comments</a>
+            </footer>
+        </div>
+</article>
+                            </div>
+                        </div>
+                    </section>
+                <section class="gh-container is-grid gh-outer">
+                    <div class="gh-container-inner gh-inner">
+                        <h2 class="gh-container-title">Recent Posts</h2>
+                        <div class="gh-feed">
+                                <article class="gh-card post">
+
+            <a href="/launching-the-rural-guaranteed-minimum-income-initiative/">
+                <figure class="gh-card-image">
+                    <img
+                        srcset="/content/images/size/w160/format/webp/2026/02/rgmii-metro-vs-rural-counties-usa-2026-1.png 160w,
+                                /content/images/size/w320/format/webp/2026/02/rgmii-metro-vs-rural-counties-usa-2026-1.png 320w,
+                                /content/images/size/w600/format/webp/2026/02/rgmii-metro-vs-rural-counties-usa-2026-1.png 600w,
+                                /content/images/size/w960/format/webp/2026/02/rgmii-metro-vs-rural-counties-usa-2026-1.png 960w,
+                                /content/images/size/w1200/format/webp/2026/02/rgmii-metro-vs-rural-counties-usa-2026-1.png 1200w,
+                                /content/images/size/w2000/format/webp/2026/02/rgmii-metro-vs-rural-counties-usa-2026-1.png 2000w"
+                        sizes="320px"
+                        src="/content/images/size/w600/2026/02/rgmii-metro-vs-rural-counties-usa-2026-1.png"
+                        alt="map of the United States via rgmii.org showing all 3,143 counties by rural (gold) / metro (grey) and population"
+                        loading="lazy"
+                    >
+                </figure>
+            </a>
+        <div class="gh-card-wrapper">
+            <h3 class="gh-card-title is-title">
+                <a href="/launching-the-rural-guaranteed-minimum-income-initiative/">
+                    Launching The Rural Guaranteed Minimum Income Initiative
+                </a>
+            </h3>
+                    <p class="gh-card-excerpt is-body">It&#39;s been a year since I invited Americans to join us in a pledge to Share the American Dream:
+
+1. Support organizations you feel are effectively helping those most in need across America right now.
+
+2. Within the next five years, also contribute public dedications of time or</p>
+            <footer class="gh-card-meta">
+                    <span class="gh-card-author">By Jeff Atwood</span>
+                &middot;
+                    <time class="gh-card-date" datetime="2026-02-03">03 Feb 2026</time>
+                <br />
+                <a class="gh-comment-count" href="//blog.codinghorror.com/launching-the-rural-guaranteed-minimum-income-initiative/#discourse-comments">Comments</a>
+            </footer>
+        </div>
+</article>
+                                <article class="gh-card post">
+
+            <a href="/the-road-not-taken-is-guaranteed-minimum-income/">
+                <figure class="gh-card-image">
+                    <img
+                        srcset="/content/images/size/w160/format/webp/2025/03/IMG_7003-1.jpg 160w,
+                                /content/images/size/w320/format/webp/2025/03/IMG_7003-1.jpg 320w,
+                                /content/images/size/w600/format/webp/2025/03/IMG_7003-1.jpg 600w,
+                                /content/images/size/w960/format/webp/2025/03/IMG_7003-1.jpg 960w,
+                                /content/images/size/w1200/format/webp/2025/03/IMG_7003-1.jpg 1200w,
+                                /content/images/size/w2000/format/webp/2025/03/IMG_7003-1.jpg 2000w"
+                        sizes="320px"
+                        src="/content/images/size/w600/2025/03/IMG_7003-1.jpg"
+                        alt="The Road Not Taken is Guaranteed Minimum Income"
+                        loading="lazy"
+                    >
+                </figure>
+            </a>
+        <div class="gh-card-wrapper">
+            <h3 class="gh-card-title is-title">
+                <a href="/the-road-not-taken-is-guaranteed-minimum-income/">
+                    The Road Not Taken is Guaranteed Minimum Income
+                </a>
+            </h3>
+                <p class="gh-card-excerpt is-body">The dream is incomplete until we share it with our fellow Americans.</p>
+            <footer class="gh-card-meta">
+                    <span class="gh-card-author">By Jeff Atwood</span>
+                &middot;
+                    <time class="gh-card-date" datetime="2025-03-20">20 Mar 2025</time>
+                <br />
+                <a class="gh-comment-count" href="//blog.codinghorror.com/the-road-not-taken-is-guaranteed-minimum-income/#discourse-comments">Comments</a>
+            </footer>
+        </div>
+</article>
+                                <article class="gh-card post">
+
+            <a href="/lets-talk-about-the-american-dream/">
+                <figure class="gh-card-image">
+                    <img
+                        srcset="/content/images/size/w160/format/webp/2025/03/rebuildingamericandream25-page_v.2.jpg 160w,
+                                /content/images/size/w320/format/webp/2025/03/rebuildingamericandream25-page_v.2.jpg 320w,
+                                /content/images/size/w600/format/webp/2025/03/rebuildingamericandream25-page_v.2.jpg 600w,
+                                /content/images/size/w960/format/webp/2025/03/rebuildingamericandream25-page_v.2.jpg 960w,
+                                /content/images/size/w1200/format/webp/2025/03/rebuildingamericandream25-page_v.2.jpg 1200w,
+                                /content/images/size/w2000/format/webp/2025/03/rebuildingamericandream25-page_v.2.jpg 2000w"
+                        sizes="320px"
+                        src="/content/images/size/w600/2025/03/rebuildingamericandream25-page_v.2.jpg"
+                        alt="Let&#x27;s Talk About The American Dream"
+                        loading="lazy"
+                    >
+                </figure>
+            </a>
+        <div class="gh-card-wrapper">
+            <h3 class="gh-card-title is-title">
+                <a href="/lets-talk-about-the-american-dream/">
+                    Let&#x27;s Talk About The American Dream
+                </a>
+            </h3>
+                    <p class="gh-card-excerpt is-body">A few months ago I wrote about what it means to stay gold — to hold on to the best parts of ourselves, our communities, and the American Dream itself. But staying gold isn’t passive. It takes work. It takes action. It takes hard conversations that ask us to confront</p>
+            <footer class="gh-card-meta">
+                    <span class="gh-card-author">By Jeff Atwood</span>
+                &middot;
+                    <time class="gh-card-date" datetime="2025-03-05">05 Mar 2025</time>
+                <br />
+                <a class="gh-comment-count" href="//blog.codinghorror.com/lets-talk-about-the-american-dream/#discourse-comments">Comments</a>
+            </footer>
+        </div>
+</article>
+                                <article class="gh-card post">
+
+            <a href="/stay-gold-america/">
+                <figure class="gh-card-image">
+                    <img
+                        srcset="/content/images/size/w160/format/webp/2025/02/share-landscape-1.png 160w,
+                                /content/images/size/w320/format/webp/2025/02/share-landscape-1.png 320w,
+                                /content/images/size/w600/format/webp/2025/02/share-landscape-1.png 600w,
+                                /content/images/size/w960/format/webp/2025/02/share-landscape-1.png 960w,
+                                /content/images/size/w1200/format/webp/2025/02/share-landscape-1.png 1200w,
+                                /content/images/size/w2000/format/webp/2025/02/share-landscape-1.png 2000w"
+                        sizes="320px"
+                        src="/content/images/size/w600/2025/02/share-landscape-1.png"
+                        alt="Stay Gold, America"
+                        loading="lazy"
+                    >
+                </figure>
+            </a>
+        <div class="gh-card-wrapper">
+            <h3 class="gh-card-title is-title">
+                <a href="/stay-gold-america/">
+                    Stay Gold, America
+                </a>
+            </h3>
+                <p class="gh-card-excerpt is-body">We are at an unprecedented point in American history, and I&#x27;m concerned we may lose sight of the American Dream.</p>
+            <footer class="gh-card-meta">
+                    <span class="gh-card-author">By Jeff Atwood</span>
+                &middot;
+                    <time class="gh-card-date" datetime="2025-01-06">06 Jan 2025</time>
+                <br />
+                <a class="gh-comment-count" href="//blog.codinghorror.com/stay-gold-america/#discourse-comments">Comments</a>
+            </footer>
+        </div>
+</article>
+                        </div>
+                    </div>
+                </section>
+<section class="gh-container is-grid gh-outer" style="text-align: center;">
+    <a href="/random" class="gh-button gh-home-button">I&rsquo;m feeling unlucky... 🎲</a>
+    &nbsp;
+    <a href="/page/2/">See All Posts</a>
+</section>
+
+
+    <footer class="gh-footer gh-outer">
+    <div class="gh-footer-inner gh-inner">
+
+        <div class="gh-footer-bar">
+            <span class="gh-footer-logo is-title">
+                    <a href="/">
+                        <img src="https://blog.codinghorror.com/content/images/2025/01/codinghorror-landscape.png" alt="Coding Horror">
+                    </a>
+            </span>
+            <nav class="gh-footer-menu">
+                <ul class="nav">
+    <li class="nav-archive"><a href="https://blog.codinghorror.com/page/2/">Archive</a></li>
+    <li class="nav-reading"><a href="https://blog.codinghorror.com/recommended-reading-for-developers/">Reading</a></li>
+    <li class="nav-about"><a href="https://blog.codinghorror.com/about-me/">About</a></li>
+    <li class="nav-shop"><a href="https://blog.codinghorror.com/own-a-coding-horror/">Shop</a></li>
+</ul>
+
+                <div class="gh-footer-socials">
+                    <a class="gh-header-icon" href="https://blog.codinghorror.com/rss" target="_blank">
+                        <svg width="20px" height="20px" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M5 11C9.41828 11 13 14.5817 13 19M5 5C12.732 5 19 11.268 19 19M7 18C7 18.5523 6.55228 19 6 19C5.44772 19 5 18.5523 5 18C5 17.4477 5.44772 17 6 17C6.55228 17 7 17.4477 7 18Z" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </a>
+                    <a rel="me" class="gh-header-icon" href="https://infosec.exchange/@codinghorror" target="_blank">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="61.076954mm" height="65.47831mm" viewBox="0 0 216.4144 232.00976">
+    <path fill="#000" d="M211.80734 139.0875c-3.18125 16.36625-28.4925 34.2775-57.5625 37.74875-15.15875 1.80875-30.08375 3.47125-45.99875 2.74125-26.0275-1.1925-46.565-6.2125-46.565-6.2125 0 2.53375.15625 4.94625.46875 7.2025 3.38375 25.68625 25.47 27.225 46.39125 27.9425 21.11625.7225 39.91875-5.20625 39.91875-5.20625l.8675 19.09s-14.77 7.93125-41.08125 9.39c-14.50875.7975-32.52375-.365-53.50625-5.91875C9.23234 213.82 1.40609 165.31125.20859 116.09125c-.365-14.61375-.14-28.39375-.14-39.91875 0-50.33 32.97625-65.0825 32.97625-65.0825C49.67234 3.45375 78.20359.2425 107.86484 0h.72875c29.66125.2425 58.21125 3.45375 74.8375 11.09 0 0 32.975 14.7525 32.975 65.0825 0 0 .41375 37.13375-4.59875 62.915"/>
+    <path fill="#fff" d="M177.50984 80.077v60.94125h-24.14375v-59.15c0-12.46875-5.24625-18.7975-15.74-18.7975-11.6025 0-17.4175 7.5075-17.4175 22.3525v32.37625H96.20734V85.42325c0-14.845-5.81625-22.3525-17.41875-22.3525-10.49375 0-15.74 6.32875-15.74 18.7975v59.15H38.90484V80.077c0-12.455 3.17125-22.3525 9.54125-29.675 6.56875-7.3225 15.17125-11.07625 25.85-11.07625 12.355 0 21.71125 4.74875 27.8975 14.2475l6.01375 10.08125 6.015-10.08125c6.185-9.49875 15.54125-14.2475 27.8975-14.2475 10.6775 0 19.28 3.75375 25.85 11.07625 6.36875 7.3225 9.54 17.22 9.54 29.675"/>
+</svg>
+                    </a>
+                </div>
+            </nav>
+            <div class="gh-footer-copyright">
+                Powered by <a href="https://ghost.org/" target="_blank" rel="noopener">Ghost</a> &middot; Themed by <a href="https://oboxthemes.com">Obox</a>
+            </div>
+        </div>
+
+    </div>
+</footer>
+
+</div>
+
+    <div class="pswp" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="pswp__bg"></div>
+
+    <div class="pswp__scroll-wrap">
+        <div class="pswp__container">
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+            <div class="pswp__item"></div>
+        </div>
+
+        <div class="pswp__ui pswp__ui--hidden">
+            <div class="pswp__top-bar">
+                <div class="pswp__counter"></div>
+
+                <button class="pswp__button pswp__button--close" title="Close (Esc)"></button>
+                <button class="pswp__button pswp__button--share" title="Share"></button>
+                <button class="pswp__button pswp__button--fs" title="Toggle fullscreen"></button>
+                <button class="pswp__button pswp__button--zoom" title="Zoom in/out"></button>
+
+                <div class="pswp__preloader">
+                    <div class="pswp__preloader__icn">
+                        <div class="pswp__preloader__cut">
+                            <div class="pswp__preloader__donut"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pswp__share-modal pswp__share-modal--hidden pswp__single-tap">
+                <div class="pswp__share-tooltip"></div>
+            </div>
+
+            <button class="pswp__button pswp__button--arrow--left" title="Previous (arrow left)"></button>
+            <button class="pswp__button pswp__button--arrow--right" title="Next (arrow right)"></button>
+
+            <div class="pswp__caption">
+                <div class="pswp__caption__center"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="https://blog.codinghorror.com/assets/built/source.js?v=cc5eb33be3"></script>
+
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-5QDLQHE1MQ"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-5QDLQHE1MQ');
+</script>
+
+</body>
+</html>

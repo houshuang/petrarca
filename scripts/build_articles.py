@@ -485,6 +485,8 @@ def clean_markdown(text: str) -> str:
     heading normalization, social sharing buttons, related articles sections.
     """
     # Remove Wikipedia [edit] section links (various bracket patterns)
+    # Must handle [[edit]](URL) first — double-bracket with URL outside
+    text = re.sub(r'\s*\[\[edit\]\]\([^)]*\)', '', text)
     text = re.sub(r'\s*\[?\[edit\]\([^)]*\)\]?', '', text)
     text = re.sub(r'\s*\[\[?edit\]?\]', '', text)
 
@@ -501,27 +503,139 @@ def clean_markdown(text: str) -> str:
     # Remove empty link references like [](/wiki/...) or [ ](/wiki/...)
     text = re.sub(r'\[\s*\]\([^)]+\)', '', text)
 
+    # Strip arXiv / academic nav links
+    text = re.sub(r'(?im)^\s*\[View PDF\]\([^)]*\)\s*$', '', text)
+    text = re.sub(r'(?im)^\s*\[HTML[^\]]*\]\([^)]*\)\s*$', '', text)
+    text = re.sub(r'(?im)^\s*\[Download PDF\]\([^)]*\)\s*$', '', text)
+    text = re.sub(r'(?im)^\s*\[Full Text[^\]]*\]\([^)]*\)\s*$', '', text)
+
+    # Strip forwarded email header blocks (must come before arXiv metadata
+    # stripping, since Subjects?: also matches email Subject: headers)
+    text = re.sub(
+        r'^-{3,}\s*Forwarded message\s*-{3,}\s*\n'
+        r'(?:(?:From|Date|Subject|To|Cc|Bcc):.*\n)*',
+        '', text)
+
+    # Strip arXiv metadata lines and PDF artifacts
+    text = re.sub(r'(?im)^Subjects?:.*$', '', text)
+    text = re.sub(r'(?im)^Cite as:.*arXiv.*$', '', text)
+    text = re.sub(r'(?im)^\[Submitted on[^\]]*\]\s*$', '', text)
+    text = re.sub(r'(?im)^arXiv:\d{4}\.\d{4,5}(?:v\d+)?\s*\[.*$', '', text)
+
+    # Strip PDF page headers/footers (Author et al. — N — Month Year)
+    text = re.sub(r'(?im)^\w+(?:\s+\w+)?\s+et\s+al\.\s+—\s+\d+\s+—\s+\w+\s+\d{4}\s*$', '', text)
+
+    # Strip author affiliation/correspondence lines
+    text = re.sub(r'(?im)^[∗\*]?Corresponding author.*$', '', text)
+
     # Strip nav menus, cookie banners, and subscribe/follow cruft
     _cruft_patterns = [
-        r'(?im)^.*cookie\s*(policy|notice|consent|banner).*$',
+        # Cookie banners
+        r'(?im)^.*cookie\s*(policy|notice|consent|banner|settings?).*$',
         r'(?im)^.*accept\s*(all\s*)?cookies.*$',
         r'(?im)^.*we\s+use\s+cookies.*$',
+        r'(?im)^.*manage\s+cookies.*$',
+        r'(?im)^.*do\s+not\s+s(ell|hare)\s+my\s+personal.*$',
+        # Subscribe / newsletter / sign-up
         r'(?im)^.*subscribe\s+(to\s+)?(our\s+)?(newsletter|mailing\s+list).*$',
         r'(?im)^.*sign\s+up\s+for\s+(our\s+)?(free\s+)?(newsletter|updates).*$',
+        r'(?im)^.*enter\s+your\s+email.*$',
+        # Follow / share / social
         r'(?im)^.*follow\s+us\s+on\s+(twitter|facebook|instagram|x|linkedin).*$',
         r'(?im)^.*share\s+(this|on)\s+(twitter|facebook|linkedin|x|email).*$',
         r'(?im)^.*(tweet|share|pin|email)\s+this\s*(article|post|story)?.*$',
+        r'(?im)^\*{0,2}Share:?\*{0,2}\s+.*(?:Twitter|Facebook|LinkedIn|Reddit).*$',
+        # Navigation / chrome
         r'(?im)^.*skip\s+to\s+(main\s+)?content.*$',
         r'(?im)^.*(home|about|contact|privacy|terms)\s*[|/]\s*(home|about|contact|privacy|terms).*$',
+        r'(?im)^Menu\s*[☰≡]?\s*$',
+        r'(?im)^Toggle\s+navigation\s*$',
+        r'(?im)^Navigation\s+Menu\s*$',
+        r'(?im)^Search\s*[🔍🔎]?\s*$',
+        r'(?im)^Trending:?\s*\[.*$',
+        # Sign in / login / subscribe (standalone or as link)
+        r'(?im)^Sign\s+in\s*$',
+        r'(?im)^Sign\s+up\s*$',
+        r'(?im)^Log\s+in\s*$',
+        r'(?im)^Subscribe\s*$',
+        r'(?im)^\[Sign\s+(?:in|up)\]\(.*\)\s*$',
+        r'(?im)^\[Log\s+in\]\(.*\)\s*$',
+        r'(?im)^\[Subscribe[^\]]*\]\(.*\)\s*$',
+        # Platform-specific chrome (Substack, Medium, Reddit, GitHub)
+        r'(?im)^Open\s+in\s+app\s*$',
+        r'(?im)^Member[\s-]+only\s+story\s*$',
+        r'(?im)^This\s+post\s+is\s+for\s+paid\s+subscribers?\s*$',
+        r'(?im)^Already\s+a\s+(paid\s+)?subscriber\?.*$',
+        r'(?im)^.*(?:Start\s+Writing|Get\s+the\s+app)\s*$',
+        r'(?im)^.*(?:Substack|Medium)\s+is\s+the\s+home.*$',
+        r'(?im)^(?:Write|Listen|Share|More)\s*$',
+        r'(?im)^.*(?:clapping|clap)\s+up\s+to\s+\d+.*$',
+        r'(?im)^.*\d+\s+(?:Likes?|Claps?)\s*·\s*\d+\s+Comments?.*$',
+        r'(?im)^.*(?:Get\s+the\s+\w+\s+app|Download\s+on\s+the\s+App\s+Store|Get\s+it\s+on.+Google\s+Play).*$',
+        r'(?im)^(?:Reddit\s+app|Reddit\s+coins|Reddit\s+premium).*$',
+        r'(?im)^Text\s+to\s+speech\s*$',
+        r'(?im)^.*View\s+remaining\s+\d+\s+comments?.*$',
+        r'(?im)^.*\[?See\s+all\s+from\b.*$',
+        r'(?im)^Recommended\s+from\s+\w.*$',
+        r'(?im)^More\s+from\s+\w.*$',
+        # Engagement CTA lines with emoji
+        r'(?im)^[👏💬🔔📧]\s+.{0,60}$',
+        # Follower counts, engagement stats
+        r'(?im)^\d[\d,.]*[KMkm]?\s+Followers?\b.*$',
+        r'(?im)^.*\d[\d,.]*\s+Followers?\s*·\s*Writer\s+for\b.*$',
+        r'(?im)^Written\s+by\s+\w.*$',
+        # Paywall indicators
+        r'(?im)^[∙·•]\s*Paid\s*$',
+        r'(?im)^--\s*$',
+        # "· Follow" or "Follow" after author info
+        r'(?im)^(?:\w[\w\s]*·\s*)?Follow\s*$',
+        # Stray image placeholders (image link with no useful alt text)
+        r'(?im)^\[!\]\(.*\)\s*$',
+        r'(?im)^\[!\[.*\]\(.*\)\]\(.*\)\s*$',
+        # Ad markers
+        r'(?im)^ADVERTIS[EI]MENT\s*$',
+        r'(?im)^SPONSORED\s*$',
+        r'(?im)^AD\s*$',
+        # App store badge images
+        r'(?im)^\[!\[.*(?:App\s+Store|Google\s+Play).*\]\(.*\)\]\(.*\)\s*$',
+        # Vote / award lines (Reddit-style)
+        r'(?im)^[⬆⬇]\s*[\d,]+\s*[⬆⬇]?\s*$',
+        r'(?im)^[🏅🥈🥉💎]\s+.*$',
+        r'(?im)^Sort\s+by:.*$',
+        # Author follow lines
+        r'(?im)^.*\[Follow\s+@\w+\].*$',
+        # Email footer and unsubscribe
+        r'(?im)^.*\bunsubscribe\b.*$',
+        r'(?im)^.*\bopt[\s-]?out\b.*$',
+        r'(?im)^.*view\s+in\s+browser.*$',
+        r'(?im)^.*you\s+received\s+this\s+(email|message|newsletter).*$',
+        r'(?im)^.*sent\s+from\s+my\s+\w+.*$',
+        r'(?im)^.*manage\s+(your\s+)?(email\s+)?preferences.*$',
+        # Boilerplate / funding appeals
+        r'(?im)^.*buy\s+me\s+a\s+coffee.*$',
+        r'(?im)^.*(?:support|donate|back)\s+(?:us|me)\s+on\s+(?:patreon|ko-?fi|open\s*collective).*$',
+        r'(?im)^.*(?:patreon|buymeacoffee|ko-fi)\.com/.*$',
+        r'(?im)^copyright\s+\d{4}.*$',
+        r'(?im)^.*all\s+rights\s+reserved.*$',
+        # Universal copyright symbol
+        r'(?im)^©\s*\d{4}.*$',
+        # Multilingual subscribe/follow/newsletter (NO/SV/DA/DE/FR/ES/IT/ID/ZH)
+        r'(?im)^.*(?:abonner|prenumerera|abonnér|abonnieren|abonnez|suscríbete|iscriviti|berlangganan)\b.*(?:nyhetsbrev|nyhetsbrevet|newsletter|noticias|notizie).*$',
+        r'(?im)^.*(?:følg|följ|folgen|suivez|síguenos|seguici|ikuti)\b.*(?:facebook|twitter|instagram|linkedin|x\.com).*$',
+        r'(?im)^.*关注我们.*$',
+        r'(?im)^.*(?:alle\s+rettigheter|alla\s+rättigheter|alle\s+rechte|tous\s+droits|todos\s+los\s+derechos|tutti\s+i\s+diritti)\s+(?:forbeholdt|förbehållna|vorbehalten|réservés|reservados|riservati).*$',
+        # Multilingual nav footers (privacy|terms|about|contact equivalents)
+        r'(?im)^.*(?:personvern|integritet|datenschutz|confidentialité|privacidad|privacy)\s*[|/].*(?:vilkår|villkor|nutzung|conditions|términos|condizioni|terms).*$',
     ]
     for pattern in _cruft_patterns:
         text = re.sub(pattern, '', text)
 
-    # Strip "Related articles" / "You might also like" sections at the end
+    # Strip "Related articles" / "Read Next" / "Recommended" sections (and everything after)
     text = re.sub(
         r'(?im)\n#{1,3}\s*(related\s+(articles?|posts?|stories?|reading)|'
-        r'you\s+might\s+also\s+like|recommended|more\s+from|'
-        r'also\s+on|popular\s+(articles?|posts?)|trending).*$',
+        r'you\s+might\s+also\s+like|recommended(\s+from)?|more\s+from|'
+        r'also\s+on|popular\s+(articles?|posts?)|trending|'
+        r'read\s+next|star\s+history|comments?\s*\(\d+\)).*$',
         '', text, flags=re.DOTALL
     )
 
@@ -551,6 +665,26 @@ def clean_markdown(text: str) -> str:
     # Ensure code blocks have proper newlines around them
     text = re.sub(r'([^\n])(\n```)', r'\1\n\2', text)
     text = re.sub(r'(```\n)([^\n])', r'\1\n\2', text)
+
+    # Strip residual HTML tags that survived markdown conversion
+    text = re.sub(r'<(?:div|span|aside|section|header|nav|figure|figcaption)[^>]*>', '', text)
+    text = re.sub(r'</(?:div|span|aside|section|header|nav|figure|figcaption)>', '', text)
+    text = re.sub(r'<(?:footer|script|style|noscript|iframe)[^>]*>.*?</(?:footer|script|style|noscript|iframe)>', '', text, flags=re.DOTALL)
+    text = re.sub(r'<img\s+[^>]*/?>', '', text)
+    text = re.sub(r'<input[^>]*/?\s*>', '', text)
+    text = re.sub(r'<button[^>]*>[^<]*</button>', '', text)
+    # Strip markdown CSS class annotations {.class-name}
+    text = re.sub(r'\{[.#][\w-]+\}', '', text)
+    # Strip "MENU CLOSE" / "OPEN MENU" / "CLOSE" nav toggles
+    text = re.sub(r'(?im)^(?:MENU\s*(?:CLOSE|OPEN)|(?:OPEN|CLOSE)\s*MENU)\s*$', '', text)
+    # Strip HN-style footers (Guidelines | FAQ | Lists | ...)
+    text = re.sub(r'(?im)^(?:Guidelines|FAQ|Lists|API|Security|Legal).*$', '', text)
+    # Strip bare "Search:" prompts
+    text = re.sub(r'(?im)^Search:?\s*$', '', text)
+    # Strip "Powered by X" lines
+    text = re.sub(r'(?im)^Powered\s+by\s+\w.*$', '', text)
+    # Strip duplicate heading markers (# # Title → # Title)
+    text = re.sub(r'^(#{1,6})\s+\1\s+', r'\1 ', text, flags=re.MULTILINE)
 
     # Collapse multiple spaces left by removals
     text = re.sub(r'  +', ' ', text)

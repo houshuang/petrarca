@@ -1,0 +1,5 @@
+{
+  "title": "GitHub README — badges, chrome, contributor images",
+  "description": "Badge images, star/fork/watcher counts, Sign in/up nav, Toggle navigation, Star History chart, contributor images, GitHub footer with legal links, Manage cookies, Languages percentages, Activity stats",
+  "expected_removed": ["Skip to content", "Toggle navigation", "Sign in", "GitHub, Inc", "Manage cookies", "Do not share my personal"]
+}

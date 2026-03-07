@@ -1,0 +1,10 @@
+{
+  "title": "Codified Context: Infrastructure for AI Agents",
+  "description": "arXiv paper with nav links, PDF buttons, and bibliography",
+  "url": "https://arxiv.org/abs/2602.20478",
+  "expected_removed": [
+    "\\[View PDF\\]",
+    "\\[HTML \\(experimental\\)\\]",
+    "Subjects:.*Software Engineering"
+  ]
+}

@@ -1,0 +1,789 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+<head>
+<meta content = 'uft-8' name = 'charset'></meta>
+
+<title>Is High Quality Software Worth the Cost?</title>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8" /><script defer src="https://cloud.umami.is/script.js" data-website-id="eb12527f-b713-4afa-905a-8a50f8a7f157"></script>
+<meta content = 'summary_large_image' name = 'twitter:card'></meta>
+
+<meta content = '16665197' name = 'twitter:site:id'></meta>
+
+<meta content = '@martinfowler' name = 'twitter:site'></meta>
+
+<meta content = 'Is High Quality Software Worth the Cost?' property = 'og:title'></meta>
+
+<meta content = 'https://martinfowler.com/articles/is-quality-worth-cost.html' property = 'og:url'></meta>
+
+<meta content = 'We usually perceive that it costs more to get higher quality, but software internal quality actually reduces costs.' property = 'og:description'></meta>
+
+<meta content = 'https://martinfowler.com/articles/is-quality-worth-cost/card.png' property = 'og:image'></meta>
+
+<meta content = 'martinfowler.com' property = 'og:site_name'></meta>
+
+<meta content = 'article' property = 'og:type'></meta>
+
+<meta content = '2019-05-29' property = 'og:article:modified_time'></meta>
+
+<meta content = 'width=device-width, initial-scale=1' name = 'viewport'></meta>
+
+<link href = 'is-quality-worth-cost.css' rel = 'stylesheet' type = 'text/css'></link>
+</head>
+
+<body><header id = 'banner' style = 'background-image: url("/banner.png"); background-repeat: no-repeat'>
+
+<div class = 'name-logo'><a href = 'https://martinfowler.com'><img src = '/mf-name-white.png'></img></a></div>
+  <div class = 'search'>
+    <!-- SiteSearch Google -->
+    <form method='GET' action="https://www.google.com/search">
+      <input type='hidden' name='ie' value='UTF-8'/>
+      <input type='hidden' name='oe' value='UTF-8'/>
+      <input class = 'field' type='text' 
+             name='q' size='15' maxlength='255' value=""/>
+      <button class = 'button' type='submit' 
+             name='btnG' value=" " title = "Search"/>
+      <input type='hidden' name='domains' value="martinfowler.com"/>
+      <input type='hidden' name='sitesearch' value=""/> 
+      <input
+          type='hidden' name='sitesearch' value="martinfowler.com"/>
+    </form>
+  </div>
+
+<div class = 'menu-button navmenu-button'><a class = 'icon icon-bars' href = '#navmenu-bottom'></a></div>
+
+<nav class = 'top-menu'>
+<ul>
+<li><a class = '' href = 'https://refactoring.com'>Refactoring</a></li>
+
+<li><a class = '' href = '/agile.html'>Agile</a></li>
+
+<li><a class = '' href = '/architecture'>Architecture</a></li>
+
+<li><a class = '' href = '/aboutMe.html'>About</a></li>
+
+<li><a class = 'tw' href = 'https://www.thoughtworks.com/engineering'>Thoughtworks</a></li>
+
+<li><a class = 'icon icon-rss' href = '/feed.atom' title = 'feed'></a></li>
+
+<li><a class = 'icon icon-twitter' href = 'https://www.twitter.com/martinfowler' title = 'Twitter stream'></a></li>
+
+<li class = 'icon'><a href = 'https://toot.thoughtworks.com/@mfowler' title = 'Mastodon stream'><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M21.2595 13.9898C20.9852 15.4006 18.8033 16.9446 16.2974 17.2439C14.9907 17.3998 13.7041 17.5431 12.3321 17.4802C10.0885 17.3774 8.31809 16.9446 8.31809 16.9446C8.31809 17.163 8.33156 17.371 8.3585 17.5655C8.65019 19.7797 10.5541 19.9124 12.3576 19.9742C14.1779 20.0365 15.7987 19.5254 15.7987 19.5254L15.8735 21.1711C15.8735 21.1711 14.6003 21.8548 12.3321 21.9805C11.0814 22.0493 9.52849 21.9491 7.71973 21.4703C3.79684 20.432 3.12219 16.2504 3.01896 12.0074C2.98749 10.7477 3.00689 9.55981 3.00689 8.56632C3.00689 4.22771 5.84955 2.95599 5.84955 2.95599C7.2829 2.29772 9.74238 2.0209 12.2993 2H12.3621C14.919 2.0209 17.3801 2.29772 18.8133 2.95599C18.8133 2.95599 21.6559 4.22771 21.6559 8.56632C21.6559 8.56632 21.6916 11.7674 21.2595 13.9898ZM18.3029 8.9029C18.3029 7.82924 18.0295 6.97604 17.4805 6.34482C16.9142 5.71359 16.1726 5.39001 15.2522 5.39001C14.187 5.39001 13.3805 5.79937 12.8473 6.61819L12.3288 7.48723L11.8104 6.61819C11.2771 5.79937 10.4706 5.39001 9.40554 5.39001C8.485 5.39001 7.74344 5.71359 7.17719 6.34482C6.62807 6.97604 6.3547 7.82924 6.3547 8.9029V14.1562H8.43597V9.05731C8.43597 7.98246 8.88822 7.4369 9.79281 7.4369C10.793 7.4369 11.2944 8.08408 11.2944 9.36376V12.1547H13.3634V9.36376C13.3634 8.08408 13.8646 7.4369 14.8648 7.4369C15.7694 7.4369 16.2216 7.98246 16.2216 9.05731V14.1562H18.3029V8.9029Z"></path></svg>
+</a></li>
+
+<li class = 'icon'><a href = 'https://www.linkedin.com/in/martin-fowler-com/' title = 'LinkedIn'><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M4.00098 3H20.001C20.5533 3 21.001 3.44772 21.001 4V20C21.001 20.5523 20.5533 21 20.001 21H4.00098C3.44869 21 3.00098 20.5523 3.00098 20V4C3.00098 3.44772 3.44869 3 4.00098 3ZM5.00098 5V19H19.001V5H5.00098ZM7.50098 9C6.67255 9 6.00098 8.32843 6.00098 7.5C6.00098 6.67157 6.67255 6 7.50098 6C8.3294 6 9.00098 6.67157 9.00098 7.5C9.00098 8.32843 8.3294 9 7.50098 9ZM6.50098 10H8.50098V17.5H6.50098V10ZM12.001 10.4295C12.5854 9.86534 13.2665 9.5 14.001 9.5C16.072 9.5 17.501 11.1789 17.501 13.25V17.5H15.501V13.25C15.501 12.2835 14.7175 11.5 13.751 11.5C12.7845 11.5 12.001 12.2835 12.001 13.25V17.5H10.001V10H12.001V10.4295Z"></path></svg>
+</a></li>
+
+<li class = 'icon'><a href = 'https://bsky.app/profile/martinfowler.com' title = 'BlueSky'><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 11.3884C11.0942 9.62673 8.62833 6.34423 6.335 4.7259C4.13833 3.17506 3.30083 3.4434 2.75167 3.69256C2.11583 3.9784 2 4.95506 2 5.52839C2 6.10339 2.315 10.2367 2.52 10.9276C3.19917 13.2076 5.61417 13.9776 7.83917 13.7309C4.57917 14.2142 1.68333 15.4017 5.48083 19.6292C9.65833 23.9542 11.2058 18.7017 12 16.0392C12.7942 18.7017 13.7083 23.7651 18.4442 19.6292C22 16.0392 19.4208 14.2142 16.1608 13.7309C18.3858 13.9784 20.8008 13.2076 21.48 10.9276C21.685 10.2376 22 6.10256 22 5.52923C22 4.95423 21.8842 3.97839 21.2483 3.6909C20.6992 3.44256 19.8617 3.17423 17.665 4.72423C15.3717 6.34506 12.9058 9.62756 12 11.3884Z"></path></svg></a></li>
+</ul>
+</nav>
+</header>
+<nav id = 'top-navmenu'>
+<nav class = 'navmenu'>
+<div class = 'nav-head'>  <div class = 'search'>
+    <!-- SiteSearch Google -->
+    <form method='GET' action="https://www.google.com/search">
+      <input type='hidden' name='ie' value='UTF-8'/>
+      <input type='hidden' name='oe' value='UTF-8'/>
+      <input class = 'field' type='text' 
+             name='q' size='15' maxlength='255' value=""/>
+      <button class = 'button' type='submit' 
+             name='btnG' value=" " title = "Search"/>
+      <input type='hidden' name='domains' value="martinfowler.com"/>
+      <input type='hidden' name='sitesearch' value=""/> 
+      <input
+          type='hidden' name='sitesearch' value="martinfowler.com"/>
+    </form>
+  </div>
+
+<div class = 'closediv'>
+<span class = 'close' title = 'close'></span>
+</div>
+</div>
+
+<div class = 'nav-body'>
+<div class = 'topics'>
+<h2>Topics</h2>
+
+<p><a href = '/architecture'>Architecture</a></p>
+
+<p><a href = 'https://refactoring.com'>Refactoring</a></p>
+
+<p><a href = '/agile.html'>Agile</a></p>
+
+<p><a href = '/delivery.html'>Delivery</a></p>
+
+<p><a href = '/microservices'>Microservices</a></p>
+
+<p><a href = '/data'>Data</a></p>
+
+<p><a href = '/testing'>Testing</a></p>
+
+<p><a href = '/dsl.html'>DSL</a></p>
+</div>
+
+<div class = 'about'>
+<h2>about me</h2>
+
+<p><a href = '/aboutMe.html'>About</a></p>
+
+<p><a href = '/books'>Books</a></p>
+
+<p><a href = '/faq.html'>FAQ</a></p>
+</div>
+
+<div class = 'content'>
+<h2>content</h2>
+
+<p><a href = '/videos.html'>Videos</a></p>
+
+<p><a href = '/tags'>Content Index</a></p>
+
+<p><a href = '/boardgames'>Board Games</a></p>
+
+<p><a href = '/photos'>Photography</a></p>
+</div>
+
+<div class = 'tw'>
+<h2>Thoughtworks</h2>
+
+<p><a href = 'https://thoughtworks.com'>Home</a></p>
+
+<p><a href = 'https://thoughtworks.com/insights'>Insights</a></p>
+
+<p><a href = 'https://thoughtworks.com/careers'>Careers</a></p>
+
+<p><a href = 'https://thoughtworks.com/radar'>Radar</a></p>
+
+<p><a href = 'https://www.thoughtworks.com/engineering'>Engineering</a></p>
+</div>
+
+<div class = 'feeds'>
+<h2>follow</h2>
+
+<p><a href = '/feed.atom'>RSS</a></p>
+
+<p><a href = 'https://toot.thoughtworks.com/@mfowler'>Mastodon</a></p>
+
+<p><a href = 'https://www.linkedin.com/in/martin-fowler-com/'>LinkedIn</a></p>
+
+<p><a href = 'https://bsky.app/profile/martinfowler.com'>Bluesky</a></p>
+
+<p><a href = 'https://www.twitter.com/martinfowler'>X</a></p>
+
+<p><a href = 'https://boardgamegeek.com/blog/13064/martins-7th-decade'>BGG</a></p>
+</div>
+</div>
+</nav>
+</nav>
+
+<nav id = 'toc-dropdown'>
+<button class = 'dropdown-button'>
+<h2>Table of Contents</h2>
+</button>
+
+<div class = 'hidden' id = 'dropdownLinks'>
+<ul>
+<li><a href = '#top'>Top</a></li>
+
+<li><a href = '#WeAreUsedToATrade-offBetweenQualityAndCost'>We are used to a trade-off between quality and cost</a></li>
+
+<li><a href = '#SoftwareQualityMeansManyThings'>Software quality means many things</a></li>
+
+<li><a href = '#AtFirstGlanceInternalQualityDoesNotMatterToCustomers'>At first glance, internal quality does not matter to customers</a></li>
+
+<li><a href = '#InternalQualityMakesItEasierToEnhanceSoftware'>Internal quality makes it easier to enhance software</a></li>
+
+<li><a href = '#CustomersDoCareThatNewFeaturesComeQuickly'>Customers do care that new features come quickly</a></li>
+
+<li><a href = '#VisualizingTheImpactOfInternalQuality'>Visualizing the impact of internal quality</a></li>
+
+<li><a href = '#EvenTheBestTeamsCreateCruft'>Even the best teams create cruft</a></li>
+
+<li><a href = '#HighQualitySoftwareIsCheaperToProduce'>High quality software is cheaper to produce</a></li>
+</ul>
+
+<h3>Sidebars</h3>
+
+<ul>
+<li><a href = '#DoraStudiesOnEliteTeams'>Dora studies on elite teams</a></li>
+</ul>
+</div>
+</nav>
+
+<main>
+<h1>Is High Quality Software Worth the Cost?</h1>
+
+<section class = 'frontMatter'>
+<p class = 'date'>29 May 2019</p>
+<hr></hr>
+<div class = 'front-grid'>
+<div class = 'author-list'>
+<div class = 'author'>
+<div class = 'photo'><a href = '/'><img alt = 'Photo of Martin Fowler' src = '/mf.jpg' width = '80'></img></a></div>
+
+<address class = 'name'><a href = '/' rel = 'author'>Martin Fowler</a></address>
+</div>
+</div>
+
+<div class = 'tags'>
+<p class = 'tag-link'><a href = /tags/programming%20style.html>programming style</a></p>
+
+<p class = 'tag-link'><a href = /tags/productivity.html>productivity</a></p>
+
+<p class = 'tag-link'><a href = /tags/project%20planning.html>project planning</a></p>
+
+<p class = 'tag-link'><a href = /tags/technical%20debt.html>technical debt</a></p>
+</div>
+
+<div class = 'contents'>
+<h2>Contents</h2>
+
+<ul>
+<li><a href = '#WeAreUsedToATrade-offBetweenQualityAndCost'>We are used to a trade-off between quality and cost</a></li>
+
+<li><a href = '#SoftwareQualityMeansManyThings'>Software quality means many things</a></li>
+
+<li><a href = '#AtFirstGlanceInternalQualityDoesNotMatterToCustomers'>At first glance, internal quality does not matter to customers</a></li>
+
+<li><a href = '#InternalQualityMakesItEasierToEnhanceSoftware'>Internal quality makes it easier to enhance software</a></li>
+
+<li><a href = '#CustomersDoCareThatNewFeaturesComeQuickly'>Customers do care that new features come quickly</a></li>
+
+<li><a href = '#VisualizingTheImpactOfInternalQuality'>Visualizing the impact of internal quality</a></li>
+
+<li><a href = '#EvenTheBestTeamsCreateCruft'>Even the best teams create cruft</a></li>
+
+<li><a href = '#HighQualitySoftwareIsCheaperToProduce'>High quality software is cheaper to produce</a></li>
+</ul>
+
+<h3>Sidebars</h3>
+
+<ul>
+<li><a href = '#DoraStudiesOnEliteTeams'>Dora studies on elite teams</a></li>
+</ul>
+</div>
+</div>
+<hr></hr></section>
+
+<div class = 'paperBody shallow'>
+<p>A common debate in software development projects is between spending time
+    on improving the quality of the software versus concentrating on releasing
+    more valuable features. Usually the pressure to deliver functionality
+    dominates the discussion, leading many developers to complain that they
+    don't have time to work on architecture and code quality.</p>
+
+<p><a href = 'https://en.wikipedia.org/wiki/Betteridge%27s_law_of_headlines'>Betteridge's Law of headlines</a> is an
+    adage that says any article with a headline or title that ends in a question
+    mark can be summarized by ânoâ. Those that know me would not doubt my desire
+    to subvert such a law. But this article goes further than that - it subverts
+    the question itself. The question assumes the common trade-off between
+    quality and cost. With this article I'll explain that this trade-off does
+    not apply to software - that high quality software is actually cheaper to
+    produce.</p>
+
+<p>Although most of my writing is aimed at professional software developers,
+    for this article I'm not going to assume any knowledge of the mechanics of
+    software development. My hope is that this is an article that can be
+    valuable to anyone involved with thinking about software efforts,
+    particularly those, such as business leaders, that act as customers of
+    software development teams.</p>
+
+<section id = 'WeAreUsedToATrade-offBetweenQualityAndCost'>
+<h2>We are used to a trade-off between quality and cost</h2>
+
+<p>As I mentioned in the opening, we are all used to a trade-off between
+      quality and cost. When I replace my smart phone, I can choose a
+      more expensive model with faster processor, better screen, and more
+      memory. Or I can give up some of those qualities to pay less money. It's
+      not an absolute rule, sometimes we can get bargains where a high quality
+      good is cheaper. More often we have different values to quality - some people
+      don't really notice how one screen is nicer than another. But the
+      assumption is true most of the time, higher quality usually costs more.
+      </p>
+</section>
+
+<section id = 'SoftwareQualityMeansManyThings'>
+<h2>Software quality means many things</h2>
+
+<p>If I'm going to talk about quality for software, I need to explain what
+      that is. Here lies the first complication - there are many things that can
+      count as quality for software. I can consider the user-interface: does it easily
+      lead me through the tasks I need to do, making me more efficient and
+      removing frustrations? I can consider its reliability: does it contain
+      defects that cause errors and frustration? Another aspect is its
+      architecture: is the source code divided into clear modules, so that
+      programmers can easily find and understand which bit of the code they need
+      to work on this week?</p>
+
+<p>These three examples of quality are not an exhaustive list, but they
+      are enough to illustrate an important point. If I'm a customer, or user, of
+      the software, I don't appreciate some of the things we'd refer to as
+      quality. A user can tell if the user-interface is good. An
+      executive can tell if the software is making her staff more efficient at
+      their work. Users and customers will notice defects, particularly should
+      they corrupt data or render the system inoperative for a while. But
+      customers and users cannot perceive the architecture of the software.</p>
+
+<p>I thus divide software quality attributes into <b>external</b>
+      (such as the UI and defects) and <b>internal</b> (architecture). The
+      distinction is that users and customers can see what makes a software
+      product have high external quality, but cannot tell the difference between
+      higher or lower internal quality.</p>
+</section>
+
+<section id = 'AtFirstGlanceInternalQualityDoesNotMatterToCustomers'>
+<h2>At first glance, internal quality does not matter to customers</h2>
+
+<p>Since internal quality isn't something that customers or users can see
+      - does it matter? Let's imagine Rebecca and I write an application to
+      track and predict flight delays. Both our applications do the same
+      essential function, both have equally elegant user interfaces, and both
+      have hardly any defects. The only difference is that her internal source
+      code is neatly organized, while mine is a tangled mess. There is one other
+      difference: I sell mine for $6 and she sells hers for $10.</p>
+
+<p>Since a customer never sees this source code, and it doesn't affect the
+      operation of the app, why would anyone pay an extra $4 for Rebecca's software?
+      Put more generally this should mean that it isn't worth paying more money
+      for higher internal quality.</p>
+
+<p>Another way I put this is that it makes sense to trade cost for
+      external quality but it makes no sense to trade cost for internal quality.
+      A user can judge whether they want to pay more to get a better user
+      interface, since they can assess whether the user interface is sufficiently
+      nicer to be worth the extra money. But a user can't see the internal
+      modular structure of the software, let alone judge that it's better. Why pay
+      more for something that has no effect?
+      Since that's the case - why should
+      any software developer put their time and effort into improving the
+      internal quality of their work?</p>
+</section>
+
+<section id = 'InternalQualityMakesItEasierToEnhanceSoftware'>
+<h2>Internal quality makes it easier to enhance software</h2>
+
+<p>So why is it that software developers make an issue out of internal
+      quality? Programmers spend most of their time modifying code. Even in a
+      new system, almost all programming is done in the context of an existing
+      code base. When I want to add a new feature to the software, my first task
+      is to figure out how this feature fits into the flow of the existing
+      application. I then need to change that flow to let my feature fit in. I
+      often need to use data that's already in the application, so I need to
+      understand what the data represents, how it relates to the data around it,
+      and what data I may need to add for my new feature.</p>
+
+<p>All of this is about me understanding the existing code. But it's very
+      easy for software to be hard to understand. Logic can get tangled, the
+      data can be hard to follow, the names used to refer to things may have
+      made sense to Tony six months ago, but are as mysterious to me as his
+      reasons for leaving the company. All of these are forms of what
+      developers refer to as <b>cruft</b> - the difference between the current code
+      and how it would ideally be.</p>
+
+<aside class = 'sidebar'>
+<p>A common metaphor for cruft is <a href = '/bliki/TechnicalDebt.html'>Technical Debt</a>. The
+        extra cost on adding features is like paying interest. Cleaning up the
+        cruft is like paying down the principal. While it's a helpful metaphor,
+        it does encourage many to believe cruft is much easier to measure and
+        control than it is in practice.</p>
+
+<div class = 'photo '><span class = 'img-link'><a href = '/bliki/TechnicalDebt.html'><img src = '/bliki/images/tech-debt/sketch.png'></img></a></span>
+<p class = 'photoCaption'></p>
+</div>
+</aside>
+
+<p>One of the primary features of internal quality is making it easier for
+      me to figure out how the application works so I can see how to add things.
+      If the software is nicely divided into separate modules, I don't have to
+      read all 500,000 lines of code, I can quickly find a few hundred lines in
+      a couple of modules. If we've put the effort into clear naming, I can
+      quickly understand what the various part of the code does without having
+      to puzzle through the details. If the data sensibly follows the language
+      and structure of the underlying business, I can easily understand how it
+      correlates to the request I'm getting from the customer service reps. 
+      Cruft adds to the time it take for me to understand how to make a change,
+      and also increases the chance that I'll make a mistake. If I spot my mistakes, then
+      there's more time lost as I have to understand what the fault is and how to
+      fix it. If I don't spot them, then we get production defects, and more time
+      spend fixing things later.</p>
+
+<p>My changes also affect the future. I may see a quick way to put in this
+      feature, but it's a route that goes against the modular structure of the
+      program, adding cruft. If I take that path, I'll make it quicker for me today, but slow
+      down everyone else who has to deal with this code in future weeks and
+      months. Once other members of the team make the same decision, an easy to
+      modify application can quickly accumulate cruft to the point where every little
+      change takes many weeks of effort.</p>
+</section>
+
+<section id = 'CustomersDoCareThatNewFeaturesComeQuickly'>
+<h2>Customers do care that new features come quickly </h2>
+
+<p>Here we see a clue of why internal quality does matter to users and
+      customers. Better internal quality makes adding new features easier,
+      therefore quicker and cheaper. Rebecca and I may have the same application
+      now, but in the next few months Rebecca's high internal quality allows her
+      to add new features every week, while I'm stuck trying chop through the
+      cruft to get just a single new feature out. I can't compete with Rebecca's
+      speed, and soon her software is far more featureful than mine. Then all my customers
+      delete my app, and get Rebecca's instead, even as she's able to increase
+      her price.</p>
+
+<div class = 'figure ' id = 'cruft-impact.png'><img src = 'is-quality-worth-cost/cruft-impact.png'></img>
+<p class = 'photoCaption'></p>
+</div>
+
+<div class = 'clear'></div>
+</section>
+
+<section id = 'VisualizingTheImpactOfInternalQuality'>
+<h2>Visualizing the impact of internal quality</h2>
+
+<p>The fundamental role of internal quality is
+      that it lowers the cost of future change. But there is some extra effort
+      required to write good software, which does impose some cost in the short term.</p>
+
+<p>A way of visualizing this is with the following pseudo-graph, where I
+      plot the cumulative functionality of software versus the time (and thus
+      cost) to produce it. For most software efforts, the curve looks something
+      like this.</p>
+
+<div class = 'figure ' id = 'poor.png'><img src = 'is-quality-worth-cost/poor.png'></img>
+<p class = 'photoCaption'></p>
+</div>
+
+<div class = 'clear'></div>
+
+<p>This is what happens with poor internal quality. Progress is rapid
+      initially, but as time goes on it gets harder to add new features. Even
+      small changes require programmers to understand large areas of code, code
+      that's difficult to understand. When they make changes, unexpected
+      breakages occur, leading to long test times and defects that need to be
+      fixed.</p>
+
+<p>Concentrating on high internal quality is about reducing that drop off
+      in productivity. Indeed some products see an opposite effect, where
+      developers can accelerate as new features can be easily built by making
+      use of prior work. This happy situation is a rarer case, as it requires a
+      skilled and disciplined team to make it happen. But we do occasionally see
+      it.</p>
+
+<div class = 'figure ' id = 'both.png'><img src = 'is-quality-worth-cost/both.png'></img>
+<p class = 'photoCaption'></p>
+</div>
+
+<div class = 'clear'></div>
+
+<p>The subtlety here is that there is a period where the low internal
+      quality is more productive than the high track. During this time there is
+      some kind of trade-off between quality and cost. The question, of course,
+      is: how long is that period before the lines cross?</p>
+
+<aside>
+<div class = 'article-card'>
+<h3><a href = '/bliki/CannotMeasureProductivity.html'>Cannot Measure Productivity</a></h3>
+
+<div class = 'card-body'>
+<p class = 'card-image'><img src = ''></img></p>
+
+<p>We see so much emotional discussion about software process,
+design practices and the like. Many of these arguments are impossible
+to resolve because the software industry lacks the ability to measure
+some of the basic elements of the effectiveness of software
+development. In particular we have no way of reasonably measuring
+productivity.</p>
+
+<div class = 'meta'>
+<p class = 'credits'>by Martin Fowler</p>
+
+<p class = 'date'>29 Aug 2003</p>
+
+<p class = 'more'><a href = '/bliki/CannotMeasureProductivity.html'>Read moreâ¦</a></p>
+
+<p class = 'type bliki'>bliki</p>
+
+<p class = 'tags'> <span class = 'tag-link'><a href = /tags/productivity.html>productivity</a></span> <span class = 'tag-link'><a href = /tags/metrics.html>metrics</a></span> <span class = 'tag-link'><a href = /tags/project%20planning.html>project planning</a></span> <span class = 'tag-link'><a href = /tags/estimation.html>estimation</a></span> </p>
+</div>
+</div>
+</div>
+</aside>
+
+<p>At this point we run into why this is a pseudo-graph. There is no way
+      of measuring the functionality delivered by a software team. This
+      inability to measure output, and thus productivity, makes it impossible to
+      put solid numbers on the consequences of low internal quality (which is
+      also difficult to measure). An inability to measure output is pretty
+      common among professional work - how do we measure the productivity of
+      lawyers or doctors?</p>
+
+<p>The way I assess where lines cross is by canvassing the opinion of
+      skilled developers that I know. And the answer surprises a lot of folks.
+      Developers find poor quality code significantly slows them down within a
+      few weeks. So there's not much runway where the trade-off between internal
+      quality and cost applies. Even small software efforts benefit from
+      attention to good software practices, certainly something I can attest
+      from my experience.</p>
+</section>
+
+<section id = 'EvenTheBestTeamsCreateCruft'>
+<h2>Even the best teams create cruft</h2>
+
+<p>Many non-developers tend to think of cruft as something that only
+      occurs when development teams are careless and make errors, but even the
+      finest teams will inevitably create some cruft as they work.</p>
+
+<p>I like to illustrate this point with a tale of when I was chatting with
+      one of our best technical team leads. He'd just finished a project that
+      was widely considered to be a great success. The client was happy with the
+      delivered system, both in terms of its capabilities and its construction
+      time and cost. Our people were positive about the experience of working on
+      the project. The tech lead was broadly happy but confessed that the
+      architecture of the system wasn't that good. I reacted with âhow could
+      that be - you're one of our best architects?â His reply is one familiar to
+      any experienced software architect: âwe made good decisions, but only now
+      do we understand how we should have built itâ.</p>
+
+<p>Many people, including more than a few in the software industry, liken
+      building software to constructing cathedrals or skyscrapers - after all
+      why do we use âarchitectâ for senior programmers? But building software
+      exists in a world of uncertainty unknown to the physical world. Software's
+      customers have only a rough idea of what features they need in a product
+      and learn more as the software is built - particularly once early versions
+      are released to their users. The building blocks of software development -
+      languages, libraries, and platforms - change significantly every few
+      years. The equivalent in the physical world would be that customers
+      usually add new floors and change the floor-plan once half the building is
+      built and occupied, while the fundamental properties of concrete change
+      every other year.</p>
+
+<aside class = 'sidebar' id = 'DoraStudiesOnEliteTeams'>
+<h2>Dora studies on elite teams</h2>
+
+<p>The choice between quality and speed isn't the only choice in software
+    development that makes intuitive sense, but is wrong. There is also a strong
+    thread of thought that says there is a <a href = '/bliki/BimodalIT.html'>Bimodal</a> choice
+    between fast development, with frequent updates to a system, and reliable
+    systems that don't break in production. That this is a false choice is
+    proven by the careful scientific work in the <a href = '/bliki/StateOfDevOpsReport.html'>State Of Dev Ops Report</a>. </p>
+
+<p>For several years they have used statistical
+    analysis of surveys to tease out the practices of high performing software
+    teams. Their work has shown that elite software teams update production code
+    many times a day, pushing code changes from development to production in
+    less than an hour. As they do this, their change failure rate is
+    significantly lower than slower organizations so they recover from errors much
+    more quickly. Furthermore, such elite software delivery organizations are
+    correlated with higher organizational performance.</p>
+</aside>
+
+<p>Given this level of change, software projects are always creating
+      something novel. We hardly ever find ourselves working on a
+      well-understood problem that's been solved before. Naturally we learn most
+      about the problem as we're building the solution, so it's common for me to
+      hear that teams only really best understand what the architecture of their
+      software should be after they've spent a year or so building it. Even the
+      best teams will have cruft in their software.</p>
+
+<p>The difference is that the best teams both create much less cruft but
+      also remove enough of the cruft they do create that they can continue to
+      add features quickly. They spend time creating automated tests so that
+      they can surface problems quickly and spend less time removing bugs. They
+      refactor frequently so that they can remove cruft before it builds up
+      enough to get in the way. Continuous integration minimizes cruft
+      building up due to team members working at cross-purposes. A common
+      metaphor is that it's like cleaning up work surfaces and equipment in the
+      kitchen. You can't not make things dirty when you cook, but if you don't
+      clean things quickly, muck dries up, is harder to remove, and all the
+      dirty stuff gets in the way of cooking the next dish.</p>
+</section>
+
+<section id = 'HighQualitySoftwareIsCheaperToProduce'>
+<h2>High quality software is cheaper to produce</h2>
+
+<p>Summing all of this up:</p>
+
+<ul>
+<li>Neglecting internal quality leads to rapid build up of cruft</li>
+
+<li>This cruft slows down feature development</li>
+
+<li>Even a great team produces cruft, but by keeping internal quality
+        high, is able to keep it under control</li>
+
+<li>High internal quality keeps cruft to a minimum, allowing a team to
+        add features with less effort, time, and cost.</li>
+</ul>
+
+<p>Sadly, software developers usually don't do a good job of explaining
+      this situation. Countless times I've talked to development teams who say
+      âthey (management) won't let us write good quality code because it takes
+      too longâ. Developers often justify attention to quality by justifying
+      through the need for proper professionalism. But this moralistic
+      argument implies that this quality comes at a cost - dooming their
+      argument. The annoying thing is that the resulting crufty code both makes
+      developers' lives harder, and costs the customer money. When thinking about
+      internal quality, I stress that we should only approach it as an economic argument.
+      High internal quality reduces the cost of future features, meaning that
+      putting the time into writing good code actually reduces cost.</p>
+
+<p>This is why the question that heads this article misses the point. The
+      âcostâ of high internal quality software is negative. The usual trade-off
+      between cost and quality, one that we are used to for most decisions in
+      our life, does not make sense with the internal quality of software. (It
+      does for external quality, such as a carefully crafted user-experience.)
+      Because the relationship between cost and internal quality is an unusual
+      and counter-intuitive relationship, it's usually hard to absorb. But
+      understanding it is critical to developing software at maximum
+      efficiency.</p>
+</section>
+
+<hr class = 'bodySep'></hr>
+</div>
+
+<div class = 'appendix'>
+<section id = 'MeasuringTheEffectsOfLowInternalQuality'>
+<h2>Measuring the effects of low internal quality</h2>
+
+<p><i>(added: 2024-01-29)</i></p>
+
+<p>As I mentioned above, we don't really know how to measure internal
+      quality, or productivity, and so it's difficult to get quantifiable
+      evidence for the importance of internal quality. However in recent years,
+      there has been increasing efforts to try.</p>
+
+<p>One particularly interesting paper that I've come across is this study
+      from <a href = 'https://arxiv.org/abs/2203.04374'>Adam Tornhill and Markus Borg</a>.
+      They use their proprietary tool, CodeScene, to determine the health level
+      of files in 39 proprietary code bases. They found that resolving issues in
+      low quality took more than twice as long as doing so in high quality code,
+      and that low quality code had 15 times higher defect density.</p>
+</section>
+</div>
+
+<div class = 'appendix'>
+<details id = 'SignificantRevisions'>
+<summary>Significant Revisions</summary>
+
+<p><i>29 May 2019: </i>published</p>
+</details>
+</div>
+</main>
+
+<nav id = 'bottom-navmenu'>
+<nav class = 'navmenu'>
+<div class = 'nav-head'>  <div class = 'search'>
+    <!-- SiteSearch Google -->
+    <form method='GET' action="https://www.google.com/search">
+      <input type='hidden' name='ie' value='UTF-8'/>
+      <input type='hidden' name='oe' value='UTF-8'/>
+      <input class = 'field' type='text' 
+             name='q' size='15' maxlength='255' value=""/>
+      <button class = 'button' type='submit' 
+             name='btnG' value=" " title = "Search"/>
+      <input type='hidden' name='domains' value="martinfowler.com"/>
+      <input type='hidden' name='sitesearch' value=""/> 
+      <input
+          type='hidden' name='sitesearch' value="martinfowler.com"/>
+    </form>
+  </div>
+
+<div class = 'closediv'>
+<span class = 'close' title = 'close'></span>
+</div>
+</div>
+
+<div class = 'nav-body'>
+<div class = 'topics'>
+<h2>Topics</h2>
+
+<p><a href = '/architecture'>Architecture</a></p>
+
+<p><a href = 'https://refactoring.com'>Refactoring</a></p>
+
+<p><a href = '/agile.html'>Agile</a></p>
+
+<p><a href = '/delivery.html'>Delivery</a></p>
+
+<p><a href = '/microservices'>Microservices</a></p>
+
+<p><a href = '/data'>Data</a></p>
+
+<p><a href = '/testing'>Testing</a></p>
+
+<p><a href = '/dsl.html'>DSL</a></p>
+</div>
+
+<div class = 'about'>
+<h2>about me</h2>
+
+<p><a href = '/aboutMe.html'>About</a></p>
+
+<p><a href = '/books'>Books</a></p>
+
+<p><a href = '/faq.html'>FAQ</a></p>
+</div>
+
+<div class = 'content'>
+<h2>content</h2>
+
+<p><a href = '/videos.html'>Videos</a></p>
+
+<p><a href = '/tags'>Content Index</a></p>
+
+<p><a href = '/boardgames'>Board Games</a></p>
+
+<p><a href = '/photos'>Photography</a></p>
+</div>
+
+<div class = 'tw'>
+<h2>Thoughtworks</h2>
+
+<p><a href = 'https://thoughtworks.com'>Home</a></p>
+
+<p><a href = 'https://thoughtworks.com/insights'>Insights</a></p>
+
+<p><a href = 'https://thoughtworks.com/careers'>Careers</a></p>
+
+<p><a href = 'https://thoughtworks.com/radar'>Radar</a></p>
+
+<p><a href = 'https://www.thoughtworks.com/engineering'>Engineering</a></p>
+</div>
+
+<div class = 'feeds'>
+<h2>follow</h2>
+
+<p><a href = '/feed.atom'>RSS</a></p>
+
+<p><a href = 'https://toot.thoughtworks.com/@mfowler'>Mastodon</a></p>
+
+<p><a href = 'https://www.linkedin.com/in/martin-fowler-com/'>LinkedIn</a></p>
+
+<p><a href = 'https://bsky.app/profile/martinfowler.com'>Bluesky</a></p>
+
+<p><a href = 'https://www.twitter.com/martinfowler'>X</a></p>
+
+<p><a href = 'https://boardgamegeek.com/blog/13064/martins-7th-decade'>BGG</a></p>
+</div>
+</div>
+</nav>
+</nav>
+<footer id='page-footer'>
+<div class='tw-logo'>
+<a href='https://www.thoughtworks.com/engineering'>
+<img src='/thoughtworks_white.png'>
+</a>
+</div>
+<div class='menu-button'>
+<div class='icon-bars navmenu-button'></div>
+</div>
+<div class='copyright'>
+<p>Â© Martin Fowler | <a href="/aboutMe.html#disclosures">Disclosures</a></p>
+</div>
+</footer>
+
+<script src = '/jquery-1.11.3.min.js' type = 'text/javascript'></script>
+
+<script src = '/mfcom.js' type = 'text/javascript'></script>
+</body>
+</html>

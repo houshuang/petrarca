@@ -1,0 +1,9 @@
+{
+  "title": "Weekly AI Research Digest",
+  "description": "Forwarded email with headers, signature, unsubscribe cruft",
+  "expected_removed": [
+    "unsubscribe",
+    "forward",
+    "Sent from"
+  ]
+}

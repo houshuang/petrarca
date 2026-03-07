@@ -1,0 +1,10 @@
+{
+  "title": "Byzantine Empire",
+  "description": "Wikipedia-style content with edit links, citations, empty links, nav cruft",
+  "url": "https://en.wikipedia.org/wiki/Byzantine_Empire",
+  "expected_removed": [
+    "\\[edit\\]",
+    "\\[\\d+\\]",
+    "\\[\\s*\\]\\([^)]+\\)"
+  ]
+}

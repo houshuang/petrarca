@@ -1,0 +1,5 @@
+{
+  "title": "News Article — ads, nav, bylines, related stories",
+  "description": "Menu nav, trending bar, subscribe CTA, ADVERTISEMENT blocks, photo credits, Related Stories section, Read Next section, newsletter signup, dual nav footers, cookie settings, author follow links, published/updated timestamps",
+  "expected_removed": ["ADVERTISEMENT", "Read Next", "Sign up for our daily newsletter", "Do Not Sell My Info", "Menu"]
+}

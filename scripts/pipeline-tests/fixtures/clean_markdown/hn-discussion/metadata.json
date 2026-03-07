@@ -1,0 +1,5 @@
+{
+  "title": "Hacker News Discussion — nav bar, voting, reply chains, guidelines footer",
+  "description": "HN nav bar, point/time/comment count header, voting arrows, reply/hide/past/favorite UI elements, threaded comments with usernames and timestamps, More comments link, Guidelines/FAQ footer, Search bar",
+  "expected_removed": ["Guidelines.*FAQ.*Lists.*API", "Search:"]
+}

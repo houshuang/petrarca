@@ -1,0 +1,5 @@
+{
+  "title": "PDF-extracted academic paper — column artifacts",
+  "description": "Broken hyphenation from 2-column PDF, page headers/footers (Chen et al. — 1 —), arXiv ID, author affiliations, acknowledgments section, appendix, email addresses, equation formatting",
+  "expected_removed": ["Chen et al.\\s+— \\d+ —", "arXiv:2603", "∗Corresponding author"]
+}

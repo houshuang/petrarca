@@ -1,0 +1,5 @@
+{
+  "title": "Corrupted HTML→Markdown — residual tags, divs, footers",
+  "description": "Residual HTML tags (div, span, aside, footer, script, img), inline CSS classes, cookie consent div, author info div, newsletter signup form, related articles div, comments section, Share: links, photo credit, duplicate heading markers (# #)",
+  "expected_removed": ["cookie-consent", "<div", "<footer>", "<script>", "MENU CLOSE", "Powered by Ghost"]
+}

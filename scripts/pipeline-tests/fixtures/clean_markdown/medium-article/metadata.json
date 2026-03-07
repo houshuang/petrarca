@@ -1,0 +1,5 @@
+{
+  "title": "Medium Article — heavy platform chrome",
+  "description": "Member-only gate, author card, follow buttons, clap CTA, related posts, Medium footer, app store links, image captions",
+  "expected_removed": ["Member-only story", "Open in app", "Clapping up to 50", "Recommended from Medium", "Get the Medium app", "Text to speech"]
+}

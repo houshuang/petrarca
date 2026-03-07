@@ -1,0 +1,5 @@
+{
+  "title": "Substack Newsletter — heavy CTA cruft",
+  "description": "Subscribe buttons, paid post gates, share blocks (2x), comment sections, author cards, Substack chrome, like counts",
+  "expected_removed": ["^Subscribe$", "Already a.*subscriber", "Share this post", "Copy link", "Start Writing", "Substack is the home"]
+}

@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en-gb">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="canonical" href="https://simonwillison.net/2024/Dec/19/one-shot-python-tools/">
+<title>Building Python tools with a one-shot prompt using uv run and Claude Projects</title>
+<script defer data-domain="simonwillison.net" src="https://plausible.io/js/plausible.js"></script>
+<link rel="alternate" type="application/atom+xml" title="Atom" href="/atom/everything/">
+<link rel="stylesheet" type="text/css" href="/static/css/all.css">
+<link rel="webmention" href="https://webmention.io/simonwillison.net/webmention">
+<link rel="pingback" href="https://webmention.io/simonwillison.net/xmlrpc">
+<meta name="author" content="Simon Willison">
+<meta property="og:site_name" content="Simon Willison’s Weblog">
+
+
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://static.simonwillison.net/static/2024/s3-debug-social-media-card.jpg">
+<meta name="twitter:creator" content="@simonw">
+<meta property="og:url" content="https://simonwillison.net/2024/Dec/19/one-shot-python-tools/">
+<meta property="og:title" content="Building Python tools with a one-shot prompt using uv run and Claude Projects">
+<meta property="og:image" content="https://static.simonwillison.net/static/2024/s3-debug-social-media-card.jpg">
+<meta property="og:type" content="article">
+<meta property="og:description" content="I’ve written a lot about how I’ve been using Claude to build one-shot HTML+JavaScript applications via Claude Artifacts. I recently started using a similar pattern to create one-shot Python utilities, …">
+<meta property="og:updated_time" content="1734591637">
+
+
+
+
+
+<script>
+(function() { // Apply theme immediately to prevent flash
+  const theme = localStorage.getItem('theme');
+  if (theme === 'light' || theme === 'dark') {
+    document.documentElement.setAttribute('data-theme', theme);
+  }
+})();
+</script>
+</head>
+<body class="smallhead">
+
+<div id="smallhead">
+  <div id="smallhead-inner">
+    <h1><a href="/">Simon Willison’s Weblog</a></h1>
+    <a id="smallhead-about" href="/about/#subscribe">Subscribe</a>
+  </div>
+</div><!-- #smallhead -->
+
+
+<div id="sponsored-banner" class="sponsor-scheme-sky">
+  <div id="sponsored-banner-inner">
+    <strong class="sponsored-label">Sponsored by:</strong> Postman &mdash; Every API your agents depend on, mapped and monitored. <a href="https://fandf.co/40IFB7j" rel="sponsored noopener" target="_blank">See what&#x27;s new</a>
+  </div>
+</div>
+
+
+<div id="wrapper">
+<div id="primary">
+
+<div class="entry entryPage">
+
+
+<div data-permalink-context="/2024/Dec/19/one-shot-python-tools/">
+<h2>Building Python tools with a one-shot prompt using uv run and Claude Projects</h2>
+<p class="mobile-date">19th December 2024</p>
+
+
+
+<p>I’ve written a lot about how I’ve been using Claude to build one-shot HTML+JavaScript applications <a href="https://simonwillison.net/tags/claude-artifacts/">via Claude Artifacts</a>. I recently started using a similar pattern to create one-shot Python utilities, using a custom Claude Project combined with the dependency management capabilities of <a href="https://github.com/astral-sh/uv">uv</a>.</p>
+<p>(In LLM jargon a “one-shot” prompt is a prompt that produces the complete desired result on the first attempt. Confusingly it also sometimes means a prompt that includes a single example of the desired output format. Here I’m using the first of those two definitions.)</p>
+<p>I’ll start with an example of a tool I built that way.</p>
+<p>I had another round of battle with Amazon S3 today trying to figure out why a file in one of my buckets couldn’t be accessed via a public URL.</p>
+<p>Out of frustration I prompted Claude with a variant of the following (<a href="https://gist.github.com/simonw/9f69cf35889b0445b80eeed691d44504">full transcript here</a>):</p>
+<blockquote>
+<p><code>I can't access the file at EXAMPLE_S3_URL. Write me a Python CLI tool using Click and boto3 which takes a URL of that form and then uses EVERY single boto3 trick in the book to try and debug why the file is returning a 404</code></p>
+</blockquote>
+<p>It wrote me <a href="https://github.com/simonw/tools/blob/main/python/debug_s3_access.py">this script</a>, which gave me exactly what I needed. I ran it like this:</p>
+<div class="highlight highlight-source-shell"><pre>uv run debug_s3_access.py \
+  https://test-public-bucket-simonw.s3.us-east-1.amazonaws.com/0f550b7b28264d7ea2b3d360e3381a95.jpg</pre></div>
+<p><img src="https://static.simonwillison.net/static/2024/debug-s3.jpg" alt="Terminal screenshot showing S3 access analysis results. Command: '$ uv run http://tools.simonwillison.net/python/debug_s3_access.py url-to-image' followed by detailed output showing bucket exists (Yes), region (default), key exists (Yes), bucket policy (AllowAllGetObject), bucket owner (swillison), versioning (Not enabled), content type (image/jpeg), size (71683 bytes), last modified (2024-12-19 03:43:30+00:00) and public access settings (all False)" style="max-width: 100%;"></p>
+<p>You can <a href="https://github.com/simonw/tools/tree/main/python#debug_s3_accesspy">see the text output here</a>.</p>
+<h4 id="inline-dependencies-and-uv-run">Inline dependencies and uv run</h4>
+<p>Crucially, I didn’t have to take any extra steps to install any of the dependencies that the script needed. That’s because the script starts with this magic comment:</p>
+<pre><span class="pl-c"># /// script</span>
+<span class="pl-c"># requires-python = "&gt;=3.12"</span>
+<span class="pl-c"># dependencies = [</span>
+<span class="pl-c">#     "click",</span>
+<span class="pl-c">#     "boto3",</span>
+<span class="pl-c">#     "urllib3",</span>
+<span class="pl-c">#     "rich",</span>
+<span class="pl-c"># ]</span>
+<span class="pl-c"># ///</span></pre>
+<p>This is an example of <a href="https://docs.astral.sh/uv/guides/scripts/#declaring-script-dependencies">inline script dependencies</a>, a feature described in <a href="https://peps.python.org/pep-0723/">PEP 723</a> and implemented by <code>uv run</code>. Running the script causes <code>uv</code> to create a temporary virtual environment with those dependencies installed, a process that takes just a few milliseconds once the <code>uv</code> cache has been populated.</p>
+<p>This even works if the script is specified by a URL! Anyone with <code>uv</code> installed can run the following command (provided you trust me not to have replaced the script with something malicious) to debug one of their own S3 buckets:</p>
+<div class="highlight highlight-source-shell"><pre>uv run http://tools.simonwillison.net/python/debug_s3_access.py \
+  https://test-public-bucket-simonw.s3.us-east-1.amazonaws.com/0f550b7b28264d7ea2b3d360e3381a95.jpg</pre></div>
+<h4 id="writing-these-with-the-help-of-a-claude-project">Writing these with the help of a Claude Project</h4>
+<p>The reason I can one-shot scripts like this now is that I’ve set up a <a href="https://www.anthropic.com/news/projects">Claude Project</a> called “Python app”. Projects can have custom instructions, and I used those to “teach” Claude how to take advantage of inline script dependencies:</p>
+<blockquote>
+<p>You write Python tools as single files. They always start with this comment:</p>
+<pre><span># /// script</span>
+<span># requires-python = "&gt;=3.12"</span>
+<span># ///</span></pre>
+<p>These files can include dependencies on libraries such as Click. If they do, those dependencies are included in a list like this one in that same comment (here showing two dependencies):</p>
+<pre><span># /// script</span>
+<span># requires-python = "&gt;=3.12"</span>
+<span># dependencies = [</span>
+<span>#     "click",</span>
+<span>#     "sqlite-utils",</span>
+<span># ]</span>
+<span># ///</span></pre>
+</blockquote>
+<p>That’s everything Claude needs to reliably knock out full-featured Python tools as single scripts which can be run directly using whatever dependencies Claude chose to include.</p>
+<p>I didn’t suggest that Claude use <a href="https://github.com/Textualize/rich">rich</a> for the <code>debug_s3_access.py</code> script earlier but it decided to use it anyway!</p>
+<p>I’ve only recently started experimenting with this pattern but it seems to work <em>really</em> well. Here’s another example—my prompt was:</p>
+<blockquote>
+<p><code>Starlette web app that provides an API where you pass in ?url= and it strips all HTML tags and returns just the text, using beautifulsoup</code></p>
+</blockquote>
+<p>Here’s <a href="https://gist.github.com/simonw/08957a1490ebde1ea38b4a8374989cf8">the chat transcript</a> and <a href="https://gist.githubusercontent.com/simonw/08957a1490ebde1ea38b4a8374989cf8/raw/143ee24dc65ca109b094b72e8b8c494369e763d6/strip_html.py">the raw code it produced</a>. You can run that server directly on your machine (it uses port 8000) like this:</p>
+<div class="highlight highlight-source-shell"><pre>uv run https://gist.githubusercontent.com/simonw/08957a1490ebde1ea38b4a8374989cf8/raw/143ee24dc65ca109b094b72e8b8c494369e763d6/strip_html.py</pre></div>
+<p>Then visit <code>http://127.0.0.1:8000/?url=https://simonwillison.net/</code> to see it in action.</p>
+<h4 id="custom-instructions">Custom instructions</h4>
+<p>The pattern here that’s most interesting to me is using custom instructions or system prompts to show LLMs how to implement new patterns that may not exist in their training data. <code>uv run</code> is less than a year old, but providing just a short example is enough to get the models to write code that takes advantage of its capabilities.</p>
+<p>I have a similar set of custom instructions I use for creating single page HTML and JavaScript tools, again running in a Claude Project:</p>
+
+<blockquote>
+<p>Never use React in artifacts—always plain HTML and vanilla JavaScript and CSS with minimal dependencies.</p>
+<p>CSS should be indented with two spaces and should start like this:</p>
+<div class="highlight highlight-text-html-basic"><pre><span class="pl-kos">&lt;</span><span class="pl-ent">style</span><span class="pl-kos">&gt;</span>
+* {
+  box-sizing: border-box;
+}</pre></div>
+<p>Inputs and textareas should be font size 16px. Font should always prefer Helvetica.</p>
+<p>JavaScript should be two space indents and start like this:</p>
+<div class="highlight highlight-text-html-basic"><pre><span class="pl-kos">&lt;</span><span class="pl-ent">script</span> <span class="pl-c1">type</span>="<span class="pl-s">module</span>"<span class="pl-kos">&gt;</span>
+// code in here should not be indented at the first level</pre></div>
+</blockquote>
+<p>Most of the tools on my <a href="https://tools.simonwillison.net/">tools.simonwillison.net</a> site were created using versions of this custom instructions prompt.</p>
+
+
+</div>
+<div class="entryFooter">Posted <a href="/2024/Dec/19/">19th December 2024</a> at 7 am &middot; Follow me on <a href="https://fedi.simonwillison.net/@simon">Mastodon</a>, <a href="https://bsky.app/profile/simonwillison.net">Bluesky</a>, <a href="https://twitter.com/simonw">Twitter</a> or <a href="https://simonwillison.net/about/#subscribe">subscribe to my newsletter</a></div>
+<p class="edit-page-link" data-admin-url="/admin/blog/entry/8679/" style="display: none;"></p>
+
+</div>
+
+<div class="recent-articles">
+<h2>More recent articles</h2>
+<ul class="bullets">
+  
+    <li><a href="/2026/Mar/5/chardet/">Can coding agents relicense open source through a “clean room” implementation of code?</a> - 5th March 2026</li>
+  
+    <li><a href="/2026/Mar/4/qwen/">Something is afoot in the land of Qwen</a> - 4th March 2026</li>
+  
+    <li><a href="/2026/Feb/25/present/">I vibe coded my dream macOS presentation app</a> - 25th February 2026</li>
+  
+</ul>
+</div>
+
+
+</div> <!-- #primary -->
+
+<div id="secondary">
+
+<div class="metabox">
+<p class="this-is">This is <strong>Building Python tools with a one-shot prompt using uv run and Claude Projects</strong> by Simon Willison, posted on <a href="/2024/Dec/19/">19th December 2024</a>.</p>
+
+<div class="series-info">
+  <p>Part of series <strong><a href="/series/using-llms/">How I use LLMs and ChatGPT</a></strong></p>
+  <ol start="21">
+    
+      
+        <li><a href="/2024/Oct/21/claude-artifacts/">Everything I built with Claude Artifacts this week</a> - Oct. 21, 2024, 2:32 p.m. </li>
+      
+    
+      
+        <li><a href="/2024/Oct/27/llm-jq/">Run a prompt to generate and execute jq programs using llm-jq</a> - Oct. 27, 2024, 4:26 a.m. </li>
+      
+    
+      
+        <li><a href="/2024/Dec/7/prompts-js/">Prompts.js</a> - Dec. 7, 2024, 8:35 p.m. </li>
+      
+    
+      
+        <li><strong>Building Python tools with a one-shot prompt using uv run and Claude Projects</strong></a> - Dec. 19, 2024, 7 a.m. </li>
+      
+    
+      
+        <li><a href="/2025/Mar/11/using-llms-for-code/">Here&#x27;s how I use LLMs to help me write code</a> - March 11, 2025, 2:09 p.m. </li>
+      
+    
+      
+        <li><a href="/2025/Mar/19/vibe-coding/">Not all AI-assisted programming is vibe coding (but vibe coding rocks)</a> - March 19, 2025, 5:57 p.m. </li>
+      
+    
+      
+        <li><a href="/2025/Apr/21/ai-assisted-search/">AI assisted search-based research actually works now</a> - April 21, 2025, 12:57 p.m. </li>
+      
+    
+    <li style="list-style-type: none;"><a href="/series/using-llms/">&#8230; more</a></li>
+  </ol>
+</div>
+
+
+    
+        <a class="item-tag" href="/tags/aws/" rel="tag">
+            aws
+            <span>73</span>
+        </a>
+    
+        <a class="item-tag" href="/tags/cli/" rel="tag">
+            cli
+            <span>109</span>
+        </a>
+    
+        <a class="item-tag" href="/tags/python/" rel="tag">
+            python
+            <span>1230</span>
+        </a>
+    
+        <a class="item-tag" href="/tags/s3/" rel="tag">
+            s3
+            <span>63</span>
+        </a>
+    
+        <a class="item-tag" href="/tags/ai/" rel="tag">
+            ai
+            <span>1894</span>
+        </a>
+    
+        <a class="item-tag" href="/tags/prompt-engineering/" rel="tag">
+            prompt-engineering
+            <span>182</span>
+        </a>
+    
+        <a class="item-tag" href="/tags/generative-ai/" rel="tag">
+            generative-ai
+            <span>1679</span>
+        </a>
+    
+        <a class="item-tag" href="/tags/llms/" rel="tag">
+            llms
+            <span>1645</span>
+        </a>
+    
+        <a class="item-tag" href="/tags/ai-assisted-programming/" rel="tag">
+            ai-assisted-programming
+            <span>357</span>
+        </a>
+    
+        <a class="item-tag" href="/tags/claude/" rel="tag">
+            claude
+            <span>258</span>
+        </a>
+    
+        <a class="item-tag" href="/tags/claude-artifacts/" rel="tag">
+            claude-artifacts
+            <span>36</span>
+        </a>
+    
+        <a class="item-tag" href="/tags/uv/" rel="tag">
+            uv
+            <span>88</span>
+        </a>
+    
+        <a class="item-tag" href="/tags/rich/" rel="tag">
+            rich
+            <span>5</span>
+        </a>
+    
+        <a class="item-tag" href="/tags/prompt-to-app/" rel="tag">
+            prompt-to-app
+            <span>39</span>
+        </a>
+    
+
+
+<p><strong>Next:</strong> <a href="/2024/Dec/19/gemini-thinking-mode/">Gemini 2.0 Flash &quot;Thinking mode&quot;</a></p>
+
+
+<p><strong>Previous:</strong> <a href="/2024/Dec/11/gemini-2/">Gemini 2.0 Flash: An outstanding multi-modal LLM with a sci-fi streaming mode</a></p>
+
+
+<section style="
+    /* .promo */
+    border-radius: 8px;
+    margin: 1.5rem 0;
+    padding: 1rem 1.25rem;
+    /* .variant-a */
+    border: 2px solid #6c3eb9;
+  ">
+  <h3 style="
+      /* h3 */
+      margin: 0 0 0.5rem;
+      font-size: 1.25rem;
+    ">
+    Monthly briefing
+  </h3>
+  <p style="
+      /* p */
+      margin: 0 0 1rem;
+      line-height: 1.4;
+    ">
+    Sponsor me for <strong>$10/month</strong> and get a curated email digest of the month's most important LLM developments.
+  </p>
+  <p style="
+      /* p */
+      margin: 0 0 1rem;
+      line-height: 1.4;
+    ">
+    Pay me to send you less!
+  </p>
+  <a href="https://github.com/sponsors/simonw/" style="
+      /* a.button */
+      display: inline-block;
+      padding: 0.5rem 1rem;
+      background: #6c3eb9;
+      color: #fff;
+      text-decoration: none;
+      border-radius: 4px;
+      font-weight: 600;
+    ">
+    Sponsor &amp; subscribe
+  </a>
+</section>
+</div>
+
+
+
+</div> <!-- #secondary -->
+</div> <!-- #wrapper -->
+
+
+
+
+
+
+
+
+
+
+
+<div id="ft">
+    <ul>
+      <li><a href="/about/#disclosures">Disclosures</a></li>
+      <li><a href="/about/#about-site">Colophon</a></li>
+      <li>&copy;</li>
+      <li><a href="/2002/">2002</a></li>
+      <li><a href="/2003/">2003</a></li>
+      <li><a href="/2004/">2004</a></li>
+      <li><a href="/2005/">2005</a></li>
+      <li><a href="/2006/">2006</a></li>
+      <li><a href="/2007/">2007</a></li>
+      <li><a href="/2008/">2008</a></li>
+      <li><a href="/2009/">2009</a></li>
+      <li><a href="/2010/">2010</a></li>
+      <li><a href="/2011/">2011</a></li>
+      <li><a href="/2012/">2012</a></li>
+      <li><a href="/2013/">2013</a></li>
+      <li><a href="/2014/">2014</a></li>
+      <li><a href="/2015/">2015</a></li>
+      <li><a href="/2016/">2016</a></li>
+      <li><a href="/2017/">2017</a></li>
+      <li><a href="/2018/">2018</a></li>
+      <li><a href="/2019/">2019</a></li>
+      <li><a href="/2020/">2020</a></li>
+      <li><a href="/2021/">2021</a></li>
+      <li><a href="/2022/">2022</a></li>
+      <li><a href="/2023/">2023</a></li>
+      <li><a href="/2024/">2024</a></li>
+      <li><a href="/2025/">2025</a></li>
+      <li><a href="/2026/">2026</a></li>
+      <li>
+        <button id="theme-toggle" type="button" aria-label="Toggle theme">
+          <!-- Auto/System icon (default) -->
+          <svg id="icon-auto" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm0-2V4a8 8 0 1 0 0 16z"/></svg>
+          <!-- Light icon -->
+          <svg id="icon-light" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" style="display:none"><path d="M12 18a6 6 0 1 1 0-12 6 6 0 0 1 0 12zm0-2a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM11 1h2v3h-2V1zm0 19h2v3h-2v-3zM3.515 4.929l1.414-1.414L7.05 5.636 5.636 7.05 3.515 4.93zM16.95 18.364l1.414-1.414 2.121 2.121-1.414 1.414-2.121-2.121zm2.121-14.85l1.414 1.415-2.121 2.121-1.414-1.414 2.121-2.121zM5.636 16.95l1.414 1.414-2.121 2.121-1.414-1.414 2.121-2.121zM23 11v2h-3v-2h3zM4 11v2H1v-2h3z"/></svg>
+          <!-- Dark icon -->
+          <svg id="icon-dark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" style="display:none"><path d="M10 7a7 7 0 0 0 12 4.9v.1c0 5.523-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2h.1A6.979 6.979 0 0 0 10 7zm-6 5a8 8 0 0 0 15.062 3.762A9 9 0 0 1 8.238 4.938 7.999 7.999 0 0 0 4 12z"/></svg>
+        </button>
+      </li>
+    </ul>
+</div>
+
+
+
+<style>image-gallery:not(:defined) img {max-height: 150px;}</style>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('h2[id],h3[id],h4[id],h5[id],h6[id]').forEach(el => {
+    const id = el.getAttribute('id');
+    const permalinkContext = el.closest('[data-permalink-context]');
+    if (permalinkContext) {
+      const url = permalinkContext.getAttribute('data-permalink-context');
+      const hashLink = document.createElement('a');
+      hashLink.style.borderBottom = 'none';
+      hashLink.style.color = '#666';
+      hashLink.style.fontSize = '1em';
+      hashLink.style.opacity = 0.8;
+      hashLink.setAttribute('href', url + '#' + id);
+      hashLink.innerText = '#';
+      el.appendChild(document.createTextNode('\u00A0'));
+      el.appendChild(hashLink);
+    }
+  });
+});
+</script>
+<script type="module">
+const config = [
+  {"tag": "lite-youtube", "js": "/static/lite-yt-embed.js", "css": "/static/lite-yt-embed.css"},
+  {"tag": "image-gallery", "js": "/static/image-gallery.js", "css": null}
+];
+for (const {tag, js, css} of config) {
+  if (document.querySelector(tag)) {
+    if (css) {
+      document.head.appendChild(
+        Object.assign(document.createElement('link'), {
+          rel: 'stylesheet',
+          href: css
+        })
+      );
+    }
+    if (js) {
+      await import(js);
+    }
+  }
+}
+</script>
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    if (window.localStorage.getItem('ADMIN')) {
+      document.querySelectorAll('.edit-page-link').forEach(el => {
+        const url = el.getAttribute('data-admin-url');
+        if (url) {
+          const a = document.createElement('a');
+          a.href = url;
+          a.className = 'edit-link';
+          a.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> Edit';
+          el.appendChild(a);
+          el.style.display = 'block';
+        }
+      });
+    }
+  });
+</script>
+<script>
+// Random tag navigation - shows button if recently came from tag random
+(function() {
+  const stored = localStorage.getItem('random_tag');
+  if (!stored) return;
+
+  try {
+    const data = JSON.parse(stored);
+    const elapsed = Date.now() - data.timestamp;
+
+    // Only show if within 5 seconds
+    if (elapsed > 5000) return;
+
+    const header = document.getElementById('smallhead-inner');
+    if (!header) return;
+
+    const btn = document.createElement('a');
+    btn.href = '/random/' + encodeURIComponent(data.tag) + '/';
+    btn.className = 'random-tag-nav';
+    btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"></circle><circle cx="15.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"></circle><circle cx="8.5" cy="15.5" r="1.5" fill="currentColor" stroke="none"></circle><circle cx="15.5" cy="15.5" r="1.5" fill="currentColor" stroke="none"></circle><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"></circle></svg> Random ' + data.tag;
+
+    btn.addEventListener('click', function(e) {
+      // Bump the timestamp before navigating
+      localStorage.setItem('random_tag', JSON.stringify({
+        tag: data.tag,
+        timestamp: Date.now()
+      }));
+    });
+
+    // Insert before the Subscribe link
+    const subscribeLink = document.getElementById('smallhead-about');
+    if (subscribeLink) {
+      header.insertBefore(btn, subscribeLink);
+    } else {
+      header.appendChild(btn);
+    }
+  } catch (e) {
+    // Invalid JSON, clear it
+    localStorage.removeItem('random_tag');
+  }
+})();
+</script>
+<script>
+// Theme toggle functionality
+(function() {
+  const toggle = document.getElementById('theme-toggle');
+  const iconAuto = document.getElementById('icon-auto');
+  const iconLight = document.getElementById('icon-light');
+  const iconDark = document.getElementById('icon-dark');
+
+  // Theme states: 'auto' (default), 'light', 'dark'
+  function getTheme() {
+    return localStorage.getItem('theme') || 'auto';
+  }
+
+  function setTheme(theme) {
+    if (theme === 'auto') {
+      localStorage.removeItem('theme');
+      document.documentElement.removeAttribute('data-theme');
+    } else {
+      localStorage.setItem('theme', theme);
+      document.documentElement.setAttribute('data-theme', theme);
+    }
+    updateIcon(theme);
+  }
+
+  function updateIcon(theme) {
+    iconAuto.style.display = theme === 'auto' ? 'block' : 'none';
+    iconLight.style.display = theme === 'light' ? 'block' : 'none';
+    iconDark.style.display = theme === 'dark' ? 'block' : 'none';
+
+    // Update aria-label for accessibility
+    const labels = {
+      'auto': 'Theme: Auto (system preference). Click to switch to light.',
+      'light': 'Theme: Light. Click to switch to dark.',
+      'dark': 'Theme: Dark. Click to switch to auto.'
+    };
+    toggle.setAttribute('aria-label', labels[theme]);
+  }
+
+  // Cycle through themes: auto -> light -> dark -> auto
+  function cycleTheme() {
+    const current = getTheme();
+    const next = current === 'auto' ? 'light' : current === 'light' ? 'dark' : 'auto';
+    setTheme(next);
+  }
+
+  // Initialize
+  updateIcon(getTheme());
+  toggle.addEventListener('click', cycleTheme);
+})();
+</script>
+</body>
+</html>

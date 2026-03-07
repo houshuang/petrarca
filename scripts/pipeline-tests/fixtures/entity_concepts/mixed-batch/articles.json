@@ -1,0 +1,113 @@
+[
+  {
+    "id": "31b2ba4bbb6f",
+    "title": "Codified Context: Infrastructure for AI Agents in a Complex Codebase",
+    "topics": [
+      "agents",
+      "AGENTS.md",
+      "context-engineering",
+      "research"
+    ],
+    "full_summary": "This paper presents the concept of \"codified context\" — structured documentation and infrastructure that helps AI agents navigate and work effectively in complex codebases. The authors argue that as codebases grow beyond a certain size, agents need explicit infrastructure (like AGENTS.md files) rather than relying on ad-hoc prompt engineering.",
+    "one_line_summary": "Research paper on building infrastructure for AI coding agents in large codebases.",
+    "key_claims": [
+      "AGENTS.md files help AI coding agents navigate complex codebases",
+      "Codified context scales better than ad-hoc prompting for large projects",
+      "Infrastructure for agents should be treated as first-class engineering concern"
+    ]
+  },
+  {
+    "id": "3d6edb8f1271",
+    "title": "Karpathy: Notes on Claude Coding After Weeks of Heavy Use",
+    "topics": [
+      "llm-coding",
+      "ai-agents",
+      "developer-workflow",
+      "claude",
+      "software-engineering",
+      "productivity",
+      "code-quality",
+      "ai-impact"
+    ],
+    "full_summary": "Andrej Karpathy describes his rapid shift from 80% manual coding to 80% agent-assisted coding in just weeks, calling it the biggest workflow change in two decades. He details specific failure modes of current agents—wrong assumptions, overcomplicated code, sycophancy—while maintaining they're still a net huge improvement. He observes that the real gain isn't just speed but expansion of what's possible, recommends declarative over imperative prompting for leverage, and predicts 2026 will bring both genuine productivity gains and a 'slopacolypse' of AI-generated low-quality content across digital media.",
+    "one_line_summary": "Karpathy shares how LLM agents crossed a threshold in Dec 2025, shifting 80% of his coding to agents.",
+    "key_claims": [
+      "LLM agent capabilities crossed a coherence threshold around December 2025, causing a phase shift in software engineering",
+      "The shift from 80% manual to 80% agent coding happened in weeks—the biggest workflow change in 20 years",
+      "The main benefit is expansion of what's possible, not just speedup of existing work",
+      "Agent errors are now subtle conceptual mistakes, not syntax errors—they make wrong assumptions and overcomplicate code",
+      "Declarative prompting with success criteria dramatically outperforms imperative step-by-step instructions",
+      "Human stamina is a core work bottleneck that LLMs have dramatically reduced",
+      "2026 will bring both real productivity gains and a slopacolypse of AI-generated low-quality content"
+    ]
+  },
+  {
+    "id": "0e77e7f08ea4",
+    "title": "AGENTS.md: An Open Format for Guiding AI Coding Agents",
+    "topics": [
+      "ai-agents",
+      "coding-agents",
+      "developer-tools",
+      "open-standards",
+      "devex",
+      "agents-md",
+      "monorepo"
+    ],
+    "full_summary": "AGENTS.md is a proposed open format — a 'README for agents' — that provides AI coding agents with project-specific context like build commands, code style, and testing instructions. Unlike README.md which targets human contributors, AGENTS.md is designed to give agents precise, predictable guidance without cluttering human-facing docs. The format has been adopted by over 60,000 open-source projects and is backed by a cross-industry coalition including OpenAI Codex, Google Jules, Cursor, Amp, and Factory. It is now stewarded by the Agentic AI Foundation under the Linux Foundation.",
+    "one_line_summary": "AGENTS.md is an open standard for giving AI coding agents project-specific instructions, adopted by 60k+ open-source projects.",
+    "key_claims": [
+      "AGENTS.md is adopted by over 60,000 open-source projects on GitHub",
+      "It serves as a 'README for agents' — a predictable file for AI coding agent instructions",
+      "Intentionally separated from README.md to keep human docs concise",
+      "A single AGENTS.md works across multiple AI coding tools (Codex, Cursor, Jules, Amp, etc.)",
+      "Now governed by the Agentic AI Foundation under the Linux Foundation",
+      "The format has no required fields and supports nested files for monorepos",
+      "Emerged from cross-industry collaboration rather than a single vendor"
+    ]
+  },
+  {
+    "id": "fb84e3197a92",
+    "title": "Five Books on Byzantium: Judith Herrin's Essential Reading List",
+    "topics": [
+      "byzantium",
+      "late-antiquity",
+      "medieval-history",
+      "islamic-history",
+      "historiography",
+      "istanbul",
+      "book-recommendations"
+    ],
+    "full_summary": "In this interview, Judith Herrin, professor emerita of Late Antique and Byzantine Studies at King's College London, selects five books essential to understanding Byzantium. Her picks range from an 11th-century insider account by Michael Psellus, through Peter Brown's paradigm-shifting concept of Late Antiquity, J.B. Bury's masterful classical history, Cook and Crone's controversial study of Islam's rise through non-Arabic sources, to a layered guidebook of Istanbul. Throughout, Herrin emphasizes Byzantium as a dynamic, constantly transforming civilization—not the static decline portrayed by Gibbon—spanning over a millennium and bridging ancient Greek, Roman, Christian, and Islamic worlds.",
+    "one_line_summary": "Byzantine scholar Judith Herrin recommends five books that illuminate Byzantium's millennium-long civilization.",
+    "key_claims": [
+      "Byzantium lasted over a millennium and was constantly transforming, not the static civilization it is often assumed to be",
+      "Late Antiquity as an academic concept was largely invented by Peter Brown's book, replacing Gibbon's decline-and-fall narrative",
+      "Arab conquests took about 40 years and cost Byzantium nearly two-thirds of its territory",
+      "Byzantine culture fused Ancient Greek pagan roots with Roman, Christian, and medieval influences in a continuously evolving mixture",
+      "Nestorian Christians carried Roman ideas in Christian form from Persia all the way to China",
+      "Non-Arabic sources provide a fundamentally different picture of Islam's rise than the traditional Arabic accounts"
+    ]
+  },
+  {
+    "id": "5b728856b62a",
+    "title": "The Islamization of Egypt and the Levant: A Later, More Complex Story",
+    "topics": [
+      "islamic-history",
+      "egypt",
+      "levant",
+      "religious-conversion",
+      "ottoman-empire",
+      "medieval-history",
+      "state-collapse"
+    ],
+    "full_summary": "This thread discusses a book examining the cultural and religious transformation of Egypt and the Levant from Christian-majority to Muslim-majority societies. Contrary to popular belief, this shift did not result primarily from direct imposition by early Muslim conquerors, who actually had financial incentives to maintain a taxable Christian population. Instead, the decisive transformation occurred centuries later amid state breakdown, regional fragmentation, and competing warlords. Stability was eventually restored by the Ottomans, but by then the demographic shift was well underway.",
+    "one_line_summary": "Islamization of Egypt and the Levant was driven more by later state collapse than by early Muslim conquest.",
+    "key_claims": [
+      "Islamization of Egypt and the Levant began centuries after the initial Muslim conquests, not during them",
+      "Early Muslim rulers had financial disincentives to convert Christians, who were a major tax revenue source",
+      "Taxation and social discrimination eroded Christian demographics but were insufficient alone to cause the shift",
+      "State collapse and regional fragmentation under competing warlords drove the decisive demographic transformation",
+      "The Ottoman Empire eventually restored stability to the region after this period of fragmentation"
+    ]
+  }
+]

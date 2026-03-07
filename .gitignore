@@ -48,3 +48,6 @@ __pycache__/
 
 # Temp files
 stderr.tmp
+
+# Pipeline test sessions (generated output, not fixtures)
+scripts/pipeline-tests/sessions/

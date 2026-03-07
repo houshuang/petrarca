@@ -1,0 +1,5 @@
+{
+  "title": "Minimal content — short article with cruft wrapping",
+  "description": "Very short article (2 paragraphs) wrapped in subscribe/menu/share cruft. Tests that content_preserved and non_empty checks still pass after aggressive cleaning",
+  "expected_removed": ["Subscribe", "Menu", "Share this post"]
+}

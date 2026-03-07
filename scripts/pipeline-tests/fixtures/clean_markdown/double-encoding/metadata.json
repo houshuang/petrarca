@@ -1,0 +1,5 @@
+{
+  "title": "Double-encoded HTML entities",
+  "description": "Content with &amp;amp; &amp;lt; &amp;gt; &amp;quot; &amp;nbsp; double-encoded HTML entities throughout, testing whether clean_markdown handles or at least doesn't break on them",
+  "expected_removed": ["&amp;copy;"]
+}
