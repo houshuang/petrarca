@@ -51,4 +51,6 @@ Master index of all research documents. **Always update this file when adding ne
 | [user-journey-analysis.md](user-journey-analysis.md) | Assumptions vs. reality: expected user journey over weeks, gap analysis, prioritized recommendations | Done |
 | [content-refresh-design.md](content-refresh-design.md) | Architecture for scheduled pipeline on Hetzner + HTTP content serving + app sync | Done |
 | [honest-assessment.md](honest-assessment.md) | Frank self-critique: what works, what doesn't, risk-ranked assumptions, experiments needed | Done |
+| [reset-implementation-log.md](reset-implementation-log.md) | **Major reset**: strip to feed+reader, litellm pipeline, interest model — full design spec + next steps | Done |
 | [user-journey-weeks.md](user-journey-weeks.md) | Detailed 4-week user journey narrative, grounded in interviews + design research | Done |
+| [user-guide.md](user-guide.md) | **User guide** — capture flows, reading modes, integrations, non-obvious features, hypotheses to test | Done |
