@@ -1,4 +1,4 @@
 trafilatura>=2.0.0
 requests>=2.31.0
 lxml>=5.0.0
-google-generativeai>=0.8.0
+litellm>=1.0.0

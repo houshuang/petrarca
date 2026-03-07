@@ -117,34 +117,30 @@ Return ONLY a valid JSON object mapping entity ID to array of related IDs:
 Only include entities that have at least one relationship."""
 
 
-def _call_gemini(prompt: str, system_instruction: str = None) -> str | None:
-    """Call Gemini API for concept extraction."""
-    api_key = os.environ.get("GEMINI_KEY", "")
-    if not api_key:
-        # Try loading from .env
-        env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
-        if os.path.exists(env_path):
-            with open(env_path) as f:
-                for line in f:
-                    if line.startswith("GEMINI_KEY="):
-                        api_key = line.strip().split("=", 1)[1]
-    if not api_key:
-        print("    GEMINI_KEY not set", file=sys.stderr)
-        return None
-    try:
-        import google.generativeai as genai
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-2.0-flash', system_instruction=system_instruction)
-        response = model.generate_content(prompt)
-        return response.text.strip() if response.text else None
-    except Exception as e:
-        print(f"    Gemini error: {e}", file=sys.stderr)
-        return None
+LLM_MODEL = os.environ.get("PETRARCA_LLM_MODEL", "gemini/gemini-2.0-flash")
+
+# litellm expects GEMINI_API_KEY; bridge from our GEMINI_KEY if needed
+if os.environ.get("GEMINI_KEY") and not os.environ.get("GEMINI_API_KEY"):
+    os.environ["GEMINI_API_KEY"] = os.environ["GEMINI_KEY"]
 
 
 def call_llm(prompt: str) -> str | None:
-    """Call Gemini API."""
-    return _call_gemini(prompt)
+    """Call LLM via litellm."""
+    try:
+        from litellm import completion
+        response = completion(
+            model=LLM_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=4096,
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"    LLM error ({LLM_MODEL}): {e}", file=sys.stderr)
+        return None
+
+
+# Alias
+_call_gemini = call_llm
 
 
 def parse_json_response(response: str) -> list | dict | None:

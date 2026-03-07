@@ -446,47 +446,34 @@ def deduplicate_fetched(fetched: list[dict]) -> list[dict]:
 # Step 4: Build articles with LLM processing
 # ---------------------------------------------------------------------------
 
-def _call_llm(prompt: str, provider: str = "gemini") -> str | None:
-    """Call LLM API. Provider: 'gemini' (default, cheap/fast) or 'anthropic' (high-value)."""
-    if provider == "anthropic":
-        return _call_anthropic(prompt)
-    return _call_gemini(prompt)
+LLM_MODEL = os.environ.get("PETRARCA_LLM_MODEL", "gemini/gemini-2.0-flash")
+
+# litellm expects GEMINI_API_KEY; bridge from our GEMINI_KEY if needed
+if os.environ.get("GEMINI_KEY") and not os.environ.get("GEMINI_API_KEY"):
+    os.environ["GEMINI_API_KEY"] = os.environ["GEMINI_KEY"]
 
 
-def _call_gemini(prompt: str, system_instruction: str = None) -> str | None:
-    """Call Gemini API for article processing."""
-    api_key = os.environ.get("GEMINI_KEY", "")
-    if not api_key:
-        print("    GEMINI_KEY not set, falling back to anthropic", file=sys.stderr)
-        return _call_anthropic(prompt)
+def _call_llm(prompt: str, model: str | None = None) -> str | None:
+    """Call LLM via litellm. Model defaults to PETRARCA_LLM_MODEL env var."""
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-2.0-flash', system_instruction=system_instruction)
-        response = model.generate_content(prompt)
-        return response.text.strip() if response.text else None
-    except Exception as e:
-        print(f"    gemini error: {e}", file=sys.stderr)
-        return None
-
-
-def _call_anthropic(prompt: str) -> str | None:
-    api_key = os.environ.get("ANTHROPIC_KEY", "")
-    if not api_key:
-        print("    ANTHROPIC_KEY not set", file=sys.stderr)
-        return None
-    try:
-        import anthropic
-        client = anthropic.Anthropic(api_key=api_key)
-        message = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=4096,
+        from litellm import completion
+        response = completion(
+            model=model or LLM_MODEL,
             messages=[{"role": "user", "content": prompt}],
+            max_tokens=4096,
         )
-        return message.content[0].text.strip() if message.content else None
+        return response.choices[0].message.content.strip()
     except Exception as e:
-        print(f"    anthropic error: {e}", file=sys.stderr)
+        print(f"    LLM error ({model or LLM_MODEL}): {e}", file=sys.stderr)
         return None
+
+
+# Aliases for backwards compatibility
+def _call_gemini(prompt: str, system_instruction: str = None) -> str | None:
+    return _call_llm(prompt)
+
+def _call_claude(prompt: str, timeout: int = 180) -> str | None:
+    return _call_llm(prompt)
 
 
 
