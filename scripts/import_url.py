@@ -27,7 +27,7 @@ from urllib.parse import urlparse
 sys.path.insert(0, str(Path(__file__).parent))
 from build_articles import (
     fetch_article,
-    _call_claude,
+    _call_llm,
     _build_article_prompt,
     _article_id,
     _save_json,
@@ -112,7 +112,7 @@ def _process_with_llm(fetched: dict, dry_run: bool = False) -> dict:
 
     print(f"  Processing with LLM: {title[:60]} ({word_count} words)", file=sys.stderr)
     prompt = _build_article_prompt(fetched["text"], title)
-    response = _call_claude(prompt)
+    response = _call_llm(prompt)
 
     if response:
         try:

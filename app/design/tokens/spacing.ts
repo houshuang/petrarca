@@ -40,4 +40,8 @@ export const layout = {
   progressBarHeight: 3,
   /** Depth nav underline height */
   depthUnderlineHeight: 2,
+  /** Sidebar navigation width (desktop web) */
+  sidebarNavWidth: 220,
+  /** Max content width for screens (desktop web) */
+  contentMaxWidth: 960,
 } as const;

@@ -21,6 +21,8 @@ export interface Article {
   reading_order?: 'foundational' | 'intermediate' | 'deep';
   exploration_tier?: 'foundational' | 'intermediate' | 'deep';
   exploration_order?: number;
+  interest_topics?: InterestTopic[];
+  novelty_claims?: NoveltyClaim[];
 }
 
 export interface ArticleSection {
@@ -43,16 +45,33 @@ export type ContentType =
   | 'research' | 'reference' | 'announcement' | 'discussion'
   | 'unknown';
 
+// --- Interest-driven fields (extracted by pipeline) ---
+
+export interface InterestTopic {
+  broad: string;
+  specific: string;
+  entity?: string;
+}
+
+export interface NoveltyClaim {
+  claim: string;
+  specificity: 'high' | 'medium' | 'low';
+}
+
 export interface ReadingState {
   article_id: string;
-  depth: ReadingDepth;
-  current_section_index: number;
+  status: ReadingStatus;
   last_read_at: number;
   time_spent_ms: number;
   started_at: number;
+  completed_at?: number;
   scroll_position_y: number;
+  // Legacy fields for migration
+  depth?: ReadingDepth;
+  current_section_index?: number;
 }
 
+export type ReadingStatus = 'unread' | 'reading' | 'read';
 export type ReadingDepth = 'unread' | 'summary' | 'claims' | 'concepts' | 'sections' | 'full';
 
 export interface UserSignal {

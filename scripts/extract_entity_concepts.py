@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extract entity-style concepts from all articles using claude -p or API fallback.
+"""Extract entity-style concepts from all articles using Gemini API.
 
 Replaces the old sentence-style concepts with short, named knowledge entities.
 Example: "Garibaldi", "Greek colonization of Sicily", "spaced repetition"
@@ -12,7 +12,6 @@ Usage:
 
 import json
 import hashlib
-import subprocess
 import sys
 import os
 import re
@@ -118,64 +117,34 @@ Return ONLY a valid JSON object mapping entity ID to array of related IDs:
 Only include entities that have at least one relationship."""
 
 
-def call_claude_p(prompt: str) -> str | None:
-    """Call claude -p (Max plan, free)."""
-    try:
-        result = subprocess.run(
-            ["claude", "-p", "--output-format", "text"],
-            input=prompt,
-            capture_output=True,
-            text=True,
-            timeout=180,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            return result.stdout.strip()
-        print(f"    claude -p returned code {result.returncode}", file=sys.stderr)
-        if result.stderr:
-            print(f"    stderr: {result.stderr[:200]}", file=sys.stderr)
-        return None
-    except subprocess.TimeoutExpired:
-        print("    claude -p timed out", file=sys.stderr)
-        return None
-    except FileNotFoundError:
-        print("    claude CLI not found, falling back to API", file=sys.stderr)
-        return None
-
-
-def call_api(prompt: str) -> str | None:
-    """Fallback: call Anthropic API directly."""
-    api_key = os.environ.get("ANTHROPIC_KEY", "")
+def _call_gemini(prompt: str, system_instruction: str = None) -> str | None:
+    """Call Gemini API for concept extraction."""
+    api_key = os.environ.get("GEMINI_KEY", "")
     if not api_key:
         # Try loading from .env
         env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
         if os.path.exists(env_path):
             with open(env_path) as f:
                 for line in f:
-                    if line.startswith("ANTHROPIC_KEY="):
+                    if line.startswith("GEMINI_KEY="):
                         api_key = line.strip().split("=", 1)[1]
     if not api_key:
-        print("    No ANTHROPIC_KEY available", file=sys.stderr)
+        print("    GEMINI_KEY not set", file=sys.stderr)
         return None
     try:
-        import anthropic
-        client = anthropic.Anthropic(api_key=api_key)
-        message = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=8192,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return message.content[0].text.strip() if message.content else None
+        import google.generativeai as genai
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-2.0-flash', system_instruction=system_instruction)
+        response = model.generate_content(prompt)
+        return response.text.strip() if response.text else None
     except Exception as e:
-        print(f"    API error: {e}", file=sys.stderr)
+        print(f"    Gemini error: {e}", file=sys.stderr)
         return None
 
 
 def call_llm(prompt: str) -> str | None:
-    """Try claude -p first, fall back to API."""
-    result = call_claude_p(prompt)
-    if result:
-        return result
-    return call_api(prompt)
+    """Call Gemini API."""
+    return _call_gemini(prompt)
 
 
 def parse_json_response(response: str) -> list | dict | None:
@@ -365,6 +334,11 @@ def main():
                 print(f"  Added relationships to {related_count} concepts", file=sys.stderr)
             else:
                 print("  Relationship extraction returned unexpected format", file=sys.stderr)
+
+    # Safety guard: don't overwrite with empty results
+    if not all_concepts:
+        print("WARNING: Extraction produced empty concepts, keeping existing file", file=sys.stderr)
+        return
 
     # Sort by topic then name
     all_concepts.sort(key=lambda c: (c.get("topic", ""), c.get("name", "")))

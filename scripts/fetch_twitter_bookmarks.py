@@ -149,6 +149,10 @@ def tweet_to_dict(tweet) -> dict:
         "lang": tweet.lang,
     }
 
+    # Track reply chain info for thread reconstruction
+    if hasattr(tweet, 'in_reply_to') and tweet.in_reply_to:
+        result["in_reply_to_tweet_id"] = tweet.in_reply_to
+
     if tweet.quote:
         q = tweet.quote
         result["quoted_tweet"] = {
@@ -159,6 +163,46 @@ def tweet_to_dict(tweet) -> dict:
         }
 
     return result
+
+
+async def reconstruct_thread(client: Client, tweet_dict: dict) -> list[dict]:
+    """Follow the in_reply_to chain to reconstruct a full thread.
+
+    Returns a list of tweet texts in chronological order (oldest first).
+    Only follows same-author replies (self-threads), stops at cross-author replies.
+    """
+    thread_tweets = [tweet_dict["text"]]
+    author = tweet_dict["author_username"]
+    reply_to_id = tweet_dict.get("in_reply_to_tweet_id")
+    seen_ids = {tweet_dict["id"]}
+    max_depth = 25  # safety limit
+
+    depth = 0
+    while reply_to_id and depth < max_depth:
+        if reply_to_id in seen_ids:
+            break
+        seen_ids.add(reply_to_id)
+        depth += 1
+
+        try:
+            parent = await client.get_tweet_by_id(reply_to_id)
+            if not parent or not parent.user:
+                break
+            # Only follow same-author replies (self-thread)
+            if parent.user.screen_name != author:
+                # Include the parent as context but stop following
+                thread_tweets.append(parent.full_text)
+                break
+            thread_tweets.append(parent.full_text)
+            reply_to_id = getattr(parent, 'in_reply_to', None)
+            await asyncio.sleep(random.uniform(0.5, 1.5))
+        except Exception as e:
+            print(f"    Thread reconstruction stopped: {e}", file=sys.stderr)
+            break
+
+    # Reverse to chronological order (we collected newest-first)
+    thread_tweets.reverse()
+    return thread_tweets
 
 
 async def fetch_bookmarks(client: Client, limit: int | None = None) -> list[dict]:
@@ -175,7 +219,20 @@ async def fetch_bookmarks(client: Client, limit: int | None = None) -> list[dict
             if tweet.id in seen_ids:
                 continue
             seen_ids.add(tweet.id)
-            all_tweets.append(tweet_to_dict(tweet))
+            tweet_dict = tweet_to_dict(tweet)
+
+            # Reconstruct thread if this is a reply
+            if tweet_dict.get("in_reply_to_tweet_id"):
+                try:
+                    thread_texts = await reconstruct_thread(client, tweet_dict)
+                    if len(thread_texts) > 1:
+                        tweet_dict["thread_texts"] = thread_texts
+                        tweet_dict["thread_full_text"] = "\n\n---\n\n".join(thread_texts)
+                        print(f"    Reconstructed thread: {len(thread_texts)} tweets", file=sys.stderr)
+                except Exception as e:
+                    print(f"    Thread reconstruction failed: {e}", file=sys.stderr)
+
+            all_tweets.append(tweet_dict)
             new_in_page += 1
             if limit and len(all_tweets) >= limit:
                 return all_tweets

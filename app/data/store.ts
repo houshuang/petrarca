@@ -1,36 +1,20 @@
-import { Article, ReadingState, UserSignal, ReadingDepth, Concept, ConceptState, ConceptKnowledgeLevel, VoiceNote, ConceptReview, ReviewRating, ConceptNote, TopicSynthesis, Highlight, Book, BookSection, BookReadingState, BookReadingDepth, SectionReadingState, PersonalThreadEntry, ClaimSignalType } from './types';
+import { Article, ReadingState, UserSignal, Highlight } from './types';
 import { logEvent } from './logger';
-import { loadSignals, saveSignals, loadReadingStates, saveReadingStates, loadConceptStates, saveConceptStates, loadVoiceNotes, saveVoiceNotes, loadConceptReviews, saveConceptReviews, loadHighlights, saveHighlights, loadBookReadingStates, saveBookReadingStates } from './persistence';
-import { checkForUpdates, downloadContent, loadCachedContent, fetchBookChapterSections } from './content-sync';
-import { scheduleNewContentNotification } from '../lib/notifications';
+import { loadSignals, saveSignals, loadReadingStates, saveReadingStates, loadHighlights, saveHighlights } from './persistence';
+import { checkForUpdates, downloadContent, loadCachedContent } from './content-sync';
+import { loadInterestProfile, scoreArticle, recordSignal, getTotalSignalCount } from './interest-model';
+import type { SignalAction } from './interest-model';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 let articles: Article[] = [];
-let concepts: Concept[] = [];
-let syntheses: TopicSynthesis[] = [];
-let books: Book[] = [];
-let bookSections = new Map<string, BookSection[]>(); // keyed by "bookId:chN"
 let readingStates = new Map<string, ReadingState>();
-let bookReadingStates = new Map<string, BookReadingState>();
-let conceptStates = new Map<string, ConceptState>();
-let conceptReviews = new Map<string, ConceptReview>();
-let voiceNotes: VoiceNote[] = [];
 let highlights: Highlight[] = [];
 let signals: UserSignal[] = [];
 let dismissedArticles = new Set<string>();
 let initialized = false;
 let initPromise: Promise<void> | null = null;
 
-// Current reader state (for sidebar context)
-let currentReaderArticleId: string | null = null;
-export function setCurrentReaderArticle(id: string | null) { currentReaderArticleId = id; }
-export function getCurrentReaderArticle() { return currentReaderArticleId; }
-
 const DISMISSED_KEY = '@petrarca/dismissed_articles';
-
-// Precomputed: article_id -> concept_ids
-let articleConceptIndex = new Map<string, string[]>();
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 // --- Dismissed articles ---
 
@@ -61,6 +45,8 @@ export function isDismissed(articleId: string): boolean {
   return dismissedArticles.has(articleId);
 }
 
+// --- Init ---
+
 export async function initStore(): Promise<void> {
   if (initialized) return;
   if (initPromise) return initPromise;
@@ -70,63 +56,30 @@ export async function initStore(): Promise<void> {
     const cached = await loadCachedContent();
     if (cached && cached.articles.length > 0) {
       articles = cached.articles;
-      concepts = cached.concepts;
-      if (cached.syntheses) syntheses = cached.syntheses;
-      if (cached.books) books = cached.books;
     } else {
-      // Fall back to bundled static JSON
       try {
         const data = require('./articles.json');
         articles = (Array.isArray(data) ? data : []) as Article[];
       } catch {
         articles = [];
       }
-      try {
-        const conceptData = require('./concepts.json');
-        concepts = (Array.isArray(conceptData) ? conceptData : []) as Concept[];
-      } catch {
-        concepts = [];
-      }
     }
 
-    // Sort by exploration tier (foundational first), then date
-    articles.sort(explorationSort);
-
-    // Load syntheses
-    try {
-      const synthData = require('./syntheses.json');
-      syntheses = (Array.isArray(synthData) ? synthData : []) as TopicSynthesis[];
-    } catch {
-      syntheses = [];
-    }
-
-    // Build article->concept index
-    rebuildConceptIndex();
+    // Sort by date (newest first)
+    articles.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
     signals = await loadSignals();
     readingStates = await loadReadingStates();
-    conceptStates = await loadConceptStates();
-    conceptReviews = await loadConceptReviews();
-    voiceNotes = await loadVoiceNotes();
     highlights = await loadHighlights();
-    bookReadingStates = await loadBookReadingStates();
     await loadDismissedArticles();
-
-    // No pre-seeding: with exploration-ordered content, foundational articles
-    // appear first so the user discovers concepts naturally through reading.
+    await loadInterestProfile();
 
     initialized = true;
 
     logEvent('store_initialized', {
       total_articles: articles.length,
-      total_concepts: concepts.length,
-      total_books: books.length,
       loaded_signals: signals.length,
       loaded_reading_states: readingStates.size,
-      loaded_book_reading_states: bookReadingStates.size,
-      loaded_concept_states: conceptStates.size,
-      loaded_concept_reviews: conceptReviews.size,
-      loaded_voice_notes: voiceNotes.length,
       loaded_highlights: highlights.length,
       loaded_dismissed: dismissedArticles.size,
     });
@@ -134,19 +87,12 @@ export async function initStore(): Promise<void> {
     // Background: check for content updates from server
     checkForUpdates().then(async (hasUpdates) => {
       if (hasUpdates) {
-        const oldCount = articles.length;
         const fresh = await downloadContent();
         if (fresh) {
-          mergeNewContent(fresh.articles, fresh.concepts, fresh.syntheses, fresh.books);
-          const newCount = fresh.articles.length - oldCount;
-          if (newCount > 0) {
-            scheduleNewContentNotification(newCount);
-          }
+          articles = fresh.articles;
+          articles.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
           logEvent('content_refreshed', {
             article_count: fresh.articles.length,
-            concept_count: fresh.concepts.length,
-            synthesis_count: fresh.syntheses?.length || 0,
-            book_count: fresh.books?.length || 0,
           });
         }
       }
@@ -156,52 +102,8 @@ export async function initStore(): Promise<void> {
   return initPromise;
 }
 
-function rebuildConceptIndex() {
-  articleConceptIndex.clear();
-  for (const c of concepts) {
-    for (const aid of c.source_article_ids) {
-      if (!articleConceptIndex.has(aid)) articleConceptIndex.set(aid, []);
-      articleConceptIndex.get(aid)!.push(c.id);
-    }
-  }
-}
-
-function mergeNewContent(newArticles: Article[], newConcepts: Concept[], newSyntheses?: TopicSynthesis[], newBooks?: Book[]) {
-  articles = newArticles;
-  articles.sort(explorationSort);
-  concepts = newConcepts;
-  if (newSyntheses) syntheses = newSyntheses;
-  if (newBooks) books = newBooks;
-  rebuildConceptIndex();
-}
-
 export function isInitialized(): boolean {
   return initialized;
-}
-
-// --- Exploration ordering ---
-
-const TIER_BASE: Record<string, number> = {
-  foundational: 0,
-  intermediate: 100,
-  deep: 200,
-};
-
-export function getExplorationOrder(article: Article): number {
-  if (!article.exploration_tier) return 999;
-  const base = TIER_BASE[article.exploration_tier] ?? 999;
-  const subtopicOffset = article.exploration_order ?? 0;
-  // Parent articles sort before their children (parent_id means it's a child chunk)
-  const chunkOffset = article.parent_id ? 0.5 : 0;
-  return base + subtopicOffset + chunkOffset;
-}
-
-function explorationSort(a: Article, b: Article): number {
-  const orderA = getExplorationOrder(a);
-  const orderB = getExplorationOrder(b);
-  if (orderA !== orderB) return orderA - orderB;
-  // Within same subtopic, sort by date
-  return (a.date || '').localeCompare(b.date || '');
 }
 
 // --- Article access ---
@@ -210,79 +112,52 @@ export function getArticles(): Article[] {
   return articles;
 }
 
-export function getSortedArticles(): Article[] {
-  return [...articles].sort(explorationSort);
-}
-
 export function getArticleById(id: string): Article | undefined {
   return articles.find(a => a.id === id);
 }
 
-export function getFeedArticles(): Article[] {
-  return articles.filter(a => {
+/**
+ * Get feed articles: not dismissed, not read. Ranked by interest model.
+ * Cold start (~< 20 signals): falls back to date sort.
+ */
+export function getRankedFeedArticles(): Article[] {
+  const candidates = articles.filter(a => {
+    if (dismissedArticles.has(a.id)) return false;
     const state = readingStates.get(a.id);
-    return !state || state.depth === 'unread';
+    if (state && state.status === 'read') return false;
+    return true;
   });
-}
 
-export function getLibraryArticles(): Article[] {
-  return articles
-    .filter(a => {
-      const state = readingStates.get(a.id);
-      return state && state.depth !== 'unread';
-    })
-    .sort((a, b) => {
-      const sa = readingStates.get(a.id);
-      const sb = readingStates.get(b.id);
-      return (sb?.last_read_at || 0) - (sa?.last_read_at || 0);
-    });
-}
+  const hasEnoughSignals = getTotalSignalCount() >= 10;
+  if (!hasEnoughSignals) {
+    return candidates; // Already sorted by date from initStore
+  }
 
-export function getInProgressArticles(): Article[] {
-  return articles
-    .filter(a => {
-      const state = readingStates.get(a.id);
-      return state && state.depth !== 'unread' && state.depth !== 'full';
-    })
-    .sort((a, b) => {
-      const sa = readingStates.get(a.id);
-      const sb = readingStates.get(b.id);
-      return (sb?.last_read_at || 0) - (sa?.last_read_at || 0);
-    });
+  // Build recent topic list (last 10 articles shown) for variety penalty
+  const recentTopics = candidates
+    .slice(0, 10)
+    .flatMap(a => (a.interest_topics || []).map(t => t.specific));
+
+  return candidates
+    .map(a => ({ article: a, score: scoreArticle(a, recentTopics) }))
+    .sort((a, b) => b.score - a.score)
+    .map(x => x.article);
 }
 
 /**
- * Find articles related to the given article through shared concepts.
+ * Get read articles for the bottom section of the feed.
  */
-export function getRelatedArticles(articleId: string, limit: number = 3): Array<{ article: Article; sharedConcepts: string[] }> {
-  const conceptIds = articleConceptIndex.get(articleId) || [];
-  if (conceptIds.length === 0) return [];
-
-  const scores = new Map<string, { count: number; concepts: string[] }>();
-
-  for (const cid of conceptIds) {
-    const concept = concepts.find(c => c.id === cid);
-    if (!concept) continue;
-
-    for (const relatedArticleId of concept.source_article_ids) {
-      if (relatedArticleId === articleId) continue;
-      if (!scores.has(relatedArticleId)) {
-        scores.set(relatedArticleId, { count: 0, concepts: [] });
-      }
-      const entry = scores.get(relatedArticleId)!;
-      entry.count++;
-      entry.concepts.push(conceptName(concept));
-    }
-  }
-
-  return [...scores.entries()]
-    .sort((a, b) => b[1].count - a[1].count)
-    .slice(0, limit)
-    .map(([id, { concepts: sharedConcepts }]) => {
-      const article = articles.find(a => a.id === id);
-      return article ? { article, sharedConcepts } : null;
+export function getReadArticles(): Article[] {
+  return articles
+    .filter(a => {
+      const state = readingStates.get(a.id);
+      return state && state.status === 'read';
     })
-    .filter((x): x is { article: Article; sharedConcepts: string[] } => x !== null);
+    .sort((a, b) => {
+      const sa = readingStates.get(a.id);
+      const sb = readingStates.get(b.id);
+      return (sb?.completed_at || sb?.last_read_at || 0) - (sa?.completed_at || sa?.last_read_at || 0);
+    });
 }
 
 // --- Reading state ---
@@ -290,8 +165,7 @@ export function getRelatedArticles(articleId: string, limit: number = 3): Array<
 export function getReadingState(articleId: string): ReadingState {
   return readingStates.get(articleId) || {
     article_id: articleId,
-    depth: 'unread' as ReadingDepth,
-    current_section_index: 0,
+    status: 'unread',
     last_read_at: 0,
     time_spent_ms: 0,
     started_at: 0,
@@ -304,13 +178,20 @@ export function updateReadingState(articleId: string, updates: Partial<ReadingSt
   const updated = { ...current, ...updates, article_id: articleId };
   readingStates.set(articleId, updated);
   saveReadingStates(readingStates);
+}
 
-  logEvent('reading_state_update', {
+export function markArticleRead(articleId: string) {
+  const current = getReadingState(articleId);
+  const updated: ReadingState = {
+    ...current,
     article_id: articleId,
-    depth: updated.depth,
-    section_index: updated.current_section_index,
-    time_spent_ms: updated.time_spent_ms,
-  });
+    status: 'read',
+    completed_at: Date.now(),
+    last_read_at: Date.now(),
+  };
+  readingStates.set(articleId, updated);
+  saveReadingStates(readingStates);
+  logEvent('article_read', { article_id: articleId, time_spent_ms: updated.time_spent_ms });
 }
 
 // --- Signals ---
@@ -318,24 +199,14 @@ export function updateReadingState(articleId: string, updates: Partial<ReadingSt
 export function addSignal(signal: UserSignal) {
   signals.push(signal);
   saveSignals(signals);
-
-  const article = getArticleById(signal.article_id);
   logEvent('signal', {
     article_id: signal.article_id,
     signal: signal.signal,
-    title: article?.title,
-    topics: article?.topics,
-    depth: signal.depth,
-    section_index: signal.section_index,
   });
 }
 
 export function getSignals(): UserSignal[] {
   return [...signals];
-}
-
-export function getSignalForArticle(id: string): UserSignal | undefined {
-  return signals.findLast(s => s.article_id === id);
 }
 
 // --- Topic grouping ---
@@ -349,331 +220,6 @@ export function getByTopic(): Map<string, Article[]> {
     }
   }
   return topicMap;
-}
-
-// --- Syntheses ---
-
-export function getSynthesisForTopic(topic: string): TopicSynthesis | undefined {
-  return syntheses.find(s => s.topic === topic);
-}
-
-// --- Stats ---
-
-export function getStats() {
-  const readArticles = articles.filter(a => {
-    const s = readingStates.get(a.id);
-    return s && s.depth !== 'unread';
-  });
-
-  const depthCounts = { summary: 0, claims: 0, concepts: 0, sections: 0, full: 0 };
-  let totalTimeMs = 0;
-  for (const [, state] of readingStates) {
-    if (state.depth !== 'unread') {
-      depthCounts[state.depth]++;
-      totalTimeMs += state.time_spent_ms;
-    }
-  }
-
-  return {
-    total: articles.length,
-    read: readArticles.length,
-    unread: articles.length - readArticles.length,
-    ...depthCounts,
-    totalTimeMs,
-    signals: signals.length,
-    totalConcepts: concepts.length,
-    knownConcepts: [...conceptStates.values()].filter(s => s.state === 'known').length,
-    encounteredConcepts: [...conceptStates.values()].filter(s => s.state === 'encountered').length,
-  };
-}
-
-// --- Concepts & Knowledge Model ---
-
-export function getConcepts(): Concept[] {
-  return concepts;
-}
-
-export function getConceptState(conceptId: string): ConceptState {
-  return conceptStates.get(conceptId) || {
-    concept_id: conceptId,
-    state: 'unknown' as ConceptKnowledgeLevel,
-    last_seen: 0,
-    signal_count: 0,
-  };
-}
-
-export function updateConceptState(conceptId: string, state: ConceptKnowledgeLevel) {
-  const current = getConceptState(conceptId);
-  const updated: ConceptState = {
-    ...current,
-    concept_id: conceptId,
-    state,
-    last_seen: Date.now(),
-    signal_count: current.signal_count + 1,
-  };
-  conceptStates.set(conceptId, updated);
-  saveConceptStates(conceptStates);
-
-  // Create review state if transitioning from unknown
-  if (current.state === 'unknown' && state !== 'unknown' && !conceptReviews.has(conceptId)) {
-    const review = getOrCreateReview(conceptId);
-    // "known" concepts get longer initial interval
-    review.stability_days = state === 'known' ? 7 : 1;
-    review.due_at = Date.now() + review.stability_days * DAY_MS;
-    conceptReviews.set(conceptId, review);
-    saveConceptReviews(conceptReviews);
-  }
-
-  logEvent('concept_state_update', {
-    concept_id: conceptId,
-    state,
-    signal_count: updated.signal_count,
-  });
-}
-
-/**
- * When a user signals on a claim, find matching concepts and update their state.
- * "knew_it" -> concept becomes "known"
- * "interesting" -> concept becomes "encountered"
- */
-const STOP_WORDS = new Set([
-  'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-  'should', 'may', 'might', 'shall', 'can', 'need', 'must',
-  'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from', 'as',
-  'into', 'through', 'during', 'before', 'after', 'above', 'below',
-  'and', 'but', 'or', 'nor', 'not', 'so', 'yet', 'both', 'either',
-  'that', 'which', 'who', 'whom', 'this', 'these', 'those',
-  'it', 'its', 'they', 'them', 'their', 'we', 'our', 'you', 'your',
-  'than', 'more', 'most', 'very', 'also', 'just', 'about',
-]);
-
-function contentWords(text: string): Set<string> {
-  const words = text.toLowerCase().replace(/[^\w\s]/g, '').split(/\s+/).filter(Boolean);
-  return new Set(words.filter(w => w.length > 2 && !STOP_WORDS.has(w)));
-}
-
-/** Get the display name for a concept (entity-style name, or fallback to old text) */
-function conceptName(c: Concept): string {
-  return c.name || c.text || '';
-}
-
-/** Check if a concept's name or aliases appear in a text string (case-insensitive substring match) */
-function conceptMatchesText(concept: Concept, text: string): boolean {
-  const lower = text.toLowerCase();
-  const name = conceptName(concept).toLowerCase();
-  if (name && lower.includes(name)) return true;
-  for (const alias of concept.aliases || []) {
-    if (alias && lower.includes(alias.toLowerCase())) return true;
-  }
-  return false;
-}
-
-/**
- * Get all concepts for an article with their knowledge state, sorted by state.
- * Unknown concepts first (most interesting), then encountered, then known.
- */
-export function getConceptsForArticleWithState(articleId: string): Array<{ concept: Concept; state: ConceptKnowledgeLevel }> {
-  const conceptIds = articleConceptIndex.get(articleId) || [];
-  const stateOrder: Record<ConceptKnowledgeLevel, number> = { unknown: 0, encountered: 1, known: 2 };
-
-  return conceptIds
-    .map(cid => {
-      const concept = concepts.find(c => c.id === cid);
-      if (!concept) return null;
-      const state = conceptStates.get(cid);
-      return { concept, state: state?.state || 'unknown' as ConceptKnowledgeLevel };
-    })
-    .filter((x): x is { concept: Concept; state: ConceptKnowledgeLevel } => x !== null)
-    .sort((a, b) => stateOrder[a.state] - stateOrder[b.state]);
-}
-
-/** Find concepts whose name/alias appears in the given text (for inline highlighting) */
-export function findConceptsInText(articleId: string, text: string): Concept[] {
-  const conceptIds = articleConceptIndex.get(articleId) || [];
-  return conceptIds
-    .map(cid => concepts.find(c => c.id === cid))
-    .filter((c): c is Concept => c !== null && c !== undefined && conceptMatchesText(c, text));
-}
-
-/**
- * Implicit encounter: when user spends meaningful time reading an article zone,
- * mark all "unknown" concepts for this article as "encountered".
- * Returns the list of concept IDs that were updated.
- */
-export function processImplicitEncounter(articleId: string): string[] {
-  const articleConcepts = articleConceptIndex.get(articleId) || [];
-  const updated: string[] = [];
-
-  for (const cid of articleConcepts) {
-    const current = getConceptState(cid);
-    if (current.state === 'unknown') {
-      updateConceptState(cid, 'encountered');
-      updated.push(cid);
-    }
-  }
-
-  return updated;
-}
-
-export function processClaimSignalForConcepts(articleId: string, claimText: string, signal: string) {
-  const articleConcepts = articleConceptIndex.get(articleId) || [];
-
-  for (const cid of articleConcepts) {
-    const concept = concepts.find(c => c.id === cid);
-    if (!concept) continue;
-
-    // Entity-style: check if concept name/alias appears in claim text
-    if (conceptMatchesText(concept, claimText)) {
-      if (signal === 'knew_it') {
-        updateConceptState(cid, 'known');
-      } else if (signal === 'interesting') {
-        updateConceptState(cid, 'encountered');
-      }
-      continue;
-    }
-
-    // Fallback: word overlap for concepts without a short name (legacy data)
-    const name = conceptName(concept);
-    if (name.split(/\s+/).length > 6) {
-      const conceptContent = contentWords(name);
-      if (conceptContent.size === 0) continue;
-      const claimContent = contentWords(claimText);
-      const overlap = [...conceptContent].filter(w => claimContent.has(w)).length;
-      if (overlap / conceptContent.size > 0.3) {
-        if (signal === 'knew_it') updateConceptState(cid, 'known');
-        else if (signal === 'interesting') updateConceptState(cid, 'encountered');
-      }
-    }
-  }
-}
-
-/**
- * Match transcript text against an article's concepts and create notes.
- * Lower threshold (0.2) than claims — transcripts are noisier, already scoped to article.
- */
-export function processTranscriptForConcepts(articleId: string, transcript: string, voiceNoteId: string): string[] {
-  const articleConcepts = articleConceptIndex.get(articleId) || [];
-  const matched: string[] = [];
-
-  for (const cid of articleConcepts) {
-    const concept = concepts.find(c => c.id === cid);
-    if (!concept) continue;
-
-    // Entity-style: check if concept name appears in transcript
-    const nameMatches = conceptMatchesText(concept, transcript);
-
-    // Fallback: word overlap for legacy long-form concepts
-    let overlapMatches = false;
-    if (!nameMatches) {
-      const name = conceptName(concept);
-      if (name.split(/\s+/).length > 6) {
-        const conceptContent = contentWords(name);
-        if (conceptContent.size > 0) {
-          const transcriptContent = contentWords(transcript);
-          const overlap = [...conceptContent].filter(w => transcriptContent.has(w)).length;
-          overlapMatches = overlap / conceptContent.size > 0.2;
-        }
-      }
-    }
-
-    if (nameMatches || overlapMatches) {
-      updateConceptState(cid, 'encountered');
-
-      // Add note to review, deduplicating by voice_note_id
-      const review = getOrCreateReview(cid);
-      const alreadyLinked = review.notes.some(n => n.voice_note_id === voiceNoteId);
-      if (!alreadyLinked) {
-        review.notes.push({
-          id: `vnote_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-          text: transcript,
-          voice_note_id: voiceNoteId,
-          created_at: Date.now(),
-        });
-        conceptReviews.set(cid, review);
-      }
-
-      matched.push(cid);
-    }
-  }
-
-  if (matched.length > 0) {
-    saveConceptReviews(conceptReviews);
-    logEvent('transcript_concepts_matched', {
-      article_id: articleId,
-      voice_note_id: voiceNoteId,
-      matched_count: matched.length,
-      concept_ids: matched,
-    });
-  }
-
-  return matched;
-}
-
-/**
- * Compute novelty score for an article.
- * Returns null if no data available, or 0.0-1.0 where 1.0 = completely novel.
- */
-export function getNoveltyScore(articleId: string): number | null {
-  const conceptIds = articleConceptIndex.get(articleId);
-
-  if (conceptIds && conceptIds.length > 0) {
-    const unknownCount = conceptIds.filter(cid => {
-      const state = conceptStates.get(cid);
-      return !state || state.state === 'unknown';
-    }).length;
-    return unknownCount / conceptIds.length;
-  }
-
-  // Fallback: use claim signals from the article
-  const article = articles.find(a => a.id === articleId);
-  if (!article || article.key_claims.length === 0) return null;
-
-  const articleSignals = signals.filter(s => s.article_id === articleId);
-  if (articleSignals.length === 0) return null; // no signals yet, can't estimate
-
-  const knewCount = articleSignals.filter(s => s.signal === 'knew_it').length;
-  const totalSignaled = articleSignals.length;
-  if (totalSignaled === 0) return null;
-
-  return 1.0 - (knewCount / totalSignaled);
-}
-
-// --- Voice Notes ---
-
-export function getVoiceNotes(articleId?: string): VoiceNote[] {
-  if (articleId) return voiceNotes.filter(n => n.article_id === articleId);
-  return voiceNotes;
-}
-
-export function addVoiceNote(note: VoiceNote) {
-  voiceNotes.push(note);
-  saveVoiceNotes(voiceNotes);
-  logEvent('voice_note_added', {
-    article_id: note.article_id,
-    depth: note.depth,
-    duration_ms: note.duration_ms,
-  });
-}
-
-export function updateVoiceNoteStatus(noteId: string, status: VoiceNote['transcription_status']) {
-  const note = voiceNotes.find(n => n.id === noteId);
-  if (!note) return;
-  note.transcription_status = status;
-  saveVoiceNotes(voiceNotes);
-}
-
-export function updateVoiceNoteTranscript(noteId: string, transcript: string) {
-  const note = voiceNotes.find(n => n.id === noteId);
-  if (!note) return;
-  note.transcript = transcript;
-  note.transcription_status = 'completed';
-  saveVoiceNotes(voiceNotes);
-  logEvent('voice_note_transcribed', { note_id: noteId, article_id: note.article_id });
-}
-
-export function getVoiceNoteById(noteId: string): VoiceNote | undefined {
-  return voiceNotes.find(n => n.id === noteId);
 }
 
 // --- Highlights ---
@@ -698,491 +244,36 @@ export function addHighlight(highlight: Highlight) {
   });
 }
 
-export function updateHighlightNote(articleId: string, blockIndex: number, note: string) {
-  const h = highlights.find(h => h.article_id === articleId && h.block_index === blockIndex);
-  if (!h) return;
-  h.note = note;
-  saveHighlights(highlights);
-  logEvent('highlight_note_added', { article_id: articleId, block_index: blockIndex, note_length: note.length });
-}
-
 export function removeHighlight(articleId: string, blockIndex: number) {
   highlights = highlights.filter(h => !(h.article_id === articleId && h.block_index === blockIndex));
   saveHighlights(highlights);
   logEvent('paragraph_unhighlight', { article_id: articleId, block_index: blockIndex });
 }
 
-// --- Spaced Attention Scheduling ---
+// --- Interest signals ---
 
-function getOrCreateReview(conceptId: string): ConceptReview {
-  const existing = conceptReviews.get(conceptId);
-  if (existing) return existing;
+export function recordInterestSignal(action: SignalAction, articleId: string) {
+  const article = getArticleById(articleId);
+  if (article) {
+    recordSignal(action, article);
+  }
+}
+
+// --- Stats (simplified) ---
+
+export function getStats() {
+  let totalTimeMs = 0;
+  let readCount = 0;
+  for (const [, state] of readingStates) {
+    totalTimeMs += state.time_spent_ms;
+    if (state.status === 'read') readCount++;
+  }
 
   return {
-    concept_id: conceptId,
-    stability_days: 1,
-    difficulty: 1.0,
-    due_at: Date.now(), // due immediately
-    engagement_count: 0,
-    last_engaged_at: 0,
-    understanding: 0,
-    notes: [],
+    total: articles.length,
+    read: readCount,
+    unread: articles.length - readCount,
+    totalTimeMs,
+    signals: signals.length,
   };
-}
-
-/**
- * Ensure concepts that have been encountered/known have review states.
- */
-export function ensureReviewStates() {
-  let created = 0;
-  for (const [cid, state] of conceptStates) {
-    if (state.state !== 'unknown' && !conceptReviews.has(cid)) {
-      const review = getOrCreateReview(cid);
-      review.due_at = Date.now(); // due now
-      conceptReviews.set(cid, review);
-      created++;
-    }
-  }
-  if (created > 0) {
-    saveConceptReviews(conceptReviews);
-  }
-}
-
-/**
- * Get concepts that are due for review, ranked by priority.
- * Priority factors: overdue amount, relevance to current reading, topic interest.
- */
-export function getReviewQueue(limit: number = 10): Array<{
-  concept: Concept;
-  review: ConceptReview;
-  priority: number;
-  reason: string;
-}> {
-  ensureReviewStates();
-  const now = Date.now();
-  const results: Array<{ concept: Concept; review: ConceptReview; priority: number; reason: string }> = [];
-
-  // Get current active topics from recent reading
-  const activeTopics = new Set<string>();
-  for (const [, state] of readingStates) {
-    if (state.depth !== 'unread' && now - state.last_read_at < 7 * DAY_MS) {
-      const article = articles.find(a => a.id === state.article_id);
-      if (article) article.topics.forEach(t => activeTopics.add(t));
-    }
-  }
-
-  for (const [cid, review] of conceptReviews) {
-    const concept = concepts.find(c => c.id === cid);
-    if (!concept) continue;
-
-    // Base: how overdue is this concept?
-    const overdueDays = Math.max(0, (now - review.due_at) / DAY_MS);
-    const scheduling = Math.min(overdueDays / Math.max(1, review.stability_days), 2.0);
-
-    // Relevance: does this topic appear in recent reading?
-    const relevant = activeTopics.has(concept.topic);
-    const relevanceFactor = relevant ? 1.5 : 0.7;
-
-    // Topic interest: how many articles read in this topic?
-    const topicArticles = articles.filter(a => a.topics.includes(concept.topic));
-    const engagedCount = topicArticles.filter(a => {
-      const s = readingStates.get(a.id);
-      return s && s.depth !== 'unread';
-    }).length;
-    const interestFactor = engagedCount >= 5 ? 1.5 : engagedCount >= 2 ? 1.0 : 0.5;
-
-    // Maturity: new concepts should be reviewed sooner
-    const maturityFactor = review.engagement_count <= 1 ? 1.3 : review.engagement_count >= 5 ? 0.8 : 1.0;
-
-    const priority = Math.max(0.01, scheduling * relevanceFactor * interestFactor * maturityFactor);
-
-    // Build reason string
-    let reason = '';
-    if (overdueDays > 7) reason = `Overdue by ${Math.round(overdueDays)} days`;
-    else if (relevant) reason = 'Connects to current reading';
-    else if (review.engagement_count === 0) reason = 'New concept to explore';
-    else reason = 'Scheduled review';
-
-    results.push({ concept, review, priority, reason });
-  }
-
-  results.sort((a, b) => b.priority - a.priority);
-  return results.slice(0, limit);
-}
-
-/**
- * Record a review engagement and update scheduling.
- */
-export function submitReview(conceptId: string, rating: ReviewRating, noteText?: string) {
-  const review = getOrCreateReview(conceptId);
-
-  // Update scheduling based on rating
-  // Rating 1 (again): reset to 1 day, increase difficulty
-  // Rating 2 (hard): interval * 1.2, slight difficulty increase
-  // Rating 3 (good): interval * 2.5, slight difficulty decrease
-  // Rating 4 (easy): interval * 3.5, difficulty decrease
-  const multipliers: Record<ReviewRating, number> = { 1: 0.5, 2: 1.2, 3: 2.5, 4: 3.5 };
-  const difficultyAdjust: Record<ReviewRating, number> = { 1: 0.3, 2: 0.1, 3: -0.05, 4: -0.15 };
-
-  if (rating === 1) {
-    review.stability_days = 1; // Reset
-  } else {
-    review.stability_days = Math.max(1, Math.min(365, review.stability_days * multipliers[rating]));
-  }
-  review.difficulty = Math.max(0.3, Math.min(3.0, review.difficulty + difficultyAdjust[rating]));
-  review.due_at = Date.now() + review.stability_days * DAY_MS;
-  review.engagement_count++;
-  review.last_engaged_at = Date.now();
-  review.understanding = rating;
-
-  if (noteText) {
-    review.notes.push({
-      id: `note_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      text: noteText,
-      created_at: Date.now(),
-    });
-  }
-
-  conceptReviews.set(conceptId, review);
-  saveConceptReviews(conceptReviews);
-
-  logEvent('concept_review', {
-    concept_id: conceptId,
-    rating,
-    stability_days: review.stability_days,
-    engagement_count: review.engagement_count,
-    has_note: !!noteText,
-  });
-}
-
-export function getConceptReview(conceptId: string): ConceptReview | undefined {
-  return conceptReviews.get(conceptId);
-}
-
-/**
- * Find claims from source articles that match a concept, using contentWords overlap.
- * Returns up to `limit` matching claims with article attribution.
- */
-export function getMatchingClaims(conceptId: string, limit: number = 2): Array<{ claim: string; articleTitle: string; articleId: string }> {
-  const concept = concepts.find(c => c.id === conceptId);
-  if (!concept) return [];
-
-  const scored: Array<{ claim: string; articleTitle: string; articleId: string; score: number }> = [];
-
-  for (const aid of concept.source_article_ids) {
-    const article = articles.find(a => a.id === aid);
-    if (!article) continue;
-
-    for (const claim of article.key_claims) {
-      // Entity-style: check if concept name appears in the claim
-      if (conceptMatchesText(concept, claim)) {
-        scored.push({ claim, articleTitle: article.title, articleId: article.id, score: 1.0 });
-        continue;
-      }
-      // Fallback: word overlap
-      const cName = conceptName(concept);
-      const conceptContent = contentWords(cName);
-      if (conceptContent.size === 0) continue;
-      const claimContent = contentWords(claim);
-      const overlap = [...conceptContent].filter(w => claimContent.has(w)).length;
-      const overlapRatio = overlap / conceptContent.size;
-      if (overlapRatio > 0.2) {
-        scored.push({ claim, articleTitle: article.title, articleId: article.id, score: overlapRatio });
-      }
-    }
-  }
-
-  scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, limit).map(({ claim, articleTitle, articleId }) => ({ claim, articleTitle, articleId }));
-}
-
-/**
- * Find concepts matching a claim that the user has previously encountered/known
- * AND that appear in other articles. Used for in-reading connection prompts.
- * Returns max 1 result (best match) to avoid clutter.
- */
-export function getConceptConnections(articleId: string, claimText: string): {
-  concept: Concept;
-  otherArticles: Array<{ id: string; title: string }>;
-} | null {
-  const articleConcepts = articleConceptIndex.get(articleId) || [];
-  if (!claimText) return null;
-
-  let bestMatch: { concept: Concept; otherArticles: Array<{ id: string; title: string }>; score: number } | null = null;
-
-  for (const cid of articleConcepts) {
-    const state = conceptStates.get(cid);
-    if (!state || state.state === 'unknown') continue;
-
-    const concept = concepts.find(c => c.id === cid);
-    if (!concept) continue;
-
-    // Entity-style: check if concept name appears in the text
-    let score = 0;
-    if (conceptMatchesText(concept, claimText)) {
-      score = 1.0;
-    } else {
-      // Fallback: word overlap for legacy concepts
-      const cName = conceptName(concept);
-      const conceptContent = contentWords(cName);
-      if (conceptContent.size === 0) continue;
-      const claimContent = contentWords(claimText);
-      const overlap = [...conceptContent].filter(w => claimContent.has(w)).length;
-      score = overlap / conceptContent.size;
-      if (score <= 0.3) continue;
-    }
-
-    const otherArticles = concept.source_article_ids
-      .filter(aid => aid !== articleId)
-      .map(aid => {
-        const a = articles.find(art => art.id === aid);
-        return a ? { id: a.id, title: a.title } : null;
-      })
-      .filter((x): x is { id: string; title: string } => x !== null);
-
-    if (otherArticles.length === 0) continue;
-
-    if (!bestMatch || score > bestMatch.score) {
-      bestMatch = { concept, otherArticles, score };
-    }
-  }
-
-  return bestMatch ? { concept: bestMatch.concept, otherArticles: bestMatch.otherArticles } : null;
-}
-
-/**
- * Get knowledge stats per topic for the dashboard.
- */
-export function getTopicKnowledgeStats(): Map<string, { known: number; encountered: number; unknown: number; total: number }> {
-  const topicStats = new Map<string, { known: number; encountered: number; unknown: number; total: number }>();
-
-  for (const concept of concepts) {
-    const topic = concept.topic;
-    if (!topicStats.has(topic)) {
-      topicStats.set(topic, { known: 0, encountered: 0, unknown: 0, total: 0 });
-    }
-    const stats = topicStats.get(topic)!;
-    stats.total++;
-
-    const state = conceptStates.get(concept.id);
-    if (!state || state.state === 'unknown') {
-      stats.unknown++;
-    } else if (state.state === 'encountered') {
-      stats.encountered++;
-    } else if (state.state === 'known') {
-      stats.known++;
-    }
-  }
-
-  return topicStats;
-}
-
-// --- Books ---
-
-export function getBooks(): Book[] {
-  return books;
-}
-
-export function getBookById(id: string): Book | undefined {
-  return books.find(b => b.id === id);
-}
-
-/**
- * Fetch sections for a book chapter (lazy-loaded from server, cached locally).
- * Returns cached sections if already loaded.
- */
-export async function getBookChapterSections(bookId: string, chapterNumber: number): Promise<BookSection[]> {
-  const cacheKey = `${bookId}:ch${chapterNumber}`;
-  const cached = bookSections.get(cacheKey);
-  if (cached) return cached;
-
-  const sections = await fetchBookChapterSections(bookId, chapterNumber);
-  if (sections) {
-    bookSections.set(cacheKey, sections);
-    return sections;
-  }
-  return [];
-}
-
-export function getCachedBookSections(bookId: string, chapterNumber: number): BookSection[] | undefined {
-  return bookSections.get(`${bookId}:ch${chapterNumber}`);
-}
-
-/**
- * Get all loaded sections for a book (across all cached chapters).
- */
-export function getAllLoadedBookSections(bookId: string): BookSection[] {
-  const result: BookSection[] = [];
-  for (const [key, sections] of bookSections) {
-    if (key.startsWith(`${bookId}:`)) {
-      result.push(...sections);
-    }
-  }
-  return result.sort((a, b) =>
-    a.chapter_number !== b.chapter_number
-      ? a.chapter_number - b.chapter_number
-      : a.section_number - b.section_number
-  );
-}
-
-// --- Book Reading State ---
-
-export function getBookReadingState(bookId: string): BookReadingState {
-  return bookReadingStates.get(bookId) || {
-    book_id: bookId,
-    section_states: {},
-    total_time_spent_ms: 0,
-    last_read_at: 0,
-    personal_thread: [],
-  };
-}
-
-export function getSectionReadingState(bookId: string, sectionId: string): SectionReadingState {
-  const bookState = getBookReadingState(bookId);
-  return bookState.section_states[sectionId] || {
-    depth: 'unread' as BookReadingDepth,
-    scroll_position_y: 0,
-    time_spent_ms: 0,
-    last_read_at: 0,
-    claim_signals: {},
-  };
-}
-
-export function updateSectionReadingState(bookId: string, sectionId: string, updates: Partial<SectionReadingState>) {
-  const bookState = getBookReadingState(bookId);
-  const current = bookState.section_states[sectionId] || {
-    depth: 'unread' as BookReadingDepth,
-    scroll_position_y: 0,
-    time_spent_ms: 0,
-    last_read_at: 0,
-    claim_signals: {},
-  };
-  const updated = { ...current, ...updates };
-  bookState.section_states[sectionId] = updated;
-  bookState.last_read_at = Date.now();
-  bookReadingStates.set(bookId, bookState);
-  saveBookReadingStates(bookReadingStates);
-
-  logEvent('book_section_state_update', {
-    book_id: bookId,
-    section_id: sectionId,
-    depth: updated.depth,
-    time_spent_ms: updated.time_spent_ms,
-  });
-}
-
-export function recordBookClaimSignal(bookId: string, sectionId: string, claimId: string, signal: ClaimSignalType) {
-  const bookState = getBookReadingState(bookId);
-  const sectionState = bookState.section_states[sectionId] || {
-    depth: 'unread' as BookReadingDepth,
-    scroll_position_y: 0,
-    time_spent_ms: 0,
-    last_read_at: 0,
-    claim_signals: {},
-  };
-  sectionState.claim_signals[claimId] = signal;
-  bookState.section_states[sectionId] = sectionState;
-  bookReadingStates.set(bookId, bookState);
-  saveBookReadingStates(bookReadingStates);
-
-  logEvent('book_claim_signal', {
-    book_id: bookId,
-    section_id: sectionId,
-    claim_id: claimId,
-    signal,
-  });
-}
-
-export function addBookTimeSpent(bookId: string, ms: number) {
-  const bookState = getBookReadingState(bookId);
-  bookState.total_time_spent_ms += ms;
-  bookState.last_read_at = Date.now();
-  bookReadingStates.set(bookId, bookState);
-  saveBookReadingStates(bookReadingStates);
-}
-
-// --- Personal Thread ---
-
-export function addPersonalThreadEntry(bookId: string, entry: Omit<PersonalThreadEntry, 'id' | 'created_at'>) {
-  const bookState = getBookReadingState(bookId);
-  const newEntry: PersonalThreadEntry = {
-    ...entry,
-    id: `pt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-    created_at: Date.now(),
-  };
-  bookState.personal_thread.push(newEntry);
-  bookReadingStates.set(bookId, bookState);
-  saveBookReadingStates(bookReadingStates);
-
-  logEvent('personal_thread_entry', {
-    book_id: bookId,
-    section_id: entry.section_id,
-    type: entry.type,
-    text_length: entry.text.length,
-  });
-
-  return newEntry;
-}
-
-export function getPersonalThread(bookId: string): PersonalThreadEntry[] {
-  return getBookReadingState(bookId).personal_thread;
-}
-
-// --- Book progress helpers ---
-
-export function getBookProgress(bookId: string): { read: number; total: number; pct: number } {
-  const book = getBookById(bookId);
-  if (!book) return { read: 0, total: 0, pct: 0 };
-
-  const total = book.chapters.reduce((sum, ch) => sum + ch.section_count, 0);
-  const bookState = getBookReadingState(bookId);
-  const read = Object.values(bookState.section_states).filter(s => s.depth !== 'unread').length;
-  return { read, total, pct: total > 0 ? Math.round((read / total) * 100) : 0 };
-}
-
-/**
- * Get books that share topics with existing articles, grouped by topic.
- * Used for the shelf view interleaving.
- */
-export function getBooksByTopic(): Map<string, Book[]> {
-  const topicMap = new Map<string, Book[]>();
-  for (const b of books) {
-    for (const t of b.topics) {
-      if (!topicMap.has(t)) topicMap.set(t, []);
-      topicMap.get(t)!.push(b);
-    }
-  }
-  return topicMap;
-}
-
-/**
- * Context restoration: find books not read in >2 days with unfinished sections.
- */
-export function getBooksNeedingContextRestore(): Array<{ book: Book; lastSectionId: string; daysSince: number }> {
-  const now = Date.now();
-  const results: Array<{ book: Book; lastSectionId: string; daysSince: number }> = [];
-
-  for (const book of books) {
-    const state = bookReadingStates.get(book.id);
-    if (!state || state.last_read_at === 0) continue;
-
-    const daysSince = (now - state.last_read_at) / DAY_MS;
-    if (daysSince < 2) continue;
-
-    // Find last read section
-    let lastSection = '';
-    let lastTime = 0;
-    for (const [sid, ss] of Object.entries(state.section_states)) {
-      if (ss.last_read_at > lastTime) {
-        lastTime = ss.last_read_at;
-        lastSection = sid;
-      }
-    }
-
-    if (lastSection) {
-      results.push({ book, lastSectionId: lastSection, daysSince: Math.floor(daysSince) });
-    }
-  }
-
-  return results.sort((a, b) => a.daysSince - b.daysSince);
 }

@@ -3,5 +3,6 @@
   "compilerOptions": {
     "strict": true,
     "resolveJsonModule": true
-  }
+  },
+  "exclude": ["_archive"]
 }

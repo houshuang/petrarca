@@ -25,7 +25,6 @@ import json
 import os
 import random
 import re
-import subprocess
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -454,18 +453,17 @@ def _call_llm(prompt: str, provider: str = "gemini") -> str | None:
     return _call_gemini(prompt)
 
 
-def _call_gemini(prompt: str) -> str | None:
+def _call_gemini(prompt: str, system_instruction: str = None) -> str | None:
+    """Call Gemini API for article processing."""
     api_key = os.environ.get("GEMINI_KEY", "")
     if not api_key:
         print("    GEMINI_KEY not set, falling back to anthropic", file=sys.stderr)
         return _call_anthropic(prompt)
     try:
-        from google import genai
-        client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-        )
+        import google.generativeai as genai
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-2.0-flash', system_instruction=system_instruction)
+        response = model.generate_content(prompt)
         return response.text.strip() if response.text else None
     except Exception as e:
         print(f"    gemini error: {e}", file=sys.stderr)
@@ -491,15 +489,13 @@ def _call_anthropic(prompt: str) -> str | None:
         return None
 
 
-# Keep old name as alias so import_url.py and other callers still work
-def _call_claude(prompt: str, timeout: int = 180) -> str | None:
-    return _call_llm(prompt, provider="gemini")
 
 
 def clean_markdown(text: str) -> str:
-    """Clean Wikipedia artifacts from markdown content.
+    """Clean extracted markdown content for reading.
 
-    Fixes: run-together link text, [edit] links, citation markers, empty links.
+    Handles: Wikipedia artifacts, nav menus, cookie banners, subscribe cruft,
+    heading normalization, social sharing buttons, related articles sections.
     """
     # Remove Wikipedia [edit] section links (various bracket patterns)
     text = re.sub(r'\s*\[?\[edit\]\([^)]*\)\]?', '', text)
@@ -509,7 +505,6 @@ def clean_markdown(text: str) -> str:
     text = re.sub(r'\)\[', ') [', text)
 
     # Fix run-together link-then-text: ](...) followed immediately by [ or letter
-    # e.g. [Italy](/wiki/Italy)[Capital] → [Italy](/wiki/Italy) [Capital]
     text = re.sub(r'(\])\(([^)]+)\)([A-Za-z\[])', r'\1(\2) \3', text)
 
     # Strip inline citation markers like [1], [23], [citation needed]
@@ -518,6 +513,57 @@ def clean_markdown(text: str) -> str:
 
     # Remove empty link references like [](/wiki/...) or [ ](/wiki/...)
     text = re.sub(r'\[\s*\]\([^)]+\)', '', text)
+
+    # Strip nav menus, cookie banners, and subscribe/follow cruft
+    _cruft_patterns = [
+        r'(?im)^.*cookie\s*(policy|notice|consent|banner).*$',
+        r'(?im)^.*accept\s*(all\s*)?cookies.*$',
+        r'(?im)^.*we\s+use\s+cookies.*$',
+        r'(?im)^.*subscribe\s+(to\s+)?(our\s+)?(newsletter|mailing\s+list).*$',
+        r'(?im)^.*sign\s+up\s+for\s+(our\s+)?(free\s+)?(newsletter|updates).*$',
+        r'(?im)^.*follow\s+us\s+on\s+(twitter|facebook|instagram|x|linkedin).*$',
+        r'(?im)^.*share\s+(this|on)\s+(twitter|facebook|linkedin|x|email).*$',
+        r'(?im)^.*(tweet|share|pin|email)\s+this\s*(article|post|story)?.*$',
+        r'(?im)^.*skip\s+to\s+(main\s+)?content.*$',
+        r'(?im)^.*(home|about|contact|privacy|terms)\s*[|/]\s*(home|about|contact|privacy|terms).*$',
+    ]
+    for pattern in _cruft_patterns:
+        text = re.sub(pattern, '', text)
+
+    # Strip "Related articles" / "You might also like" sections at the end
+    text = re.sub(
+        r'(?im)\n#{1,3}\s*(related\s+(articles?|posts?|stories?|reading)|'
+        r'you\s+might\s+also\s+like|recommended|more\s+from|'
+        r'also\s+on|popular\s+(articles?|posts?)|trending).*$',
+        '', text, flags=re.DOTALL
+    )
+
+    # Strip social sharing button text blocks
+    text = re.sub(r'(?im)^(facebook|twitter|linkedin|reddit|email|copy\s+link|share)\s*$', '', text)
+
+    # Normalize heading hierarchy: strip duplicate H1s (keep first), normalize to H2/H3
+    lines = text.split('\n')
+    seen_h1 = False
+    cleaned_lines = []
+    for line in lines:
+        h1_match = re.match(r'^#\s+(.+)$', line)
+        if h1_match:
+            if seen_h1:
+                # Demote duplicate H1 to H2
+                cleaned_lines.append(f'## {h1_match.group(1)}')
+            else:
+                seen_h1 = True
+                cleaned_lines.append(line)
+        else:
+            cleaned_lines.append(line)
+    text = '\n'.join(cleaned_lines)
+
+    # Clean up blockquote formatting (ensure space after >)
+    text = re.sub(r'^>([^ \n])', r'> \1', text, flags=re.MULTILINE)
+
+    # Ensure code blocks have proper newlines around them
+    text = re.sub(r'([^\n])(\n```)', r'\1\n\2', text)
+    text = re.sub(r'(```\n)([^\n])', r'\1\n\2', text)
 
     # Collapse multiple spaces left by removals
     text = re.sub(r'  +', ' ', text)
@@ -575,9 +621,18 @@ Return a JSON object:
   ],
   "key_claims": ["the 3-7 most important claims/insights across the whole article"],
   "topics": ["topic tags, e.g. prompt-caching, agents, mcp"],
+  "interest_topics": [
+    {{"broad": "artificial-intelligence", "specific": "ai-orchestration", "entity": "Claude Code"}}
+  ],
+  "novelty_claims": [
+    {{"claim": "Claude Code now supports background agents", "specificity": "high"}}
+  ],
   "estimated_read_minutes": 5,
   "content_type": "one of: analysis, tutorial, opinion, news, research, reference, announcement, discussion"
 }}
+
+interest_topics: hierarchical topic tags with kebab-case broad/specific categories and optional entity names.
+novelty_claims: what's genuinely new or surprising in this article. specificity is "high", "medium", or "low".
 
 If the article has clear sections/headings, use them. If not, divide into 2-5 logical sections.
 Return ONLY valid JSON."""
@@ -642,7 +697,7 @@ def build_articles(candidates: list[dict], existing_articles: list[dict],
             title_hint = best["title"] or cand.get("_title", "Untitled")
             print(f"  [{i+1}/{len(candidates)}] Processing: {title_hint[:60]} ({best['word_count']} words)", file=sys.stderr)
             prompt = _build_article_prompt(best["text"], title_hint)
-            response = _call_claude(prompt)
+            response = _call_llm(prompt)
 
             if response:
                 try:
@@ -683,6 +738,8 @@ def build_articles(candidates: list[dict], existing_articles: list[dict],
             "topics": llm.get("topics", []),
             "estimated_read_minutes": llm.get("estimated_read_minutes", max(1, best["word_count"] // 200)),
             "content_type": llm.get("content_type", "unknown"),
+            "interest_topics": llm.get("interest_topics", []),
+            "novelty_claims": llm.get("novelty_claims", []),
             "word_count": best["word_count"],
             "sources": [source],
         }
@@ -870,7 +927,7 @@ def extract_concepts(articles: list[dict], dry_run: bool = False) -> list[dict]:
         print(f"  [{batch_num}/{total_batches}] Extracting concepts from {len(batch)} articles...", file=sys.stderr)
 
         prompt = _build_concept_extraction_prompt(batch)
-        response = _call_claude(prompt, timeout=120)
+        response = _call_llm(prompt)
 
         if response:
             try:
@@ -1121,22 +1178,6 @@ def main():
     concepts = extract_concepts(articles, dry_run=args.dry_run)
     _save_json(concepts, CONCEPTS_PATH)
     _save_json(concepts, APP_DATA_DIR / "concepts.json")
-
-    # Auto-trigger synthesis for topics with 3+ articles
-    try:
-        topics_count = {}
-        for a in articles:
-            for t in a.get("topics", []):
-                topics_count[t] = topics_count.get(t, 0) + 1
-        rich_topics = [t for t, c in topics_count.items() if c >= 3]
-        if rich_topics:
-            print(f"  Auto-generating syntheses for {len(rich_topics)} topics with 3+ articles", file=sys.stderr)
-            subprocess.run(
-                ["python3", str(SCRIPT_DIR / "generate_syntheses.py")],
-                timeout=300,
-            )
-    except Exception as e:
-        print(f"  Auto-synthesis failed: {e}", file=sys.stderr)
 
     # Summary
     sources = {}

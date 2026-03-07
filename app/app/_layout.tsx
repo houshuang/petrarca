@@ -3,11 +3,8 @@ import { Stack } from 'expo-router';
 import { View, Text, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Font from 'expo-font';
-import { initStore, getReviewQueue } from '../data/store';
-import { startNewSession, logEvent } from '../data/logger';
-import { requestNotificationPermissions, scheduleDailyReviewReminder } from '../lib/notifications';
-import { useIsDesktopWeb } from '../lib/use-responsive';
-import { WebSidebar } from '../components/WebSidebar';
+import { initStore } from '../data/store';
+import { startNewSession } from '../data/logger';
 import { colors } from '../design/tokens/colors';
 
 const fontAssets = {
@@ -31,7 +28,6 @@ const fontAssets = {
 
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
-  const isDesktop = useIsDesktopWeb();
 
   useEffect(() => {
     (async () => {
@@ -41,13 +37,6 @@ export default function RootLayout() {
         Font.loadAsync(fontAssets),
       ]);
       setReady(true);
-
-      const granted = await requestNotificationPermissions();
-      logEvent('notifications_permission', { granted });
-      if (granted) {
-        const reviewCount = getReviewQueue().length;
-        await scheduleDailyReviewReminder(reviewCount);
-      }
     })();
   }, []);
 
@@ -60,27 +49,13 @@ export default function RootLayout() {
     );
   }
 
-  const stack = (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="reader" />
-      <Stack.Screen name="book-reader" />
-      <Stack.Screen name="+not-found" />
-    </Stack>
-  );
-
-  if (isDesktop) {
-    return (
-      <View style={styles.desktopRoot}>
-        <WebSidebar />
-        <View style={styles.desktopContent}>{stack}</View>
-      </View>
-    );
-  }
-
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.parchment }} edges={['top']}>
-      {stack}
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="reader" />
+        <Stack.Screen name="+not-found" />
+      </Stack>
     </SafeAreaView>
   );
 }
@@ -98,12 +73,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: Platform.OS === 'web' ? "'Cormorant Garamond', Georgia, serif" : 'CormorantGaramond',
     fontStyle: 'italic',
-  },
-  desktopRoot: {
-    flex: 1,
-    flexDirection: 'row',
-  },
-  desktopContent: {
-    flex: 1,
   },
 });

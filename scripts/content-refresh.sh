@@ -25,7 +25,7 @@ else
     log "WARNING: No venv found, using system Python"
 fi
 
-# Load environment
+# Load environment (includes GEMINI_KEY, READWISE_ACCESS_TOKEN, etc.)
 if [ -f "/opt/petrarca/.env" ]; then
     log "Loading environment from /opt/petrarca/.env"
     set -a
@@ -58,14 +58,9 @@ log "Step 3c: Extracting entity concepts for new articles..."
 python3 "$SCRIPT_DIR/extract_entity_concepts.py" --incremental \
     || log "Step 3c FAILED: extract_entity_concepts.py"
 
-# Step 4: Generate syntheses
-if [ -f "$SCRIPT_DIR/generate_syntheses.py" ]; then
-    log "Step 4: Generating syntheses..."
-    python3 "$SCRIPT_DIR/generate_syntheses.py" \
-        || log "Step 4 FAILED: generate_syntheses.py"
-else
-    log "Step 4: Skipping syntheses (generate_syntheses.py not found)"
-fi
+# Step 4: Syntheses (disabled — generate_syntheses.py removed)
+# log "Step 4: Generating syntheses..."
+# python3 "$SCRIPT_DIR/generate_syntheses.py"
 
 # Step 5: Generate books manifest from individual book meta files
 BOOKS_DIR="$PROJECT_DIR/data/books"
@@ -104,11 +99,13 @@ else
     log "Step 5: No books found, skipping books.json generation"
 fi
 
-# Step 6: Copy output to app data directory
+# Step 6: Copy output to app data directory (with file size validation)
 log "Step 6: Copying output files..."
 for f in articles.json concepts.json manifest.json books.json; do
-    if [ -f "$PROJECT_DIR/data/$f" ]; then
+    if [ -s "$PROJECT_DIR/data/$f" ]; then
         cp "$PROJECT_DIR/data/$f" "$PROJECT_DIR/app/data/"
+    elif [ -f "$PROJECT_DIR/data/$f" ]; then
+        log "WARNING: $f is empty, skipping copy to app/data"
     else
         log "WARNING: $PROJECT_DIR/data/$f not found, skipping"
     fi
@@ -117,8 +114,10 @@ log "Copied to $PROJECT_DIR/app/data/"
 
 if [ -d "/opt/petrarca/data" ]; then
     for f in articles.json concepts.json manifest.json books.json; do
-        if [ -f "$PROJECT_DIR/data/$f" ]; then
+        if [ -s "$PROJECT_DIR/data/$f" ]; then
             cp "$PROJECT_DIR/data/$f" /opt/petrarca/data/
+        else
+            log "WARNING: $f is empty or missing, skipping copy to /opt/petrarca/data/"
         fi
     done
     # Also copy book chapter section files
