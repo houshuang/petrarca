@@ -166,6 +166,8 @@ def _build_article_obj(
         "full_summary": llm.get("full_summary", ""),
         "key_claims": llm.get("key_claims", []),
         "topics": llm.get("topics", []),
+        "interest_topics": llm.get("interest_topics", []),
+        "novelty_claims": llm.get("novelty_claims", []),
         "estimated_read_minutes": llm.get("estimated_read_minutes", max(1, fetched["word_count"] // 200)),
         "content_type": llm.get("content_type", "unknown"),
         "word_count": fetched["word_count"],
