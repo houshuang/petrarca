@@ -334,6 +334,15 @@ export default function FeedScreen() {
       <FlatList
         data={allItems}
         keyExtractor={(item, index) => item.article?.id || `section-${item.type}-${index}`}
+        onViewableItemsChanged={useCallback(({ viewableItems }: any) => {
+          const articleIds = viewableItems
+            .filter((v: any) => v.item?.article?.id)
+            .map((v: any) => v.item.article.id);
+          if (articleIds.length > 0) {
+            logEvent('feed_articles_visible', { article_ids: articleIds });
+          }
+        }, [])}
+        viewabilityConfig={{ itemVisiblePercentThreshold: 50, minimumViewTime: 1000 }}
         renderItem={({ item }) => {
           if (item.type === 'continue') {
             return (

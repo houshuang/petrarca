@@ -426,6 +426,7 @@ export default function ReaderScreen() {
   const enterTime = useRef(Date.now());
   const lastScrollY = useRef(0);
   const lastPositionSaveTime = useRef(0);
+  const scrollMilestone = useRef(0);
   const [highlightedBlocks, setHighlightedBlocks] = useState<Set<number>>(new Set());
   const [showInterestCard, setShowInterestCard] = useState(false);
   const [readingMode, setReadingMode] = useState<ReadingMode>('full');
@@ -529,7 +530,14 @@ export default function ReaderScreen() {
 
     const maxScroll = contentSize.height - layoutMeasurement.height;
     if (maxScroll > 0) {
-      setScrollProgress(Math.min(100, Math.max(0, (scrollY / maxScroll) * 100)));
+      const pct = Math.min(100, Math.max(0, (scrollY / maxScroll) * 100));
+      setScrollProgress(pct);
+      // Log scroll milestones (25%, 50%, 75%, 100%)
+      const milestone = Math.floor(pct / 25) * 25;
+      if (milestone > 0 && milestone > (scrollMilestone.current || 0)) {
+        scrollMilestone.current = milestone;
+        logEvent('reader_scroll_milestone', { article_id: article.id, pct: milestone });
+      }
     }
   }, [article]);
 

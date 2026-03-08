@@ -132,7 +132,8 @@ export async function downloadContent(): Promise<{ articles: Article[]; knowledg
       knowledge_index: !!knowledgeIndex,
     });
     return { articles, knowledgeIndex };
-  } catch {
+  } catch (e) {
+    logEvent('content_download_error', { error: String(e) });
     return null;
   }
 }
