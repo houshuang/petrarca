@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 
 const LOG_DIR_NAME = 'logs';
 const LOG_STORAGE_PREFIX = '@petrarca/log_';
+const LOG_SERVER_URL = 'http://alifstian.duckdns.org:8091/log';
 
 let sessionId: string | null = null;
 let writeQueue: Promise<void> = Promise.resolve();
@@ -10,6 +11,11 @@ let writeQueue: Promise<void> = Promise.resolve();
 let nativeBuffer: string[] = [];
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 const FLUSH_INTERVAL_MS = 2000;
+
+// Server-side log buffer — batches events before sending
+let serverBuffer: string[] = [];
+let serverFlushTimer: ReturnType<typeof setTimeout> | null = null;
+const SERVER_FLUSH_INTERVAL_MS = 5000;
 
 // Lazy-load expo-file-system only on native
 let NativeFS: any = null;
@@ -113,6 +119,20 @@ function flushNativeBuffer() {
   });
 }
 
+function flushServerBuffer() {
+  if (serverBuffer.length === 0) return;
+  const payload = serverBuffer.join('');
+  serverBuffer = [];
+
+  fetch(LOG_SERVER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: payload,
+  }).catch(() => {
+    // Server unreachable — events already saved locally, don't retry
+  });
+}
+
 export function logEvent(event: string, data?: Record<string, any>) {
   const entry = {
     ts: new Date().toISOString(),
@@ -123,6 +143,7 @@ export function logEvent(event: string, data?: Record<string, any>) {
 
   const line = JSON.stringify(entry) + '\n';
 
+  // Local storage (primary)
   if (Platform.OS === 'web') {
     webAppendLog(line);
   } else {
@@ -130,6 +151,11 @@ export function logEvent(event: string, data?: Record<string, any>) {
     if (flushTimer) clearTimeout(flushTimer);
     flushTimer = setTimeout(flushNativeBuffer, FLUSH_INTERVAL_MS);
   }
+
+  // Server-side copy (for Claude Code analysis)
+  serverBuffer.push(line);
+  if (serverFlushTimer) clearTimeout(serverFlushTimer);
+  serverFlushTimer = setTimeout(flushServerBuffer, SERVER_FLUSH_INTERVAL_MS);
 }
 
 export async function getLogFiles(): Promise<string[]> {
