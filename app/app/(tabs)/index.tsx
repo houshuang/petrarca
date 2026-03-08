@@ -452,6 +452,7 @@ const styles = StyleSheet.create({
   // Topic filter chips
   filterScroll: {
     flexGrow: 0,
+    minHeight: 44,
   },
   filterRow: {
     flexDirection: 'row',
