@@ -39,3 +39,15 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Generated data (served from server, not bundled)
+data/knowledge_index.json
+data/synthetic-articles.json
+
+# Design explorer output
+designs.html
+feedback.json
+annotations/
+mockups/
+preview-mockups/
+public/guide/
