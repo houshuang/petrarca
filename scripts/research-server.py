@@ -35,9 +35,12 @@ VENV_PYTHON = '/opt/petrarca/.venv/bin/python3'
 
 EMAILS_DIR = INGEST_DIR / 'emails'
 
+CHAT_DIR = Path(os.environ.get('CHAT_DIR', '/opt/petrarca/data/chats'))
+
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 INGEST_DIR.mkdir(parents=True, exist_ok=True)
 EMAILS_DIR.mkdir(parents=True, exist_ok=True)
+CHAT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ---------------------------------------------------------------------------
@@ -714,6 +717,68 @@ def run_explore_batch(request_id: str, concepts: list[dict]):
     print(f'[explore-batch] {request_id} -> {result["status"]} ({len(concepts)} concepts)', flush=True)
 
 
+# --- Chat with article context ---
+
+def handle_chat(question: str, context: str, conversation_id: str | None = None) -> dict:
+    """Synchronous chat using Gemini via litellm."""
+    import uuid
+    try:
+        import litellm
+    except ImportError:
+        return {'answer': 'Error: litellm not installed on server', 'conversation_id': conversation_id or ''}
+
+    if not conversation_id:
+        conversation_id = str(uuid.uuid4())[:12]
+
+    # Load conversation history
+    chat_file = CHAT_DIR / f'{conversation_id}.json'
+    history = []
+    if chat_file.exists():
+        try:
+            history = json.loads(chat_file.read_text())
+        except (json.JSONDecodeError, OSError):
+            history = []
+
+    # Build messages
+    messages = [
+        {'role': 'system', 'content': (
+            'You are a helpful reading assistant for Petrarca, an intelligent read-later app. '
+            'The user is reading an article and has a question. You have the article\'s metadata, '
+            'summary, key claims, topics, and text as context. Answer concisely and helpfully. '
+            'If the user asks about claims, topics, or connections to other knowledge, be specific.'
+        )},
+    ]
+
+    # Add context as first user message if this is a new conversation
+    if not history:
+        messages.append({'role': 'user', 'content': f'[Article context]\n{context}'})
+        messages.append({'role': 'assistant', 'content': 'I have the article context. What would you like to know?'})
+
+    # Add conversation history
+    for msg in history:
+        messages.append({'role': msg['role'], 'content': msg['content']})
+
+    # Add current question
+    messages.append({'role': 'user', 'content': question})
+
+    try:
+        response = litellm.completion(
+            model='gemini/gemini-2.0-flash',
+            messages=messages,
+            max_tokens=1500,
+        )
+        answer = response.choices[0].message.content
+    except Exception as e:
+        answer = f'Error calling LLM: {e}'
+
+    # Save to history
+    history.append({'role': 'user', 'content': question, 'timestamp': int(time.time())})
+    history.append({'role': 'assistant', 'content': answer, 'timestamp': int(time.time())})
+    chat_file.write_text(json.dumps(history, indent=2))
+
+    return {'answer': answer, 'conversation_id': conversation_id}
+
+
 class ResearchHandler(BaseHTTPRequestHandler):
     def _send_cors_headers(self):
         self.send_header('Access-Control-Allow-Origin', '*')
@@ -795,6 +860,39 @@ class ResearchHandler(BaseHTTPRequestHandler):
         self.send_header('Content-Type', 'application/json')
         self.end_headers()
         self.wfile.write(json.dumps({'status': 'queued', 'source': 'email'}).encode())
+
+    def _handle_chat(self):
+        content_length = int(self.headers.get('Content-Length', 0))
+        if not content_length:
+            self.send_response(400)
+            self._send_cors_headers()
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(b'{"error": "Empty body"}')
+            return
+
+        body = json.loads(self.rfile.read(content_length))
+        question = body.get('question', '').strip()
+        context = body.get('context', '')
+        conversation_id = body.get('conversation_id')
+
+        if not question:
+            self.send_response(400)
+            self._send_cors_headers()
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(b'{"error": "Missing question"}')
+            return
+
+        print(f'[chat] Q: {question[:80]}...', flush=True)
+        result = handle_chat(question, context, conversation_id)
+        print(f'[chat] A: {result["answer"][:80]}...', flush=True)
+
+        self.send_response(200)
+        self._send_cors_headers()
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps(result).encode())
 
     def _handle_ingest(self):
         # Verify auth token
@@ -898,6 +996,8 @@ class ResearchHandler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps({'id': request_id, 'status': 'processing', 'path': book_path}).encode())
 
     def do_POST(self):
+        if self.path == '/chat':
+            return self._handle_chat()
         if self.path == '/ingest':
             return self._handle_ingest()
         if self.path == '/ingest-email':

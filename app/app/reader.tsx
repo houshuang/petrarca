@@ -2,11 +2,12 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Linking,
   NativeSyntheticEvent, NativeScrollEvent,
-  Platform,
+  Platform, Clipboard,
 } from 'react-native';
+import AskAI from '../components/AskAI';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { getArticleById, getReadingState, updateReadingState, getHighlightBlockIndices, addHighlight, removeHighlight, markArticleRead, recordInterestSignal } from '../data/store';
-import { InterestTopic } from '../data/types';
+import { Article, InterestTopic } from '../data/types';
 import * as Haptics from 'expo-haptics';
 import { logEvent } from '../data/logger';
 import { isSectionValid, parseInlineMarkdown, splitMarkdownBlocks, parseMarkdownBlock } from '../lib/markdown-utils';
@@ -416,6 +417,31 @@ function MarkdownText({ content, highlightedBlocks, onBlockLongPress, blockDimmi
   );
 }
 
+// --- AI Chat context builder ---
+
+function buildAIChatContext(article: Article): string {
+  const parts = [
+    `Title: ${article.title}`,
+    `Author: ${article.author}`,
+    `Source: ${article.hostname} (${article.source_url})`,
+    `Type: ${article.content_type}`,
+    `Summary: ${article.one_line_summary}`,
+    '',
+    `Full summary: ${article.full_summary}`,
+  ];
+  if (article.key_claims?.length) {
+    parts.push('', 'Key claims:', ...article.key_claims.map(c => `- ${c}`));
+  }
+  if (article.interest_topics?.length) {
+    parts.push('', 'Topics:', ...article.interest_topics.map(t => `- ${t.broad}: ${t.specific}`));
+  }
+  // Include article text (truncated to ~4000 chars to stay within context limits)
+  if (article.content_markdown) {
+    parts.push('', '--- Article text (truncated) ---', article.content_markdown.slice(0, 4000));
+  }
+  return parts.join('\n');
+}
+
 // --- Main Reader Screen ---
 
 export default function ReaderScreen() {
@@ -433,6 +459,8 @@ export default function ReaderScreen() {
   const [readingMode, setReadingMode] = useState<ReadingMode>('full');
   const [scrollProgress, setScrollProgress] = useState(0);
   const [bookmarked, setBookmarked] = useState(() => article ? isBookmarked(article.id) : false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [showAIChat, setShowAIChat] = useState(false);
   const contentHeight = useRef(0);
   const viewportHeight = useRef(0);
 
@@ -635,12 +663,84 @@ export default function ReaderScreen() {
           </Text>
         </Pressable>
         <Pressable onPress={() => {
-          logEvent('reader_open_source', { article_id: article.id, url: article.source_url });
-          Linking.openURL(article.source_url);
-        }}>
-          <Text style={styles.sourceLink}>Source</Text>
+          setShowMenu(!showMenu);
+          logEvent('reader_menu_toggle', { article_id: article.id });
+        }} style={styles.menuButton}>
+          <Text style={styles.menuButtonText}>⋯</Text>
         </Pressable>
       </View>
+
+      {/* Dropdown menu */}
+      {showMenu && (
+        <View style={styles.menuDropdown}>
+          {/* Article ID */}
+          <Pressable onPress={() => {
+            Clipboard.setString(article.id);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            logEvent('reader_copy_id', { article_id: article.id });
+          }} style={styles.menuItem}>
+            <Text style={styles.menuItemLabel}>ID</Text>
+            <Text style={styles.menuItemValue} numberOfLines={1}>{article.id}</Text>
+          </Pressable>
+
+          {/* Source */}
+          <View style={styles.menuItem}>
+            <Text style={styles.menuItemLabel}>Source</Text>
+            <Text style={styles.menuItemValue} numberOfLines={1}>{article.hostname}</Text>
+          </View>
+
+          {/* Content type */}
+          <View style={styles.menuItem}>
+            <Text style={styles.menuItemLabel}>Type</Text>
+            <Text style={styles.menuItemValue}>{article.content_type}</Text>
+          </View>
+
+          {/* Word count + read time */}
+          <View style={styles.menuItem}>
+            <Text style={styles.menuItemLabel}>Length</Text>
+            <Text style={styles.menuItemValue}>{article.word_count?.toLocaleString()} words · {article.estimated_read_minutes} min</Text>
+          </View>
+
+          {/* Date */}
+          {article.date ? (
+            <View style={styles.menuItem}>
+              <Text style={styles.menuItemLabel}>Date</Text>
+              <Text style={styles.menuItemValue}>{article.date}</Text>
+            </View>
+          ) : null}
+
+          {/* Topics */}
+          {article.interest_topics && article.interest_topics.length > 0 ? (
+            <View style={styles.menuItem}>
+              <Text style={styles.menuItemLabel}>Topics</Text>
+              <Text style={styles.menuItemValue} numberOfLines={2}>
+                {article.interest_topics.map(t => t.broad).join(', ')}
+              </Text>
+            </View>
+          ) : null}
+
+          {/* Divider */}
+          <View style={styles.menuDivider} />
+
+          {/* Open source */}
+          <Pressable onPress={() => {
+            logEvent('reader_open_source', { article_id: article.id, url: article.source_url });
+            Linking.openURL(article.source_url);
+            setShowMenu(false);
+          }} style={styles.menuAction}>
+            <Text style={styles.menuActionText}>Open source →</Text>
+          </Pressable>
+
+          {/* Ask AI */}
+          <Pressable onPress={() => {
+            setShowMenu(false);
+            setShowAIChat(true);
+            logEvent('ai_chat_open', { article_id: article.id });
+          }} style={styles.menuAction}>
+            <Text style={[styles.menuActionText, { color: colors.rubric }]}>✦ Ask AI</Text>
+          </Pressable>
+        </View>
+      )}
 
       {/* Progress bar */}
       <View style={styles.progressBarTrack}>
@@ -734,6 +834,15 @@ export default function ReaderScreen() {
           onClose={handleInterestClose}
         />
       )}
+
+      {/* AI Chat */}
+      {showAIChat && (
+        <AskAI
+          articleId={article.id}
+          context={buildAIChatContext(article)}
+          onClose={() => setShowAIChat(false)}
+        />
+      )}
     </View>
   );
 }
@@ -780,10 +889,71 @@ const styles = StyleSheet.create({
   bookmarkTextActive: {
     color: colors.rubric,
   },
-  sourceLink: {
+  menuButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+  },
+  menuButtonText: {
+    fontSize: 22,
+    color: colors.textMuted,
+    fontFamily: fonts.display,
+  },
+  menuDropdown: {
+    backgroundColor: colors.parchment,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.rule,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+    } : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      elevation: 3,
+    }),
+  },
+  menuItem: {
+    flexDirection: 'row' as const,
+    alignItems: 'flex-start' as const,
+    paddingVertical: 5,
+    gap: 10,
+  },
+  menuItemLabel: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 11,
+    color: colors.textMuted,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+    width: 50,
+    marginTop: 2,
+    ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}),
+  },
+  menuItemValue: {
+    fontFamily: fonts.reading,
+    fontSize: 13,
+    color: colors.textBody,
+    flex: 1,
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: colors.rule,
+    marginVertical: 6,
+  },
+  menuAction: {
+    paddingVertical: 8,
+    minHeight: 36,
+    justifyContent: 'center' as const,
+  },
+  menuActionText: {
     fontFamily: fonts.ui,
-    fontSize: 12,
-    color: colors.rubric,
+    fontSize: 14,
+    color: colors.textBody,
   },
 
   // Progress bar
