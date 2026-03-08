@@ -58,9 +58,10 @@ log "Step 3c: Extracting entity concepts for new articles..."
 python3 "$SCRIPT_DIR/extract_entity_concepts.py" --incremental \
     || log "Step 3c FAILED: extract_entity_concepts.py"
 
-# Step 4: Syntheses (disabled — generate_syntheses.py removed)
-# log "Step 4: Generating syntheses..."
-# python3 "$SCRIPT_DIR/generate_syntheses.py"
+# Step 4: Build knowledge index (claim similarities, novelty matrix, delta reports)
+log "Step 4: Building knowledge index..."
+python3 "$SCRIPT_DIR/build_knowledge_index.py" \
+    || log "Step 4 FAILED: build_knowledge_index.py"
 
 # Step 5: Generate books manifest from individual book meta files
 BOOKS_DIR="$PROJECT_DIR/data/books"
@@ -101,7 +102,7 @@ fi
 
 # Step 6: Copy output to app data directory (with file size validation)
 log "Step 6: Copying output files..."
-for f in articles.json concepts.json manifest.json books.json; do
+for f in articles.json concepts.json manifest.json books.json knowledge_index.json; do
     if [ -s "$PROJECT_DIR/data/$f" ]; then
         cp "$PROJECT_DIR/data/$f" "$PROJECT_DIR/app/data/"
     elif [ -f "$PROJECT_DIR/data/$f" ]; then
@@ -113,7 +114,7 @@ done
 log "Copied to $PROJECT_DIR/app/data/"
 
 if [ -d "/opt/petrarca/data" ]; then
-    for f in articles.json concepts.json manifest.json books.json; do
+    for f in articles.json concepts.json manifest.json books.json knowledge_index.json; do
         if [ -s "$PROJECT_DIR/data/$f" ]; then
             cp "$PROJECT_DIR/data/$f" /opt/petrarca/data/
         else

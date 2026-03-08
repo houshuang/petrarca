@@ -1,9 +1,19 @@
 import { Article, ReadingState, UserSignal, Highlight } from './types';
+import type { ClaimClassification, ParagraphDimming, ArticleNovelty, DeltaReport } from './types';
 import { logEvent } from './logger';
 import { loadSignals, saveSignals, loadReadingStates, saveReadingStates, loadHighlights, saveHighlights } from './persistence';
 import { checkForUpdates, downloadContent, loadCachedContent } from './content-sync';
 import { loadInterestProfile, scoreArticle, recordSignal, getTotalSignalCount } from './interest-model';
 import type { SignalAction } from './interest-model';
+import {
+  initKnowledgeEngine,
+  getArticleNovelty as _getArticleNovelty,
+  classifyArticleClaims as _classifyArticleClaims,
+  computeParagraphDimming as _computeParagraphDimming,
+  markArticleEncountered as _markArticleEncountered,
+  getDeltaReports as _getDeltaReports,
+} from './knowledge-engine';
+import { loadQueue } from './queue';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 let articles: Article[] = [];
@@ -53,15 +63,22 @@ export async function initStore(): Promise<void> {
 
   initPromise = (async () => {
     // Load articles: try cached remote content first, fall back to bundled JSON
+    let cachedKnowledgeIndex = null;
     const cached = await loadCachedContent();
     if (cached && cached.articles.length > 0) {
       articles = cached.articles;
+      cachedKnowledgeIndex = cached.knowledgeIndex;
     } else {
       try {
         const data = require('./articles.json');
         articles = (Array.isArray(data) ? data : []) as Article[];
       } catch {
         articles = [];
+      }
+      try {
+        cachedKnowledgeIndex = require('./knowledge_index.json');
+      } catch {
+        // knowledge index not bundled — will work without it
       }
     }
 
@@ -73,6 +90,8 @@ export async function initStore(): Promise<void> {
     highlights = await loadHighlights();
     await loadDismissedArticles();
     await loadInterestProfile();
+    await loadQueue();
+    await initKnowledgeEngine(cachedKnowledgeIndex);
 
     initialized = true;
 
@@ -91,8 +110,12 @@ export async function initStore(): Promise<void> {
         if (fresh) {
           articles = fresh.articles;
           articles.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+          if (fresh.knowledgeIndex) {
+            await initKnowledgeEngine(fresh.knowledgeIndex);
+          }
           logEvent('content_refreshed', {
             article_count: fresh.articles.length,
+            knowledge_index_updated: !!fresh.knowledgeIndex,
           });
         }
       }
@@ -257,6 +280,28 @@ export function recordInterestSignal(action: SignalAction, articleId: string) {
   if (article) {
     recordSignal(action, article);
   }
+}
+
+// --- Knowledge engine ---
+
+export function getArticleNovelty(articleId: string): ArticleNovelty {
+  return _getArticleNovelty(articleId);
+}
+
+export function classifyArticleClaims(articleId: string): ClaimClassification[] {
+  return _classifyArticleClaims(articleId);
+}
+
+export function computeParagraphDimming(articleId: string): ParagraphDimming[] {
+  return _computeParagraphDimming(articleId);
+}
+
+export function markArticleEncountered(articleId: string, engagement: 'skim' | 'read' | 'highlight'): void {
+  _markArticleEncountered(articleId, engagement);
+}
+
+export function getDeltaReports(): Record<string, DeltaReport> {
+  return _getDeltaReports();
 }
 
 // --- Stats (simplified) ---

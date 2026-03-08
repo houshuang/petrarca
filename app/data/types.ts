@@ -258,6 +258,76 @@ export interface PersonalThreadEntry {
   linked_concept_ids?: string[];
 }
 
+// === Knowledge Index (loaded from server) ===
+
+export interface KnowledgeIndex {
+  version: number;
+  generated_at: string;
+  stats: {
+    total_articles: number;
+    total_claims: number;
+    total_similarity_pairs: number;
+    total_topics: number;
+    delta_report_count: number;
+  };
+  claims: Record<string, {
+    text: string;
+    article_id: string;
+    claim_type: string;
+    source_paragraphs: number[];
+    topics: string[];
+  }>;
+  article_claims: Record<string, string[]>;
+  similarities: Array<{ a: string; b: string; score: number }>;
+  article_novelty_matrix: Record<string, Record<string, { new: number; extends: number; known: number }>>;
+  delta_reports: Record<string, DeltaReport>;
+}
+
+export interface DeltaReport {
+  topic: string;
+  summary: string;
+  claim_count: number;
+  article_count: number;
+  top_claims: Array<{ text: string; article_id: string; claim_type: string }>;
+}
+
+// === User Knowledge State ===
+
+export type NoveltyClassification = 'NEW' | 'KNOWN' | 'EXTENDS';
+
+export interface ClaimKnowledgeEntry {
+  claim_id: string;
+  first_seen_at: number;
+  article_id: string;
+  engagement: 'skim' | 'read' | 'highlight' | 'annotate';
+  stability_days: number;
+}
+
+export interface ClaimClassification {
+  claim_id: string;
+  text: string;
+  classification: NoveltyClassification;
+  similarity_score: number;
+  source_paragraphs: number[];
+}
+
+export interface ParagraphDimming {
+  paragraph_index: number;
+  opacity: number;
+  novelty: 'novel' | 'mostly_novel' | 'mixed' | 'mostly_familiar' | 'familiar' | 'neutral';
+  claim_counts: { new: number; extends: number; known: number };
+}
+
+export interface ArticleNovelty {
+  article_id: string;
+  total_claims: number;
+  new_claims: number;
+  extends_claims: number;
+  known_claims: number;
+  novelty_ratio: number;
+  curiosity_score: number;
+}
+
 // --- Research Agent ---
 
 export interface ResearchResult {

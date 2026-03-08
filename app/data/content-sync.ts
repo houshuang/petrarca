@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { Article } from './types';
+import type { Article, KnowledgeIndex } from './types';
 import { logEvent } from './logger';
 
 const CONTENT_BASE = Platform.OS === 'web'
@@ -7,6 +7,7 @@ const CONTENT_BASE = Platform.OS === 'web'
   : 'https://alifstian.duckdns.org/content';
 const MANIFEST_URL = `${CONTENT_BASE}/manifest.json`;
 const ARTICLES_URL = `${CONTENT_BASE}/articles.json`;
+const KNOWLEDGE_INDEX_URL = `${CONTENT_BASE}/knowledge_index.json`;
 
 const CONTENT_DIR_NAME = 'content';
 const WEB_CACHE_PREFIX = '@petrarca/cache_';
@@ -60,6 +61,7 @@ interface Manifest {
   concepts_hash?: string;
   concept_count?: number;
   books_hash?: string;
+  knowledge_index_hash?: string;
 }
 
 export async function checkForUpdates(): Promise<boolean> {
@@ -72,7 +74,8 @@ export async function checkForUpdates(): Promise<boolean> {
       const localRaw = webCacheRead('manifest.json');
       if (localRaw) {
         const local: Manifest = JSON.parse(localRaw);
-        return remote.articles_hash !== local.articles_hash;
+        return remote.articles_hash !== local.articles_hash
+          || remote.knowledge_index_hash !== local.knowledge_index_hash;
       }
       return true;
     }
@@ -81,7 +84,8 @@ export async function checkForUpdates(): Promise<boolean> {
     if (manifestFile.exists) {
       const localRaw = await manifestFile.text();
       const local: Manifest = JSON.parse(localRaw);
-      return remote.articles_hash !== local.articles_hash;
+      return remote.articles_hash !== local.articles_hash
+        || remote.knowledge_index_hash !== local.knowledge_index_hash;
     }
     return true;
   } catch {
@@ -89,19 +93,31 @@ export async function checkForUpdates(): Promise<boolean> {
   }
 }
 
-export async function downloadContent(): Promise<{ articles: Article[] } | null> {
+export async function downloadContent(): Promise<{ articles: Article[]; knowledgeIndex: KnowledgeIndex | null } | null> {
   try {
     if (Platform.OS !== 'web') ensureContentDir();
 
-    const [articlesResp, manifestResp] = await Promise.all([
+    const [articlesResp, manifestResp, knowledgeResp] = await Promise.all([
       fetch(ARTICLES_URL),
       fetch(MANIFEST_URL),
+      fetch(KNOWLEDGE_INDEX_URL).catch(() => null),
     ]);
 
     if (!articlesResp.ok) return null;
 
     const articles: Article[] = await articlesResp.json();
     const manifestText = await manifestResp.text();
+
+    let knowledgeIndex: KnowledgeIndex | null = null;
+    if (knowledgeResp && knowledgeResp.ok) {
+      const knowledgeText = await knowledgeResp.text();
+      knowledgeIndex = JSON.parse(knowledgeText);
+      if (Platform.OS === 'web') {
+        webCacheWrite('knowledge_index.json', knowledgeText);
+      } else {
+        getCachedFile('knowledge_index.json').write(knowledgeText);
+      }
+    }
 
     if (Platform.OS === 'web') {
       webCacheWrite('articles.json', JSON.stringify(articles));
@@ -111,25 +127,38 @@ export async function downloadContent(): Promise<{ articles: Article[] } | null>
       getCachedFile('manifest.json').write(manifestText);
     }
 
-    logEvent('content_downloaded', { article_count: articles.length });
-    return { articles };
+    logEvent('content_downloaded', {
+      article_count: articles.length,
+      knowledge_index: !!knowledgeIndex,
+    });
+    return { articles, knowledgeIndex };
   } catch {
     return null;
   }
 }
 
-export async function loadCachedContent(): Promise<{ articles: Article[] } | null> {
+export async function loadCachedContent(): Promise<{ articles: Article[]; knowledgeIndex: KnowledgeIndex | null } | null> {
   try {
     if (Platform.OS === 'web') {
       const articlesRaw = webCacheRead('articles.json');
       if (!articlesRaw) return null;
-      return { articles: JSON.parse(articlesRaw) };
+      const knowledgeRaw = webCacheRead('knowledge_index.json');
+      return {
+        articles: JSON.parse(articlesRaw),
+        knowledgeIndex: knowledgeRaw ? JSON.parse(knowledgeRaw) : null,
+      };
     }
 
     const articlesFile = getCachedFile('articles.json');
     if (!articlesFile.exists) return null;
 
-    return { articles: JSON.parse(await articlesFile.text()) };
+    let knowledgeIndex: KnowledgeIndex | null = null;
+    const knowledgeFile = getCachedFile('knowledge_index.json');
+    if (knowledgeFile.exists) {
+      knowledgeIndex = JSON.parse(await knowledgeFile.text());
+    }
+
+    return { articles: JSON.parse(await articlesFile.text()), knowledgeIndex };
   } catch {
     return null;
   }
