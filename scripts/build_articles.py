@@ -1257,8 +1257,61 @@ def _claim_id(normalized_text: str) -> str:
     return hashlib.sha256(normalized_text.encode()).hexdigest()[:12]
 
 
+def _extract_claims_for_article(article: dict, index: int, total: int) -> None:
+    """Extract atomic claims for a single article. Modifies article in-place."""
+    title = article.get("title", "Untitled")
+    content = article.get("content_markdown", "")
+    topics = article.get("topics", [])
+
+    if not content or len(content.split()) < 50:
+        print(f"  [{index}/{total}] Skipping (too short): {title[:60]}", file=sys.stderr)
+        article["atomic_claims"] = []
+        return
+
+    print(f"  [{index}/{total}] Extracting claims: {title[:60]}", file=sys.stderr)
+    prompt = _build_atomic_decomposition_prompt(content, title, topics)
+    response = _call_llm(prompt)
+
+    if response:
+        try:
+            cleaned = response
+            if cleaned.startswith("```"):
+                cleaned = re.sub(r"^```(?:json)?\n?", "", cleaned)
+                cleaned = re.sub(r"\n?```$", "", cleaned)
+            parsed = json.loads(cleaned)
+            if isinstance(parsed, list):
+                claims = []
+                for raw_claim in parsed:
+                    normalized = raw_claim.get("normalized_text", "").strip()
+                    if not normalized:
+                        continue
+                    claims.append({
+                        "normalized_text": normalized,
+                        "original_text": raw_claim.get("original_text", "").strip(),
+                        "claim_type": raw_claim.get("claim_type", "factual"),
+                        "source_paragraphs": raw_claim.get("source_paragraphs", []),
+                        "topics": raw_claim.get("topics", []),
+                    })
+                claims = _fix_pronoun_starts(claims)
+                for c in claims:
+                    c["id"] = _claim_id(c["normalized_text"])
+                article["atomic_claims"] = claims
+                print(f"    OK: {len(claims)} claims extracted", file=sys.stderr)
+            else:
+                print(f"    Unexpected response format (not array), skipping", file=sys.stderr)
+                article["atomic_claims"] = []
+        except json.JSONDecodeError:
+            print(f"    JSON parse failed for claims extraction", file=sys.stderr)
+            article["atomic_claims"] = []
+    else:
+        print(f"    LLM call failed for claims extraction", file=sys.stderr)
+        article["atomic_claims"] = []
+
+
 def extract_atomic_claims(articles: list[dict], dry_run: bool = False) -> list[dict]:
     """Extract atomic claims for each article. Modifies articles in-place and returns them."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     to_process = [a for a in articles if not a.get("atomic_claims")]
     if not to_process:
         print("  All articles already have atomic_claims, skipping", file=sys.stderr)
@@ -1266,61 +1319,24 @@ def extract_atomic_claims(articles: list[dict], dry_run: bool = False) -> list[d
 
     print(f"  Extracting atomic claims for {len(to_process)} articles (skipping {len(articles) - len(to_process)} already done)", file=sys.stderr)
 
-    for i, article in enumerate(to_process):
-        title = article.get("title", "Untitled")
-        content = article.get("content_markdown", "")
-        topics = article.get("topics", [])
-
-        if not content or len(content.split()) < 50:
-            print(f"  [{i+1}/{len(to_process)}] Skipping (too short): {title[:60]}", file=sys.stderr)
+    if dry_run:
+        for i, article in enumerate(to_process):
+            print(f"  [{i+1}/{len(to_process)}] Would extract claims: {article.get('title', 'Untitled')[:60]}", file=sys.stderr)
             article["atomic_claims"] = []
-            continue
-
-        if dry_run:
-            print(f"  [{i+1}/{len(to_process)}] Would extract claims: {title[:60]}", file=sys.stderr)
-            article["atomic_claims"] = []
-            continue
-
-        print(f"  [{i+1}/{len(to_process)}] Extracting claims: {title[:60]}", file=sys.stderr)
-        prompt = _build_atomic_decomposition_prompt(content, title, topics)
-        response = _call_llm(prompt)
-
-        if response:
-            try:
-                cleaned = response
-                if cleaned.startswith("```"):
-                    cleaned = re.sub(r"^```(?:json)?\n?", "", cleaned)
-                    cleaned = re.sub(r"\n?```$", "", cleaned)
-                parsed = json.loads(cleaned)
-                if isinstance(parsed, list):
-                    claims = []
-                    for raw_claim in parsed:
-                        normalized = raw_claim.get("normalized_text", "").strip()
-                        if not normalized:
-                            continue
-                        claims.append({
-                            "normalized_text": normalized,
-                            "original_text": raw_claim.get("original_text", "").strip(),
-                            "claim_type": raw_claim.get("claim_type", "factual"),
-                            "source_paragraphs": raw_claim.get("source_paragraphs", []),
-                            "topics": raw_claim.get("topics", []),
-                        })
-                    claims = _fix_pronoun_starts(claims)
-                    for c in claims:
-                        c["id"] = _claim_id(c["normalized_text"])
-                    article["atomic_claims"] = claims
-                    print(f"    OK: {len(claims)} claims extracted", file=sys.stderr)
-                else:
-                    print(f"    Unexpected response format (not array), skipping", file=sys.stderr)
+    else:
+        max_workers = min(10, len(to_process))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(_extract_claims_for_article, article, i + 1, len(to_process)): article
+                for i, article in enumerate(to_process)
+            }
+            for future in as_completed(futures):
+                try:
+                    future.result()
+                except Exception as e:
+                    article = futures[future]
+                    print(f"    Error processing {article.get('title', '')[:40]}: {e}", file=sys.stderr)
                     article["atomic_claims"] = []
-            except json.JSONDecodeError:
-                print(f"    JSON parse failed for claims extraction", file=sys.stderr)
-                article["atomic_claims"] = []
-        else:
-            print(f"    LLM call failed for claims extraction", file=sys.stderr)
-            article["atomic_claims"] = []
-
-        time.sleep(1)
 
     total_claims = sum(len(a.get("atomic_claims", [])) for a in articles)
     print(f"  Total atomic claims across all articles: {total_claims}", file=sys.stderr)
