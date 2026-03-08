@@ -36,11 +36,18 @@ VENV_PYTHON = '/opt/petrarca/.venv/bin/python3'
 EMAILS_DIR = INGEST_DIR / 'emails'
 
 CHAT_DIR = Path(os.environ.get('CHAT_DIR', '/opt/petrarca/data/chats'))
+NOTES_DIR = Path(os.environ.get('NOTES_DIR', '/opt/petrarca/data/notes'))
+AUDIO_DIR = Path(os.environ.get('AUDIO_DIR', '/opt/petrarca/data/audio'))
+
+SONIOX_API_KEY = os.environ.get('SONIOX_API_KEY', '557c7c5a86a2f5b8fa734ddbbe179f0f21fd342c762768c9af4f4ffff8c58e1f')
+SONIOX_BASE_URL = 'https://api.soniox.com/v1'
 
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 INGEST_DIR.mkdir(parents=True, exist_ok=True)
 EMAILS_DIR.mkdir(parents=True, exist_ok=True)
 CHAT_DIR.mkdir(parents=True, exist_ok=True)
+NOTES_DIR.mkdir(parents=True, exist_ok=True)
+AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ---------------------------------------------------------------------------
@@ -717,6 +724,155 @@ def run_explore_batch(request_id: str, concepts: list[dict]):
     print(f'[explore-batch] {request_id} -> {result["status"]} ({len(concepts)} concepts)', flush=True)
 
 
+# --- Voice notes: backend transcription + storage ---
+
+def transcribe_on_server(audio_path: Path) -> str:
+    """Upload audio to Soniox, transcribe, return text."""
+    import requests as req
+
+    headers = {'Authorization': f'Bearer {SONIOX_API_KEY}'}
+
+    # Upload file
+    with open(audio_path, 'rb') as f:
+        resp = req.post(f'{SONIOX_BASE_URL}/files', headers=headers,
+                        files={'file': ('note.m4a', f, 'audio/m4a')})
+    resp.raise_for_status()
+    file_id = resp.json()['id']
+
+    # Create transcription
+    resp = req.post(f'{SONIOX_BASE_URL}/transcriptions', headers=headers,
+                    json={'model': 'stt-async-v4', 'file_id': file_id,
+                          'language_hints': ['en', 'no', 'sv', 'da', 'it', 'de', 'es', 'fr', 'zh', 'id']})
+    resp.raise_for_status()
+    txn_id = resp.json()['id']
+
+    # Poll
+    for _ in range(90):  # 3 min max
+        time.sleep(2)
+        resp = req.get(f'{SONIOX_BASE_URL}/transcriptions/{txn_id}', headers=headers)
+        resp.raise_for_status()
+        data = resp.json()
+        if data['status'] == 'completed':
+            break
+        if data['status'] == 'error':
+            raise RuntimeError(f'Soniox error: {data.get("error_message", "unknown")}')
+
+    # Get transcript
+    resp = req.get(f'{SONIOX_BASE_URL}/transcriptions/{txn_id}/transcript', headers=headers)
+    resp.raise_for_status()
+    data = resp.json()
+    text = ''
+    if data.get('tokens'):
+        text = ''.join(t['text'] for t in data['tokens']).strip()
+    elif data.get('text'):
+        text = data['text'].strip()
+
+    # Cleanup
+    try:
+        req.delete(f'{SONIOX_BASE_URL}/transcriptions/{txn_id}', headers=headers)
+        req.delete(f'{SONIOX_BASE_URL}/files/{file_id}', headers=headers)
+    except Exception:
+        pass
+
+    return text
+
+
+def process_voice_note(note_id: str, audio_path: Path, article_id: str, topics: list[str],
+                       article_title: str, article_context: str):
+    """Background: transcribe audio, store note, optionally spawn research."""
+    note_path = NOTES_DIR / f'{note_id}.json'
+    note = {
+        'id': note_id,
+        'article_id': article_id,
+        'article_title': article_title,
+        'topics': topics,
+        'status': 'transcribing',
+        'created_at': int(time.time()),
+    }
+    note_path.write_text(json.dumps(note, indent=2))
+
+    try:
+        transcript = transcribe_on_server(audio_path)
+        note['transcript'] = transcript
+        note['status'] = 'complete'
+        note_path.write_text(json.dumps(note, indent=2))
+        print(f'[note] {note_id} transcribed: {transcript[:80]}...', flush=True)
+    except Exception as e:
+        note['status'] = 'failed'
+        note['error'] = str(e)
+        note_path.write_text(json.dumps(note, indent=2))
+        print(f'[note] {note_id} transcription failed: {e}', flush=True)
+
+
+def run_topic_research(request_id: str, topic: str, context: str, article_titles: list[str]):
+    """Background: use claude to find interesting articles on a topic, then ingest them."""
+    result_path = RESULTS_DIR / f'{request_id}.json'
+    result = {
+        'id': request_id,
+        'type': 'topic_research',
+        'status': 'processing',
+        'topic': topic,
+        'requested_at': int(time.time() * 1000),
+    }
+    result_path.write_text(json.dumps(result, indent=2))
+
+    prompt = f"""You are a research assistant for Petrarca, a read-later app. The user is interested in the topic "{topic}".
+
+Context about what they've been reading:
+{context}
+
+Articles they already have on this topic:
+{chr(10).join(f'- {t}' for t in article_titles[:10])}
+
+Find 3-5 high-quality articles, blog posts, or papers that would give the user genuinely NEW perspectives on this topic. Prioritize:
+- Diverse viewpoints (not just the same take rehashed)
+- Primary sources over aggregators
+- Recent and substantive pieces
+- Content that complements rather than duplicates what they already have
+
+Return JSON:
+{{
+  "articles": [
+    {{"url": "https://...", "title": "...", "why": "One sentence on why this is valuable"}}
+  ]
+}}"""
+
+    try:
+        proc = subprocess.run(
+            ['claude', '-p', prompt],
+            capture_output=True, text=True, timeout=300,
+        )
+        if proc.returncode != 0:
+            result['status'] = 'failed'
+            result['error'] = proc.stderr[:500]
+        else:
+            output = proc.stdout.strip()
+            json_start = output.find('{')
+            json_end = output.rfind('}') + 1
+            if json_start >= 0 and json_end > json_start:
+                parsed = json.loads(output[json_start:json_end])
+                articles = parsed.get('articles', [])
+                result['status'] = 'completed'
+                result['completed_at'] = int(time.time() * 1000)
+                result['found_articles'] = articles
+
+                # Auto-ingest top articles
+                for art in articles[:3]:
+                    url = art.get('url', '')
+                    if url:
+                        print(f'[topic_research] Ingesting: {url}', flush=True)
+                        run_ingest(url, art.get('title', ''), '', '', art.get('why', ''), f'research:{topic}')
+            else:
+                result['status'] = 'failed'
+                result['error'] = 'Could not parse JSON'
+    except Exception as e:
+        result['status'] = 'failed'
+        result['error'] = str(e)
+
+    result_path.write_text(json.dumps(result, indent=2))
+    print(f'[topic_research] {request_id} -> {result["status"]}', flush=True)
+
+
 # --- Chat with article context ---
 
 def handle_chat(question: str, context: str, conversation_id: str | None = None) -> dict:
@@ -861,6 +1017,100 @@ class ResearchHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(json.dumps({'status': 'queued', 'source': 'email'}).encode())
 
+    def _handle_note(self):
+        """Receive audio file + metadata, transcribe in background, store note."""
+        import cgi
+        content_type = self.headers.get('Content-Type', '')
+
+        if 'multipart/form-data' in content_type:
+            # Parse multipart form data
+            environ = {
+                'REQUEST_METHOD': 'POST',
+                'CONTENT_TYPE': content_type,
+                'CONTENT_LENGTH': self.headers.get('Content-Length', '0'),
+            }
+            form = cgi.FieldStorage(fp=self.rfile, headers=self.headers, environ=environ)
+
+            article_id = form.getvalue('article_id', '')
+            topics_raw = form.getvalue('topics', '[]')
+            article_title = form.getvalue('article_title', '')
+            article_context = form.getvalue('article_context', '')
+
+            try:
+                topics = json.loads(topics_raw) if isinstance(topics_raw, str) else []
+            except json.JSONDecodeError:
+                topics = []
+
+            # Save audio file
+            note_id = f'note_{int(time.time())}_{article_id[:8]}'
+            audio_path = AUDIO_DIR / f'{note_id}.m4a'
+
+            file_item = form['audio']
+            audio_path.write_bytes(file_item.file.read())
+        else:
+            self.send_response(400)
+            self._send_cors_headers()
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(b'{"error": "Expected multipart/form-data"}')
+            return
+
+        # Spawn background transcription
+        thread = threading.Thread(
+            target=process_voice_note,
+            args=(note_id, audio_path, article_id, topics, article_title, article_context),
+            daemon=True,
+        )
+        thread.start()
+
+        print(f'[note] Started {note_id} for article {article_id}', flush=True)
+
+        self.send_response(202)
+        self._send_cors_headers()
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({'id': note_id, 'status': 'transcribing'}).encode())
+
+    def _handle_topic_research(self):
+        content_length = int(self.headers.get('Content-Length', 0))
+        if not content_length:
+            self.send_response(400)
+            self._send_cors_headers()
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(b'{"error": "Empty body"}')
+            return
+
+        body = json.loads(self.rfile.read(content_length))
+        topic = body.get('topic', '').strip()
+        context = body.get('context', '')
+        article_titles = body.get('article_titles', [])
+
+        if not topic:
+            self.send_response(400)
+            self._send_cors_headers()
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(b'{"error": "Missing topic"}')
+            return
+
+        request_id = f'topres_{int(time.time())}_{hash(topic) % 10000:04d}'
+
+        thread = threading.Thread(
+            target=run_topic_research,
+            args=(request_id, topic, context, article_titles),
+            daemon=True,
+        )
+        thread.start()
+
+        print(f'[topic_research] Started {request_id}: {topic}', flush=True)
+
+        self.send_response(202)
+        self._send_cors_headers()
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({'id': request_id, 'status': 'processing'}).encode())
+
     def _handle_chat(self):
         content_length = int(self.headers.get('Content-Length', 0))
         if not content_length:
@@ -998,6 +1248,10 @@ class ResearchHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path == '/chat':
             return self._handle_chat()
+        if self.path == '/note':
+            return self._handle_note()
+        if self.path == '/research/topic':
+            return self._handle_topic_research()
         if self.path == '/ingest':
             return self._handle_ingest()
         if self.path == '/ingest-email':
@@ -1101,6 +1355,29 @@ class ResearchHandler(BaseHTTPRequestHandler):
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps(results).encode())
+
+        elif self.path.startswith('/notes'):
+            # /notes?article_id=X or /notes (all)
+            from urllib.parse import parse_qs, urlparse
+            parsed = urlparse(self.path)
+            params = parse_qs(parsed.query)
+            article_filter = params.get('article_id', [None])[0]
+
+            notes = []
+            for f in sorted(NOTES_DIR.glob('*.json'), key=lambda p: p.stat().st_mtime, reverse=True):
+                try:
+                    note = json.loads(f.read_text())
+                    if article_filter and note.get('article_id') != article_filter:
+                        continue
+                    notes.append(note)
+                except (json.JSONDecodeError, OSError):
+                    continue
+
+            self.send_response(200)
+            self._send_cors_headers()
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(notes).encode())
 
         elif self.path == '/health':
             self.send_response(200)

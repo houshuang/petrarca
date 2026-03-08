@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 
-const RESEARCH_BASE = Platform.OS === 'web'
+export const RESEARCH_BASE = Platform.OS === 'web'
   ? `${window.location.protocol}//${window.location.hostname}:8090`
   : 'http://alifstian.duckdns.org:8090';
 
@@ -27,5 +27,68 @@ export async function askAI(
     const text = await resp.text();
     throw new Error(`Chat failed (${resp.status}): ${text}`);
   }
+  return resp.json();
+}
+
+export async function uploadVoiceNote(
+  audioUri: string,
+  articleId: string,
+  articleTitle: string,
+  topics: string[],
+  articleContext: string,
+): Promise<{ id: string }> {
+  const formData = new FormData();
+  formData.append('audio', {
+    uri: audioUri,
+    type: 'audio/m4a',
+    name: 'note.m4a',
+  } as any);
+  formData.append('article_id', articleId);
+  formData.append('article_title', articleTitle);
+  formData.append('topics', JSON.stringify(topics));
+  formData.append('article_context', articleContext.slice(0, 2000));
+
+  const resp = await fetch(`${RESEARCH_BASE}/note`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!resp.ok) throw new Error(`Upload failed: ${resp.status}`);
+  return resp.json();
+}
+
+export async function spawnTopicResearch(
+  topic: string,
+  context: string,
+  articleTitles: string[],
+): Promise<{ id: string; status: string }> {
+  const resp = await fetch(`${RESEARCH_BASE}/research/topic`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      topic,
+      context,
+      article_titles: articleTitles,
+    }),
+  });
+  if (!resp.ok) throw new Error(`Research failed: ${resp.status}`);
+  return resp.json();
+}
+
+export interface VoiceNote {
+  id: string;
+  article_id: string;
+  article_title: string;
+  topics: string[];
+  transcript?: string;
+  status: string;
+  created_at: number;
+}
+
+export async function fetchNotes(articleId?: string): Promise<VoiceNote[]> {
+  const url = articleId
+    ? `${RESEARCH_BASE}/notes?article_id=${articleId}`
+    : `${RESEARCH_BASE}/notes`;
+  const resp = await fetch(url);
+  if (!resp.ok) return [];
   return resp.json();
 }

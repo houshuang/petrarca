@@ -3,12 +3,14 @@ import {
   View, Text, StyleSheet, ScrollView, Pressable, Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { getArticles, getReadingState } from '../../data/store';
 import { Article } from '../../data/types';
 import { logEvent } from '../../data/logger';
 import { getDisplayTitle, normalizeTopic, displayTopic } from '../../lib/display-utils';
 import { colors, fonts, type, spacing, layout } from '../../design/tokens';
 import { isKnowledgeReady, getDeltaReportForTopic } from '../../data/knowledge-engine';
+import { spawnTopicResearch } from '../../lib/chat-api';
 
 // --- Compact Article Row ---
 
@@ -122,6 +124,26 @@ function TopicCluster({ topic, articles, expanded, onToggle }: {
           {articles.map(a => (
             <CompactArticleRow key={a.id} article={a} />
           ))}
+
+          {/* Research button */}
+          <Pressable
+            onPress={async () => {
+              try {
+                await spawnTopicResearch(
+                  topic,
+                  `Topic: ${label}. ${articles.length} articles.`,
+                  articles.map(a => a.title),
+                );
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                logEvent('topic_research_spawned', { topic });
+              } catch (e) {
+                logEvent('topic_research_error', { topic, error: String(e) });
+              }
+            }}
+            style={styles.researchButton}
+          >
+            <Text style={styles.researchButtonText}>↗ Find more on {label}</Text>
+          </Pressable>
         </View>
       ) : null}
     </View>
@@ -349,6 +371,18 @@ const styles = StyleSheet.create({
     ...type.metadata,
     color: colors.textMuted,
     marginTop: 1,
+  },
+
+  // Research button
+  researchButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    marginTop: 4,
+  },
+  researchButtonText: {
+    fontFamily: fonts.ui,
+    fontSize: 13,
+    color: colors.claimNew,
   },
 
   // Empty state

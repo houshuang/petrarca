@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import AskAI from '../components/AskAI';
 import VoiceFeedback from '../components/VoiceFeedback';
+import { spawnTopicResearch } from '../lib/chat-api';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { getArticleById, getReadingState, updateReadingState, getHighlightBlockIndices, addHighlight, removeHighlight, markArticleRead, recordInterestSignal } from '../data/store';
 import { Article, InterestTopic } from '../data/types';
@@ -742,14 +743,37 @@ export default function ReaderScreen() {
             <Text style={[styles.menuActionText, { color: colors.rubric }]}>✦ Ask AI</Text>
           </Pressable>
 
-          {/* Voice feedback */}
+          {/* Voice note */}
           <Pressable onPress={() => {
             setShowMenu(false);
             setShowVoiceFeedback(true);
-            logEvent('voice_feedback_open', { article_id: article.id });
+            logEvent('voice_note_open', { article_id: article.id });
           }} style={styles.menuAction}>
-            <Text style={styles.menuActionText}>● Voice feedback</Text>
+            <Text style={styles.menuActionText}>● Voice note</Text>
           </Pressable>
+
+          {/* Research topics */}
+          {article.interest_topics && article.interest_topics.length > 0 ? (
+            <Pressable onPress={async () => {
+              const topic = article.interest_topics![0].broad;
+              setShowMenu(false);
+              try {
+                await spawnTopicResearch(
+                  topic,
+                  `Article: ${article.title}\nSummary: ${article.one_line_summary}`,
+                  [article.title],
+                );
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                logEvent('research_spawned', { article_id: article.id, topic });
+              } catch (e) {
+                logEvent('research_spawn_error', { article_id: article.id, error: String(e) });
+              }
+            }} style={styles.menuAction}>
+              <Text style={[styles.menuActionText, { color: colors.claimNew }]}>
+                ↗ Research "{article.interest_topics[0].broad}"
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       )}
 
@@ -855,11 +879,13 @@ export default function ReaderScreen() {
         />
       )}
 
-      {/* Voice Feedback */}
+      {/* Voice Note */}
       {showVoiceFeedback && (
         <View style={styles.voiceFeedbackOverlay}>
           <VoiceFeedback
             articleId={article.id}
+            articleTitle={article.title}
+            topics={(article.interest_topics || []).map(t => t.broad)}
             articleContext={buildAIChatContext(article)}
             onClose={() => setShowVoiceFeedback(false)}
           />

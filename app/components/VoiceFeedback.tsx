@@ -2,256 +2,198 @@ import { useState, useRef } from 'react';
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { Audio } from 'expo-av';
 import { colors, fonts } from '../design/tokens';
-import { transcribeAudio } from '../lib/transcribe';
+import { uploadVoiceNote } from '../lib/chat-api';
 import { logEvent } from '../data/logger';
-
-type Status = 'idle' | 'recording' | 'transcribing' | 'done' | 'error';
+import * as Haptics from 'expo-haptics';
 
 interface VoiceFeedbackProps {
   articleId: string;
+  articleTitle: string;
+  topics: string[];
   articleContext: string;
   onClose: () => void;
 }
 
-export default function VoiceFeedback({ articleId, articleContext, onClose }: VoiceFeedbackProps) {
-  const [status, setStatus] = useState<Status>('idle');
-  const [transcript, setTranscript] = useState('');
+export default function VoiceFeedback({ articleId, articleTitle, topics, articleContext, onClose }: VoiceFeedbackProps) {
+  const [recording, setRecording] = useState(false);
+  const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
   const [duration, setDuration] = useState(0);
-  const recording = useRef<Audio.Recording | null>(null);
+  const recRef = useRef<Audio.Recording | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const startRecording = async () => {
     try {
       const permission = await Audio.requestPermissionsAsync();
-      if (!permission.granted) {
-        setError('Microphone permission required');
-        setStatus('error');
-        return;
-      }
+      if (!permission.granted) { setError('Mic permission needed'); return; }
       await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording: rec } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY,
-      );
-      recording.current = rec;
-      setStatus('recording');
+      const { recording: rec } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      recRef.current = rec;
+      setRecording(true);
       setDuration(0);
       timerRef.current = setInterval(() => setDuration(d => d + 1), 1000);
-      logEvent('voice_feedback_start', { article_id: articleId });
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      logEvent('voice_note_start', { article_id: articleId });
     } catch (e) {
-      setError(`Failed to start recording: ${e}`);
-      setStatus('error');
+      setError(`Recording failed: ${e}`);
     }
   };
 
-  const stopAndTranscribe = async () => {
-    if (!recording.current) return;
+  const stopAndSend = async () => {
+    if (!recRef.current) return;
     if (timerRef.current) clearInterval(timerRef.current);
-
     try {
-      await recording.current.stopAndUnloadAsync();
-      const uri = recording.current.getURI();
-      recording.current = null;
+      await recRef.current.stopAndUnloadAsync();
+      const uri = recRef.current.getURI();
+      recRef.current = null;
+      setRecording(false);
+      if (!uri) { setError('No audio file'); return; }
 
-      if (!uri) {
-        setError('No recording file');
-        setStatus('error');
-        return;
-      }
+      // Upload to server — transcription happens in background
+      await uploadVoiceNote(uri, articleId, articleTitle, topics, articleContext);
+      setSent(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      logEvent('voice_note_sent', { article_id: articleId, duration_seconds: duration });
 
-      setStatus('transcribing');
-      logEvent('voice_feedback_stop', { article_id: articleId, duration_seconds: duration });
-
-      const text = await transcribeAudio(uri);
-      setTranscript(text);
-      setStatus('done');
-
-      // Log the feedback with full context
-      logEvent('voice_feedback_transcript', {
-        article_id: articleId,
-        transcript: text,
-        duration_seconds: duration,
-        article_context: articleContext.slice(0, 2000),
-      });
+      // Auto-close after brief confirmation
+      setTimeout(onClose, 1200);
     } catch (e) {
-      setError(`Transcription failed: ${e}`);
-      setStatus('error');
+      setRecording(false);
+      setError(`Send failed: ${e}`);
     }
   };
 
-  const formatTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
+  const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
+
+  if (sent) {
+    return (
+      <View style={styles.bar}>
+        <Text style={styles.sentText}>✓ Sent — transcribing in background</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.bar}>
+        <Text style={styles.errorText}>{error}</Text>
+        <Pressable onPress={onClose}><Text style={styles.dismiss}>Dismiss</Text></Pressable>
+      </View>
+    );
+  }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{'✦ Voice Feedback'}</Text>
-        <Pressable onPress={onClose} style={styles.closeButton}>
-          <Text style={styles.closeText}>Done</Text>
+    <View style={styles.bar}>
+      {!recording ? (
+        <Pressable onPress={startRecording} style={styles.recordBtn}>
+          <View style={styles.recordDot} />
+          <Text style={styles.btnText}>Record note</Text>
         </Pressable>
-      </View>
-
-      <View style={styles.body}>
-        {status === 'idle' && (
-          <>
-            <Text style={styles.hint}>
-              Record your thoughts about this article. The recording will be transcribed and saved with your reading context.
-            </Text>
-            <Pressable onPress={startRecording} style={styles.recordButton}>
-              <View style={styles.recordDot} />
-              <Text style={styles.recordButtonText}>Start Recording</Text>
-            </Pressable>
-          </>
-        )}
-
-        {status === 'recording' && (
-          <>
-            <View style={styles.recordingIndicator}>
-              <View style={styles.recordingPulse} />
-              <Text style={styles.recordingTime}>{formatTime(duration)}</Text>
-            </View>
-            <Pressable onPress={stopAndTranscribe} style={styles.stopButton}>
-              <Text style={styles.stopButtonText}>Stop & Transcribe</Text>
-            </Pressable>
-          </>
-        )}
-
-        {status === 'transcribing' && (
-          <Text style={styles.hint}>Transcribing...</Text>
-        )}
-
-        {status === 'done' && (
-          <>
-            <Text style={styles.transcriptLabel}>Transcribed feedback:</Text>
-            <Text style={styles.transcriptText}>{transcript || '(empty)'}</Text>
-            <Text style={styles.savedNote}>Saved to interaction log</Text>
-          </>
-        )}
-
-        {status === 'error' && (
-          <Text style={styles.errorText}>{error}</Text>
-        )}
-      </View>
+      ) : (
+        <>
+          <View style={styles.recordingRow}>
+            <View style={styles.pulseDot} />
+            <Text style={styles.timer}>{fmt(duration)}</Text>
+          </View>
+          <Pressable onPress={stopAndSend} style={styles.sendBtn}>
+            <Text style={styles.sendText}>Send</Text>
+          </Pressable>
+        </>
+      )}
+      <Pressable onPress={onClose} style={styles.cancelBtn}>
+        <Text style={styles.cancelText}>✕</Text>
+      </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  bar: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.parchment,
     borderTopWidth: 1,
     borderTopColor: colors.rule,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.rule,
-  },
-  title: {
-    fontFamily: fonts.uiMedium,
-    fontSize: 11,
-    letterSpacing: 1,
-    color: colors.rubric,
-    textTransform: 'uppercase',
-  },
-  closeButton: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-  },
-  closeText: {
-    fontFamily: fonts.ui,
-    fontSize: 14,
-    color: colors.textMuted,
-  },
-  body: {
-    padding: 20,
-    alignItems: 'center',
-    gap: 16,
-  },
-  hint: {
-    fontFamily: fonts.reading,
-    fontSize: 14,
-    lineHeight: 21,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  recordButton: {
+  recordBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     backgroundColor: colors.ink,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
   },
   recordDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.rubric,
+  },
+  btnText: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 14,
+    color: colors.parchment,
+    ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}),
+  },
+  recordingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  pulseDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
     backgroundColor: colors.rubric,
   },
-  recordButtonText: {
-    fontFamily: fonts.uiMedium,
-    fontSize: 15,
-    color: colors.parchment,
-    ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}),
-  },
-  recordingIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  recordingPulse: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: colors.rubric,
-  },
-  recordingTime: {
+  timer: {
     fontFamily: fonts.display,
-    fontSize: 28,
+    fontSize: 22,
     color: colors.ink,
   },
-  stopButton: {
+  sendBtn: {
     backgroundColor: colors.rubric,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
   },
-  stopButtonText: {
+  sendText: {
     fontFamily: fonts.uiMedium,
-    fontSize: 15,
+    fontSize: 14,
     color: colors.parchment,
     ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}),
   },
-  transcriptLabel: {
-    fontFamily: fonts.ui,
-    fontSize: 11,
+  cancelBtn: {
+    padding: 8,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cancelText: {
+    fontSize: 18,
     color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    alignSelf: 'flex-start',
   },
-  transcriptText: {
-    fontFamily: fonts.reading,
-    fontSize: 14,
-    lineHeight: 21,
-    color: colors.textBody,
-    alignSelf: 'flex-start',
-  },
-  savedNote: {
+  sentText: {
     fontFamily: fonts.ui,
-    fontSize: 12,
+    fontSize: 14,
     color: colors.claimNew,
+    flex: 1,
   },
   errorText: {
-    fontFamily: fonts.reading,
+    fontFamily: fonts.ui,
     fontSize: 14,
     color: colors.rubric,
-    textAlign: 'center',
+    flex: 1,
+  },
+  dismiss: {
+    fontFamily: fonts.ui,
+    fontSize: 14,
+    color: colors.textMuted,
   },
 });
