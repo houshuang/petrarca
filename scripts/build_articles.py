@@ -1617,6 +1617,99 @@ def _extract_claims_for_article(article: dict, index: int, total: int) -> None:
         article["atomic_claims"] = []
 
 
+def enrich_articles(articles: list[dict], dry_run: bool = False) -> list[dict]:
+    """Add entities + follow_up_questions to articles that don't have them."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    to_process = [a for a in articles
+                  if not a.get("entities") or not a.get("follow_up_questions")]
+    if not to_process:
+        print("  All articles already have entities + follow_up_questions, skipping", file=sys.stderr)
+        return articles
+
+    print(f"  Enriching {len(to_process)} articles (skipping {len(articles) - len(to_process)} already done)", file=sys.stderr)
+
+    if dry_run:
+        for i, article in enumerate(to_process):
+            print(f"  [{i+1}/{len(to_process)}] Would enrich: {article.get('title', 'Untitled')[:60]}", file=sys.stderr)
+        return articles
+
+    def _enrich_one(article, index, total):
+        title = article.get("title", "Untitled")
+        content = article.get("content_markdown", "")
+        topics = article.get("topics", [])
+
+        if not content or len(content.split()) < 50:
+            print(f"  [{index}/{total}] Skipping (too short): {title[:60]}", file=sys.stderr)
+            article.setdefault("entities", [])
+            article.setdefault("follow_up_questions", [])
+            return
+
+        print(f"  [{index}/{total}] Enriching: {title[:60]}", file=sys.stderr)
+        prompt = f"""Analyze this article and extract two things:
+
+Article title: {title}
+Topics: {', '.join(topics[:5])}
+
+Article content:
+{content[:8000]}
+
+Return a JSON object with exactly these two fields:
+{{
+  "entities": [
+    {{"name": "Entity Name", "type": "person|book|company|concept|event|place|technology", "synthesis": "1-2 sentence description of this entity in context of the article.", "mentions": ["Entity Name", "alternate name"]}}
+  ],
+  "follow_up_questions": [
+    {{"question": "A curiosity-driven question a thoughtful reader might explore after reading this article?", "connects_to": "related topic area"}}
+  ]
+}}
+
+entities: extract 3-8 notable entities (people, books, companies, concepts, places, events, technologies) mentioned in the article. Include a 1-2 sentence synthesis and all name variations used in the text.
+follow_up_questions: generate 2-3 curiosity-driven questions that a thoughtful reader might want to explore after reading this article.
+
+Return ONLY valid JSON."""
+
+        response = _call_llm(prompt, purpose="enrich")
+        if response:
+            try:
+                cleaned = response
+                if cleaned.startswith("```"):
+                    cleaned = re.sub(r"^```(?:json)?\n?", "", cleaned)
+                    cleaned = re.sub(r"\n?```$", "", cleaned)
+                parsed = json.loads(cleaned)
+                article["entities"] = parsed.get("entities", [])
+                article["follow_up_questions"] = parsed.get("follow_up_questions", [])
+                print(f"    OK: {len(article['entities'])} entities, {len(article['follow_up_questions'])} questions", file=sys.stderr)
+            except json.JSONDecodeError:
+                print(f"    JSON parse failed for enrichment", file=sys.stderr)
+                article.setdefault("entities", [])
+                article.setdefault("follow_up_questions", [])
+        else:
+            print(f"    LLM call failed for enrichment", file=sys.stderr)
+            article.setdefault("entities", [])
+            article.setdefault("follow_up_questions", [])
+
+    max_workers = min(10, len(to_process))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(_enrich_one, article, i + 1, len(to_process)): article
+            for i, article in enumerate(to_process)
+        }
+        for future in as_completed(futures):
+            try:
+                future.result()
+            except Exception as e:
+                article = futures[future]
+                print(f"    Error enriching {article.get('title', '')[:40]}: {e}", file=sys.stderr)
+                article.setdefault("entities", [])
+                article.setdefault("follow_up_questions", [])
+
+    total_entities = sum(len(a.get("entities", [])) for a in articles)
+    total_questions = sum(len(a.get("follow_up_questions", [])) for a in articles)
+    print(f"  Total: {total_entities} entities, {total_questions} follow-up questions across all articles", file=sys.stderr)
+    return articles
+
+
 def extract_atomic_claims(articles: list[dict], dry_run: bool = False) -> list[dict]:
     """Extract atomic claims for each article. Modifies articles in-place and returns them."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -1679,6 +1772,8 @@ def main():
                         help="Only run atomic claim extraction on existing articles")
     parser.add_argument("--skip-claims", action="store_true",
                         help="Explicitly skip atomic claim extraction")
+    parser.add_argument("--enrich", action="store_true",
+                        help="Add entities + follow-up questions to existing articles that lack them")
     parser.add_argument("--entities", action="store_true",
                         help="Run resourceful entity research on short tweets without URLs")
     parser.add_argument("--entity-limit", type=int, default=3,
@@ -1727,6 +1822,23 @@ def main():
         _save_json(articles, APP_DATA_DIR / "articles.json")
         total_claims = sum(len(a.get("atomic_claims", [])) for a in articles)
         print(f"  Done: {total_claims} total claims across {len(articles)} articles", file=sys.stderr)
+        return
+
+    # Enrich mode: add entities + follow_up_questions to existing articles
+    if args.enrich:
+        existing = _load_json(ARTICLES_PATH) or []
+        if not existing:
+            print("ERROR: No existing articles to enrich", file=sys.stderr)
+            sys.exit(1)
+        print(f"\n=== Enrich Articles (entities + follow-up questions) ===", file=sys.stderr)
+        articles = enrich_articles(existing, dry_run=args.dry_run)
+        _save_json(articles, ARTICLES_PATH)
+        APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
+        _save_json(articles, APP_DATA_DIR / "articles.json")
+        manifest = _load_json(DATA_DIR / "manifest.json") or {}
+        manifest["articles_hash"] = hashlib.sha256(json.dumps(articles, sort_keys=True).encode()).hexdigest()[:16]
+        manifest["last_updated"] = datetime.now(timezone.utc).isoformat()
+        _save_json(manifest, DATA_DIR / "manifest.json")
         return
 
     start_idx = STEPS.index(args.from_step) if args.from_step else 0
