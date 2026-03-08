@@ -5,6 +5,7 @@ import {
   Platform, Clipboard,
 } from 'react-native';
 import AskAI from '../components/AskAI';
+import VoiceFeedback from '../components/VoiceFeedback';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { getArticleById, getReadingState, updateReadingState, getHighlightBlockIndices, addHighlight, removeHighlight, markArticleRead, recordInterestSignal } from '../data/store';
 import { Article, InterestTopic } from '../data/types';
@@ -461,6 +462,7 @@ export default function ReaderScreen() {
   const [bookmarked, setBookmarked] = useState(() => article ? isBookmarked(article.id) : false);
   const [showMenu, setShowMenu] = useState(false);
   const [showAIChat, setShowAIChat] = useState(false);
+  const [showVoiceFeedback, setShowVoiceFeedback] = useState(false);
   const contentHeight = useRef(0);
   const viewportHeight = useRef(0);
 
@@ -739,6 +741,15 @@ export default function ReaderScreen() {
           }} style={styles.menuAction}>
             <Text style={[styles.menuActionText, { color: colors.rubric }]}>✦ Ask AI</Text>
           </Pressable>
+
+          {/* Voice feedback */}
+          <Pressable onPress={() => {
+            setShowMenu(false);
+            setShowVoiceFeedback(true);
+            logEvent('voice_feedback_open', { article_id: article.id });
+          }} style={styles.menuAction}>
+            <Text style={styles.menuActionText}>● Voice feedback</Text>
+          </Pressable>
         </View>
       )}
 
@@ -842,6 +853,17 @@ export default function ReaderScreen() {
           context={buildAIChatContext(article)}
           onClose={() => setShowAIChat(false)}
         />
+      )}
+
+      {/* Voice Feedback */}
+      {showVoiceFeedback && (
+        <View style={styles.voiceFeedbackOverlay}>
+          <VoiceFeedback
+            articleId={article.id}
+            articleContext={buildAIChatContext(article)}
+            onClose={() => setShowVoiceFeedback(false)}
+          />
+        </View>
       )}
     </View>
   );
@@ -954,6 +976,12 @@ const styles = StyleSheet.create({
     fontFamily: fonts.ui,
     fontSize: 14,
     color: colors.textBody,
+  },
+  voiceFeedbackOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
 
   // Progress bar
