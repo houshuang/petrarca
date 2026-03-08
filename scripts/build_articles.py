@@ -271,13 +271,10 @@ If no tweets have clear researchable entities, return {{"entities": []}}."""
 
 
 def research_entity(entity: dict) -> dict | None:
-    """Use claude -p to research an entity and synthesize a mini-article."""
-    import subprocess
-
+    """Use LLM to research an entity and synthesize a mini-article."""
     entity_name = entity.get("entity_name", "")
     entity_type = entity.get("entity_type", "")
     context = entity.get("context", "")
-    search_query = entity.get("search_query", entity_name)
     tweet_text = entity.get("tweet_text", "")
 
     prompt = f"""You are a research assistant. A user bookmarked this tweet:
@@ -287,47 +284,44 @@ def research_entity(entity: dict) -> dict | None:
 They want to learn about: {entity_name} ({entity_type})
 Context: {context}
 
-Research this thoroughly using web search. Write a concise but informative article (300-800 words) covering:
+Write a concise but informative article (300-800 words) covering:
 1. What it is and why it matters
 2. Key facts, arguments, or features
 3. How it connects to the tweet's context
 4. 2-3 follow-up questions or related topics worth exploring
 
-Format as clean markdown with a title. Be factual and specific — include dates, names, numbers where relevant.
+Be factual and specific — include dates, names, numbers where relevant.
 
-At the end, suggest 2-3 URLs where the user could read more (real, likely-valid URLs).
+IMPORTANT: Return JSON with these exact fields. Use \\n for newlines inside the content_markdown string (do NOT use actual newlines inside JSON string values):
+- "title": article title
+- "content_markdown": the article body in markdown (use \\n for line breaks, \\n\\n for paragraph breaks)
+- "topics": array of 2-4 topic strings
+- "one_line_summary": one sentence summary"""
 
-Return the article in this JSON format:
-{{
-  "title": "...",
-  "content_markdown": "...(the full article in markdown)...",
-  "suggested_urls": ["https://...", "..."],
-  "topics": ["topic1", "topic2"],
-  "one_line_summary": "..."
-}}"""
+    response = _call_llm(prompt, purpose="entity_research")
+    if not response:
+        return None
 
     try:
-        proc = subprocess.run(
-            ["claude", "-p", prompt],
-            capture_output=True, text=True, timeout=300,
-        )
-        if proc.returncode != 0:
-            print(f"    Claude research failed for {entity_name}: {proc.stderr[:200]}", file=sys.stderr)
-            return None
-
-        output = proc.stdout.strip()
-        json_start = output.find('{')
-        json_end = output.rfind('}') + 1
+        json_start = response.find('{')
+        json_end = response.rfind('}') + 1
         if json_start < 0:
             print(f"    Could not parse research output for {entity_name}", file=sys.stderr)
             return None
 
-        parsed = json.loads(output[json_start:json_end])
+        json_str = response[json_start:json_end]
+        try:
+            parsed = json.loads(json_str)
+        except json.JSONDecodeError:
+            # Try to fix common LLM JSON issues: unescaped newlines in strings
+            json_str = re.sub(r'(?<=: ")(.*?)(?="[,\}])', lambda m: m.group(0).replace('\n', '\\n').replace('\t', '\\t'), json_str, flags=re.DOTALL)
+            parsed = json.loads(json_str)
+
         parsed["_entity"] = entity
         return parsed
 
     except Exception as e:
-        print(f"    Research error for {entity_name}: {e}", file=sys.stderr)
+        print(f"    Research parse error for {entity_name}: {e}", file=sys.stderr)
         return None
 
 
