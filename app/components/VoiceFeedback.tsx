@@ -1,10 +1,80 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { Audio } from 'expo-av';
+import { documentDirectory, makeDirectoryAsync, copyAsync, getInfoAsync } from 'expo-file-system/legacy';
 import { colors, fonts } from '../design/tokens';
 import { uploadVoiceNote } from '../lib/chat-api';
 import { logEvent } from '../data/logger';
 import * as Haptics from 'expo-haptics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const PENDING_NOTES_KEY = '@petrarca/pending_voice_notes';
+
+interface PendingNote {
+  localPath: string;
+  articleId: string;
+  articleTitle: string;
+  topics: string[];
+  articleContext: string;
+  recordedAt: number;
+}
+
+async function savePendingNote(note: PendingNote): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem(PENDING_NOTES_KEY);
+    const pending: PendingNote[] = raw ? JSON.parse(raw) : [];
+    pending.push(note);
+    await AsyncStorage.setItem(PENDING_NOTES_KEY, JSON.stringify(pending));
+  } catch (e) {
+    console.warn('[VoiceFeedback] failed to save pending note:', e);
+  }
+}
+
+async function removePendingNote(localPath: string): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem(PENDING_NOTES_KEY);
+    if (!raw) return;
+    const pending: PendingNote[] = JSON.parse(raw);
+    const filtered = pending.filter(n => n.localPath !== localPath);
+    await AsyncStorage.setItem(PENDING_NOTES_KEY, JSON.stringify(filtered));
+  } catch (e) {
+    console.warn('[VoiceFeedback] failed to remove pending note:', e);
+  }
+}
+
+async function tryUploadPending(): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem(PENDING_NOTES_KEY);
+    if (!raw) return;
+    const pending: PendingNote[] = JSON.parse(raw);
+    for (const note of pending) {
+      try {
+        const info = await getInfoAsync(note.localPath);
+        if (!info.exists) {
+          await removePendingNote(note.localPath);
+          continue;
+        }
+        await uploadVoiceNote(note.localPath, note.articleId, note.articleTitle, note.topics, note.articleContext);
+        await removePendingNote(note.localPath);
+        logEvent('voice_note_retry_success', { article_id: note.articleId });
+      } catch {
+        // Will retry next time
+      }
+    }
+  } catch (e) {
+    console.warn('[VoiceFeedback] retry upload error:', e);
+  }
+}
+
+// Retry pending uploads on mount
+let retryScheduled = false;
+function scheduleRetry() {
+  if (retryScheduled) return;
+  retryScheduled = true;
+  setTimeout(() => {
+    tryUploadPending().finally(() => { retryScheduled = false; });
+  }, 5000);
+}
 
 interface VoiceFeedbackProps {
   articleId: string;
@@ -21,6 +91,9 @@ export default function VoiceFeedback({ articleId, articleTitle, topics, article
   const [duration, setDuration] = useState(0);
   const recRef = useRef<Audio.Recording | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Try uploading any pending notes on mount
+  useEffect(() => { scheduleRetry(); }, []);
 
   const startRecording = async () => {
     try {
@@ -49,17 +122,43 @@ export default function VoiceFeedback({ articleId, articleTitle, topics, article
       setRecording(false);
       if (!uri) { setError('No audio file'); return; }
 
-      // Upload to server — transcription happens in background
-      await uploadVoiceNote(uri, articleId, articleTitle, topics, articleContext);
+      // Save locally first for reliability
+      let localPath = uri;
+      if (Platform.OS !== 'web' && documentDirectory) {
+        const filename = `voice_${articleId}_${Date.now()}.m4a`;
+        localPath = `${documentDirectory}voice-notes/${filename}`;
+        await makeDirectoryAsync(`${documentDirectory}voice-notes/`, { intermediates: true });
+        await copyAsync({ from: uri, to: localPath });
+      }
+
+      // Mark as sent immediately — recording is safely stored locally
       setSent(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      logEvent('voice_note_sent', { article_id: articleId, duration_seconds: duration });
+      logEvent('voice_note_saved', { article_id: articleId, duration_seconds: duration, local_path: localPath });
+
+      // Upload in background — if it fails, we have a local copy + retry queue
+      uploadVoiceNote(localPath, articleId, articleTitle, topics, articleContext)
+        .then(() => {
+          logEvent('voice_note_uploaded', { article_id: articleId });
+        })
+        .catch(async (e) => {
+          console.warn('[VoiceFeedback] upload failed, queued for retry:', e);
+          await savePendingNote({
+            localPath,
+            articleId,
+            articleTitle,
+            topics,
+            articleContext,
+            recordedAt: Date.now(),
+          });
+          logEvent('voice_note_upload_failed', { article_id: articleId, error: String(e) });
+        });
 
       // Auto-close after brief confirmation
       setTimeout(onClose, 1200);
     } catch (e) {
       setRecording(false);
-      setError(`Send failed: ${e}`);
+      setError(`Recording error: ${e}`);
     }
   };
 
@@ -68,7 +167,7 @@ export default function VoiceFeedback({ articleId, articleTitle, topics, article
   if (sent) {
     return (
       <View style={styles.bar}>
-        <Text style={styles.sentText}>✓ Sent — transcribing in background</Text>
+        <Text style={styles.sentText}>✓ Saved — uploading in background</Text>
       </View>
     );
   }

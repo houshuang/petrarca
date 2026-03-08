@@ -3,7 +3,7 @@ import type { ClaimClassification, ParagraphDimming, ArticleNovelty, DeltaReport
 import { logEvent } from './logger';
 import { loadSignals, saveSignals, loadReadingStates, saveReadingStates, loadHighlights, saveHighlights } from './persistence';
 import { checkForUpdates, downloadContent, loadCachedContent } from './content-sync';
-import { loadInterestProfile, scoreArticle, recordSignal, getTotalSignalCount } from './interest-model';
+import { loadInterestProfile, scoreArticle, recordSignal, recordTopicSignal as _recordTopicSignal, getTotalSignalCount } from './interest-model';
 import type { SignalAction } from './interest-model';
 import {
   initKnowledgeEngine,
@@ -286,6 +286,10 @@ export function recordInterestSignal(action: SignalAction, articleId: string) {
   if (article) {
     recordSignal(action, article);
   }
+}
+
+export function recordTopicInterestSignal(action: SignalAction, topic: import('./types').InterestTopic) {
+  _recordTopicSignal(action, topic);
 }
 
 // --- Knowledge engine ---

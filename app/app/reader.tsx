@@ -8,7 +8,7 @@ import AskAI from '../components/AskAI';
 import VoiceFeedback from '../components/VoiceFeedback';
 import { spawnTopicResearch } from '../lib/chat-api';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { getArticleById, getReadingState, updateReadingState, getHighlightBlockIndices, addHighlight, removeHighlight, markArticleRead, recordInterestSignal } from '../data/store';
+import { getArticleById, getReadingState, updateReadingState, getHighlightBlockIndices, addHighlight, removeHighlight, markArticleRead, recordInterestSignal, recordTopicInterestSignal } from '../data/store';
 import { Article, InterestTopic } from '../data/types';
 import * as Haptics from 'expo-haptics';
 import { logEvent } from '../data/logger';
@@ -80,35 +80,103 @@ function PostReadInterestCard({ topics, onChipSignal, onClose }: {
   onChipSignal: (topic: InterestTopic, positive: boolean) => void;
   onClose: () => void;
 }) {
+  const [votes, setVotes] = useState<Record<string, 'positive' | 'negative'>>({});
+
+  const handleVote = (topic: InterestTopic, positive: boolean) => {
+    const key = topic.specific;
+    const currentVote = votes[key];
+    const newPositive = positive ? 'positive' : 'negative';
+    // Toggle off if same vote, otherwise set
+    if (currentVote === newPositive) {
+      setVotes(prev => { const next = { ...prev }; delete next[key]; return next; });
+    } else {
+      setVotes(prev => ({ ...prev, [key]: newPositive }));
+    }
+    onChipSignal(topic, positive);
+  };
+
   return (
     <View style={styles.interestCardOverlay}>
       <View style={styles.interestCard}>
         <Text style={styles.interestCardTitle}>Topics in this article</Text>
         <Text style={styles.interestCardSubtitle}>Tap + or - to shape your feed</Text>
         <View style={styles.interestChips}>
-          {topics.map((t, i) => (
-            <View key={i} style={styles.interestChipRow}>
-              <Pressable
-                style={styles.interestChipMinus}
-                onPress={() => onChipSignal(t, false)}
-              >
-                <Text style={styles.interestChipButtonText}>-</Text>
-              </Pressable>
-              <View style={styles.interestChipLabel}>
-                <Text style={styles.interestChipText}>{t.entity || t.specific}</Text>
+          {topics.map((t, i) => {
+            const vote = votes[t.specific];
+            return (
+              <View key={i} style={styles.interestChipRow}>
+                <Pressable
+                  style={[styles.interestChipMinus, vote === 'negative' && styles.interestChipVotedNeg]}
+                  onPress={() => handleVote(t, false)}
+                >
+                  <Text style={[styles.interestChipButtonText, vote === 'negative' && { color: colors.parchment }]}>-</Text>
+                </Pressable>
+                <View style={styles.interestChipLabel}>
+                  <Text style={styles.interestChipText}>{t.entity || t.specific}</Text>
+                </View>
+                <Pressable
+                  style={[styles.interestChipPlus, vote === 'positive' && styles.interestChipVotedPos]}
+                  onPress={() => handleVote(t, true)}
+                >
+                  <Text style={[styles.interestChipButtonText, vote === 'positive' && { color: colors.parchment }]}>+</Text>
+                </Pressable>
               </View>
-              <Pressable
-                style={styles.interestChipPlus}
-                onPress={() => onChipSignal(t, true)}
-              >
-                <Text style={styles.interestChipButtonText}>+</Text>
-              </Pressable>
-            </View>
-          ))}
+            );
+          })}
         </View>
         <Pressable style={styles.interestCloseButton} onPress={onClose}>
           <Text style={styles.interestCloseText}>Close</Text>
         </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function InlineTopicChips({ topics, onChipSignal }: {
+  topics: InterestTopic[];
+  onChipSignal: (topic: InterestTopic, positive: boolean) => void;
+}) {
+  const [votes, setVotes] = useState<Record<string, 'positive' | 'negative'>>({});
+
+  const handleVote = (topic: InterestTopic, positive: boolean) => {
+    const key = topic.specific;
+    const currentVote = votes[key];
+    const newVal = positive ? 'positive' : 'negative';
+    if (currentVote === newVal) {
+      setVotes(prev => { const next = { ...prev }; delete next[key]; return next; });
+    } else {
+      setVotes(prev => ({ ...prev, [key]: newVal }));
+    }
+    onChipSignal(topic, positive);
+  };
+
+  return (
+    <View style={styles.inlineTopicsSection}>
+      <Text style={styles.inlineTopicsTitle}>
+        <Text style={{ color: colors.rubric }}>{'\u2726'} </Text>
+        Topics
+      </Text>
+      <View style={styles.inlineTopicsGrid}>
+        {topics.map((t, i) => {
+          const vote = votes[t.specific];
+          return (
+            <View key={i} style={styles.inlineTopicRow}>
+              <Pressable
+                style={[styles.inlineTopicBtn, vote === 'negative' && { backgroundColor: colors.rubric }]}
+                onPress={() => handleVote(t, false)}
+              >
+                <Text style={[styles.inlineTopicBtnText, vote === 'negative' && { color: colors.parchment }]}>−</Text>
+              </Pressable>
+              <Text style={styles.inlineTopicLabel} numberOfLines={1}>{t.entity || t.specific}</Text>
+              <Pressable
+                style={[styles.inlineTopicBtn, vote === 'positive' && { backgroundColor: colors.claimNew }]}
+                onPress={() => handleVote(t, true)}
+              >
+                <Text style={[styles.inlineTopicBtnText, vote === 'positive' && { color: colors.parchment }]}>+</Text>
+              </Pressable>
+            </View>
+          );
+        })}
       </View>
     </View>
   );
@@ -464,6 +532,7 @@ export default function ReaderScreen() {
   const [showMenu, setShowMenu] = useState(false);
   const [showAIChat, setShowAIChat] = useState(false);
   const [showVoiceFeedback, setShowVoiceFeedback] = useState(false);
+  const [longPressContext, setLongPressContext] = useState<{ blockIndex: number; text: string } | null>(null);
   const contentHeight = useRef(0);
   const viewportHeight = useRef(0);
 
@@ -574,9 +643,16 @@ export default function ReaderScreen() {
     }
   }, [article]);
 
-  // Highlight handler
+  // Long-press handler — shows action menu
   const handleBlockLongPress = useCallback((blockIndex: number, text: string) => {
     if (!article) return;
+    setLongPressContext({ blockIndex, text });
+    logEvent('reader_long_press', { article_id: article.id, block_index: blockIndex });
+  }, [article]);
+
+  const handleHighlightBlock = useCallback(() => {
+    if (!article || !longPressContext) return;
+    const { blockIndex, text } = longPressContext;
     const indices = getHighlightBlockIndices(article.id);
     if (indices.has(blockIndex)) {
       removeHighlight(article.id, blockIndex);
@@ -599,7 +675,19 @@ export default function ReaderScreen() {
       recordInterestSignal('highlight_paragraph', article.id);
       logEvent('reader_highlight_add', { article_id: article.id, block_index: blockIndex, text_preview: text.slice(0, 80) });
     }
-  }, [article]);
+    setLongPressContext(null);
+  }, [article, longPressContext]);
+
+  const [researchQuestion, setResearchQuestion] = useState<string | undefined>();
+
+  const handleResearchPassage = useCallback(() => {
+    if (!article || !longPressContext) return;
+    const question = `The user is reading this passage and wants to learn more:\n\n"${longPressContext.text.slice(0, 800)}"\n\nIdentify the most interesting entity, concept, or reference mentioned (person, book, company, theory, etc.) and provide a concise but informative summary. Suggest 2-3 follow-up questions.`;
+    setResearchQuestion(question);
+    setLongPressContext(null);
+    setShowAIChat(true);
+    logEvent('research_passage', { article_id: article.id, text_preview: longPressContext.text.slice(0, 80) });
+  }, [article, longPressContext]);
 
   // Done handler
   const handleDone = useCallback(() => {
@@ -622,7 +710,7 @@ export default function ReaderScreen() {
   const handleChipSignal = useCallback((topic: InterestTopic, positive: boolean) => {
     if (!article) return;
     const action = positive ? 'interest_chip_positive' : 'interest_chip_negative';
-    recordInterestSignal(action, article.id);
+    recordTopicInterestSignal(action, topic);
     logEvent('interest_chip_tap', { article_id: article.id, topic: topic.specific, positive });
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, [article]);
@@ -850,6 +938,14 @@ export default function ReaderScreen() {
           readingMode={readingMode}
         />
 
+        {/* Inline topic interest chips at end of article */}
+        {article.interest_topics && article.interest_topics.length > 0 && (
+          <InlineTopicChips
+            topics={article.interest_topics.slice(0, 6)}
+            onChipSignal={handleChipSignal}
+          />
+        )}
+
         {/* Bottom spacer for Done button */}
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -870,12 +966,44 @@ export default function ReaderScreen() {
         />
       )}
 
+      {/* Long-press action menu */}
+      {longPressContext && (
+        <View style={styles.longPressOverlay}>
+          <Pressable style={styles.longPressBackdrop} onPress={() => setLongPressContext(null)} />
+          <View style={styles.longPressMenu}>
+            <Text style={styles.longPressPreview} numberOfLines={2}>
+              {longPressContext.text.slice(0, 120)}...
+            </Text>
+            <View style={styles.longPressActions}>
+              <Pressable style={styles.longPressAction} onPress={handleHighlightBlock}>
+                <Text style={styles.longPressActionText}>
+                  {highlightedBlocks.has(longPressContext.blockIndex) ? 'Unhighlight' : 'Highlight'}
+                </Text>
+              </Pressable>
+              <Pressable style={styles.longPressAction} onPress={handleResearchPassage}>
+                <Text style={[styles.longPressActionText, { color: colors.claimNew }]}>Research</Text>
+              </Pressable>
+              <Pressable style={styles.longPressAction} onPress={() => {
+                setLongPressContext(null);
+                setShowAIChat(true);
+              }}>
+                <Text style={[styles.longPressActionText, { color: colors.rubric }]}>Ask AI</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      )}
+
       {/* AI Chat */}
       {showAIChat && (
         <AskAI
           articleId={article.id}
           context={buildAIChatContext(article)}
-          onClose={() => setShowAIChat(false)}
+          initialQuestion={researchQuestion}
+          onClose={() => {
+            setShowAIChat(false);
+            setResearchQuestion(undefined);
+          }}
         />
       )}
 
@@ -1370,6 +1498,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  interestChipVotedNeg: {
+    backgroundColor: colors.rubric,
+  },
   interestChipPlus: {
     width: 36,
     height: 36,
@@ -1377,6 +1508,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(60, 120, 60, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  interestChipVotedPos: {
+    backgroundColor: colors.claimNew,
   },
   interestChipButtonText: {
     fontFamily: fonts.uiMedium,
@@ -1406,6 +1540,90 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 1,
+  },
+
+  // Long-press action menu
+  longPressOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'flex-end',
+    zIndex: 50,
+  },
+  longPressBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+  },
+  longPressMenu: {
+    backgroundColor: colors.parchment,
+    borderTopWidth: 1,
+    borderTopColor: colors.rule,
+    paddingHorizontal: layout.screenPadding,
+    paddingVertical: 16,
+  },
+  longPressPreview: {
+    fontFamily: fonts.reading,
+    fontSize: 13,
+    color: colors.textSecondary,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  longPressActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  longPressAction: {
+    backgroundColor: colors.parchmentDark,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  longPressActionText: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 14,
+    color: colors.ink,
+    ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}),
+  },
+  // Inline topic chips
+  inlineTopicsSection: {
+    marginTop: 24,
+    paddingTop: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.rule,
+  },
+  inlineTopicsTitle: {
+    ...type.sectionHead,
+    color: colors.rubric,
+    marginBottom: 12,
+  },
+  inlineTopicsGrid: {
+    gap: 8,
+  },
+  inlineTopicRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  inlineTopicBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: colors.parchmentDark,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  inlineTopicBtnText: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 16,
+    color: colors.ink,
+    ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}),
+  },
+  inlineTopicLabel: {
+    flex: 1,
+    fontFamily: fonts.bodyItalic,
+    fontSize: 14,
+    color: colors.textBody,
+    ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}),
   },
 
   // Error state

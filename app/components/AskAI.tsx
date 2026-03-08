@@ -16,24 +16,29 @@ interface AskAIProps {
   context: string;
   articleId: string;
   onClose: () => void;
+  initialQuestion?: string;
 }
 
-export default function AskAI({ context, articleId, onClose }: AskAIProps) {
+export default function AskAI({ context, articleId, onClose, initialQuestion }: AskAIProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | undefined>();
   const scrollRef = useRef<ScrollView>(null);
+  const initialSent = useRef(false);
 
-  const handleSend = async () => {
-    const question = input.trim();
-    if (!question || loading) return;
+  // Auto-send initial question if provided
+  useEffect(() => {
+    if (initialQuestion && !initialSent.current) {
+      initialSent.current = true;
+      sendQuestion(initialQuestion);
+    }
+  }, [initialQuestion]);
 
-    setInput('');
+  const sendQuestion = async (question: string) => {
     setMessages(prev => [...prev, { role: 'user', content: question }]);
     setLoading(true);
     logEvent('ai_chat_send', { article_id: articleId, question_length: question.length });
-
     try {
       const resp = await askAI(question, context, conversationId);
       setConversationId(resp.conversation_id);
@@ -44,6 +49,14 @@ export default function AskAI({ context, articleId, onClose }: AskAIProps) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSend = async () => {
+    const question = input.trim();
+    if (!question || loading) return;
+
+    setInput('');
+    await sendQuestion(question);
   };
 
   useEffect(() => {

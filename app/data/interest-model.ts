@@ -128,6 +128,25 @@ export function recordSignal(action: SignalAction, article: Article): void {
   saveInterestProfile();
 }
 
+export function recordTopicSignal(action: SignalAction, topic: InterestTopic): void {
+  const config = SIGNAL_WEIGHTS[action];
+
+  const specificEntry = ensureTopic(topic.specific, 'specific', topic.broad);
+  applySignal(specificEntry, config.positive, config.weight);
+
+  if (topic.entity) {
+    const entityKey = topic.entity.toLowerCase().replace(/\s+/g, '-');
+    const entityEntry = ensureTopic(entityKey, 'entity', topic.specific);
+    applySignal(entityEntry, config.positive, config.weight);
+  }
+
+  const broadEntry = ensureTopic(topic.broad, 'broad');
+  applySignal(broadEntry, config.positive, config.weight * PARENT_SIGNAL_RATIO);
+
+  logEvent('topic_signal', { action, topic: topic.specific, broad: topic.broad });
+  saveInterestProfile();
+}
+
 function applySignal(entry: TopicInterest, positive: boolean, weight: number): void {
   if (positive) {
     entry.positive_signals += weight;

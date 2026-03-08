@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, FlatList, Pressable, Animated,
   Platform, ViewStyle, ScrollView, Linking,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import {
   getRankedFeedArticles, getReadingState, dismissArticle,
@@ -15,6 +15,7 @@ import { getDisplayTitle, normalizeTopic, displayTopic } from '../../lib/display
 import { colors, fonts, type, spacing, layout } from '../../design/tokens';
 import { isKnowledgeReady, getArticleNovelty } from '../../data/knowledge-engine';
 import { addToQueue } from '../../data/queue';
+import VoiceFeedback from '../../components/VoiceFeedback';
 
 // --- Continue Reading Card ---
 
@@ -199,8 +200,15 @@ function TopicChip({ label, count, active, onPress }: {
 // --- Feed Screen ---
 
 export default function FeedScreen() {
-  const [, forceUpdate] = useState(0);
+  const [refreshKey, forceUpdate] = useState(0);
   const [activeTopic, setActiveTopic] = useState<string | null>(null);
+  const [showMenu, setShowMenu] = useState(false);
+  const [showVoiceFeedback, setShowVoiceFeedback] = useState(false);
+
+  // Re-render when screen gains focus (e.g. returning from reader)
+  useFocusEffect(useCallback(() => {
+    forceUpdate(n => n + 1);
+  }, []));
 
   const feedArticles = useMemo(() => {
     const base = getRankedFeedArticles();
@@ -217,9 +225,10 @@ export default function FeedScreen() {
         return a.rank - b.rank; // preserve interest model order as tiebreaker
       })
       .map(x => x.article);
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey]);
 
-  const readArticles = getReadArticles();
+  const readArticles = useMemo(() => getReadArticles(), [refreshKey]);
 
   // Articles currently being read (started but not finished) — show max 2
   const continueReading = useMemo(() => {
@@ -234,7 +243,8 @@ export default function FeedScreen() {
         return (sb.last_read_at || 0) - (sa.last_read_at || 0);
       })
       .slice(0, 2);
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey]);
 
   // Gather all topics for filter chips (normalized)
   const topicCounts = useMemo(() => {
@@ -249,7 +259,7 @@ export default function FeedScreen() {
     return [...counts.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 8);
-  }, [feedArticles]);
+  }, [feedArticles, refreshKey]);
 
   // Filter articles by active topic (compare normalized)
   const filteredArticles = useMemo(() => {
@@ -300,7 +310,39 @@ export default function FeedScreen() {
         >
           <Text style={styles.guideLinkText}>Guide</Text>
         </Pressable>
+        <Pressable
+          onPress={() => {
+            setShowMenu(!showMenu);
+            logEvent('feed_menu_toggle');
+          }}
+          style={styles.feedMenuButton}
+        >
+          <Text style={styles.feedMenuButtonText}>⋯</Text>
+        </Pressable>
       </View>
+
+      {showMenu && (
+        <View style={styles.feedMenuDropdown}>
+          <Pressable onPress={() => {
+            setShowMenu(false);
+            setShowVoiceFeedback(true);
+            logEvent('app_feedback_open');
+          }} style={styles.feedMenuItem}>
+            <Text style={styles.feedMenuItemText}>● Voice feedback</Text>
+          </Pressable>
+          <Pressable onPress={() => {
+            setShowMenu(false);
+            logEvent('user_guide_opened');
+            const url = Platform.OS === 'web' ? '/guide/' : 'https://alifstian.duckdns.org/guide/';
+            Linking.openURL(url);
+          }} style={styles.feedMenuItem}>
+            <Text style={styles.feedMenuItemText}>Guide</Text>
+          </Pressable>
+          <View style={styles.feedMenuInfo}>
+            <Text style={styles.feedMenuInfoText}>{feedArticles.length} articles · {readArticles.length} read</Text>
+          </View>
+        </View>
+      )}
 
       {/* Double rule */}
       <View style={styles.doubleRule}>
@@ -393,6 +435,18 @@ export default function FeedScreen() {
           </View>
         }
       />
+
+      {showVoiceFeedback && (
+        <View style={styles.voiceFeedbackOverlay}>
+          <VoiceFeedback
+            articleId="app-feedback"
+            articleTitle="App Feedback"
+            topics={[]}
+            articleContext="General app feedback from the feed screen"
+            onClose={() => setShowVoiceFeedback(false)}
+          />
+        </View>
+      )}
     </GestureHandlerRootView>
   );
 }
@@ -431,6 +485,52 @@ const styles = StyleSheet.create({
     fontFamily: fonts.ui,
     fontSize: 11,
     color: colors.rubric,
+  },
+  feedMenuButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+  },
+  feedMenuButtonText: {
+    fontSize: 18,
+    color: colors.ink,
+  },
+  feedMenuDropdown: {
+    backgroundColor: colors.parchment,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.rule,
+    paddingHorizontal: layout.screenPadding,
+    paddingVertical: 8,
+  },
+  feedMenuItem: {
+    paddingVertical: 10,
+    minHeight: 44,
+    justifyContent: 'center' as const,
+  },
+  feedMenuItemText: {
+    fontFamily: fonts.ui,
+    fontSize: 14,
+    color: colors.textBody,
+  },
+  feedMenuInfo: {
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.rule,
+    marginTop: 4,
+  },
+  feedMenuInfoText: {
+    fontFamily: fonts.ui,
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  voiceFeedbackOverlay: {
+    position: 'absolute' as const,
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
 
   // Double rule
