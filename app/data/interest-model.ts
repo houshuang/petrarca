@@ -33,7 +33,9 @@ export type SignalAction =
   | 'tap_done'
   | 'highlight_paragraph'
   | 'interest_chip_positive'
-  | 'interest_chip_negative';
+  | 'interest_chip_negative'
+  | 'bookmark_add'
+  | 'bookmark_remove';
 
 const SIGNAL_WEIGHTS: Record<SignalAction, { positive: boolean; weight: number }> = {
   swipe_keep:              { positive: true,  weight: 1.0 },
@@ -43,6 +45,8 @@ const SIGNAL_WEIGHTS: Record<SignalAction, { positive: boolean; weight: number }
   highlight_paragraph:     { positive: true,  weight: 1.0 },
   interest_chip_positive:  { positive: true,  weight: 2.0 },
   interest_chip_negative:  { positive: false, weight: 2.0 },
+  bookmark_add:            { positive: true,  weight: 1.5 },
+  bookmark_remove:         { positive: false, weight: 0.5 },
 };
 
 // --- Module state ---

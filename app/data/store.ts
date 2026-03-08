@@ -14,6 +14,7 @@ import {
   getDeltaReports as _getDeltaReports,
 } from './knowledge-engine';
 import { loadQueue } from './queue';
+import { loadBookmarks } from './bookmarks';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 let articles: Article[] = [];
@@ -79,6 +80,7 @@ export async function initStore(): Promise<void> {
     await loadDismissedArticles();
     await loadInterestProfile();
     await loadQueue();
+    await loadBookmarks();
     await initKnowledgeEngine(cachedKnowledgeIndex);
 
     initialized = true;

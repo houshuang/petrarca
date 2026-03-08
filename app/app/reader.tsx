@@ -11,6 +11,7 @@ import * as Haptics from 'expo-haptics';
 import { logEvent } from '../data/logger';
 import { isSectionValid, parseInlineMarkdown, splitMarkdownBlocks, parseMarkdownBlock } from '../lib/markdown-utils';
 import { getDisplayTitle } from '../lib/display-utils';
+import { toggleBookmark, isBookmarked } from '../data/bookmarks';
 import { colors, fonts, type, spacing, layout } from '../design/tokens';
 import {
   computeParagraphDimming, classifyArticleClaims,
@@ -431,6 +432,7 @@ export default function ReaderScreen() {
   const [showInterestCard, setShowInterestCard] = useState(false);
   const [readingMode, setReadingMode] = useState<ReadingMode>('full');
   const [scrollProgress, setScrollProgress] = useState(0);
+  const [bookmarked, setBookmarked] = useState(() => article ? isBookmarked(article.id) : false);
   const contentHeight = useRef(0);
   const viewportHeight = useRef(0);
 
@@ -622,6 +624,16 @@ export default function ReaderScreen() {
           <Text style={styles.backLinkText}>{'← Feed'}</Text>
         </Pressable>
         <View style={{ flex: 1 }} />
+        <Pressable onPress={async () => {
+          const nowBookmarked = await toggleBookmark(article.id);
+          setBookmarked(nowBookmarked);
+          recordInterestSignal(nowBookmarked ? 'bookmark_add' : 'bookmark_remove', article.id);
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }} style={styles.bookmarkButton}>
+          <Text style={[styles.bookmarkText, bookmarked && styles.bookmarkTextActive]}>
+            {bookmarked ? '★' : '☆'}
+          </Text>
+        </Pressable>
         <Pressable onPress={() => {
           logEvent('reader_open_source', { article_id: article.id, url: article.source_url });
           Linking.openURL(article.source_url);
@@ -752,6 +764,21 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 14,
     color: colors.textMuted,
+  },
+  bookmarkButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+  },
+  bookmarkText: {
+    fontSize: 20,
+    color: colors.textMuted,
+  },
+  bookmarkTextActive: {
+    color: colors.rubric,
   },
   sourceLink: {
     fontFamily: fonts.ui,
