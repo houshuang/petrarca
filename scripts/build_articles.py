@@ -153,6 +153,278 @@ def collect_twitter_candidates(days: int = 365) -> list[dict]:
     return results
 
 
+def collect_entity_tweets(days: int = 30) -> list[dict]:
+    """Find short tweets without URLs that mention books, people, products, etc.
+    These are the tweets that the normal pipeline drops."""
+    if not OTAK_BOOKMARKS.exists():
+        return []
+
+    bookmarks = json.loads(OTAK_BOOKMARKS.read_text())
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    entity_tweets = []
+
+    # Load already-researched tweet IDs
+    researched_path = DATA_DIR / "researched_tweets.json"
+    researched_ids: set[str] = set()
+    if researched_path.exists():
+        researched_ids = set(json.loads(researched_path.read_text()))
+
+    for bm in bookmarks:
+        try:
+            dt = datetime.strptime(bm["created_at"], "%a %b %d %H:%M:%S %z %Y")
+        except (KeyError, ValueError):
+            continue
+        if dt < cutoff:
+            continue
+
+        tweet_id = bm.get("id", "")
+        if tweet_id in researched_ids:
+            continue
+
+        urls = _collect_urls_from_bookmark(bm)
+        tweet_words = len(bm.get("text", "").split())
+
+        # We want tweets that were DROPPED by the normal pipeline
+        if urls or tweet_words >= 100:
+            continue
+        if tweet_words < 10:
+            continue  # Too short to have meaningful entities
+
+        entity_tweets.append({
+            "id": tweet_id,
+            "text": bm.get("text", ""),
+            "author": bm.get("author_username", ""),
+            "date": dt.isoformat(),
+            "quoted_text": bm.get("quoted_tweet", {}).get("text", "") if bm.get("quoted_tweet") else "",
+        })
+
+    print(f"  Entity tweet candidates: {len(entity_tweets)} (short tweets without URLs)", file=sys.stderr)
+    return entity_tweets
+
+
+def extract_entities_from_tweets(tweets: list[dict], limit: int = 5) -> list[dict]:
+    """Use LLM to identify researchable entities in short tweets."""
+    if not tweets:
+        return []
+
+    # Batch the tweets for efficient LLM usage
+    tweets_batch = tweets[:limit * 3]  # Send more than needed, LLM will filter
+    tweets_text = "\n---\n".join(
+        f"Tweet {i+1} (by @{t['author']}):\n{t['text']}"
+        + (f"\nQuoted: {t['quoted_text']}" if t['quoted_text'] else "")
+        for i, t in enumerate(tweets_batch)
+    )
+
+    prompt = f"""Analyze these bookmarked tweets. For each tweet that mentions a specific book, article, paper, person, company, product, tool, TV show, podcast, or other researchable entity that the user likely wants to learn more about, extract the entity.
+
+Only include tweets where there's a CLEAR entity worth researching. Skip tweets that are just opinions, jokes, or general commentary with no specific entity to look up.
+
+{tweets_text}
+
+Return JSON:
+{{
+  "entities": [
+    {{
+      "tweet_index": 1,
+      "entity_name": "The Attention Merchants",
+      "entity_type": "book",
+      "author_or_creator": "Tim Wu",
+      "context": "Recommended by the tweeter as important reading on attention economy",
+      "search_query": "The Attention Merchants Tim Wu book summary key arguments"
+    }}
+  ]
+}}
+
+If no tweets have clear researchable entities, return {{"entities": []}}."""
+
+    response = _call_llm(prompt, purpose="entity_extraction_tweets")
+    if not response:
+        return []
+
+    try:
+        json_start = response.find('{')
+        json_end = response.rfind('}') + 1
+        if json_start < 0:
+            return []
+        parsed = json.loads(response[json_start:json_end])
+        entities = parsed.get("entities", [])
+
+        # Map back to tweet data
+        results = []
+        for ent in entities[:limit]:
+            idx = ent.get("tweet_index", 0) - 1
+            if 0 <= idx < len(tweets_batch):
+                tweet = tweets_batch[idx]
+                results.append({
+                    **ent,
+                    "tweet_id": tweet["id"],
+                    "tweet_text": tweet["text"],
+                    "tweet_author": tweet["author"],
+                    "tweet_date": tweet["date"],
+                })
+
+        print(f"  Found {len(results)} researchable entities in tweets", file=sys.stderr)
+        return results
+    except (json.JSONDecodeError, KeyError) as e:
+        print(f"  Entity extraction parse error: {e}", file=sys.stderr)
+        return []
+
+
+def research_entity(entity: dict) -> dict | None:
+    """Use claude -p to research an entity and synthesize a mini-article."""
+    import subprocess
+
+    entity_name = entity.get("entity_name", "")
+    entity_type = entity.get("entity_type", "")
+    context = entity.get("context", "")
+    search_query = entity.get("search_query", entity_name)
+    tweet_text = entity.get("tweet_text", "")
+
+    prompt = f"""You are a research assistant. A user bookmarked this tweet:
+
+"{tweet_text}"
+
+They want to learn about: {entity_name} ({entity_type})
+Context: {context}
+
+Research this thoroughly using web search. Write a concise but informative article (300-800 words) covering:
+1. What it is and why it matters
+2. Key facts, arguments, or features
+3. How it connects to the tweet's context
+4. 2-3 follow-up questions or related topics worth exploring
+
+Format as clean markdown with a title. Be factual and specific — include dates, names, numbers where relevant.
+
+At the end, suggest 2-3 URLs where the user could read more (real, likely-valid URLs).
+
+Return the article in this JSON format:
+{{
+  "title": "...",
+  "content_markdown": "...(the full article in markdown)...",
+  "suggested_urls": ["https://...", "..."],
+  "topics": ["topic1", "topic2"],
+  "one_line_summary": "..."
+}}"""
+
+    try:
+        proc = subprocess.run(
+            ["claude", "-p", prompt],
+            capture_output=True, text=True, timeout=300,
+        )
+        if proc.returncode != 0:
+            print(f"    Claude research failed for {entity_name}: {proc.stderr[:200]}", file=sys.stderr)
+            return None
+
+        output = proc.stdout.strip()
+        json_start = output.find('{')
+        json_end = output.rfind('}') + 1
+        if json_start < 0:
+            print(f"    Could not parse research output for {entity_name}", file=sys.stderr)
+            return None
+
+        parsed = json.loads(output[json_start:json_end])
+        parsed["_entity"] = entity
+        return parsed
+
+    except Exception as e:
+        print(f"    Research error for {entity_name}: {e}", file=sys.stderr)
+        return None
+
+
+def process_entity_tweets(limit: int = 3):
+    """Full pipeline: find entity tweets → extract entities → research → ingest."""
+    print("\n=== Resourceful Bookmark Pipeline ===", file=sys.stderr)
+
+    tweets = collect_entity_tweets()
+    if not tweets:
+        print("  No entity tweets to process", file=sys.stderr)
+        return
+
+    entities = extract_entities_from_tweets(tweets, limit=limit)
+    if not entities:
+        print("  No researchable entities found", file=sys.stderr)
+        return
+
+    # Load existing articles for dedup
+    existing_titles: set[str] = set()
+    if ARTICLES_PATH.exists():
+        for art in json.loads(ARTICLES_PATH.read_text()):
+            existing_titles.add(art.get("title", "").lower())
+
+    # Track researched tweet IDs
+    researched_path = DATA_DIR / "researched_tweets.json"
+    researched_ids: list[str] = []
+    if researched_path.exists():
+        researched_ids = json.loads(researched_path.read_text())
+
+    articles = []
+    if ARTICLES_PATH.exists():
+        articles = json.loads(ARTICLES_PATH.read_text())
+
+    ingested = 0
+    for ent in entities:
+        entity_name = ent.get("entity_name", "")
+        print(f"  Researching: {entity_name} ({ent.get('entity_type', '')})", file=sys.stderr)
+
+        result = research_entity(ent)
+        if not result:
+            continue
+
+        title = result.get("title", entity_name)
+        if title.lower() in existing_titles:
+            print(f"    Skipping (already exists): {title}", file=sys.stderr)
+            continue
+
+        # Build article from research
+        content_md = result.get("content_markdown", "")
+        word_count = len(content_md.split())
+        if word_count < 50:
+            print(f"    Skipping (too short): {title} ({word_count} words)", file=sys.stderr)
+            continue
+
+        article_id = hashlib.sha256(f"entity:{entity_name}:{ent.get('tweet_id', '')}".encode()).hexdigest()[:12]
+
+        article = {
+            "id": article_id,
+            "title": title,
+            "author": f"Research on @{ent.get('tweet_author', '')} bookmark",
+            "date": ent.get("tweet_date", ""),
+            "hostname": "petrarca-research",
+            "source_url": f"tweet:{ent.get('tweet_id', '')}",
+            "content_type": "research_synthesis",
+            "word_count": word_count,
+            "estimated_read_minutes": max(1, word_count // 200),
+            "content_markdown": content_md,
+            "one_line_summary": result.get("one_line_summary", ""),
+            "topics": result.get("topics", []),
+            "sections": [],
+            "key_claims": [],
+            "novelty_claims": [],
+            "fetch_method": "entity_research",
+            "_source_tweet": ent.get("tweet_text", ""),
+            "_entity_name": entity_name,
+            "_entity_type": ent.get("entity_type", ""),
+        }
+
+        articles.append(article)
+        existing_titles.add(title.lower())
+        ingested += 1
+        print(f"    Ingested: {title} ({word_count} words)", file=sys.stderr)
+
+        # Mark tweet as researched
+        tweet_id = ent.get("tweet_id", "")
+        if tweet_id and tweet_id not in researched_ids:
+            researched_ids.append(tweet_id)
+
+    if ingested > 0:
+        ARTICLES_PATH.write_text(json.dumps(articles, indent=2, ensure_ascii=False))
+        print(f"  Ingested {ingested} entity research articles", file=sys.stderr)
+
+    # Save researched tweet IDs
+    researched_path.write_text(json.dumps(researched_ids))
+    print(f"  Total researched tweets: {len(researched_ids)}", file=sys.stderr)
+
+
 def collect_readwise_candidates() -> list[dict]:
     """Load Readwise Reader items that have been engaged with."""
     if not OTAK_READWISE.exists():
@@ -1387,9 +1659,18 @@ def main():
                         help="Only run atomic claim extraction on existing articles")
     parser.add_argument("--skip-claims", action="store_true",
                         help="Explicitly skip atomic claim extraction")
+    parser.add_argument("--entities", action="store_true",
+                        help="Run resourceful entity research on short tweets without URLs")
+    parser.add_argument("--entity-limit", type=int, default=3,
+                        help="Max entities to research per run (default: 3)")
     args = parser.parse_args()
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Entity research mode: find and research entity mentions in tweets
+    if args.entities:
+        process_entity_tweets(limit=args.entity_limit)
+        return
 
     # Concepts-only mode: just extract concepts from existing articles
     if args.concepts_only:

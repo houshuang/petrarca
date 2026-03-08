@@ -58,6 +58,11 @@ log "Step 3c: Extracting entity concepts for new articles..."
 python3 "$SCRIPT_DIR/extract_entity_concepts.py" --incremental \
     || log "Step 3c FAILED: extract_entity_concepts.py"
 
+# Step 3c2: Resourceful entity research on short tweets
+log "Step 3c2: Researching entity mentions in tweets..."
+python3 "$SCRIPT_DIR/build_articles.py" --entities --entity-limit 3 \
+    || log "Step 3c2 FAILED: entity research"
+
 # Step 3d: Extract atomic claims for new articles
 log "Step 3d: Extracting atomic claims..."
 python3 "$SCRIPT_DIR/build_articles.py" --claims-only \
