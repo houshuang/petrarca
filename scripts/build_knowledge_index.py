@@ -8,8 +8,9 @@ delta reports per topic.
 Output: data/knowledge_index.json
 
 Usage:
-    python3 scripts/build_knowledge_index.py                # full build with delta reports
-    python3 scripts/build_knowledge_index.py --skip-delta   # skip LLM calls
+    python3 scripts/build_knowledge_index.py                # full build with delta reports + LLM judge
+    python3 scripts/build_knowledge_index.py --skip-delta   # skip LLM delta reports
+    python3 scripts/build_knowledge_index.py --skip-judge   # skip LLM judge for ambiguous pairs
 """
 
 import json
@@ -40,6 +41,16 @@ THRESHOLD_EXTENDS = 0.68
 def normalize_topic(topic: str) -> str:
     """Normalize a topic string: hyphens to spaces, lowercase, strip whitespace."""
     return re.sub(r"\s+", " ", topic.replace("-", " ")).strip().lower()
+
+# LLM judge: ambiguous zone where cosine overestimates similarity
+JUDGE_AMBIGUOUS_LOW = 0.68
+JUDGE_AMBIGUOUS_HIGH = 0.78
+JUDGE_MAX_PAIRS = 200
+# Prioritize pairs closest to the boundary (0.72-0.78) when capping
+JUDGE_PRIORITY_LOW = 0.72
+
+# Sub-topic splitting threshold
+SUBTOPIC_CLAIM_THRESHOLD = 30
 
 # Load env from .env file if present
 for env_path in [PROJECT_DIR / ".env", Path("/opt/petrarca/.env")]:
@@ -144,6 +155,117 @@ def extract_cross_article_pairs(similarity: np.ndarray, claims: list[dict],
     return pairs
 
 
+def verify_ambiguous_pairs(pairs: list[dict], claims: list[dict]) -> int:
+    """Use LLM to reclassify pairs in the ambiguous similarity zone (0.68-0.78).
+
+    Pairs in this range often have cosine overestimating true similarity.
+    The LLM judge classifies each as KNOWN/EXTENDS/NEW, and pairs reclassified
+    as NEW get their classification field updated + score set below threshold.
+
+    Returns the number of reclassified pairs.
+    """
+    import litellm
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    gemini_key = os.environ.get("GEMINI_KEY") or os.environ.get("GEMINI_API_KEY")
+    if not gemini_key:
+        log("  No GEMINI_KEY found, skipping LLM judge")
+        return 0
+
+    # Build claim lookup
+    claim_lookup = {c["id"]: c for c in claims}
+
+    # Select ambiguous pairs
+    ambiguous = [
+        p for p in pairs
+        if JUDGE_AMBIGUOUS_LOW <= p["score"] < JUDGE_AMBIGUOUS_HIGH
+    ]
+
+    if not ambiguous:
+        log("  No ambiguous pairs to judge")
+        return 0
+
+    # Prioritize pairs closest to the boundary (0.72-0.78 range first)
+    priority = [p for p in ambiguous if p["score"] >= JUDGE_PRIORITY_LOW]
+    rest = [p for p in ambiguous if p["score"] < JUDGE_PRIORITY_LOW]
+    ordered = priority + rest
+    to_judge = ordered[:JUDGE_MAX_PAIRS]
+
+    log(f"  {len(ambiguous)} ambiguous pairs (0.68-0.78), judging {len(to_judge)} (cap {JUDGE_MAX_PAIRS})")
+
+    reclassified = 0
+
+    def _judge_pair(pair: dict, index: int) -> tuple[dict, str]:
+        claim_a = claim_lookup.get(pair["a"], {})
+        claim_b = claim_lookup.get(pair["b"], {})
+        text_a = claim_a.get("normalized_text", pair["a"])
+        text_b = claim_b.get("normalized_text", pair["b"])
+
+        prompt = (
+            "Given these two claims, classify their relationship:\n"
+            "(a) KNOWN — they say the SAME thing (semantically equivalent)\n"
+            "(b) EXTENDS — one extends, refines, or adds detail to the other\n"
+            "(c) NEW — they are genuinely DIFFERENT claims about different things\n\n"
+            f"Claim A: {text_a}\n"
+            f"Claim B: {text_b}\n\n"
+            "Respond with ONLY one word: KNOWN, EXTENDS, or NEW."
+        )
+
+        try:
+            response = litellm.completion(
+                model="gemini/gemini-2.0-flash",
+                messages=[{"role": "user", "content": prompt}],
+                api_key=gemini_key,
+                temperature=0.0,
+                max_tokens=10,
+            )
+            try:
+                from llm_audit import audit_llm_call
+                audit_llm_call(response, script="build_knowledge_index.py", purpose="llm_judge")
+            except Exception:
+                pass
+            answer = response.choices[0].message.content.strip().upper()
+            # Normalize: accept partial matches
+            if "KNOWN" in answer:
+                return pair, "KNOWN"
+            elif "EXTENDS" in answer:
+                return pair, "EXTENDS"
+            elif "NEW" in answer:
+                return pair, "NEW"
+            else:
+                return pair, "EXTENDS"  # default to current classification
+        except Exception as e:
+            log(f"    LLM judge error for pair {index}: {e}")
+            return pair, "EXTENDS"
+
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {
+            executor.submit(_judge_pair, pair, i): pair
+            for i, pair in enumerate(to_judge)
+        }
+        completed = 0
+        for future in as_completed(futures):
+            completed += 1
+            pair, verdict = future.result()
+            pair["judge_verdict"] = verdict
+            if verdict == "KNOWN":
+                # Promote to KNOWN: bump score above threshold
+                pair["original_score"] = pair["score"]
+                pair["score"] = THRESHOLD_KNOWN
+                reclassified += 1
+            elif verdict == "NEW":
+                # Demote to NEW: drop score below EXTENDS threshold
+                pair["original_score"] = pair["score"]
+                pair["score"] = round(JUDGE_AMBIGUOUS_LOW - 0.01, 3)
+                reclassified += 1
+            # EXTENDS: leave as-is (already in EXTENDS range)
+
+            if completed % 50 == 0 or completed == len(futures):
+                log(f"  [{completed}/{len(futures)}] pairs judged")
+
+    return reclassified
+
+
 def build_article_claims_map(articles: list[dict], claims: list[dict]) -> dict[str, list[str]]:
     """Map article_id -> list of claim IDs."""
     result = {}
@@ -240,8 +362,116 @@ def compute_article_novelty_matrix(articles: list[dict], claims: list[dict],
     return matrix
 
 
+def _get_subtopic_labels(topic: str, t_claims: list[dict], gemini_key: str) -> list[str]:
+    """Ask the LLM to suggest 3-5 subtopic labels for a broad topic's claims."""
+    import litellm
+
+    sample = t_claims[:60]
+    claim_texts = "\n".join(f"- {c['normalized_text']}" for c in sample)
+    prompt = (
+        f"These are {len(t_claims)} claims about '{topic}'. The topic is too broad.\n"
+        f"Suggest 3-5 specific subtopic labels to split them into.\n"
+        f"Each label should be '{topic}: <specific aspect>'.\n"
+        f"Return ONLY the labels, one per line, no numbering or bullets.\n\n"
+        f"{claim_texts}"
+    )
+
+    try:
+        response = litellm.completion(
+            model="gemini/gemini-2.0-flash",
+            messages=[{"role": "user", "content": prompt}],
+            api_key=gemini_key,
+            temperature=0.3,
+            max_tokens=200,
+        )
+        try:
+            from llm_audit import audit_llm_call
+            audit_llm_call(response, script="build_knowledge_index.py", purpose="subtopic_labels")
+        except Exception:
+            pass
+        text = response.choices[0].message.content.strip()
+        labels = [line.strip() for line in text.splitlines() if line.strip()]
+        return labels[:5] if labels else []
+    except Exception as e:
+        log(f"    LLM error getting subtopic labels for '{topic}': {e}")
+        return []
+
+
+def _assign_claims_to_subtopics(topic: str, t_claims: list[dict],
+                                 subtopic_labels: list[str], gemini_key: str) -> dict[str, list[dict]]:
+    """Assign each claim to its best-matching subtopic label via LLM."""
+    import litellm
+
+    labels_str = "\n".join(f"- {label}" for label in subtopic_labels)
+    # Process in batches to stay within token limits
+    batch_size = 30
+    assignments: dict[str, list[dict]] = {label: [] for label in subtopic_labels}
+
+    for batch_start in range(0, len(t_claims), batch_size):
+        batch = t_claims[batch_start:batch_start + batch_size]
+        claims_str = "\n".join(
+            f"[{i}] {c['normalized_text']}" for i, c in enumerate(batch)
+        )
+        prompt = (
+            f"Assign each claim to the best-matching subtopic.\n\n"
+            f"Subtopics:\n{labels_str}\n\n"
+            f"Claims:\n{claims_str}\n\n"
+            f"For each claim, respond with ONLY the claim number and subtopic label, "
+            f"one per line: '0: {subtopic_labels[0]}' etc."
+        )
+
+        try:
+            response = litellm.completion(
+                model="gemini/gemini-2.0-flash",
+                messages=[{"role": "user", "content": prompt}],
+                api_key=gemini_key,
+                temperature=0.0,
+                max_tokens=500,
+            )
+            try:
+                from llm_audit import audit_llm_call
+                audit_llm_call(response, script="build_knowledge_index.py", purpose="subtopic_assign")
+            except Exception:
+                pass
+            text = response.choices[0].message.content.strip()
+            for line in text.splitlines():
+                line = line.strip()
+                if ":" not in line:
+                    continue
+                idx_str, _, label = line.partition(":")
+                try:
+                    idx = int(idx_str.strip().strip("[]"))
+                except ValueError:
+                    continue
+                label = label.strip()
+                if idx < len(batch) and label in assignments:
+                    assignments[label].append(batch[idx])
+        except Exception as e:
+            log(f"    LLM error assigning subtopics for '{topic}' batch {batch_start}: {e}")
+            # Fallback: put all in first subtopic
+            for c in batch:
+                assignments[subtopic_labels[0]].append(c)
+
+    # Any unassigned claims go to the first subtopic
+    assigned_ids = set()
+    for claims_list in assignments.values():
+        for c in claims_list:
+            assigned_ids.add(c["id"])
+    for c in t_claims:
+        if c["id"] not in assigned_ids:
+            assignments[subtopic_labels[0]].append(c)
+
+    # Remove empty subtopics
+    return {k: v for k, v in assignments.items() if v}
+
+
 def generate_delta_reports(claims: list[dict], min_claims: int = 5) -> dict:
-    """Generate LLM-synthesized delta reports per topic (parallel)."""
+    """Generate LLM-synthesized delta reports per topic (parallel).
+
+    Topics with > SUBTOPIC_CLAIM_THRESHOLD claims get split into subtopics.
+    The parent topic retains a high-level summary, and subtopics are nested
+    under a 'subtopics' key for backwards compatibility.
+    """
     import litellm
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -260,7 +490,9 @@ def generate_delta_reports(claims: list[dict], min_claims: int = 5) -> dict:
 
     # Filter to topics with enough claims
     eligible = {t: cs for t, cs in topic_claims.items() if len(cs) >= min_claims}
-    log(f"  {len(eligible)} topics with >= {min_claims} claims")
+    broad_topics = {t: cs for t, cs in eligible.items() if len(cs) > SUBTOPIC_CLAIM_THRESHOLD}
+    normal_topics = {t: cs for t, cs in eligible.items() if len(cs) <= SUBTOPIC_CLAIM_THRESHOLD}
+    log(f"  {len(eligible)} topics with >= {min_claims} claims ({len(broad_topics)} broad, will split)")
 
     def _synthesize_topic(topic: str, t_claims: list[dict], index: int) -> tuple[str, dict]:
         claim_texts = "\n".join(f"- {c['normalized_text']}" for c in t_claims[:50])
@@ -305,21 +537,96 @@ def generate_delta_reports(claims: list[dict], min_claims: int = 5) -> dict:
             "top_claims": top_claims,
         }
 
+    def _synthesize_broad_topic(topic: str, t_claims: list[dict], index: int) -> tuple[str, dict]:
+        """Handle a broad topic: get subtopic labels, assign claims, synthesize each."""
+        # Step 1: Get subtopic labels from LLM
+        subtopic_labels = _get_subtopic_labels(topic, t_claims, gemini_key)
+        if not subtopic_labels or len(subtopic_labels) < 2:
+            # Fallback: treat as normal topic if splitting fails
+            _, report = _synthesize_topic(topic, t_claims, index)
+            return topic, report
+
+        # Step 2: Assign claims to subtopics
+        subtopic_assignments = _assign_claims_to_subtopics(
+            topic, t_claims, subtopic_labels, gemini_key
+        )
+
+        # Step 3: Generate high-level parent summary
+        _, parent_report = _synthesize_topic(topic, t_claims, index)
+
+        # Step 4: Generate subtopic reports (sequentially within this thread)
+        subtopics = {}
+        for st_label, st_claims in subtopic_assignments.items():
+            if len(st_claims) < 3:
+                continue
+            st_article_ids = set(c["article_id"] for c in st_claims)
+            claim_texts = "\n".join(f"- {c['normalized_text']}" for c in st_claims[:50])
+            prompt = (
+                f"Synthesize these claims about '{st_label}' into a 2-4 sentence summary "
+                f"of what a reader would learn. Be specific and informative, not generic.\n\n"
+                f"{claim_texts}"
+            )
+            try:
+                response = litellm.completion(
+                    model="gemini/gemini-2.0-flash",
+                    messages=[{"role": "user", "content": prompt}],
+                    api_key=gemini_key,
+                    temperature=0.3,
+                    max_tokens=250,
+                )
+                try:
+                    from llm_audit import audit_llm_call
+                    audit_llm_call(response, script="build_knowledge_index.py", purpose="subtopic_report")
+                except Exception:
+                    pass
+                st_summary = response.choices[0].message.content.strip()
+            except Exception as e:
+                log(f"    LLM error for subtopic '{st_label}': {e}")
+                st_summary = ""
+
+            st_top_claims = [
+                {
+                    "text": c["normalized_text"],
+                    "article_id": c["article_id"],
+                    "claim_type": c["claim_type"],
+                }
+                for c in st_claims[:5]
+            ]
+
+            subtopics[st_label] = {
+                "topic": st_label,
+                "summary": st_summary,
+                "claim_count": len(st_claims),
+                "article_count": len(st_article_ids),
+                "top_claims": st_top_claims,
+            }
+
+        # Add subtopics to parent report
+        if subtopics:
+            parent_report["subtopics"] = subtopics
+            log(f"    '{topic}' split into {len(subtopics)} subtopics")
+
+        return topic, parent_report
+
     reports = {}
-    sorted_topics = sorted(eligible.items())
     completed = 0
+    total = len(normal_topics) + len(broad_topics)
 
     with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = {
-            executor.submit(_synthesize_topic, topic, t_claims, i): topic
-            for i, (topic, t_claims) in enumerate(sorted_topics)
-        }
+        futures = {}
+        # Normal topics
+        for i, (topic, t_claims) in enumerate(sorted(normal_topics.items())):
+            futures[executor.submit(_synthesize_topic, topic, t_claims, i)] = topic
+        # Broad topics
+        for i, (topic, t_claims) in enumerate(sorted(broad_topics.items())):
+            futures[executor.submit(_synthesize_broad_topic, topic, t_claims, i)] = topic
+
         for future in as_completed(futures):
             completed += 1
             topic, report = future.result()
             reports[topic] = report
-            if completed % 25 == 0 or completed == len(futures):
-                log(f"  [{completed}/{len(futures)}] delta reports done")
+            if completed % 25 == 0 or completed == total:
+                log(f"  [{completed}/{total}] delta reports done")
 
     return reports
 
@@ -328,6 +635,8 @@ def main():
     parser = argparse.ArgumentParser(description="Build the Petrarca knowledge index")
     parser.add_argument("--skip-delta", action="store_true",
                         help="Skip LLM-generated delta reports")
+    parser.add_argument("--skip-judge", action="store_true",
+                        help="Skip LLM judge for ambiguous similarity pairs")
     args = parser.parse_args()
 
     log("=== Building Petrarca Knowledge Index ===")
@@ -353,6 +662,17 @@ def main():
     log("Extracting cross-article similarity pairs (>= 0.68)...")
     pairs = extract_cross_article_pairs(similarity, claims)
     log(f"  {len(pairs)} cross-article pairs found")
+
+    # 2b. LLM judge for ambiguous pairs (optional)
+    judge_reclassified = 0
+    if args.skip_judge:
+        log("Skipping LLM judge (--skip-judge)")
+    else:
+        log("Running LLM judge on ambiguous pairs (0.68-0.78)...")
+        judge_reclassified = verify_ambiguous_pairs(pairs, claims)
+        log(f"  {judge_reclassified} pairs reclassified by judge")
+        # Re-sort after score adjustments
+        pairs.sort(key=lambda p: p["score"], reverse=True)
 
     # 3. Build paragraph mapping
     log("Building paragraph mappings...")
@@ -407,6 +727,7 @@ def main():
             "total_similarity_pairs": len(pairs),
             "total_topics": len(all_topics),
             "delta_report_count": len(delta_reports),
+            "judge_reclassified": judge_reclassified,
         },
         "claims": claims_dict,
         "article_claims": article_claims,
@@ -432,6 +753,7 @@ def main():
     print(f"  Claims:    {output['stats']['total_claims']}")
     print(f"  Topics:    {output['stats']['total_topics']}")
     print(f"  Sim pairs: {output['stats']['total_similarity_pairs']} (>= 0.68)")
+    print(f"  Judge:     {output['stats']['judge_reclassified']} pairs reclassified")
     print(f"  Delta rpts:{output['stats']['delta_report_count']}")
     print(f"  File size: {file_size:,} bytes ({file_size / 1024:.1f} KB)")
     print()
@@ -483,8 +805,12 @@ def main():
         print("  Delta reports:")
         for topic, report in sorted(delta_reports.items()):
             summary_preview = report["summary"][:80] + "..." if len(report["summary"]) > 80 else report["summary"]
-            print(f"    {topic} ({report['claim_count']} claims, {report['article_count']} articles)")
+            subtopics = report.get("subtopics", {})
+            subtopic_label = f" [{len(subtopics)} subtopics]" if subtopics else ""
+            print(f"    {topic} ({report['claim_count']} claims, {report['article_count']} articles){subtopic_label}")
             print(f"      {summary_preview}")
+            for st_name, st_report in sorted(subtopics.items()):
+                print(f"      -> {st_name} ({st_report['claim_count']} claims)")
         print()
 
     log("Done.")
