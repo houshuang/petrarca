@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """Build embeddings for all atomic claims and compute similarity matrix.
 
+Supports incremental embedding — only embeds NEW claims that don't already
+have embeddings, and merges them into the existing .npz file.
+
 Usage:
-    python3 scripts/build_claim_embeddings.py              # embed all claims
+    python3 scripts/build_claim_embeddings.py              # incremental embed (only new claims)
+    python3 scripts/build_claim_embeddings.py --force       # re-embed everything from scratch
     python3 scripts/build_claim_embeddings.py --analyze     # embed + run analysis
     python3 scripts/build_claim_embeddings.py --skip-embed  # analysis only (if embeddings exist)
 """
@@ -315,10 +319,39 @@ def generate_delta_report(claims: list[dict], topic: str,
     }
 
 
+def load_existing_embeddings() -> tuple[np.ndarray | None, dict[str, int] | None]:
+    """Load existing embeddings and claims index if available.
+
+    Returns (embeddings_array, {claim_id: row_index}) or (None, None).
+    """
+    if not EMBEDDINGS_PATH.exists() or not CLAIMS_INDEX_PATH.exists():
+        return None, None
+
+    try:
+        data = np.load(EMBEDDINGS_PATH)
+        embeddings = data["embeddings"]
+
+        with open(CLAIMS_INDEX_PATH) as f:
+            index_list = json.load(f)
+
+        # Build claim_id -> row index mapping
+        id_to_row = {entry["id"]: i for i, entry in enumerate(index_list)}
+
+        if len(id_to_row) != len(embeddings):
+            print(f"  Warning: index ({len(id_to_row)}) != embeddings ({len(embeddings)}). Will rebuild.", file=sys.stderr)
+            return None, None
+
+        return embeddings, id_to_row
+    except Exception as e:
+        print(f"  Warning: could not load existing embeddings: {e}", file=sys.stderr)
+        return None, None
+
+
 def main():
     parser = argparse.ArgumentParser(description="Build claim embeddings and analyze")
     parser.add_argument("--analyze", action="store_true", help="Run full analysis")
     parser.add_argument("--skip-embed", action="store_true", help="Skip embedding, use cached")
+    parser.add_argument("--force", action="store_true", help="Re-embed everything from scratch")
     parser.add_argument("--journey", action="store_true", help="Simulate reading journey")
     parser.add_argument("--delta", type=str, help="Generate delta report for topic")
     args = parser.parse_args()
@@ -336,21 +369,77 @@ def main():
         print("No claims found. Run --claims-only first.", file=sys.stderr)
         sys.exit(1)
 
+    # Build the set of all current claim IDs
+    current_claim_ids = set(c["id"] for c in claims)
+
     # Embed (or load cached)
     if args.skip_embed and EMBEDDINGS_PATH.exists():
         print("Loading cached embeddings...", file=sys.stderr)
         data = np.load(EMBEDDINGS_PATH)
         embeddings = data["embeddings"]
-        # Verify dimensions match
         if len(embeddings) != len(claims):
             print(f"  Warning: cached embeddings ({len(embeddings)}) != claims ({len(claims)}). Re-embedding.", file=sys.stderr)
             embeddings = embed_claims(claims)
             np.savez_compressed(EMBEDDINGS_PATH, embeddings=embeddings)
-    else:
-        print("Embedding claims...", file=sys.stderr)
+    elif args.force:
+        print("Embedding all claims (--force)...", file=sys.stderr)
         embeddings = embed_claims(claims)
         np.savez_compressed(EMBEDDINGS_PATH, embeddings=embeddings)
         print(f"  Saved {EMBEDDINGS_PATH} ({embeddings.shape})", file=sys.stderr)
+    else:
+        # Incremental mode: load existing, embed only new claims
+        existing_embeddings, existing_id_to_row = load_existing_embeddings()
+
+        if existing_embeddings is not None and existing_id_to_row is not None:
+            existing_ids = set(existing_id_to_row.keys())
+
+            # Check for removed claims — if any old claim is gone, rebuild from scratch
+            removed_ids = existing_ids - current_claim_ids
+            if removed_ids:
+                print(f"  {len(removed_ids)} claims removed since last run. Rebuilding from scratch.", file=sys.stderr)
+                embeddings = embed_claims(claims)
+                np.savez_compressed(EMBEDDINGS_PATH, embeddings=embeddings)
+                print(f"  Saved {EMBEDDINGS_PATH} ({embeddings.shape})", file=sys.stderr)
+            else:
+                # Find new claims (preserving their order from articles.json)
+                new_claims = [c for c in claims if c["id"] not in existing_ids]
+
+                if not new_claims:
+                    print("  No new claims to embed.", file=sys.stderr)
+                    # Reorder existing embeddings to match current articles.json order
+                    # (order may have changed if articles were reordered)
+                    reordered = np.stack([existing_embeddings[existing_id_to_row[c["id"]]] for c in claims])
+                    embeddings = reordered
+                    # Save only if order actually changed
+                    order_matches = all(
+                        existing_id_to_row[c["id"]] == i for i, c in enumerate(claims)
+                    )
+                    if not order_matches:
+                        print("  Reordering embeddings to match current articles.json order.", file=sys.stderr)
+                        np.savez_compressed(EMBEDDINGS_PATH, embeddings=embeddings)
+                else:
+                    print(f"  {len(new_claims)} new claims to embed (skipping {len(existing_ids)} existing).", file=sys.stderr)
+                    new_embeddings = embed_claims(new_claims)
+
+                    # Build a lookup: claim_id -> embedding row (combining old + new)
+                    new_id_to_row = {c["id"]: i for i, c in enumerate(new_claims)}
+                    combined_rows = []
+                    for c in claims:
+                        cid = c["id"]
+                        if cid in existing_id_to_row:
+                            combined_rows.append(existing_embeddings[existing_id_to_row[cid]])
+                        else:
+                            combined_rows.append(new_embeddings[new_id_to_row[cid]])
+
+                    embeddings = np.stack(combined_rows)
+                    np.savez_compressed(EMBEDDINGS_PATH, embeddings=embeddings)
+                    print(f"  Saved {EMBEDDINGS_PATH} ({embeddings.shape})", file=sys.stderr)
+        else:
+            # No existing embeddings — full embed
+            print("Embedding all claims...", file=sys.stderr)
+            embeddings = embed_claims(claims)
+            np.savez_compressed(EMBEDDINGS_PATH, embeddings=embeddings)
+            print(f"  Saved {EMBEDDINGS_PATH} ({embeddings.shape})", file=sys.stderr)
 
     # Save claims index for cross-referencing
     index = [{"id": c["id"], "text": c["normalized_text"][:100],
