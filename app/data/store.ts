@@ -62,24 +62,12 @@ export async function initStore(): Promise<void> {
   if (initPromise) return initPromise;
 
   initPromise = (async () => {
-    // Load articles: try cached remote content first, fall back to bundled JSON
+    // Load articles from cache (downloaded from server on previous launch)
     let cachedKnowledgeIndex = null;
     const cached = await loadCachedContent();
     if (cached && cached.articles.length > 0) {
       articles = cached.articles;
       cachedKnowledgeIndex = cached.knowledgeIndex;
-    } else {
-      try {
-        const data = require('./articles.json');
-        articles = (Array.isArray(data) ? data : []) as Article[];
-      } catch {
-        articles = [];
-      }
-      try {
-        cachedKnowledgeIndex = require('./knowledge_index.json');
-      } catch {
-        // knowledge index not bundled — will work without it
-      }
     }
 
     // Sort by date (newest first)
@@ -103,23 +91,39 @@ export async function initStore(): Promise<void> {
       loaded_dismissed: dismissedArticles.size,
     });
 
-    // Background: check for content updates from server
-    checkForUpdates().then(async (hasUpdates) => {
-      if (hasUpdates) {
-        const fresh = await downloadContent();
-        if (fresh) {
-          articles = fresh.articles;
-          articles.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-          if (fresh.knowledgeIndex) {
-            await initKnowledgeEngine(fresh.knowledgeIndex);
-          }
-          logEvent('content_refreshed', {
-            article_count: fresh.articles.length,
-            knowledge_index_updated: !!fresh.knowledgeIndex,
-          });
+    // If no cached articles, download immediately (first launch)
+    // Otherwise check for updates in background
+    if (articles.length === 0) {
+      const fresh = await downloadContent();
+      if (fresh) {
+        articles = fresh.articles;
+        articles.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        if (fresh.knowledgeIndex) {
+          await initKnowledgeEngine(fresh.knowledgeIndex);
         }
+        logEvent('content_downloaded_first_launch', {
+          article_count: fresh.articles.length,
+          knowledge_index: !!fresh.knowledgeIndex,
+        });
       }
-    });
+    } else {
+      checkForUpdates().then(async (hasUpdates) => {
+        if (hasUpdates) {
+          const fresh = await downloadContent();
+          if (fresh) {
+            articles = fresh.articles;
+            articles.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+            if (fresh.knowledgeIndex) {
+              await initKnowledgeEngine(fresh.knowledgeIndex);
+            }
+            logEvent('content_refreshed', {
+              article_count: fresh.articles.length,
+              knowledge_index_updated: !!fresh.knowledgeIndex,
+            });
+          }
+        }
+      });
+    }
   })();
 
   return initPromise;

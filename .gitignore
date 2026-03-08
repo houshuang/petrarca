@@ -46,6 +46,10 @@ __pycache__/
 # Data (root level only, not app/data/)
 /data/
 
+# Large JSON data files — downloaded from server at runtime, not bundled
+app/data/articles.json
+app/data/knowledge_index.json
+
 # Temp files
 stderr.tmp
 
