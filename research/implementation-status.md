@@ -112,15 +112,15 @@ App (Expo SDK 54):
 
 ### UI Issues (from user screenshot, Mar 8)
 
-1. **Filter chips row clipped** — `maxHeight: 40` on the horizontal ScrollView cuts off chip text. **FIX APPLIED** (changed to `flexGrow: 0`), deployed.
-2. **Continue Reading section too large** — shows all in-progress articles (user had 5), pushing feed below fold. **FIX APPLIED** (limited to 2 most recent), deployed.
-3. **Continue Reading cards have card-like backgrounds** — too heavy visually. **FIX APPLIED** (removed parchmentDark background), deployed.
-4. **UI not visually tested** — Must visually verify all screens before considering done.
+1. **Filter chips row clipped** — **RESOLVED**: Changed `maxHeight: 40` to `flexGrow: 0`.
+2. **Continue Reading section too large** — **RESOLVED**: Limited to 2 most recent.
+3. **Continue Reading cards have card-like backgrounds** — **RESOLVED**: Removed parchmentDark background.
+4. ~~**UI not visually tested**~~ — **RESOLVED**: Visual testing done with agent-browser. Confirmed all screens render correctly. Topics expansion works (Playwright click issue was a false positive — React Native Web Pressable needs DOM `.click()`, not Playwright's `click @ref`).
 
 ### Data Issues
 
 5. ~~**Server has only 47 articles**~~ — **RESOLVED**: Full 171-article corpus restored with 2,954 atomic claims, embeddings, and knowledge index.
-6. **Duplicate topic variants** — Claim extraction produces inconsistent topic formatting (e.g., "Italian unification" vs "Italian-unification", "Il Gattopardo" vs "Il-Gattopardo"). Results in redundant delta reports. Needs topic normalization in the extraction prompt or post-processing.
+6. ~~**Duplicate topic variants**~~ — **RESOLVED**: Added client-side topic normalization in `app/lib/display-utils.ts` (`normalizeTopic()` + `displayTopic()`). Used across feed filter chips, topic tags, and Topics tab grouping. Reduced 67→58 topic groups.
 7. **google.generativeai deprecation warning** — Embedding script uses deprecated `google.generativeai` package, should migrate to `google.genai`.
 
 ### Logic Issues
@@ -167,8 +167,8 @@ App (Expo SDK 54):
 ## Next Steps (Priority Order)
 
 ### Immediate (before daily use)
-1. **Visual testing** — Use agent-browser or Expo Go to verify every screen on mobile. This has never been done.
-2. **Topic normalization** — Fix duplicate topic variants in claim extraction (dashes vs spaces, capitalization). Either fix the prompt or add post-processing.
+1. ~~**Visual testing**~~ — **DONE**: All screens verified via agent-browser.
+2. ~~**Topic normalization**~~ — **DONE**: Client-side normalization in `display-utils.ts`, deployed.
 3. **Production bundle optimization** — Remove bundled `knowledge_index.json` from JS (now 4.3MB — load from server only, cache in AsyncStorage)
 
 ### Short-term (quality improvements)
@@ -203,6 +203,7 @@ App (Expo SDK 54):
 | `research/knowledge-diff-interfaces.md` | HCI research on adaptive presentation (dimming, stretchtext) |
 | `research/knowledge-tracing-for-reading.md` | FSRS/BKT adaptation for reading knowledge |
 | `research/knowledge-deduplication.md` | Embedding + dedup architecture |
+| `research/user-guide.md` | User-facing guide (markdown source) — also at `app/public/guide/index.html` (HTML) |
 
 ## Key Scripts
 

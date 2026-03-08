@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, FlatList, Pressable, Animated,
-  Platform, ViewStyle, ScrollView,
+  Platform, ViewStyle, ScrollView, Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
@@ -286,10 +286,20 @@ export default function FeedScreen() {
   return (
     <GestureHandlerRootView style={styles.container}>
       <View style={styles.header}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.headerTitle}>Petrarca</Text>
           <Text style={styles.headerSubtitle}>{dateStr}</Text>
         </View>
+        <Pressable
+          onPress={() => {
+            logEvent('user_guide_opened');
+            const url = Platform.OS === 'web' ? '/guide/' : 'https://alifstian.duckdns.org/guide/';
+            Linking.openURL(url);
+          }}
+          style={styles.guideLink}
+        >
+          <Text style={styles.guideLinkText}>Guide</Text>
+        </Pressable>
       </View>
 
       {/* Double rule */}
@@ -395,6 +405,9 @@ const styles = StyleSheet.create({
 
   // Header
   header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
     paddingHorizontal: layout.screenPadding,
     paddingTop: 12,
     paddingBottom: 8,
@@ -407,6 +420,17 @@ const styles = StyleSheet.create({
     ...type.screenSubtitle,
     color: colors.textMuted,
     marginTop: 2,
+  },
+  guideLink: {
+    alignSelf: 'flex-start',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    marginTop: 2,
+  },
+  guideLinkText: {
+    fontFamily: fonts.ui,
+    fontSize: 11,
+    color: colors.rubric,
   },
 
   // Double rule
