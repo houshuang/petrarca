@@ -7,7 +7,8 @@ Pipeline:
   3. Fetch article content with 3-tier extraction
   4. Deduplicate by URL
   5. LLM processing: generate sections, summaries, claims per article
-  6. Output articles.json
+  6. Atomic claim decomposition (optional, --claims / --claims-only)
+  7. Output articles.json
 
 Usage:
     python3 scripts/build_articles.py                          # all sources
@@ -17,6 +18,9 @@ Usage:
     python3 scripts/build_articles.py --from articles          # skip to LLM step
     python3 scripts/build_articles.py --dry-run                # skip LLM calls
     python3 scripts/build_articles.py --limit 50               # max articles to process
+    python3 scripts/build_articles.py --claims                 # include atomic claim extraction
+    python3 scripts/build_articles.py --claims-only            # only run claim extraction on existing articles
+    python3 scripts/build_articles.py --skip-claims            # explicitly skip claim extraction
 """
 
 import argparse
@@ -1155,6 +1159,175 @@ def _deduplicate_concepts(concepts: list[dict]) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Step 6: Atomic claim decomposition
+# ---------------------------------------------------------------------------
+
+def _build_atomic_decomposition_prompt(content: str, title: str, topics: list[str]) -> str:
+    """Build prompt for extracting atomic claims from an article."""
+    if len(content) > 12000:
+        content = content[:12000] + "\n\n[... truncated ...]"
+
+    topics_hint = ""
+    if topics:
+        topics_hint = f"\nExisting topic tags for this article: {', '.join(topics)}\nPrefer these topic tags where applicable, but add new ones if needed.\n"
+
+    return f"""Given this article, extract all knowledge contributions as atomic claims.
+
+Each claim should be:
+- MINIMAL: one single assertion (not compound sentences with "and")
+- SELF-CONTAINED: understandable without the article context (resolve ALL pronouns, add context)
+- NEVER start a claim with: It, This, They, He, She, These, Those, The paper, The author, The study.
+  Always use the specific noun, name, or subject instead. Examples:
+  BAD: "This paper presents..." → GOOD: "The Codified Context paper presents..."
+  BAD: "It is recommended to..." → GOOD: "Users should..." or "Deploying X behind a proxy is recommended"
+  BAD: "It makes sense to..." → GOOD: "Trading cost for external quality is worthwhile..."
+  BAD: "They found that..." → GOOD: "Researchers at MIT found that..."
+- TYPED: classify as factual/causal/comparative/procedural/evaluative/predictive/experiential
+
+Claim types:
+- factual: A verifiable statement of fact ("Claude Code supports background agents")
+- causal: Cause-and-effect relationship ("Larger context windows reduce hallucination rates")
+- comparative: Comparison between entities ("GPT-4 outperforms Claude on math benchmarks")
+- procedural: How-to or process description ("To fine-tune a model, first prepare labeled data")
+- evaluative: Judgment or assessment ("Gambetta's protection-industry framework is more practical than cultural explanations")
+- predictive: Forecast or expectation ("AI agents will replace most SaaS tools by 2027")
+- experiential: First-hand experience or observation ("We found that users preferred the simpler UI")
+
+For each claim, provide:
+- normalized_text: the claim in canonical, self-contained form (resolve all pronouns, add context)
+- original_text: the claim as it appears in the article (exact or near-exact quote)
+- claim_type: one of the types above
+- source_paragraphs: which paragraph numbers (0-indexed) contain this claim
+- topics: relevant topic tags in kebab-case
+{topics_hint}
+Article title: {title}
+
+Article content (paragraphs separated by blank lines):
+{content}
+
+Return a JSON array of claims:
+[
+  {{
+    "normalized_text": "self-contained claim text",
+    "original_text": "text as it appears in article",
+    "claim_type": "factual",
+    "source_paragraphs": [0, 1],
+    "topics": ["topic-tag"]
+  }}
+]
+
+Extract 10-30 claims depending on article length. Focus on substantive knowledge contributions, not obvious statements or filler.
+Return ONLY valid JSON array."""
+
+
+_PRONOUN_START_RE = re.compile(r"^(It|They|This|He|She|These|Those|That)\s", re.IGNORECASE)
+
+_PRONOUN_REWRITES = [
+    # "It is recommended to X" → "X is recommended"
+    (re.compile(r"^It is (recommended|not recommended|suggested|advisable) to (.+)", re.IGNORECASE),
+     lambda m: m.group(2)[0].upper() + m.group(2)[1:].rstrip(".") + " is " + m.group(1) + "."),
+    # "It is [adj] for X to Y" → "Y is [adj] for X"
+    (re.compile(r"^It is (\w+) for (.+?) to (.+)", re.IGNORECASE),
+     lambda m: m.group(3)[0].upper() + m.group(3)[1:].rstrip(".") + " is " + m.group(1) + " for " + m.group(2) + "."),
+    # "It is important/necessary/difficult to X" → "X is important"
+    (re.compile(r"^It is (important|necessary|useful|helpful|possible|common|difficult|worth noting) (?:to |that )(.+)", re.IGNORECASE),
+     lambda m: m.group(2)[0].upper() + m.group(2)[1:].rstrip(".") + " is " + m.group(1) + "."),
+    # "It makes sense to X" → capitalize rest
+    (re.compile(r"^It makes sense to (.+)", re.IGNORECASE),
+     lambda m: m.group(1)[0].upper() + m.group(1)[1:]),
+]
+
+
+def _fix_pronoun_starts(claims: list[dict]) -> list[dict]:
+    """Post-process claims to fix pronoun-started claims that the LLM didn't rewrite."""
+    for claim in claims:
+        text = claim.get("normalized_text", "")
+        if not _PRONOUN_START_RE.match(text):
+            continue
+        for pattern, rewriter in _PRONOUN_REWRITES:
+            m = pattern.match(text)
+            if m:
+                claim["normalized_text"] = rewriter(m)
+                break
+    return claims
+
+
+def _claim_id(normalized_text: str) -> str:
+    """Generate a stable ID for a claim from its normalized text."""
+    return hashlib.sha256(normalized_text.encode()).hexdigest()[:12]
+
+
+def extract_atomic_claims(articles: list[dict], dry_run: bool = False) -> list[dict]:
+    """Extract atomic claims for each article. Modifies articles in-place and returns them."""
+    to_process = [a for a in articles if not a.get("atomic_claims")]
+    if not to_process:
+        print("  All articles already have atomic_claims, skipping", file=sys.stderr)
+        return articles
+
+    print(f"  Extracting atomic claims for {len(to_process)} articles (skipping {len(articles) - len(to_process)} already done)", file=sys.stderr)
+
+    for i, article in enumerate(to_process):
+        title = article.get("title", "Untitled")
+        content = article.get("content_markdown", "")
+        topics = article.get("topics", [])
+
+        if not content or len(content.split()) < 50:
+            print(f"  [{i+1}/{len(to_process)}] Skipping (too short): {title[:60]}", file=sys.stderr)
+            article["atomic_claims"] = []
+            continue
+
+        if dry_run:
+            print(f"  [{i+1}/{len(to_process)}] Would extract claims: {title[:60]}", file=sys.stderr)
+            article["atomic_claims"] = []
+            continue
+
+        print(f"  [{i+1}/{len(to_process)}] Extracting claims: {title[:60]}", file=sys.stderr)
+        prompt = _build_atomic_decomposition_prompt(content, title, topics)
+        response = _call_llm(prompt)
+
+        if response:
+            try:
+                cleaned = response
+                if cleaned.startswith("```"):
+                    cleaned = re.sub(r"^```(?:json)?\n?", "", cleaned)
+                    cleaned = re.sub(r"\n?```$", "", cleaned)
+                parsed = json.loads(cleaned)
+                if isinstance(parsed, list):
+                    claims = []
+                    for raw_claim in parsed:
+                        normalized = raw_claim.get("normalized_text", "").strip()
+                        if not normalized:
+                            continue
+                        claims.append({
+                            "normalized_text": normalized,
+                            "original_text": raw_claim.get("original_text", "").strip(),
+                            "claim_type": raw_claim.get("claim_type", "factual"),
+                            "source_paragraphs": raw_claim.get("source_paragraphs", []),
+                            "topics": raw_claim.get("topics", []),
+                        })
+                    claims = _fix_pronoun_starts(claims)
+                    for c in claims:
+                        c["id"] = _claim_id(c["normalized_text"])
+                    article["atomic_claims"] = claims
+                    print(f"    OK: {len(claims)} claims extracted", file=sys.stderr)
+                else:
+                    print(f"    Unexpected response format (not array), skipping", file=sys.stderr)
+                    article["atomic_claims"] = []
+            except json.JSONDecodeError:
+                print(f"    JSON parse failed for claims extraction", file=sys.stderr)
+                article["atomic_claims"] = []
+        else:
+            print(f"    LLM call failed for claims extraction", file=sys.stderr)
+            article["atomic_claims"] = []
+
+        time.sleep(1)
+
+    total_claims = sum(len(a.get("atomic_claims", [])) for a in articles)
+    print(f"  Total atomic claims across all articles: {total_claims}", file=sys.stderr)
+    return articles
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -1175,6 +1348,12 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Skip LLM calls")
     parser.add_argument("--concepts-only", action="store_true",
                         help="Only run concept extraction on existing articles")
+    parser.add_argument("--claims", action="store_true",
+                        help="Include atomic claim extraction step")
+    parser.add_argument("--claims-only", action="store_true",
+                        help="Only run atomic claim extraction on existing articles")
+    parser.add_argument("--skip-claims", action="store_true",
+                        help="Explicitly skip atomic claim extraction")
     args = parser.parse_args()
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -1199,6 +1378,21 @@ def main():
         }
         _save_json(manifest, DATA_DIR / "manifest.json")
         print(f"  {len(concepts)} concepts saved", file=sys.stderr)
+        return
+
+    # Claims-only mode: just extract atomic claims from existing articles
+    if args.claims_only:
+        existing = _load_json(ARTICLES_PATH) or []
+        if not existing:
+            print("ERROR: No existing articles to extract claims from", file=sys.stderr)
+            sys.exit(1)
+        print(f"\n=== Atomic Claim Extraction (claims-only mode) ===", file=sys.stderr)
+        articles = extract_atomic_claims(existing, dry_run=args.dry_run)
+        _save_json(articles, ARTICLES_PATH)
+        APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
+        _save_json(articles, APP_DATA_DIR / "articles.json")
+        total_claims = sum(len(a.get("atomic_claims", [])) for a in articles)
+        print(f"  Done: {total_claims} total claims across {len(articles)} articles", file=sys.stderr)
         return
 
     start_idx = STEPS.index(args.from_step) if args.from_step else 0
@@ -1289,6 +1483,11 @@ def main():
     similar_count = sum(1 for a in articles if a.get("similar_articles"))
     print(f"  {similar_count} articles have similar matches", file=sys.stderr)
 
+    # Step 4c: Atomic claim extraction (opt-in via --claims)
+    if args.claims and not args.skip_claims:
+        print(f"\n=== Step 4c: Atomic Claim Extraction ===", file=sys.stderr)
+        articles = extract_atomic_claims(articles, dry_run=args.dry_run)
+
     # Save final output
     _save_json(articles, ARTICLES_PATH)
     APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -1321,6 +1520,9 @@ def main():
     for src, count in sorted(sources.items()):
         print(f"    {src}: {count}", file=sys.stderr)
     print(f"  {len(concepts)} concepts extracted", file=sys.stderr)
+    total_claims = sum(len(a.get("atomic_claims", [])) for a in articles)
+    if total_claims:
+        print(f"  {total_claims} atomic claims extracted", file=sys.stderr)
     print(f"  Output: {ARTICLES_PATH}", file=sys.stderr)
     print(f"  Concepts: {CONCEPTS_PATH}", file=sys.stderr)
     print(f"  App data: {APP_DATA_DIR / 'articles.json'}", file=sys.stderr)
