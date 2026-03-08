@@ -235,8 +235,9 @@ def compute_article_novelty_matrix(articles: list[dict], claims: list[dict],
 
 
 def generate_delta_reports(claims: list[dict], min_claims: int = 5) -> dict:
-    """Generate LLM-synthesized delta reports per topic."""
+    """Generate LLM-synthesized delta reports per topic (parallel)."""
     import litellm
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
     gemini_key = os.environ.get("GEMINI_KEY") or os.environ.get("GEMINI_API_KEY")
     if not gemini_key:
@@ -255,10 +256,7 @@ def generate_delta_reports(claims: list[dict], min_claims: int = 5) -> dict:
     eligible = {t: cs for t, cs in topic_claims.items() if len(cs) >= min_claims}
     log(f"  {len(eligible)} topics with >= {min_claims} claims")
 
-    reports = {}
-    for i, (topic, t_claims) in enumerate(sorted(eligible.items())):
-        log(f"  [{i+1}/{len(eligible)}] Synthesizing '{topic}' ({len(t_claims)} claims)...")
-
+    def _synthesize_topic(topic: str, t_claims: list[dict], index: int) -> tuple[str, dict]:
         claim_texts = "\n".join(f"- {c['normalized_text']}" for c in t_claims[:50])
         prompt = (
             f"Synthesize these claims about '{topic}' into a 3-5 sentence summary "
@@ -284,7 +282,6 @@ def generate_delta_reports(claims: list[dict], min_claims: int = 5) -> dict:
             log(f"    LLM error for topic '{topic}': {e}")
             summary = ""
 
-        # Pick top claims (most representative — just take first few for now)
         top_claims = [
             {
                 "text": c["normalized_text"],
@@ -294,7 +291,7 @@ def generate_delta_reports(claims: list[dict], min_claims: int = 5) -> dict:
             for c in t_claims[:5]
         ]
 
-        reports[topic] = {
+        return topic, {
             "topic": topic,
             "summary": summary,
             "claim_count": len(t_claims),
@@ -302,7 +299,21 @@ def generate_delta_reports(claims: list[dict], min_claims: int = 5) -> dict:
             "top_claims": top_claims,
         }
 
-        time.sleep(0.3)  # rate limiting
+    reports = {}
+    sorted_topics = sorted(eligible.items())
+    completed = 0
+
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {
+            executor.submit(_synthesize_topic, topic, t_claims, i): topic
+            for i, (topic, t_claims) in enumerate(sorted_topics)
+        }
+        for future in as_completed(futures):
+            completed += 1
+            topic, report = future.result()
+            reports[topic] = report
+            if completed % 25 == 0 or completed == len(futures):
+                log(f"  [{completed}/{len(futures)}] delta reports done")
 
     return reports
 
