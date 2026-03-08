@@ -988,29 +988,37 @@ class ResearchHandler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type, X-Petrarca-Token')
 
+    def _read_json_body(self) -> dict | None:
+        """Read and parse JSON from request body. Sends 400 on failure, returns None."""
+        content_length = int(self.headers.get('Content-Length', 0))
+        if not content_length:
+            self._send_json_response(400, {'error': 'Empty request body'})
+            return None
+        try:
+            return json.loads(self.rfile.read(content_length))
+        except (json.JSONDecodeError, ValueError) as e:
+            self._send_json_response(400, {'error': f'Invalid JSON: {e}'})
+            return None
+
+    def _send_json_response(self, status: int, data: dict):
+        self.send_response(status)
+        self._send_cors_headers()
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps(data).encode())
+
     def do_OPTIONS(self):
         self.send_response(204)
         self._send_cors_headers()
         self.end_headers()
 
     def _handle_explore_batch(self):
-        content_length = int(self.headers.get('Content-Length', 0))
-        if not content_length:
-            self.send_response(400)
-            self._send_cors_headers()
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': 'Empty request body'}).encode())
+        body = self._read_json_body()
+        if body is None:
             return
-
-        body = json.loads(self.rfile.read(content_length))
         concepts = body.get('concepts', [])
         if not concepts:
-            self.send_response(400)
-            self._send_cors_headers()
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': 'No concepts provided'}).encode())
+            self._send_json_response(400, {'error': 'No concepts provided'})
             return
 
         request_id = f'expb_{int(time.time())}'
@@ -1125,35 +1133,24 @@ class ResearchHandler(BaseHTTPRequestHandler):
 
         note_path = NOTES_DIR / f'{note_id}.json'
         if not note_path.exists():
-            self.send_response(404)
-            self._send_cors_headers()
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': 'Note not found'}).encode())
+            self._send_json_response(404, {'error': 'Note not found'})
             return
 
-        content_length = int(self.headers.get('Content-Length', 0))
-        if not content_length:
-            self.send_response(400)
-            self._send_cors_headers()
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(b'{"error": "Empty body"}')
+        body = self._read_json_body()
+        if body is None:
             return
-
-        body = json.loads(self.rfile.read(content_length))
         action_id = body.get('action_id', '')
 
-        note = json.loads(note_path.read_text())
+        try:
+            note = json.loads(note_path.read_text())
+        except (json.JSONDecodeError, OSError) as e:
+            self._send_json_response(500, {'error': f'Failed to read note: {e}'})
+            return
         actions = note.get('actions', [])
         target_action = next((a for a in actions if a.get('id') == action_id), None)
 
         if not target_action:
-            self.send_response(404)
-            self._send_cors_headers()
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': 'Action not found'}).encode())
+            self._send_json_response(404, {'error': 'Action not found'})
             return
 
         if target_action['type'] == 'research':
@@ -1180,26 +1177,15 @@ class ResearchHandler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps({'action_id': action_id, 'status': target_action['status']}).encode())
 
     def _handle_topic_research(self):
-        content_length = int(self.headers.get('Content-Length', 0))
-        if not content_length:
-            self.send_response(400)
-            self._send_cors_headers()
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(b'{"error": "Empty body"}')
+        body = self._read_json_body()
+        if body is None:
             return
-
-        body = json.loads(self.rfile.read(content_length))
         topic = body.get('topic', '').strip()
         context = body.get('context', '')
         article_titles = body.get('article_titles', [])
 
         if not topic:
-            self.send_response(400)
-            self._send_cors_headers()
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(b'{"error": "Missing topic"}')
+            self._send_json_response(400, {'error': 'Missing topic'})
             return
 
         request_id = f'topres_{int(time.time())}_{hash(topic) % 10000:04d}'
@@ -1220,26 +1206,15 @@ class ResearchHandler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps({'id': request_id, 'status': 'processing'}).encode())
 
     def _handle_chat(self):
-        content_length = int(self.headers.get('Content-Length', 0))
-        if not content_length:
-            self.send_response(400)
-            self._send_cors_headers()
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(b'{"error": "Empty body"}')
+        body = self._read_json_body()
+        if body is None:
             return
-
-        body = json.loads(self.rfile.read(content_length))
         question = body.get('question', '').strip()
         context = body.get('context', '')
         conversation_id = body.get('conversation_id')
 
         if not question:
-            self.send_response(400)
-            self._send_cors_headers()
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(b'{"error": "Missing question"}')
+            self._send_json_response(400, {'error': 'Missing question'})
             return
 
         print(f'[chat] Q: {question[:80]}...', flush=True)
@@ -1253,35 +1228,19 @@ class ResearchHandler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps(result).encode())
 
     def _handle_ingest(self):
-        # Verify auth token
         if INGEST_TOKEN:
             token = self.headers.get('X-Petrarca-Token', '')
             if token != INGEST_TOKEN:
-                self.send_response(401)
-                self._send_cors_headers()
-                self.send_header('Content-Type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({'error': 'Invalid or missing auth token'}).encode())
+                self._send_json_response(401, {'error': 'Invalid or missing auth token'})
                 return
 
-        content_length = int(self.headers.get('Content-Length', 0))
-        if not content_length:
-            self.send_response(400)
-            self._send_cors_headers()
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': 'Empty request body'}).encode())
+        body = self._read_json_body()
+        if body is None:
             return
-
-        body = json.loads(self.rfile.read(content_length))
 
         url = body.get('url', '').strip()
         if not url:
-            self.send_response(400)
-            self._send_cors_headers()
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': 'Missing required field: url'}).encode())
+            self._send_json_response(400, {'error': 'Missing required field: url'})
             return
 
         title = body.get('title', '')
@@ -1309,30 +1268,15 @@ class ResearchHandler(BaseHTTPRequestHandler):
         if INGEST_TOKEN:
             token = self.headers.get('X-Petrarca-Token', '')
             if token != INGEST_TOKEN:
-                self.send_response(401)
-                self._send_cors_headers()
-                self.send_header('Content-Type', 'application/json')
-                self.end_headers()
-                self.wfile.write(json.dumps({'error': 'Invalid or missing auth token'}).encode())
+                self._send_json_response(401, {'error': 'Invalid or missing auth token'})
                 return
 
-        content_length = int(self.headers.get('Content-Length', 0))
-        if not content_length:
-            self.send_response(400)
-            self._send_cors_headers()
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': 'Empty request body'}).encode())
+        body = self._read_json_body()
+        if body is None:
             return
-
-        body = json.loads(self.rfile.read(content_length))
         book_path = body.get('path', '').strip()
         if not book_path:
-            self.send_response(400)
-            self._send_cors_headers()
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': 'Missing required field: path'}).encode())
+            self._send_json_response(400, {'error': 'Missing required field: path'})
             return
 
         chapter = body.get('chapter')
@@ -1379,7 +1323,14 @@ class ResearchHandler(BaseHTTPRequestHandler):
             return
 
         content_length = int(self.headers.get('Content-Length', 0))
-        body = json.loads(self.rfile.read(content_length)) if content_length else {}
+        if content_length:
+            try:
+                body = json.loads(self.rfile.read(content_length))
+            except (json.JSONDecodeError, ValueError) as e:
+                self._send_json_response(400, {'error': f'Invalid JSON: {e}'})
+                return
+        else:
+            body = {}
 
         if self.path == '/research/explore':
             request_id = body.get('id', f'exp_{int(time.time())}')

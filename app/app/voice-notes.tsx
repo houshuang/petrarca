@@ -68,9 +68,12 @@ export default function VoiceNotesScreen() {
   }, [router]);
 
   const handleActionExecute = useCallback(async (noteId: string, actionId: string) => {
-    await executeNoteAction(noteId, actionId);
-    // Refresh to get updated action status
-    await loadNotes();
+    try {
+      await executeNoteAction(noteId, actionId);
+      await loadNotes();
+    } catch (e) {
+      console.warn('Failed to execute action:', e);
+    }
   }, [loadNotes]);
 
   const sections = groupByDate(notes);
