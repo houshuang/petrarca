@@ -457,7 +457,7 @@ if os.environ.get("GEMINI_KEY") and not os.environ.get("GEMINI_API_KEY"):
     os.environ["GEMINI_API_KEY"] = os.environ["GEMINI_KEY"]
 
 
-def _call_llm(prompt: str, model: str | None = None) -> str | None:
+def _call_llm(prompt: str, model: str | None = None, purpose: str = "") -> str | None:
     """Call LLM via litellm. Model defaults to PETRARCA_LLM_MODEL env var."""
     try:
         from litellm import completion
@@ -466,6 +466,11 @@ def _call_llm(prompt: str, model: str | None = None) -> str | None:
             messages=[{"role": "user", "content": prompt}],
             max_tokens=4096,
         )
+        try:
+            from llm_audit import audit_llm_call
+            audit_llm_call(response, script="build_articles.py", purpose=purpose)
+        except Exception:
+            pass
         return response.choices[0].message.content.strip()
     except Exception as e:
         print(f"    LLM error ({model or LLM_MODEL}): {e}", file=sys.stderr)
@@ -473,11 +478,11 @@ def _call_llm(prompt: str, model: str | None = None) -> str | None:
 
 
 # Aliases for backwards compatibility
-def _call_gemini(prompt: str, system_instruction: str = None) -> str | None:
-    return _call_llm(prompt)
+def _call_gemini(prompt: str, system_instruction: str = None, purpose: str = "") -> str | None:
+    return _call_llm(prompt, purpose=purpose)
 
-def _call_claude(prompt: str, timeout: int = 180) -> str | None:
-    return _call_llm(prompt)
+def _call_claude(prompt: str, timeout: int = 180, purpose: str = "") -> str | None:
+    return _call_llm(prompt, purpose=purpose)
 
 
 
@@ -822,7 +827,7 @@ def build_articles(candidates: list[dict], existing_articles: list[dict],
             title_hint = best["title"] or cand.get("_title", "Untitled")
             print(f"  [{i+1}/{len(candidates)}] Processing: {title_hint[:60]} ({best['word_count']} words)", file=sys.stderr)
             prompt = _build_article_prompt(best["text"], title_hint)
-            response = _call_llm(prompt)
+            response = _call_llm(prompt, purpose="article_processing")
 
             if response:
                 try:
@@ -1052,7 +1057,7 @@ def extract_concepts(articles: list[dict], dry_run: bool = False) -> list[dict]:
         print(f"  [{batch_num}/{total_batches}] Extracting concepts from {len(batch)} articles...", file=sys.stderr)
 
         prompt = _build_concept_extraction_prompt(batch)
-        response = _call_llm(prompt)
+        response = _call_llm(prompt, purpose="concept_extraction")
 
         if response:
             try:
@@ -1270,7 +1275,7 @@ def _extract_claims_for_article(article: dict, index: int, total: int) -> None:
 
     print(f"  [{index}/{total}] Extracting claims: {title[:60]}", file=sys.stderr)
     prompt = _build_atomic_decomposition_prompt(content, title, topics)
-    response = _call_llm(prompt)
+    response = _call_llm(prompt, purpose="claims_extraction")
 
     if response:
         try:

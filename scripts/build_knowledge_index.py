@@ -274,6 +274,11 @@ def generate_delta_reports(claims: list[dict], min_claims: int = 5) -> dict:
                 temperature=0.3,
                 max_tokens=300,
             )
+            try:
+                from llm_audit import audit_llm_call
+                audit_llm_call(response, script="build_knowledge_index.py", purpose="delta_report")
+            except Exception:
+                pass
             summary = response.choices[0].message.content.strip()
         except Exception as e:
             log(f"    LLM error for topic '{topic}': {e}")

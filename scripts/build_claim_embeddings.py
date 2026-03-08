@@ -72,6 +72,27 @@ def embed_claims(claims: list[dict], batch_size: int = BATCH_SIZE) -> np.ndarray
             content=batch,
         )
         all_embeddings.extend(result["embedding"])
+
+        # Audit embedding API usage (approximate token count from text length)
+        try:
+            from llm_audit import audit_llm_call
+            approx_tokens = sum(len(t.split()) * 1.3 for t in batch)
+            audit_llm_call(
+                type("FakeResponse", (), {
+                    "usage": type("Usage", (), {
+                        "prompt_tokens": int(approx_tokens),
+                        "completion_tokens": 0,
+                        "total_tokens": int(approx_tokens),
+                        "prompt_tokens_details": None,
+                    })(),
+                    "model": EMBEDDING_MODEL,
+                })(),
+                script="build_claim_embeddings.py",
+                purpose="claim_embedding",
+            )
+        except Exception:
+            pass
+
         time.sleep(0.5)  # rate limiting
 
     return np.array(all_embeddings, dtype=np.float32)
