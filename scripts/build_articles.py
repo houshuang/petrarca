@@ -301,7 +301,8 @@ IMPORTANT: Return JSON with these exact fields. Use \\n for newlines inside the 
 - "topics": array of 2-4 topic strings
 - "one_line_summary": one sentence summary"""
 
-    response = _call_llm(prompt, purpose="entity_research")
+    from gemini_llm import call_with_search
+    response = call_with_search(prompt)
     if not response:
         return None
 

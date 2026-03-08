@@ -226,8 +226,10 @@ App (Expo SDK 54):
 20. ~~**Entity deep-dive**~~ — DONE: Pipeline extracts entities (person/book/company/concept/event/place/technology). Reader highlights entity mentions with dotted underline. Long-press shows marginalia popup with synthesis + "Research more".
 21. ~~**LLM migration**~~ — DONE: All LLM calls use `google.genai` SDK via `gemini_llm.py`. litellm removed. Default model: Gemini 3.1 Flash-Lite.
 
+### Completed (Session 6)
+22. ~~**Re-run pipeline for entities/questions**~~ — DONE: Added `--enrich` flag to `build_articles.py`. All 182 articles now have entities (1,062 total) and follow-up questions (499 total).
+
 ### Immediate (next session)
-22. **Re-run pipeline for entities/questions** — Only ~7 articles have entities + follow-up questions. Need full pipeline run with `--claims` to populate all 182 articles.
 23. **Resourceful bookmark pipeline enhancement** — When a tweet mentions a book/product/article without linking, pipeline should web-search, gather info, synthesize a small article.
 
 ### Short-term (quality improvements)
