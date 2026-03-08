@@ -1,8 +1,8 @@
 # Knowledge System Implementation Status
 
-**Date**: March 8, 2026 (last updated)
-**Status**: Full corpus deployed with knowledge system, audit system live
-**Latest commits**: `766af06` (LLM audit), `a76d25d` (parallel delta reports)
+**Date**: March 8, 2026 (last updated, evening)
+**Status**: Full corpus deployed with knowledge system, reader interactions, voice notes, AI chat, research agents
+**Latest commits**: `ddc23bc` (backend voice notes + topic research agents)
 
 ---
 
@@ -43,8 +43,26 @@ App (Expo SDK 54):
 | `scripts/deploy_knowledge_index.sh` | Deploys knowledge_index.json to nginx + updates manifest hash. Supports `--local` mode. |
 | `scripts/llm_audit.py` | Thread-safe JSONL audit trail for all LLM calls. Tracks tokens, cost, cache hits per-call. CLI: `python3 scripts/llm_audit.py --days 7`. |
 | `scripts/log_server.py` | HTTP server (port 8091) for collecting app interaction logs. Accepts POST /log with JSONL body, stores as daily files in `/opt/petrarca/data/logs/`. |
+| `app/data/bookmarks.ts` | Article bookmarking with AsyncStorage persistence. Toggle, query, list bookmarked IDs. |
+| `app/components/AskAI.tsx` | Bottom-sheet AI chat modal. Conversation threading, Gemini Flash via `/chat` server endpoint. Article context (title, summary, claims, topics, truncated text) passed as context. |
+| `app/components/VoiceFeedback.tsx` | Compact voice note recording bar. Records audio via expo-av, uploads to server `/note` endpoint for async Soniox transcription. Auto-closes on send. |
+| `app/lib/chat-api.ts` | API client for research server: `askAI()`, `uploadVoiceNote()`, `spawnTopicResearch()`, `fetchNotes()`. |
+| `app/public/guide/index.html` | HTML user guide (Annotated Folio styled). Covers all 5 capture flows, 3 tabs, reader modes, knowledge system, usage patterns. Linked from Feed header. |
+| `research/user-guide.md` | Markdown source for user guide. Describes all implemented features accurately. |
 
-#### Modified Files
+#### Modified Files (Mar 8 session 2)
+
+| File | Changes |
+|------|---------|
+| `app/app/reader.tsx` | Added ⋯ menu (article info, source, Ask AI, voice note, research topic), ☆ bookmark toggle, AI chat modal, voice feedback panel. `buildAIChatContext()` builds article context string for LLM. |
+| `app/app/(tabs)/index.tsx` | Guide link in header, topic normalization for filter chips and tags, `minHeight: 44` on filter scroll. |
+| `app/app/(tabs)/topics.tsx` | "↗ Find more on [Topic]" research button in expanded topic clusters. Topic normalization for grouping/display. |
+| `app/data/interest-model.ts` | Added `bookmark_add` (weight 1.5) and `bookmark_remove` (weight 0.5) signal types. |
+| `app/data/store.ts` | Loads bookmarks on init alongside queue. |
+| `app/lib/display-utils.ts` | Added `normalizeTopic()` and `displayTopic()` shared utilities. |
+| `scripts/research-server.py` | Added `/chat` (Gemini Flash chat), `/note` (audio upload + Soniox transcription), `/research/topic` (claude -p topic research + auto-ingest), `/notes` GET. |
+
+#### Modified Files (original build)
 
 | File | Changes |
 |------|---------|
@@ -91,7 +109,7 @@ App (Expo SDK 54):
 | Component | Status | Notes |
 |-----------|--------|-------|
 | nginx content server (:8083) | ✅ Working | Serves articles.json, knowledge_index.json, manifest.json |
-| Static web app (:8084) | ✅ Deployed | Rebuilt Mar 8 with latest code (logging, audit) |
+| Static web app (:8084) | ✅ Deployed | Rebuilt Mar 8 with bookmarks, AI chat, voice notes, research agents, guide |
 | Expo native (:8082) | ✅ Running | systemd `petrarca-expo` |
 | Log server (:8091) | ✅ Running | systemd `petrarca-log`, collects app interaction logs |
 | articles.json | ✅ 171 articles | Full corpus with 2,954 atomic claims |
@@ -101,7 +119,10 @@ App (Expo SDK 54):
 | llm_audit.jsonl | ✅ Collecting | 330 records from pipeline run ($0.035 total) |
 | Python deps | ✅ All installed | numpy, litellm, google-generativeai in `/opt/petrarca/.venv` |
 | Cron pipeline | ✅ Working | `content-refresh.sh` runs full pipeline including claims + embeddings + knowledge index |
-| GEMINI_KEY | ✅ Configured | In `/opt/petrarca/.env` |
+| GEMINI_KEY | ✅ Configured | In `/opt/petrarca/.env` (also `GEMINI_API_KEY` for litellm) |
+| Voice notes storage | ✅ Working | `/opt/petrarca/data/notes/` (JSON) + `/opt/petrarca/data/audio/` (m4a) |
+| Chat conversations | ✅ Working | `/opt/petrarca/data/chats/` (JSON, per conversation_id) |
+| Research server endpoints | ✅ Updated | `/chat`, `/note`, `/research/topic`, `/notes` added to port 8090 |
 
 ### SSH Access
 - Use `ssh alif` (configured in `~/.ssh/config` → `root@46.225.75.29` via `~/.ssh/hetzner_ed25519`)
@@ -166,27 +187,36 @@ App (Expo SDK 54):
 
 ## Next Steps (Priority Order)
 
-### Immediate (before daily use)
-1. ~~**Visual testing**~~ — **DONE**: All screens verified via agent-browser.
-2. ~~**Topic normalization**~~ — **DONE**: Client-side normalization in `display-utils.ts`, deployed.
-3. **Production bundle optimization** — Remove bundled `knowledge_index.json` from JS (now 4.3MB — load from server only, cache in AsyncStorage)
+### Completed
+1. ~~**Visual testing**~~ — DONE
+2. ~~**Topic normalization**~~ — DONE
+10. ~~**Research agent button**~~ — DONE: "↗ Research [topic]" in reader menu and Topics tab, spawns `claude -p`, auto-ingests found articles
+11. ~~**Voice notes**~~ — DONE: Record in reader → upload to server → async Soniox transcription → stored as notes linked to article + topics
+
+### Immediate (next session)
+3. **Resourceful bookmark pipeline** — When a tweet mentions a book, product, or article without linking, the pipeline should search the web to find it, gather information, and synthesize a small article. This requires enhancing `build_articles.py` or `import_url.py` to detect "reference tweets" and spawn web search + synthesis. **HIGH PRIORITY per user feedback.**
+4. **Voice note visibility** — Notes are stored server-side but not yet surfaced in the app UI. Need: (a) notes list on article info in ⋯ menu, (b) notes shown in topic clusters, (c) possibly a "Notes" section in the app.
+5. **Voice note action extraction** — User expects voice notes to trigger actions like "add tag", "research this", "I'm interested in X". Need LLM post-processing of transcripts to extract intents and execute them.
+6. **Production bundle optimization** — Remove bundled `knowledge_index.json` from JS bundle
 
 ### Short-term (quality improvements)
-4. **Incremental embedding** — `build_claim_embeddings.py` currently re-embeds all claims. Should detect new claims and only embed those (append to existing .npz).
-5. **LLM judge for ambiguous range** — Claims with 0.68-0.78 cosine similarity get LLM verification (cosine overestimates in this range)
-6. **Sub-topic splitting** — Use embedding clusters for broad topics like "Sicily" (110 claims) that are too general for useful delta reports
-7. **Migrate to `google.genai`** — Replace deprecated `google.generativeai` in embedding script
+7. **Incremental embedding** — Only embed new claims, append to existing .npz
+8. **LLM judge for ambiguous range** — 0.68-0.78 cosine gets LLM verification
+9. **Sub-topic splitting** — Embedding clusters for broad topics
+10. **Migrate to `google.genai`** — Replace deprecated `google.generativeai`
 
 ### Medium-term (feature completion)
-8. **Micro-delights** — Pull-to-refresh ✦ ornament, claim reveal animations, completion flash (from design spec)
-9. **Entry row sidebar** — Design system calls for 76px sidebar with large numbers + depth dots (not yet implemented in feed)
-10. **Research agent button** — Capture ideas while reading → spawn background research agents
-11. **Voice notes** — Record → Soniox transcription → link to reading context
+11. **Micro-delights** — Pull-to-refresh ✦ ornament, claim reveal animations, completion flash
+12. **Entry row sidebar** — 76px sidebar with large numbers + depth dots
+13. **Multi-topic interest from reader** — User wants to mark interest in ALL relevant topics (not just one), and have those surface in topic views. Currently post-read card shows topics but doesn't clearly support "follow this topic".
 
 ### Longer-term
-12. **Contradiction detection** — Current corpus too harmonious (mostly tech blogs). Needs diverse sources. Experiment showed 0 real contradictions in current data.
-13. **Web clipper** — Browser extension for capturing articles (see `research/ingestion-sources.md`)
-14. **Book reader** — Section-based long-form reading with cross-book connections (see `research/book-reader-design.md`)
+14. **Contradiction detection** — Needs diverse sources
+15. **Book reader** — Section-based long-form reading
+
+### User Feedback Summary (from voice notes, Mar 8)
+- **Article `6e3cb28c19e1`** (NotebookLM learning compression): User wants to bookmark AND follow multiple topics (AI-assisted learning, learning strategies). Wants topic overview to surface recently-bookmarked articles prominently. Voice feedback should support actionable commands (add tags, research topics, express interest).
+- **Article `0708161ff37b`**: 94-second voice note recorded but transcription was client-side (old code). Note may not have been stored server-side — check logs. This was the last interaction before the backend transcription refactor.
 
 ---
 
