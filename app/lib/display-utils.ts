@@ -6,3 +6,13 @@ export function getDisplayTitle(article: { title: string; one_line_summary: stri
   }
   return article.title;
 }
+
+/** Normalize topic key: hyphens→spaces, lowercase, collapse whitespace */
+export function normalizeTopic(topic: string): string {
+  return topic.replace(/-/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+/** Display-friendly topic: "medieval-history" → "Medieval History" */
+export function displayTopic(topic: string): string {
+  return normalizeTopic(topic).replace(/\b\w/g, c => c.toUpperCase());
+}

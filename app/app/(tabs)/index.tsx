@@ -11,7 +11,7 @@ import {
 } from '../../data/store';
 import { Article } from '../../data/types';
 import { logEvent } from '../../data/logger';
-import { getDisplayTitle } from '../../lib/display-utils';
+import { getDisplayTitle, normalizeTopic, displayTopic } from '../../lib/display-utils';
 import { colors, fonts, type, spacing, layout } from '../../design/tokens';
 import { isKnowledgeReady, getArticleNovelty } from '../../data/knowledge-engine';
 import { addToQueue } from '../../data/queue';
@@ -167,7 +167,7 @@ function ArticleCard({ article, onDismiss, onQueue }: {
           </View>
           <View style={styles.topicTags}>
             {fallbackTopics.map(t => (
-              <Text key={t} style={styles.topicTagText}>{t}</Text>
+              <Text key={t} style={styles.topicTagText}>{displayTopic(t)}</Text>
             ))}
           </View>
         </View>
@@ -236,12 +236,12 @@ export default function FeedScreen() {
       .slice(0, 2);
   }, []);
 
-  // Gather all topics for filter chips
+  // Gather all topics for filter chips (normalized)
   const topicCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const a of feedArticles) {
-      const topics = (a.interest_topics || []).map(t => t.broad);
-      const fallback = topics.length > 0 ? topics : a.topics.slice(0, 2);
+      const topics = (a.interest_topics || []).map(t => normalizeTopic(t.broad));
+      const fallback = topics.length > 0 ? topics : a.topics.slice(0, 2).map(normalizeTopic);
       for (const t of fallback) {
         counts.set(t, (counts.get(t) || 0) + 1);
       }
@@ -251,12 +251,12 @@ export default function FeedScreen() {
       .slice(0, 8);
   }, [feedArticles]);
 
-  // Filter articles by active topic
+  // Filter articles by active topic (compare normalized)
   const filteredArticles = useMemo(() => {
     if (!activeTopic) return feedArticles;
     return feedArticles.filter(a => {
-      const topics = (a.interest_topics || []).map(t => t.broad);
-      const fallback = topics.length > 0 ? topics : a.topics;
+      const topics = (a.interest_topics || []).map(t => normalizeTopic(t.broad));
+      const fallback = topics.length > 0 ? topics : a.topics.map(normalizeTopic);
       return fallback.includes(activeTopic);
     });
   }, [feedArticles, activeTopic]);
@@ -319,7 +319,7 @@ export default function FeedScreen() {
           {topicCounts.map(([topic, count]) => (
             <TopicChip
               key={topic}
-              label={topic}
+              label={displayTopic(topic)}
               count={count}
               active={activeTopic === topic}
               onPress={() => {

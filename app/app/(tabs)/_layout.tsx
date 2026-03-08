@@ -28,14 +28,17 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" options={{
         title: 'Feed',
+        tabBarAccessibilityLabel: 'Feed',
         tabBarIcon: ({ focused }) => <TabBarLabel label="Feed" focused={focused} />,
       }} />
       <Tabs.Screen name="topics" options={{
         title: 'Topics',
+        tabBarAccessibilityLabel: 'Topics',
         tabBarIcon: ({ focused }) => <TabBarLabel label="Topics" focused={focused} />,
       }} />
       <Tabs.Screen name="queue" options={{
         title: 'Queue',
+        tabBarAccessibilityLabel: 'Queue',
         tabBarIcon: ({ focused }) => <TabBarLabel label="Queue" focused={focused} />,
       }} />
     </Tabs>
@@ -53,6 +56,8 @@ const tabStyles = StyleSheet.create({
   },
   labelContainer: {
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
     gap: 4,
   },
   label: {

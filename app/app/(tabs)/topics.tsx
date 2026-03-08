@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router';
 import { getArticles, getReadingState } from '../../data/store';
 import { Article } from '../../data/types';
 import { logEvent } from '../../data/logger';
-import { getDisplayTitle } from '../../lib/display-utils';
+import { getDisplayTitle, normalizeTopic, displayTopic } from '../../lib/display-utils';
 import { colors, fonts, type, spacing, layout } from '../../design/tokens';
 import { isKnowledgeReady, getDeltaReportForTopic } from '../../data/knowledge-engine';
 
@@ -55,6 +55,7 @@ function TopicCluster({ topic, articles, expanded, onToggle }: {
 }) {
   const knowledgeReady = isKnowledgeReady();
   const delta = knowledgeReady ? getDeltaReportForTopic(topic) : null;
+  const label = displayTopic(topic);
 
   // Count reading states
   const readCount = articles.filter(a => getReadingState(a.id).status === 'read').length;
@@ -73,7 +74,7 @@ function TopicCluster({ topic, articles, expanded, onToggle }: {
         }}
       >
         <View style={styles.clusterHeaderLeft}>
-          <Text style={styles.clusterName}>{topic}</Text>
+          <Text style={styles.clusterName}>{label}</Text>
           <Text style={styles.clusterCount}>
             {articles.length} article{articles.length !== 1 ? 's' : ''}
             {readCount > 0 ? ` \u00b7 ${readCount} read` : ''}
@@ -106,7 +107,7 @@ function TopicCluster({ topic, articles, expanded, onToggle }: {
             >
               <Text style={styles.sectionHead}>
                 <Text style={{ color: colors.rubric }}>{'\u2726'} </Text>
-                {"What\u2019s new in "}{topic}
+                {"What\u2019s new in "}{label}
               </Text>
               <Text style={styles.deltaSummary}>{delta.summary}</Text>
               {delta.top_claims.slice(0, 3).map((claim, i) => (
@@ -138,9 +139,10 @@ export default function TopicsScreen() {
 
     for (const article of articles) {
       const topics = article.interest_topics || [];
-      const broad = topics[0]?.broad || article.topics[0] || 'Other';
-      if (!groups.has(broad)) groups.set(broad, []);
-      groups.get(broad)!.push(article);
+      const raw = topics[0]?.broad || article.topics[0] || 'Other';
+      const key = normalizeTopic(raw);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(article);
     }
 
     return [...groups.entries()]
