@@ -192,23 +192,30 @@ App (Expo SDK 54):
 2. ~~**Topic normalization**~~ — DONE
 10. ~~**Research agent button**~~ — DONE: "↗ Research [topic]" in reader menu and Topics tab, spawns `claude -p`, auto-ingests found articles
 11. ~~**Voice notes**~~ — DONE: Record in reader → upload to server → async Soniox transcription → stored as notes linked to article + topics
+12. ~~**Resourceful bookmark pipeline**~~ — DONE: `build_articles.py --entities` detects short tweets mentioning books/people/products, uses Gemini Flash to extract entities, synthesizes mini-articles. Runs as step 3c2 in cron pipeline. Tested: 5 entity articles ingested successfully.
+13. ~~**Topic +/- buttons fixed**~~ — DONE: Per-topic signals (not all topics), visual feedback on votes
+14. ~~**Feed refresh on return from reader**~~ — DONE: `useFocusEffect` triggers recalculation of feed, read articles, and continue reading lists
+15. ~~**Robust voice recording**~~ — DONE: Saves locally first → uploads in background → retry queue for failures
+16. ~~**Long-press entity research**~~ — DONE: Long-press paragraph → action menu (Highlight / Research / Ask AI). Research opens AI chat with passage context.
+17. ~~**Feed "..." menu**~~ — DONE: Voice feedback + stats from main feed screen
+18. ~~**Inline topic chips**~~ — DONE: +/- buttons at end of article content, not just post-read modal
+19. ~~**AskAI initialQuestion**~~ — DONE: Pre-fill AI chat with questions from research context
 
 ### Immediate (next session)
-3. **Resourceful bookmark pipeline** — When a tweet mentions a book, product, or article without linking, the pipeline should search the web to find it, gather information, and synthesize a small article. This requires enhancing `build_articles.py` or `import_url.py` to detect "reference tweets" and spawn web search + synthesis. **HIGH PRIORITY per user feedback.**
 4. **Voice note visibility** — Notes are stored server-side but not yet surfaced in the app UI. Need: (a) notes list on article info in ⋯ menu, (b) notes shown in topic clusters, (c) possibly a "Notes" section in the app.
 5. **Voice note action extraction** — User expects voice notes to trigger actions like "add tag", "research this", "I'm interested in X". Need LLM post-processing of transcripts to extract intents and execute them.
-6. **Production bundle optimization** — Remove bundled `knowledge_index.json` from JS bundle
+6. **Claude CLI token expired** — `claude -p` on server returns 401. Topic research feature broken until token refreshed. Entity research works via Gemini.
+7. **Follow-up research prompts** — Generate interesting questions during article processing; clicking one spawns background AI research. Like a chat with suggested replies but multi-threaded via the inbox.
 
 ### Short-term (quality improvements)
-7. **Incremental embedding** — Only embed new claims, append to existing .npz
-8. **LLM judge for ambiguous range** — 0.68-0.78 cosine gets LLM verification
-9. **Sub-topic splitting** — Embedding clusters for broad topics
+8. **Incremental embedding** — Only embed new claims, append to existing .npz
+9. **LLM judge for ambiguous range** — 0.68-0.78 cosine gets LLM verification
 10. **Migrate to `google.genai`** — Replace deprecated `google.generativeai`
+11. **Production bundle optimization** — Remove bundled `knowledge_index.json` from JS bundle
 
 ### Medium-term (feature completion)
-11. **Micro-delights** — Pull-to-refresh ✦ ornament, claim reveal animations, completion flash
-12. **Entry row sidebar** — 76px sidebar with large numbers + depth dots
-13. **Multi-topic interest from reader** — User wants to mark interest in ALL relevant topics (not just one), and have those surface in topic views. Currently post-read card shows topics but doesn't clearly support "follow this topic".
+12. **Micro-delights** — Pull-to-refresh ✦ ornament, claim reveal animations, completion flash
+13. **Entry row sidebar** — 76px sidebar with large numbers + depth dots
 
 ### Longer-term
 14. **Contradiction detection** — Needs diverse sources
