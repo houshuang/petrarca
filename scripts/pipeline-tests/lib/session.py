@@ -283,6 +283,18 @@ def _output_to_markdown(metadata: dict, output: dict) -> str:
                 lines.append(f"  Sources: {sources}")
         lines.append("")
 
+    elif metadata["layer"] == "atomic_claims":
+        claims = output.get("claims", [])
+        lines.append("## Atomic Claims")
+        lines.append("")
+        lines.append(f"Total claims: {len(claims)}")
+        lines.append("")
+        for c in claims:
+            lines.append(f"- **[{c.get('claim_type', '?')}]** {c.get('normalized_text', '?')}")
+            if c.get("topics"):
+                lines.append(f"  Topics: {', '.join(c['topics'])}")
+        lines.append("")
+
     elif metadata["layer"] == "end_to_end":
         lines.append("## End-to-End Results")
         lines.append("")

@@ -1,0 +1,11 @@
+{
+  "title": "Is High Quality Software Worth the Cost?",
+  "url": "",
+  "hostname": "martinfowler",
+  "word_count": 2806,
+  "content_type": "tech-blog",
+  "expected_claim_count_range": [
+    5,
+    35
+  ]
+}

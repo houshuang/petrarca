@@ -777,9 +777,59 @@ def transcribe_on_server(audio_path: Path) -> str:
     return text
 
 
+def extract_note_actions(transcript: str, article_title: str, topics: list[str]) -> list[dict]:
+    """Use Gemini to extract actionable intents from a voice note transcript."""
+    import uuid
+    from gemini_llm import call_llm
+
+    prompt = f"""Analyze this voice note transcript and extract actionable intents.
+
+Voice note transcript: "{transcript}"
+Article being read: "{article_title}"
+Article topics: {', '.join(topics[:5])}
+
+Extract any of these intent types:
+- "research": User wants to look up or explore a topic further
+- "tag": User wants to tag or categorize something
+- "remember": User wants to remember a specific insight or fact
+
+Return a JSON array of actions. Each action has:
+- "type": one of "research", "tag", "remember"
+- "description": brief human-readable description
+- "topic": (for research) the topic to research
+- "tag": (for tag) the tag name
+- "note_text": (for remember) the text to remember
+
+If no clear actions are found, return an empty array.
+Return ONLY the JSON array, no other text."""
+
+    try:
+        raw = call_llm(prompt, max_tokens=1000)
+        if not raw:
+            return []
+        # Strip markdown code fences if present
+        if raw.startswith('```'):
+            raw = raw.split('\n', 1)[1] if '\n' in raw else raw[3:]
+            if raw.endswith('```'):
+                raw = raw[:-3].strip()
+
+        json_start = raw.find('[')
+        json_end = raw.rfind(']') + 1
+        if json_start >= 0 and json_end > json_start:
+            actions = json.loads(raw[json_start:json_end])
+            for action in actions:
+                action['id'] = f'act_{uuid.uuid4().hex[:8]}'
+                action['status'] = 'pending'
+            return actions
+    except Exception as e:
+        print(f'[note] Action extraction failed: {e}', flush=True)
+
+    return []
+
+
 def process_voice_note(note_id: str, audio_path: Path, article_id: str, topics: list[str],
                        article_title: str, article_context: str):
-    """Background: transcribe audio, store note, optionally spawn research."""
+    """Background: transcribe audio, store note, extract actions."""
     note_path = NOTES_DIR / f'{note_id}.json'
     note = {
         'id': note_id,
@@ -797,6 +847,13 @@ def process_voice_note(note_id: str, audio_path: Path, article_id: str, topics: 
         note['status'] = 'complete'
         note_path.write_text(json.dumps(note, indent=2))
         print(f'[note] {note_id} transcribed: {transcript[:80]}...', flush=True)
+
+        # Extract actions from transcript
+        actions = extract_note_actions(transcript, article_title, topics)
+        if actions:
+            note['actions'] = actions
+            note_path.write_text(json.dumps(note, indent=2))
+            print(f'[note] {note_id} extracted {len(actions)} actions', flush=True)
     except Exception as e:
         note['status'] = 'failed'
         note['error'] = str(e)
@@ -805,7 +862,9 @@ def process_voice_note(note_id: str, audio_path: Path, article_id: str, topics: 
 
 
 def run_topic_research(request_id: str, topic: str, context: str, article_titles: list[str]):
-    """Background: use claude to find interesting articles on a topic, then ingest them."""
+    """Background: use Gemini with search grounding to find articles on a topic, then ingest them."""
+    from gemini_llm import call_with_search
+
     result_path = RESULTS_DIR / f'{request_id}.json'
     result = {
         'id': request_id,
@@ -824,13 +883,13 @@ Context about what they've been reading:
 Articles they already have on this topic:
 {chr(10).join(f'- {t}' for t in article_titles[:10])}
 
-Find 3-5 high-quality articles, blog posts, or papers that would give the user genuinely NEW perspectives on this topic. Prioritize:
+Search the web and find 3-5 high-quality articles, blog posts, or papers that would give the user genuinely NEW perspectives on this topic. Prioritize:
 - Diverse viewpoints (not just the same take rehashed)
 - Primary sources over aggregators
 - Recent and substantive pieces
 - Content that complements rather than duplicates what they already have
 
-Return JSON:
+Return ONLY valid JSON (no markdown fences):
 {{
   "articles": [
     {{"url": "https://...", "title": "...", "why": "One sentence on why this is valuable"}}
@@ -838,15 +897,11 @@ Return JSON:
 }}"""
 
     try:
-        proc = subprocess.run(
-            ['claude', '-p', prompt],
-            capture_output=True, text=True, timeout=300,
-        )
-        if proc.returncode != 0:
+        output = call_with_search(prompt)
+        if not output:
             result['status'] = 'failed'
-            result['error'] = proc.stderr[:500]
+            result['error'] = 'No response from Gemini'
         else:
-            output = proc.stdout.strip()
             json_start = output.find('{')
             json_end = output.rfind('}') + 1
             if json_start >= 0 and json_end > json_start:
@@ -856,7 +911,7 @@ Return JSON:
                 result['completed_at'] = int(time.time() * 1000)
                 result['found_articles'] = articles
 
-                # Auto-ingest top articles
+                # Auto-ingest top articles sequentially (import_url.py uses file locking)
                 for art in articles[:3]:
                     url = art.get('url', '')
                     if url:
@@ -864,7 +919,8 @@ Return JSON:
                         run_ingest(url, art.get('title', ''), '', '', art.get('why', ''), f'research:{topic}')
             else:
                 result['status'] = 'failed'
-                result['error'] = 'Could not parse JSON'
+                result['error'] = 'Could not parse JSON from Gemini response'
+                result['raw_output'] = output[:1000]
     except Exception as e:
         result['status'] = 'failed'
         result['error'] = str(e)
@@ -876,12 +932,9 @@ Return JSON:
 # --- Chat with article context ---
 
 def handle_chat(question: str, context: str, conversation_id: str | None = None) -> dict:
-    """Synchronous chat using Gemini via litellm."""
+    """Synchronous chat using Gemini via google.genai SDK."""
     import uuid
-    try:
-        import litellm
-    except ImportError:
-        return {'answer': 'Error: litellm not installed on server', 'conversation_id': conversation_id or ''}
+    from gemini_llm import call_chat
 
     if not conversation_id:
         conversation_id = str(uuid.uuid4())[:12]
@@ -917,15 +970,9 @@ def handle_chat(question: str, context: str, conversation_id: str | None = None)
     # Add current question
     messages.append({'role': 'user', 'content': question})
 
-    try:
-        response = litellm.completion(
-            model='gemini/gemini-2.0-flash',
-            messages=messages,
-            max_tokens=1500,
-        )
-        answer = response.choices[0].message.content
-    except Exception as e:
-        answer = f'Error calling LLM: {e}'
+    answer = call_chat(messages)
+    if not answer:
+        answer = 'Error: could not get response from Gemini'
 
     # Save to history
     history.append({'role': 'user', 'content': question, 'timestamp': int(time.time())})
@@ -1070,6 +1117,67 @@ class ResearchHandler(BaseHTTPRequestHandler):
         self.send_header('Content-Type', 'application/json')
         self.end_headers()
         self.wfile.write(json.dumps({'id': note_id, 'status': 'transcribing'}).encode())
+
+    def _handle_execute_action(self):
+        """Execute an action extracted from a voice note."""
+        parts = self.path.split('/')
+        note_id = parts[2] if len(parts) >= 4 else ''
+
+        note_path = NOTES_DIR / f'{note_id}.json'
+        if not note_path.exists():
+            self.send_response(404)
+            self._send_cors_headers()
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': 'Note not found'}).encode())
+            return
+
+        content_length = int(self.headers.get('Content-Length', 0))
+        if not content_length:
+            self.send_response(400)
+            self._send_cors_headers()
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(b'{"error": "Empty body"}')
+            return
+
+        body = json.loads(self.rfile.read(content_length))
+        action_id = body.get('action_id', '')
+
+        note = json.loads(note_path.read_text())
+        actions = note.get('actions', [])
+        target_action = next((a for a in actions if a.get('id') == action_id), None)
+
+        if not target_action:
+            self.send_response(404)
+            self._send_cors_headers()
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': 'Action not found'}).encode())
+            return
+
+        if target_action['type'] == 'research':
+            topic = target_action.get('topic', target_action.get('description', ''))
+            request_id = f'topres_{int(time.time())}_{hash(topic) % 10000:04d}'
+            thread = threading.Thread(
+                target=run_topic_research,
+                args=(request_id, topic, f'From voice note on: {note.get("article_title", "")}',
+                      [note.get('article_title', '')]),
+                daemon=True,
+            )
+            thread.start()
+            target_action['status'] = 'running'
+            print(f'[action] Spawned research for: {topic}', flush=True)
+        else:
+            target_action['status'] = 'done'
+
+        note_path.write_text(json.dumps(note, indent=2))
+
+        self.send_response(200)
+        self._send_cors_headers()
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps({'action_id': action_id, 'status': target_action['status']}).encode())
 
     def _handle_topic_research(self):
         content_length = int(self.headers.get('Content-Length', 0))
@@ -1261,6 +1369,10 @@ class ResearchHandler(BaseHTTPRequestHandler):
 
         if self.path == '/research/explore-batch':
             return self._handle_explore_batch()
+
+        # /notes/{note_id}/execute-action
+        if self.path.startswith('/notes/') and self.path.endswith('/execute-action'):
+            return self._handle_execute_action()
 
         if self.path not in ('/research', '/research/explore'):
             self.send_error(404)

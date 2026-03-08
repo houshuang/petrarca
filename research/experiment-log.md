@@ -4,6 +4,162 @@
 
 ---
 
+## 2026-03-08 — Session 4+5: LLM migration + four parallel features
+
+**What**: Major infrastructure overhaul (litellm → google.genai) + four features implemented via parallel agent worktrees.
+
+### Session 4: LLM Infrastructure Migration
+- **Problem**: litellm 1.82.0 truncates output from Gemini 2.5+/3.1 models
+- **Solution**: Created `scripts/gemini_llm.py` — shared wrapper using native `google.genai` SDK
+- Default model: `gemini-3.1-flash-lite-preview` (configurable via `PETRARCA_LLM_MODEL`)
+- Migrated all callers: `build_articles.py`, `research-server.py`, `import_url.py`
+- **Topic research rewrite**: `claude -p` (broken, 60-120s, hallucinated URLs) → Gemini search grounding (2.5s, real URLs)
+- **Write contention fix**: `fcntl.flock` in `_locked_append_article()` for concurrent `import_url.py` processes
+
+### Session 5: Four Features via Parallel Agents
+Used isolated git worktrees with non-overlapping file ownership. Agent A owned pipeline+reader, Agent B owned server+new screens.
+
+1. **Entity deep-dive** (Agent A): Pipeline extracts entities (7 types) + follow-up questions in existing LLM call. Reader: `EntityHighlightText` (dotted underline on mentions), `EntityPopup` (marginalia card), `FollowUpSection` (end-of-article questions). New types: `ArticleEntity`, `FollowUpQuestion`.
+
+2. **Follow-up research prompts** (Agent A): 2-3 curiosity-driven questions generated during article processing. Displayed as "✦ FURTHER INQUIRY" section with left-bordered cards. Tap spawns topic research via `/research/topic`.
+
+3. **Voice note browser** (Agent B): New `voice-notes.tsx` screen with date-grouped notes. `VoiceNoteCard.tsx` reusable component. `voice-notes-api.ts` API module. Accessible from Feed header "Notes" link.
+
+4. **Voice note action extraction** (Agent B): `extract_note_actions()` uses Gemini to extract research/tag/remember intents from transcripts. Actions shown as tappable chips. `POST /notes/{id}/execute-action` endpoint.
+
+### Results
+- All four features implemented, merged, deployed, and verified working
+- Entity/question pipeline fields added but only ~7 articles populated (need full pipeline re-run)
+- Design reviewed via design-explorer before implementation (all 4 mockups thumbs-up)
+
+---
+
+## 2026-03-08 — Contradiction detection experiment
+
+**What**: Tested LLM-based contradiction detection between claims across articles.
+
+### Setup
+- Candidate generation: pairs with cosine 0.55-0.85, different articles, shared topics, opinion-type preference
+- 9,312 candidates found, judged top 50 with Gemini Flash
+- LLM classifies as: HARD_CONTRADICTION, SOFT_CONTRADICTION, TENSION, COMPATIBLE
+
+### Results
+- COMPATIBLE: 43 (86%), TENSION: 5 (10%), HARD_CONTRADICTION: 2 (4%)
+- **Both "hard contradictions" are false positives** — LLM stretches to find conflict between unrelated claims
+- Tensions are real but weak (e.g., "LLMs are good at looping" vs "system needed 1,197 invocations")
+- **Conclusion**: This tech blog corpus is inherently non-contradictory. Contradictions would emerge from diverse/opposing sources (competing reviews, political debate). For now, CONTRADICTS classification can be deprioritized.
+
+Script: `scripts/experiment_contradiction_detection.py`
+
+---
+
+## 2026-03-08 — Dedup, reading order, knowledge map experiments
+
+**What**: Three more experiments building on the validated embedding/scoring system.
+
+### Claim deduplication (complete-linkage)
+- **Initial attempt** (single-linkage / union-find): produced runaway transitive chains — largest cluster had 133 members with avg internal similarity 0.660. Clearly wrong.
+- **Fixed** with complete-linkage: all members must be pairwise ≥ 0.78
+- **Result**: 174 clusters, 858 → 404 unique claims (47.1% remain, 52.9% reduction)
+- Largest cluster: 26 claims (dcg articles), avg sim=0.853 — correctly grouped
+- 12 cross-article clusters, 162 intra-article clusters
+- 3,657 near-duplicate pairs in 0.72-0.78 range
+- **Insight**: Most duplication is intra-article (claims within same article that overlap)
+- Script: `scripts/experiment_claim_dedup.py`
+
+### Reading order optimization
+- Simulated 4 strategies across 47 articles: Curiosity Zone, Chronological, Random (avg 5 runs), Most Novel First
+- **Curiosity Zone wins**: reaches 50% coverage by article 24 (vs 25 chrono, 25 most-novel), 75% by article 34 (vs 37 chrono, 35 most-novel)
+- Curiosity Zone finds optimal article 5 at step 5 (AGENTS.md) — 64% novel with high context bonus from related claims already read
+- 11.4% wasted reading (familiar content consumed) — comparable across strategies
+- **Key pattern**: Curiosity Zone front-loads interconnected articles, reads isolated articles last
+- HTML visualization: `data/reading_order_curves.html`, Script: `scripts/experiment_reading_order.py`
+
+### Interactive knowledge map
+- D3.js force-directed graph of 47 articles connected by 393 edges (≥3 shared claims)
+- UMAP 2D layout from article-level embeddings (average of claim embeddings)
+- Categories: 17 AI/Agents, 5 History, 5 Literature, 3 Dev Tools, 5 Knowledge, 12 Other
+- Hover shows article title + top claims, search and topic filtering
+- Annotated Folio styled (parchment, rubric, Cormorant Garamond)
+- HTML: `data/knowledge_map.html`, Script: `scripts/experiment_knowledge_map.py`
+
+---
+
+## 2026-03-08 — Algorithm experiments: NLI, clustering, decay, curiosity
+
+**What**: Ran 5 experiments to test algorithms from the research literature against the 47-article/858-claim corpus. Full results in `research/experiment-results-report.md`.
+
+### Nomic vs Gemini embeddings
+- Nomic-embed-text-v1.5 (768 dim, local) beats Gemini embedding-001 (3072 dim, API)
+- 4x smaller, 10x faster, wider discriminable range (0.68-0.93 vs 0.62-0.73)
+- **Decision**: Nomic is default going forward. Scripts updated.
+
+### NLI entailment (LLM judge)
+- 32 claim pairs judged across 4 similarity buckets
+- 75% agreement with cosine-only classification
+- **Key finding**: Cosine overestimates in 0.65-0.80 range — LLM says UNRELATED where cosine says EXTENDS (4 cases)
+- Below 0.65: perfect agreement, no LLM needed. Above 0.80: mostly agree.
+- **Recommendation**: Add LLM judge only in 0.68-0.78 Nomic range (~5% of pairs)
+
+### Topic clustering (BERTopic-style)
+- UMAP + HDBSCAN found 59 clusters from 858 claims (7.8% noise)
+- ~75 LLM topics map cleanly (purity > 0.6), ~6 broad topics fragment naturally (ai-agents → 9 clusters)
+- No emergent topics found — LLM topic assignment is comprehensive
+- **Recommendation**: Use clusters for sub-topic splitting on broad topics
+
+### FSRS knowledge decay
+- Initial BASE_STABILITY=5 days was far too aggressive (83% forgotten after 7 days!)
+- Tuned to BASE_STABILITY=30 days — realistic for reading comprehension
+- Engagement multipliers: skim(0.3x=9d), read(1x=30d), highlight(2x=60d), annotate(4x=120d)
+- Spaced re-encounter multiplies stability by 2.5x (natural spaced repetition)
+- **New classification**: PARTIALLY_KNOWN (R between 0.3-0.5) — "seen before, details fuzzy"
+
+### Curiosity zone scoring
+- Score peaks at ~70% novelty (Gaussian) + context bonus (some KNOWN) + bridge bonus (EXTENDS)
+- **Correlation with naive novelty: 0.051** — fundamentally different ranking
+- Promotes articles adjacent to existing knowledge (history article #31→#7)
+- Demotes completely disconnected 100%-novel articles (#10→#16)
+- **Recommendation**: Replace discovery_bonus in feed ranking with curiosity zone
+
+### Scripts created
+- `scripts/experiment_nli_entailment.py`
+- `scripts/experiment_topic_clustering.py`
+- `scripts/experiment_knowledge_decay.py`
+- `scripts/experiment_curiosity_zone.py`
+
+---
+
+## 2026-03-08 — End-to-end novelty system validation
+
+**What**: Built and validated the complete novelty-aware reading system pipeline: atomic claims → embeddings → knowledge tracking → delta reports → reading simulations. All 47 articles processed, 858 claims extracted and embedded.
+
+### Claim extraction quality
+- Added `_fix_pronoun_starts()` post-processing to `build_articles.py` — deterministic rewrites for "It is recommended..." → "Deploying X is recommended..." patterns
+- Increased test runner `max_tokens` from 4096 → 8192 (fixed parse errors on long articles)
+- Calibrated evaluator tolerances: self_contained allows 1 or 5%, compound allows 30%
+- **Final result: 12/12 fixtures pass all 7/7 structural checks**
+
+### Embedding pipeline
+- Built `scripts/build_claim_embeddings.py` using `gemini-embedding-001` (3072 dimensions)
+- **Key finding**: Gemini embeddings produce much lower cosine similarities than sentence-transformers. Related claims peak at ~0.73 vs ~0.90 typical.
+- Calibrated thresholds: KNOWN ≥ 0.72, EXTENDS ≥ 0.62
+- Cross-article similarity: 1 near-duplicate (0.90), 35 pairs > 0.80, 195 pairs > 0.75
+
+### Reading simulations
+- Built `scripts/simulate_reading.py` with 3 scenarios (tech, broad, sequential)
+- Sequential scenario shows correct novelty decay: 100% → 72.7% → 58.8% → 23.1% as user reads related articles
+- Delta reports correctly identify topic coverage: claude-code 91.7% after tech reading vs knowledge-management 8.6%
+- HTML report generated at `data/reading_simulation_report.html`
+
+### Conclusions
+- The system works end-to-end and produces useful novelty signals
+- KNOWN detection is directionally correct but threshold-sensitive
+- Should test Nomic-embed-text-v1.5 for wider similarity distribution
+- CONTRADICTS detection not yet implemented (needs LLM judge)
+- Full report: `research/overnight-system-report.md`
+
+---
+
 ## 2026-03-07 — Pipeline testing framework + clean_markdown hardening
 
 **What**: Built a comprehensive testing framework for the article processing pipeline and used it to systematically harden `clean_markdown()` from ~15 patterns to 60+, achieving 25/25 fixture pass rate across diverse content types.

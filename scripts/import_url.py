@@ -33,6 +33,7 @@ from build_articles import (
     _save_json,
     _load_json,
     _split_into_sections,
+    _locked_append_article,
 )
 
 # ---------------------------------------------------------------------------
@@ -478,19 +479,16 @@ def main():
             content_text=pre_content if i == 0 else None,
         )
         for article in new_articles:
+            # Use locked append to prevent write contention from concurrent processes
+            _locked_append_article(article, ARTICLES_PATH, APP_DATA_DIR / "articles.json")
             articles.append(article)
             all_new.append(article)
-            # Save incrementally
-            _save_json(articles, ARTICLES_PATH)
 
     if not all_new:
         print(f"\nNo new articles imported.", file=sys.stderr)
         return
 
-    # Save to both data/ and app/data/
-    _save_json(articles, ARTICLES_PATH)
-    _save_json(articles, APP_DATA_DIR / "articles.json")
-    print(f"\n  Saved {len(articles)} articles", file=sys.stderr)
+    print(f"\n  Saved {len(all_new)} new articles (total now: {len(articles)}+)", file=sys.stderr)
 
     # Extract concepts for new articles
     if not args.no_concepts:

@@ -8,8 +8,8 @@ import AskAI from '../components/AskAI';
 import VoiceFeedback from '../components/VoiceFeedback';
 import { spawnTopicResearch } from '../lib/chat-api';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { getArticleById, getReadingState, updateReadingState, getHighlightBlockIndices, addHighlight, removeHighlight, markArticleRead, recordInterestSignal, recordTopicInterestSignal } from '../data/store';
-import { Article, InterestTopic } from '../data/types';
+import { getArticleById, getReadingState, updateReadingState, getHighlightBlockIndices, addHighlight, removeHighlight, markArticleRead, recordInterestSignal } from '../data/store';
+import { Article, ArticleEntity, FollowUpQuestion, InterestTopic } from '../data/types';
 import * as Haptics from 'expo-haptics';
 import { logEvent } from '../data/logger';
 import { isSectionValid, parseInlineMarkdown, splitMarkdownBlocks, parseMarkdownBlock } from '../lib/markdown-utils';
@@ -80,103 +80,35 @@ function PostReadInterestCard({ topics, onChipSignal, onClose }: {
   onChipSignal: (topic: InterestTopic, positive: boolean) => void;
   onClose: () => void;
 }) {
-  const [votes, setVotes] = useState<Record<string, 'positive' | 'negative'>>({});
-
-  const handleVote = (topic: InterestTopic, positive: boolean) => {
-    const key = topic.specific;
-    const currentVote = votes[key];
-    const newPositive = positive ? 'positive' : 'negative';
-    // Toggle off if same vote, otherwise set
-    if (currentVote === newPositive) {
-      setVotes(prev => { const next = { ...prev }; delete next[key]; return next; });
-    } else {
-      setVotes(prev => ({ ...prev, [key]: newPositive }));
-    }
-    onChipSignal(topic, positive);
-  };
-
   return (
     <View style={styles.interestCardOverlay}>
       <View style={styles.interestCard}>
         <Text style={styles.interestCardTitle}>Topics in this article</Text>
         <Text style={styles.interestCardSubtitle}>Tap + or - to shape your feed</Text>
         <View style={styles.interestChips}>
-          {topics.map((t, i) => {
-            const vote = votes[t.specific];
-            return (
-              <View key={i} style={styles.interestChipRow}>
-                <Pressable
-                  style={[styles.interestChipMinus, vote === 'negative' && styles.interestChipVotedNeg]}
-                  onPress={() => handleVote(t, false)}
-                >
-                  <Text style={[styles.interestChipButtonText, vote === 'negative' && { color: colors.parchment }]}>-</Text>
-                </Pressable>
-                <View style={styles.interestChipLabel}>
-                  <Text style={styles.interestChipText}>{t.entity || t.specific}</Text>
-                </View>
-                <Pressable
-                  style={[styles.interestChipPlus, vote === 'positive' && styles.interestChipVotedPos]}
-                  onPress={() => handleVote(t, true)}
-                >
-                  <Text style={[styles.interestChipButtonText, vote === 'positive' && { color: colors.parchment }]}>+</Text>
-                </Pressable>
+          {topics.map((t, i) => (
+            <View key={i} style={styles.interestChipRow}>
+              <Pressable
+                style={styles.interestChipMinus}
+                onPress={() => onChipSignal(t, false)}
+              >
+                <Text style={styles.interestChipButtonText}>-</Text>
+              </Pressable>
+              <View style={styles.interestChipLabel}>
+                <Text style={styles.interestChipText}>{t.entity || t.specific}</Text>
               </View>
-            );
-          })}
+              <Pressable
+                style={styles.interestChipPlus}
+                onPress={() => onChipSignal(t, true)}
+              >
+                <Text style={styles.interestChipButtonText}>+</Text>
+              </Pressable>
+            </View>
+          ))}
         </View>
         <Pressable style={styles.interestCloseButton} onPress={onClose}>
           <Text style={styles.interestCloseText}>Close</Text>
         </Pressable>
-      </View>
-    </View>
-  );
-}
-
-function InlineTopicChips({ topics, onChipSignal }: {
-  topics: InterestTopic[];
-  onChipSignal: (topic: InterestTopic, positive: boolean) => void;
-}) {
-  const [votes, setVotes] = useState<Record<string, 'positive' | 'negative'>>({});
-
-  const handleVote = (topic: InterestTopic, positive: boolean) => {
-    const key = topic.specific;
-    const currentVote = votes[key];
-    const newVal = positive ? 'positive' : 'negative';
-    if (currentVote === newVal) {
-      setVotes(prev => { const next = { ...prev }; delete next[key]; return next; });
-    } else {
-      setVotes(prev => ({ ...prev, [key]: newVal }));
-    }
-    onChipSignal(topic, positive);
-  };
-
-  return (
-    <View style={styles.inlineTopicsSection}>
-      <Text style={styles.inlineTopicsTitle}>
-        <Text style={{ color: colors.rubric }}>{'\u2726'} </Text>
-        Topics
-      </Text>
-      <View style={styles.inlineTopicsGrid}>
-        {topics.map((t, i) => {
-          const vote = votes[t.specific];
-          return (
-            <View key={i} style={styles.inlineTopicRow}>
-              <Pressable
-                style={[styles.inlineTopicBtn, vote === 'negative' && { backgroundColor: colors.rubric }]}
-                onPress={() => handleVote(t, false)}
-              >
-                <Text style={[styles.inlineTopicBtnText, vote === 'negative' && { color: colors.parchment }]}>−</Text>
-              </Pressable>
-              <Text style={styles.inlineTopicLabel} numberOfLines={1}>{t.entity || t.specific}</Text>
-              <Pressable
-                style={[styles.inlineTopicBtn, vote === 'positive' && { backgroundColor: colors.claimNew }]}
-                onPress={() => handleVote(t, true)}
-              >
-                <Text style={[styles.inlineTopicBtnText, vote === 'positive' && { color: colors.parchment }]}>+</Text>
-              </Pressable>
-            </View>
-          );
-        })}
       </View>
     </View>
   );
@@ -280,14 +212,164 @@ function CollapsedBar({ blockCount, onExpand }: {
   );
 }
 
+// --- Entity Highlight Text ---
+
+function EntityHighlightText({
+  children,
+  entities,
+  onEntityLongPress,
+}: {
+  children: (string | React.ReactElement)[];
+  entities: ArticleEntity[];
+  onEntityLongPress: (entity: ArticleEntity) => void;
+}) {
+  if (!entities || entities.length === 0) return <>{children}</>;
+
+  // Collect all mention strings, sorted longest-first to avoid partial matches
+  const mentionMap = new Map<string, ArticleEntity>();
+  for (const ent of entities) {
+    for (const m of ent.mentions) {
+      mentionMap.set(m.toLowerCase(), ent);
+    }
+  }
+  const mentionKeys = Array.from(mentionMap.keys()).sort((a, b) => b.length - a.length);
+  if (mentionKeys.length === 0) return <>{children}</>;
+
+  // Build a case-insensitive regex that matches any mention
+  const escaped = mentionKeys.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const pattern = new RegExp(`(${escaped.join('|')})`, 'gi');
+
+  return (
+    <>
+      {children.map((child, ci) => {
+        if (typeof child !== 'string') return child;
+        const parts = child.split(pattern);
+        if (parts.length === 1) return child;
+        return parts.map((part, pi) => {
+          const entity = mentionMap.get(part.toLowerCase());
+          if (entity) {
+            return (
+              <Text
+                key={`ent-${ci}-${pi}`}
+                style={entityStyles.entityMention}
+                onLongPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  onEntityLongPress(entity);
+                }}
+              >
+                {part}
+              </Text>
+            );
+          }
+          return part;
+        });
+      })}
+    </>
+  );
+}
+
+// --- Entity Popup ---
+
+function EntityPopup({
+  entity,
+  articleTitle,
+  onResearch,
+  onDismiss,
+}: {
+  entity: ArticleEntity;
+  articleTitle: string;
+  onResearch: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <View style={entityStyles.popupContainer}>
+      <Text style={entityStyles.popupType}>{entity.type.toUpperCase()}</Text>
+      <Text style={entityStyles.popupName}>{entity.name}</Text>
+      <Text style={entityStyles.popupSynthesis}>{entity.synthesis}</Text>
+      <View style={entityStyles.popupActions}>
+        <Pressable
+          style={entityStyles.popupAction}
+          onPress={() => {
+            logEvent('entity_research_tap', { entity: entity.name, article_title: articleTitle });
+            onResearch();
+          }}
+        >
+          <Text style={entityStyles.popupActionResearch}>{'Research more \u2197'}</Text>
+        </Pressable>
+        <Pressable style={entityStyles.popupAction} onPress={onDismiss}>
+          <Text style={entityStyles.popupActionDismiss}>Dismiss</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+// --- Follow-up Research Prompts ---
+
+function FollowUpSection({
+  questions,
+  articleTitle,
+  articleId,
+  articleSummary,
+}: {
+  questions: FollowUpQuestion[];
+  articleTitle: string;
+  articleId: string;
+  articleSummary: string;
+}) {
+  const [launchedIndices, setLaunchedIndices] = useState<Set<number>>(new Set());
+
+  if (!questions || questions.length === 0) return null;
+
+  const handleResearch = async (q: FollowUpQuestion, index: number) => {
+    logEvent('research_prompt_tap', { article_id: articleId, question: q.question });
+    try {
+      await spawnTopicResearch(
+        q.question,
+        `From article: ${articleTitle}\nConnects to: ${q.connects_to}\nSummary: ${articleSummary}`,
+        [articleTitle],
+      );
+      setLaunchedIndices(prev => new Set(prev).add(index));
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      logEvent('research_prompt_launched', { article_id: articleId, question: q.question, connects_to: q.connects_to });
+    } catch (e) {
+      logEvent('research_prompt_error', { article_id: articleId, error: String(e) });
+    }
+  };
+
+  return (
+    <View style={followUpStyles.container}>
+      <Text style={followUpStyles.sectionTitle}>{'\u2726 FURTHER INQUIRY'}</Text>
+      {questions.map((q, i) => (
+        <View key={i} style={followUpStyles.questionCard}>
+          <Text style={followUpStyles.questionText}>{q.question}</Text>
+          <Text style={followUpStyles.connectsTo}>{q.connects_to}</Text>
+          {launchedIndices.has(i) ? (
+            <Text style={followUpStyles.launchedText}>{'\u2713 Research launched'}</Text>
+          ) : (
+            <Pressable
+              style={followUpStyles.researchButton}
+              onPress={() => handleResearch(q, i)}
+            >
+              <Text style={followUpStyles.researchButtonText}>{'Research this \u2197'}</Text>
+            </Pressable>
+          )}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 // --- Markdown renderer ---
 
-function MarkdownText({ content, highlightedBlocks, onBlockLongPress, blockDimming, readingMode = 'full' }: {
+function MarkdownText({ content, highlightedBlocks, onBlockLongPress, blockDimming, readingMode = 'full', entities, onEntityLongPress }: {
   content: string;
   highlightedBlocks?: Set<number>;
   onBlockLongPress?: (blockIndex: number, text: string) => void;
   blockDimming?: Map<number, { opacity: number; novelty: string }> | null;
   readingMode?: ReadingMode;
+  entities?: ArticleEntity[];
+  onEntityLongPress?: (entity: ArticleEntity) => void;
 }) {
   const [expandedCollapsedRanges, setExpandedCollapsedRanges] = useState(new Set<number>());
 
@@ -432,16 +514,24 @@ function MarkdownText({ content, highlightedBlocks, onBlockLongPress, blockDimmi
           </View>
         );
 
-      default:
+      default: {
+        const inlineContent = renderInlineMarkdown(block.content);
         return (
           <Pressable
             key={i}
             onLongPress={onBlockLongPress ? () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onBlockLongPress(i, block.content); } : undefined}
             style={[isHighlighted ? styles.paragraphHighlight : undefined, opacityStyle]}
           >
-            <Text style={styles.markdownText}>{renderInlineMarkdown(block.content)}</Text>
+            <Text style={styles.markdownText}>
+              {entities && entities.length > 0 && onEntityLongPress ? (
+                <EntityHighlightText entities={entities} onEntityLongPress={onEntityLongPress}>
+                  {inlineContent}
+                </EntityHighlightText>
+              ) : inlineContent}
+            </Text>
           </Pressable>
         );
+      }
     }
   }
 
@@ -532,7 +622,7 @@ export default function ReaderScreen() {
   const [showMenu, setShowMenu] = useState(false);
   const [showAIChat, setShowAIChat] = useState(false);
   const [showVoiceFeedback, setShowVoiceFeedback] = useState(false);
-  const [longPressContext, setLongPressContext] = useState<{ blockIndex: number; text: string } | null>(null);
+  const [activeEntity, setActiveEntity] = useState<ArticleEntity | null>(null);
   const contentHeight = useRef(0);
   const viewportHeight = useRef(0);
 
@@ -643,16 +733,9 @@ export default function ReaderScreen() {
     }
   }, [article]);
 
-  // Long-press handler — shows action menu
+  // Highlight handler
   const handleBlockLongPress = useCallback((blockIndex: number, text: string) => {
     if (!article) return;
-    setLongPressContext({ blockIndex, text });
-    logEvent('reader_long_press', { article_id: article.id, block_index: blockIndex });
-  }, [article]);
-
-  const handleHighlightBlock = useCallback(() => {
-    if (!article || !longPressContext) return;
-    const { blockIndex, text } = longPressContext;
     const indices = getHighlightBlockIndices(article.id);
     if (indices.has(blockIndex)) {
       removeHighlight(article.id, blockIndex);
@@ -675,19 +758,29 @@ export default function ReaderScreen() {
       recordInterestSignal('highlight_paragraph', article.id);
       logEvent('reader_highlight_add', { article_id: article.id, block_index: blockIndex, text_preview: text.slice(0, 80) });
     }
-    setLongPressContext(null);
-  }, [article, longPressContext]);
+  }, [article]);
 
-  const [researchQuestion, setResearchQuestion] = useState<string | undefined>();
+  // Entity long-press handler
+  const handleEntityLongPress = useCallback((entity: ArticleEntity) => {
+    setActiveEntity(entity);
+    logEvent('entity_popup_open', { article_id: article?.id, entity: entity.name, entity_type: entity.type });
+  }, [article]);
 
-  const handleResearchPassage = useCallback(() => {
-    if (!article || !longPressContext) return;
-    const question = `The user is reading this passage and wants to learn more:\n\n"${longPressContext.text.slice(0, 800)}"\n\nIdentify the most interesting entity, concept, or reference mentioned (person, book, company, theory, etc.) and provide a concise but informative summary. Suggest 2-3 follow-up questions.`;
-    setResearchQuestion(question);
-    setLongPressContext(null);
-    setShowAIChat(true);
-    logEvent('research_passage', { article_id: article.id, text_preview: longPressContext.text.slice(0, 80) });
-  }, [article, longPressContext]);
+  const handleEntityResearch = useCallback(async () => {
+    if (!article || !activeEntity) return;
+    try {
+      await spawnTopicResearch(
+        activeEntity.name,
+        `Entity: ${activeEntity.name} (${activeEntity.type})\n${activeEntity.synthesis}\nFrom article: ${article.title}`,
+        [article.title],
+      );
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      logEvent('entity_research_launched', { article_id: article.id, entity: activeEntity.name });
+    } catch (e) {
+      logEvent('entity_research_error', { article_id: article.id, entity: activeEntity.name, error: String(e) });
+    }
+    setActiveEntity(null);
+  }, [article, activeEntity]);
 
   // Done handler
   const handleDone = useCallback(() => {
@@ -710,7 +803,7 @@ export default function ReaderScreen() {
   const handleChipSignal = useCallback((topic: InterestTopic, positive: boolean) => {
     if (!article) return;
     const action = positive ? 'interest_chip_positive' : 'interest_chip_negative';
-    recordTopicInterestSignal(action, topic);
+    recordInterestSignal(action, article.id);
     logEvent('interest_chip_tap', { article_id: article.id, topic: topic.specific, positive });
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, [article]);
@@ -936,15 +1029,30 @@ export default function ReaderScreen() {
           onBlockLongPress={handleBlockLongPress}
           blockDimming={blockDimming}
           readingMode={readingMode}
+          entities={article.entities}
+          onEntityLongPress={handleEntityLongPress}
         />
 
-        {/* Inline topic interest chips at end of article */}
-        {article.interest_topics && article.interest_topics.length > 0 && (
-          <InlineTopicChips
-            topics={article.interest_topics.slice(0, 6)}
-            onChipSignal={handleChipSignal}
+        {/* Inline entity popup */}
+        {activeEntity && (
+          <EntityPopup
+            entity={activeEntity}
+            articleTitle={article.title}
+            onResearch={handleEntityResearch}
+            onDismiss={() => {
+              logEvent('entity_popup_dismiss', { article_id: article.id, entity: activeEntity.name });
+              setActiveEntity(null);
+            }}
           />
         )}
+
+        {/* Follow-up research prompts */}
+        <FollowUpSection
+          questions={article.follow_up_questions || []}
+          articleTitle={article.title}
+          articleId={article.id}
+          articleSummary={article.one_line_summary}
+        />
 
         {/* Bottom spacer for Done button */}
         <View style={{ height: 100 }} />
@@ -966,44 +1074,12 @@ export default function ReaderScreen() {
         />
       )}
 
-      {/* Long-press action menu */}
-      {longPressContext && (
-        <View style={styles.longPressOverlay}>
-          <Pressable style={styles.longPressBackdrop} onPress={() => setLongPressContext(null)} />
-          <View style={styles.longPressMenu}>
-            <Text style={styles.longPressPreview} numberOfLines={2}>
-              {longPressContext.text.slice(0, 120)}...
-            </Text>
-            <View style={styles.longPressActions}>
-              <Pressable style={styles.longPressAction} onPress={handleHighlightBlock}>
-                <Text style={styles.longPressActionText}>
-                  {highlightedBlocks.has(longPressContext.blockIndex) ? 'Unhighlight' : 'Highlight'}
-                </Text>
-              </Pressable>
-              <Pressable style={styles.longPressAction} onPress={handleResearchPassage}>
-                <Text style={[styles.longPressActionText, { color: colors.claimNew }]}>Research</Text>
-              </Pressable>
-              <Pressable style={styles.longPressAction} onPress={() => {
-                setLongPressContext(null);
-                setShowAIChat(true);
-              }}>
-                <Text style={[styles.longPressActionText, { color: colors.rubric }]}>Ask AI</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      )}
-
       {/* AI Chat */}
       {showAIChat && (
         <AskAI
           articleId={article.id}
           context={buildAIChatContext(article)}
-          initialQuestion={researchQuestion}
-          onClose={() => {
-            setShowAIChat(false);
-            setResearchQuestion(undefined);
-          }}
+          onClose={() => setShowAIChat(false)}
         />
       )}
 
@@ -1498,9 +1574,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  interestChipVotedNeg: {
-    backgroundColor: colors.rubric,
-  },
   interestChipPlus: {
     width: 36,
     height: 36,
@@ -1508,9 +1581,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(60, 120, 60, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  interestChipVotedPos: {
-    backgroundColor: colors.claimNew,
   },
   interestChipButtonText: {
     fontFamily: fonts.uiMedium,
@@ -1542,90 +1612,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 
-  // Long-press action menu
-  longPressOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'flex-end',
-    zIndex: 50,
-  },
-  longPressBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.2)',
-  },
-  longPressMenu: {
-    backgroundColor: colors.parchment,
-    borderTopWidth: 1,
-    borderTopColor: colors.rule,
-    paddingHorizontal: layout.screenPadding,
-    paddingVertical: 16,
-  },
-  longPressPreview: {
-    fontFamily: fonts.reading,
-    fontSize: 13,
-    color: colors.textSecondary,
-    lineHeight: 18,
-    marginBottom: 12,
-  },
-  longPressActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  longPressAction: {
-    backgroundColor: colors.parchmentDark,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    minWidth: 80,
-    alignItems: 'center',
-  },
-  longPressActionText: {
-    fontFamily: fonts.uiMedium,
-    fontSize: 14,
-    color: colors.ink,
-    ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}),
-  },
-  // Inline topic chips
-  inlineTopicsSection: {
-    marginTop: 24,
-    paddingTop: 16,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.rule,
-  },
-  inlineTopicsTitle: {
-    ...type.sectionHead,
-    color: colors.rubric,
-    marginBottom: 12,
-  },
-  inlineTopicsGrid: {
-    gap: 8,
-  },
-  inlineTopicRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  inlineTopicBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: colors.parchmentDark,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  inlineTopicBtnText: {
-    fontFamily: fonts.uiMedium,
-    fontSize: 16,
-    color: colors.ink,
-    ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}),
-  },
-  inlineTopicLabel: {
-    flex: 1,
-    fontFamily: fonts.bodyItalic,
-    fontSize: 14,
-    color: colors.textBody,
-    ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}),
-  },
-
   // Error state
   errorText: {
     ...type.screenTitle,
@@ -1638,5 +1624,112 @@ const styles = StyleSheet.create({
     color: colors.rubric,
     textAlign: 'center',
     marginTop: 12,
+  },
+});
+
+const entityStyles = StyleSheet.create({
+  entityMention: {
+    textDecorationLine: 'underline',
+    textDecorationStyle: 'dotted',
+    textDecorationColor: colors.textMuted,
+  },
+  popupContainer: {
+    backgroundColor: colors.parchmentDark,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.rubric,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 16,
+    marginTop: 4,
+  },
+  popupType: {
+    fontFamily: fonts.ui,
+    fontSize: 9,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    color: colors.textMuted,
+    marginBottom: 4,
+  },
+  popupName: {
+    fontFamily: fonts.body,
+    fontSize: 16,
+    color: colors.ink,
+    marginBottom: 6,
+  },
+  popupSynthesis: {
+    fontFamily: fonts.reading,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.textSecondary,
+    marginBottom: 10,
+  },
+  popupActions: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  popupAction: {
+    paddingVertical: 4,
+    minHeight: layout.touchTarget,
+    justifyContent: 'center',
+  },
+  popupActionResearch: {
+    fontFamily: fonts.ui,
+    fontSize: 11,
+    color: colors.rubric,
+  },
+  popupActionDismiss: {
+    fontFamily: fonts.ui,
+    fontSize: 11,
+    color: colors.textMuted,
+  },
+});
+
+const followUpStyles = StyleSheet.create({
+  container: {
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  sectionTitle: {
+    ...type.sectionHead,
+    color: colors.rubric,
+    marginBottom: 12,
+  },
+  questionCard: {
+    borderLeftWidth: 2,
+    borderLeftColor: colors.rule,
+    paddingLeft: 14,
+    marginBottom: 16,
+  },
+  questionText: {
+    fontFamily: fonts.readingItalic,
+    fontSize: 15,
+    lineHeight: 22,
+    color: colors.textBody,
+    marginBottom: 4,
+    ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}),
+  },
+  connectsTo: {
+    fontFamily: fonts.ui,
+    fontSize: 10,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  researchButton: {
+    paddingVertical: 4,
+    alignSelf: 'flex-start',
+    minHeight: layout.touchTarget,
+    justifyContent: 'center',
+  },
+  researchButtonText: {
+    fontFamily: fonts.ui,
+    fontSize: 11,
+    color: colors.rubric,
+  },
+  launchedText: {
+    fontFamily: fonts.ui,
+    fontSize: 11,
+    color: colors.claimNew,
   },
 });

@@ -1,3 +1,15 @@
+export interface ArticleEntity {
+  name: string;
+  type: 'person' | 'book' | 'company' | 'concept' | 'place' | 'event' | 'technology';
+  synthesis: string;
+  mentions: string[];
+}
+
+export interface FollowUpQuestion {
+  question: string;
+  connects_to: string;
+}
+
 export interface Article {
   id: string;
   title: string;
@@ -23,6 +35,8 @@ export interface Article {
   exploration_order?: number;
   interest_topics?: InterestTopic[];
   novelty_claims?: NoveltyClaim[];
+  entities?: ArticleEntity[];
+  follow_up_questions?: FollowUpQuestion[];
 }
 
 export interface ArticleSection {

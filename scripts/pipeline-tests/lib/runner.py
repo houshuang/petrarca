@@ -49,7 +49,7 @@ def call_llm_instrumented(prompt: str, model: str | None = None,
         resp = completion(
             model=model,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=4096,
+            max_tokens=8192,
             timeout=timeout,
         )
         duration_ms = int((time.time() - start) * 1000)
@@ -253,6 +253,82 @@ def run_entity_concepts(fixture_name: str, model: str | None = None) -> dict:
             session["status"] = "parse_error"
             save_session(session, {"raw_response": llm_result["response"]})
             return {**session, "error": "Failed to parse concepts from LLM response"}
+    else:
+        session["status"] = "llm_error"
+        save_session(session, {"error": llm_result.get("error", "Unknown error")})
+        return {**session, "error": llm_result.get("error")}
+
+
+# ---------- Layer: atomic_claims ----------
+
+def run_atomic_claims(fixture_name: str, model: str | None = None) -> dict:
+    """Run atomic claim extraction on a fixture. Returns session metadata."""
+    from build_articles import _build_atomic_decomposition_prompt
+    from extract_entity_concepts import parse_json_response
+
+    check_api_keys(model)
+
+    fixture = load_fixture("atomic_claims", fixture_name)
+    input_text = fixture["input_text"]
+    title = fixture["metadata"].get("title", fixture_name)
+    topics = fixture["metadata"].get("topics", [])
+
+    session = create_session("atomic_claims", fixture_name, model=model)
+    start = time.time()
+
+    prompt = _build_atomic_decomposition_prompt(input_text, title, topics)
+    llm_result = call_llm_instrumented(prompt, model=model)
+
+    session["duration_ms"] = int((time.time() - start) * 1000)
+    session["token_usage"] = llm_result.get("token_usage")
+    session["model"] = llm_result["model"]
+
+    if llm_result.get("response"):
+        # Parse: strip markdown code fences if present
+        raw = llm_result["response"]
+        cleaned = raw
+        if cleaned.startswith("```"):
+            import re as _re
+            cleaned = _re.sub(r"^```(?:json)?\n?", "", cleaned)
+            cleaned = _re.sub(r"\n?```$", "", cleaned)
+
+        parsed = parse_json_response(cleaned)
+        if parsed and isinstance(parsed, list):
+            from build_articles import _fix_pronoun_starts, _claim_id
+            claims = []
+            for raw_claim in parsed:
+                normalized = raw_claim.get("normalized_text", "").strip()
+                if not normalized:
+                    continue
+                claims.append({
+                    "normalized_text": normalized,
+                    "original_text": raw_claim.get("original_text", "").strip(),
+                    "claim_type": raw_claim.get("claim_type", "factual"),
+                    "source_paragraphs": raw_claim.get("source_paragraphs", []),
+                    "topics": raw_claim.get("topics", []),
+                })
+            claims = _fix_pronoun_starts(claims)
+            for c in claims:
+                c["id"] = _claim_id(c["normalized_text"])
+
+            session["status"] = "completed"
+
+            # Run deterministic structure checks
+            from .evaluator import evaluate_claims_structure
+            struct_eval = evaluate_claims_structure(claims, fixture.get("metadata"))
+
+            save_session(session, {"claims": claims}, evaluation=struct_eval, llm_response={
+                "prompt": llm_result["prompt"],
+                "response": llm_result["response"],
+            })
+            return {**session, "output": {"claims": claims}, "evaluation": struct_eval}
+        else:
+            session["status"] = "parse_error"
+            save_session(session, {"raw_response": llm_result["response"]}, llm_response={
+                "prompt": llm_result["prompt"],
+                "response": llm_result["response"],
+            })
+            return {**session, "error": "Failed to parse claims from LLM response"}
     else:
         session["status"] = "llm_error"
         save_session(session, {"error": llm_result.get("error", "Unknown error")})

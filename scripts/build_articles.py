@@ -44,8 +44,11 @@ from lxml import html as lxml_html
 # ---------------------------------------------------------------------------
 
 
-def normalize_topic(topic: str) -> str:
-    """Normalize a topic string: hyphens to spaces, lowercase, strip whitespace."""
+def normalize_topic(topic) -> str | dict:
+    """Normalize a topic string or dict: hyphens to spaces, lowercase, strip whitespace."""
+    if isinstance(topic, dict):
+        # interest_topics come as {"broad": "...", "specific": "...", "entity": "..."}
+        return {k: normalize_topic(v) if isinstance(v, str) else v for k, v in topic.items()}
     return re.sub(r"\s+", " ", topic.replace("-", " ")).strip().lower()
 
 
@@ -726,31 +729,16 @@ def deduplicate_fetched(fetched: list[dict]) -> list[dict]:
 # Step 4: Build articles with LLM processing
 # ---------------------------------------------------------------------------
 
-LLM_MODEL = os.environ.get("PETRARCA_LLM_MODEL", "gemini/gemini-2.0-flash")
+from gemini_llm import call_llm as _gemini_call
 
-# litellm expects GEMINI_API_KEY; bridge from our GEMINI_KEY if needed
+# Bridge env var for other tools that may use GEMINI_API_KEY
 if os.environ.get("GEMINI_KEY") and not os.environ.get("GEMINI_API_KEY"):
     os.environ["GEMINI_API_KEY"] = os.environ["GEMINI_KEY"]
 
 
 def _call_llm(prompt: str, model: str | None = None, purpose: str = "") -> str | None:
-    """Call LLM via litellm. Model defaults to PETRARCA_LLM_MODEL env var."""
-    try:
-        from litellm import completion
-        response = completion(
-            model=model or LLM_MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=4096,
-        )
-        try:
-            from llm_audit import audit_llm_call
-            audit_llm_call(response, script="build_articles.py", purpose=purpose)
-        except Exception:
-            pass
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        print(f"    LLM error ({model or LLM_MODEL}): {e}", file=sys.stderr)
-        return None
+    """Call Gemini via google.genai SDK."""
+    return _gemini_call(prompt, model=model)
 
 
 # Aliases for backwards compatibility
@@ -1033,12 +1021,20 @@ Return a JSON object:
   "novelty_claims": [
     {{"claim": "Claude Code now supports background agents", "specificity": "high"}}
   ],
+  "entities": [
+    {{"name": "Claude Code", "type": "technology", "synthesis": "Anthropic's CLI tool for interacting with Claude models directly from the terminal.", "mentions": ["Claude Code", "claude-code"]}}
+  ],
+  "follow_up_questions": [
+    {{"question": "How does this compare to other approaches in the field?", "connects_to": "broader topic area"}}
+  ],
   "estimated_read_minutes": 5,
   "content_type": "one of: analysis, tutorial, opinion, news, research, reference, announcement, discussion"
 }}
 
 interest_topics: hierarchical topic tags with kebab-case broad/specific categories and optional entity names.
 novelty_claims: what's genuinely new or surprising in this article. specificity is "high", "medium", or "low".
+entities: extract 3-8 notable entities (people, books, companies, concepts, places, events, technologies) mentioned in the article. Include a 1-2 sentence synthesis and all name variations used in the text.
+follow_up_questions: generate 2-3 curiosity-driven questions that a thoughtful reader might want to explore after reading this article.
 
 If the article has clear sections/headings, use them. If not, divide into 2-5 logical sections.
 Return ONLY valid JSON."""
@@ -1146,6 +1142,8 @@ def build_articles(candidates: list[dict], existing_articles: list[dict],
             "content_type": llm.get("content_type", "unknown"),
             "interest_topics": [normalize_topic(t) for t in llm.get("interest_topics", [])],
             "novelty_claims": llm.get("novelty_claims", []),
+            "entities": llm.get("entities", []),
+            "follow_up_questions": llm.get("follow_up_questions", []),
             "word_count": best["word_count"],
             "sources": [source],
         }
@@ -1179,6 +1177,8 @@ def _llm_fallback(best: dict) -> dict:
         "topics": [],
         "estimated_read_minutes": max(1, best["word_count"] // 200),
         "content_type": "unknown",
+        "entities": [],
+        "follow_up_questions": [],
     }
 
 
@@ -1260,6 +1260,8 @@ def _fallback_sections(content: str, llm_sections: list[dict]) -> list[dict]:
 # Utilities
 # ---------------------------------------------------------------------------
 
+import fcntl
+
 def _save_json(data, path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
@@ -1269,6 +1271,30 @@ def _load_json(path: Path):
     if path.exists():
         return json.loads(path.read_text())
     return None
+
+
+def _locked_append_article(article: dict, articles_path: Path, app_data_path: Path | None = None):
+    """Append an article to articles.json with file locking to prevent write contention.
+
+    Uses fcntl.flock so multiple concurrent import_url.py processes don't overwrite
+    each other's changes.
+    """
+    lock_path = articles_path.parent / '.articles.lock'
+    lock_path.touch(exist_ok=True)
+
+    with open(lock_path, 'r') as lock_fd:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        try:
+            articles = _load_json(articles_path) or []
+            # Check for duplicate by id
+            existing_ids = {a['id'] for a in articles}
+            if article['id'] not in existing_ids:
+                articles.append(article)
+                _save_json(articles, articles_path)
+                if app_data_path:
+                    _save_json(articles, app_data_path)
+        finally:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
 
 
 # ---------------------------------------------------------------------------

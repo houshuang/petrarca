@@ -33,7 +33,7 @@ from lib.session import (
 )
 from lib.runner import (
     run_clean_markdown, run_article_extraction, run_entity_concepts,
-    run_end_to_end, list_fixtures, load_fixture,
+    run_atomic_claims, run_end_to_end, list_fixtures, load_fixture,
 )
 from lib.compare import compare_sessions, compare_fixture, generate_report
 
@@ -112,6 +112,54 @@ def cmd_extract(args):
 
     completed = sum(1 for r in results if r.get("status") == "completed")
     print(f"\n  Results: {completed}/{len(results)} completed")
+    return 0 if completed == len(results) else 1
+
+
+def cmd_claims(args):
+    """Run atomic claims extraction tests."""
+    fixtures = list_fixtures("atomic_claims") if args.all else [args.fixture]
+    models = args.model or [None]
+    if not fixtures:
+        print("No atomic_claims fixtures found.", file=sys.stderr)
+        return 1
+
+    results = []
+    for name in fixtures:
+        for model in models:
+            model_label = model or "default"
+            print(f"\n{'='*60}")
+            print(f"  atomic_claims: {name} [{model_label}]")
+            print(f"{'='*60}")
+            try:
+                result = run_atomic_claims(name, model=model)
+                if result.get("status") == "completed":
+                    output = result.get("output", {})
+                    ev = result.get("evaluation", {})
+                    claims = output.get("claims", [])
+                    struct_summary = ev.get("summary", "")
+                    type_dist = ev.get("type_distribution", {})
+                    print(f"  OK: {len(claims)} claims extracted")
+                    if type_dist:
+                        dist_str = ", ".join(f"{k}:{v}" for k, v in sorted(type_dist.items()))
+                        print(f"  Types: {dist_str}")
+                    if struct_summary:
+                        print(f"  Structure: {struct_summary}")
+                    for issue in ev.get("issues", [])[:5]:
+                        print(f"    - {issue}")
+                else:
+                    print(f"  {result.get('status', 'error')}: {result.get('error', '?')}")
+                tok = result.get("token_usage") or {}
+                print(f"  Session: {result['session_id']} ({result.get('duration_ms', '?')}ms, "
+                      f"{tok.get('total_tokens', '?')} tokens)")
+                results.append(result)
+            except Exception as e:
+                print(f"  ERROR: {e}", file=sys.stderr)
+                results.append({"fixture": name, "model": model, "error": str(e)})
+
+    completed = sum(1 for r in results if r.get("status") == "completed")
+    print(f"\n{'='*60}")
+    print(f"  Results: {completed}/{len(results)} completed")
+    print(f"{'='*60}")
     return 0 if completed == len(results) else 1
 
 
@@ -283,6 +331,20 @@ def cmd_evaluate(args):
         _print_evaluation(evaluation)
         return 0
 
+    elif layer == "atomic_claims":
+        from lib.evaluator import evaluate_atomic_claims
+        fixture = load_fixture("atomic_claims", meta["fixture"])
+        output = data.get("output", {})
+        claims = output.get("claims", [])
+        print(f"Running LLM-as-judge on session {args.session_id} (judge: {judge_model})...")
+        evaluation = evaluate_atomic_claims(
+            fixture["input_text"], fixture["metadata"].get("title", ""),
+            claims, metadata=fixture.get("metadata"), judge_model=judge_model,
+        )
+        save_session(meta, output, evaluation)
+        _print_evaluation(evaluation)
+        return 0
+
     elif layer == "entity_concepts":
         from lib.evaluator import build_entity_judge_prompt
         from lib.runner import call_llm_instrumented
@@ -385,7 +447,7 @@ def cmd_delete(args):
 
 def cmd_fixture_list(args):
     """List available fixtures."""
-    layers = [args.layer] if args.layer else ["clean_markdown", "article_extraction", "entity_concepts", "end_to_end"]
+    layers = [args.layer] if args.layer else ["clean_markdown", "article_extraction", "atomic_claims", "entity_concepts", "end_to_end"]
     for layer in layers:
         fixtures = list_fixtures(layer)
         if fixtures:
@@ -507,6 +569,13 @@ def main():
     g.add_argument("--all", action="store_true", help="Run all fixtures")
     p.add_argument("--model", action="append", help="Model(s) to test (repeatable)")
 
+    # claims
+    p = sub.add_parser("claims", help="Run atomic claims extraction tests")
+    g = p.add_mutually_exclusive_group(required=True)
+    g.add_argument("--fixture", help="Fixture name")
+    g.add_argument("--all", action="store_true", help="Run all fixtures")
+    p.add_argument("--model", action="append", help="Model(s) to test (repeatable)")
+
     # entities
     p = sub.add_parser("entities", help="Run entity concept extraction tests")
     g = p.add_mutually_exclusive_group(required=True)
@@ -581,6 +650,7 @@ def main():
     commands = {
         "clean": cmd_clean,
         "extract": cmd_extract,
+        "claims": cmd_claims,
         "entities": cmd_entities,
         "e2e": cmd_e2e,
         "list": cmd_list,

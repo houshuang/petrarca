@@ -382,3 +382,204 @@ def build_entity_judge_prompt(articles: list[dict], entities: list[dict]) -> str
         articles_summary="\n".join(summaries),
         entities_json=json.dumps(entities, indent=2, ensure_ascii=False),
     )
+
+
+# ---------- Layer: atomic_claims (deterministic + LLM-as-judge) ----------
+
+VALID_CLAIM_TYPES = {
+    "factual", "causal", "comparative", "procedural",
+    "evaluative", "predictive", "experiential",
+}
+
+# Pronouns that suggest a claim is not self-contained
+DANGLING_PRONOUN_RE = re.compile(r"^(It|They|This|He|She|These|Those|That)\s", re.IGNORECASE)
+
+
+def evaluate_claims_structure(claims: list[dict], metadata: dict | None = None) -> dict:
+    """Deterministic structural checks for atomic claims output."""
+    checks = {}
+    issues = []
+
+    # Claim count in expected range
+    count = len(claims)
+    expected = (metadata or {}).get("expected_claim_count_range", [5, 40])
+    lo, hi = expected[0], expected[1]
+    checks["claim_count_in_range"] = lo <= count <= hi
+    if not checks["claim_count_in_range"]:
+        issues.append(f"Claim count {count} outside expected range [{lo}, {hi}]")
+
+    # Per-claim checks
+    bad_fields = []
+    bad_types = []
+    bad_pronouns = []
+    bad_compound = []
+    bad_topics = []
+    bad_empty = []
+
+    for i, claim in enumerate(claims):
+        # Required fields
+        missing = []
+        for field in ["normalized_text", "claim_type", "source_paragraphs", "topics"]:
+            if field not in claim or claim[field] is None:
+                missing.append(field)
+        if missing:
+            bad_fields.append(f"claim[{i}] missing: {', '.join(missing)}")
+
+        # Valid claim_type
+        ct = claim.get("claim_type", "")
+        if ct not in VALID_CLAIM_TYPES:
+            bad_types.append(f"claim[{i}] invalid type: '{ct}'")
+
+        # Self-contained check (no dangling pronouns)
+        text = claim.get("normalized_text", "")
+        if DANGLING_PRONOUN_RE.match(text):
+            bad_pronouns.append(f"claim[{i}] starts with pronoun: '{text[:50]}'")
+
+        # No empty text
+        if not text.strip():
+            bad_empty.append(f"claim[{i}] has empty normalized_text")
+
+        # Topics present
+        topics = claim.get("topics", [])
+        if not topics:
+            bad_topics.append(f"claim[{i}] has no topics")
+
+        # Compound claim check (rough heuristic)
+        if " and " in text:
+            parts = text.split(" and ")
+            # Only flag if both parts look like independent clauses (contain a verb-like word)
+            if len(parts) == 2 and len(parts[0].split()) > 4 and len(parts[1].split()) > 4:
+                bad_compound.append(f"claim[{i}] may be compound: '{text[:60]}'")
+
+    checks["required_fields"] = len(bad_fields) == 0
+    if bad_fields:
+        issues.extend(bad_fields[:3])
+
+    checks["valid_claim_types"] = len(bad_types) == 0
+    if bad_types:
+        issues.extend(bad_types[:3])
+
+    checks["self_contained"] = len(bad_pronouns) <= max(1, len(claims) * 0.05)  # allow up to 1 or 5%
+    if bad_pronouns:
+        issues.extend(bad_pronouns[:3])
+
+    checks["no_empty_text"] = len(bad_empty) == 0
+    if bad_empty:
+        issues.extend(bad_empty[:3])
+
+    checks["topics_present"] = len(bad_topics) <= len(claims) * 0.1  # allow up to 10% without topics
+    if bad_topics:
+        issues.extend(bad_topics[:3])
+
+    checks["no_compound_claims"] = len(bad_compound) <= len(claims) * 0.3  # allow up to 30% (heuristic is noisy)
+    if bad_compound:
+        issues.extend(bad_compound[:3])
+
+    all_passed = all(checks.values())
+    return {
+        "checks": checks,
+        "issues": issues,
+        "pass": all_passed,
+        "summary": f"{'PASS' if all_passed else 'FAIL'}: {sum(checks.values())}/{len(checks)} checks passed",
+        "claim_count": count,
+        "type_distribution": _type_distribution(claims),
+    }
+
+
+def _type_distribution(claims: list[dict]) -> dict[str, int]:
+    """Count claims by type."""
+    dist: dict[str, int] = {}
+    for c in claims:
+        ct = c.get("claim_type", "unknown")
+        dist[ct] = dist.get(ct, 0) + 1
+    return dist
+
+
+CLAIMS_JUDGE_PROMPT = """You are evaluating the quality of atomic claim extraction from an article.
+
+## Original Article
+Title: {title}
+Content (first 3000 chars):
+{content_preview}
+
+## Extracted Claims ({claim_count} total)
+{claims_json}
+
+## Scoring Criteria (1-5 each)
+
+1. **granularity**: Are claims atomic enough? Each should be one single assertion. Not too broad (paragraph-level), not too narrow (trivial detail). Score 5 = perfectly atomic.
+2. **decontextualization**: Can each claim be understood without the original article? No dangling pronouns, sufficient context added. Score 5 = fully self-contained.
+3. **type_accuracy**: Are claim_type labels correct? (factual vs causal vs evaluative etc.) Score 5 = all labels correct.
+4. **coverage**: Do the claims cover the article's main knowledge contributions? Not just the introduction. Score 5 = comprehensive coverage.
+5. **topic_quality**: Are topic tags relevant, specific enough, and in kebab-case? Score 5 = excellent tagging.
+
+Return ONLY a JSON object:
+{{
+  "scores": {{
+    "granularity": N,
+    "decontextualization": N,
+    "type_accuracy": N,
+    "coverage": N,
+    "topic_quality": N
+  }},
+  "issues": ["specific issue 1", "specific issue 2"],
+  "overall": N.N
+}}"""
+
+
+def build_claims_judge_prompt(fixture_content: str, fixture_title: str, claims: list[dict]) -> str:
+    """Build the LLM-as-judge prompt for atomic claims evaluation."""
+    content_preview = fixture_content[:3000]
+    claims_json = json.dumps(claims, indent=2, ensure_ascii=False)
+    return CLAIMS_JUDGE_PROMPT.format(
+        title=fixture_title,
+        content_preview=content_preview,
+        claims_json=claims_json,
+        claim_count=len(claims),
+    )
+
+
+def evaluate_atomic_claims(fixture_content: str, fixture_title: str,
+                           claims: list[dict], metadata: dict | None = None,
+                           judge_model: str = "gemini/gemini-2.0-flash") -> dict:
+    """Evaluate atomic claims: deterministic structure checks + LLM-as-judge."""
+    from extract_entity_concepts import parse_json_response
+    from lib.runner import call_llm_instrumented
+
+    # Phase 1: deterministic checks
+    struct_eval = evaluate_claims_structure(claims, metadata)
+
+    # Phase 2: LLM-as-judge
+    prompt = build_claims_judge_prompt(fixture_content, fixture_title, claims)
+    result = call_llm_instrumented(prompt, model=judge_model)
+
+    if not result or not result.get("response"):
+        struct_eval["llm_judge"] = "failed"
+        struct_eval["issues"].append("LLM judge call failed")
+        return struct_eval
+
+    parsed = parse_json_response(result["response"])
+    if not parsed or not isinstance(parsed, dict):
+        struct_eval["llm_judge"] = "parse_error"
+        struct_eval["issues"].append("LLM judge response not parseable")
+        struct_eval["raw_response"] = result["response"]
+        return struct_eval
+
+    # Merge: structural checks + LLM scores
+    scores = parsed.get("scores", {})
+    llm_issues = parsed.get("issues", [])
+    overall = parsed.get("overall", 0.0)
+
+    for key, val in list(scores.items()):
+        if not isinstance(val, (int, float)) or val < 1 or val > 5:
+            scores[key] = 0
+
+    return {
+        "structure": struct_eval,
+        "scores": scores,
+        "issues": struct_eval["issues"] + llm_issues,
+        "overall": overall,
+        "pass": struct_eval["pass"],
+        "claim_count": struct_eval["claim_count"],
+        "type_distribution": struct_eval["type_distribution"],
+    }

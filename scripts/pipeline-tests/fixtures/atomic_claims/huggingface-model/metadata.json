@@ -1,0 +1,8 @@
+{
+  "title": "Huihui-Qwen3.5-35B-A3B-abliterated: Uncensored Qwen 3.5 Model",
+  "url": "https://huggingface.co/huihui-ai/Huihui-Qwen3.5-35B-A3B-abliterated",
+  "hostname": "Huggingface",
+  "word_count": 345,
+  "content_type": "reference",
+  "expected_claim_count_range": [3, 25]
+}

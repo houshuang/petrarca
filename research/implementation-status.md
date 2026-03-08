@@ -1,14 +1,14 @@
 # Knowledge System Implementation Status
 
-**Date**: March 8, 2026 (last updated, evening)
-**Status**: Full corpus deployed with knowledge system, reader interactions, voice notes, AI chat, research agents
-**Latest commits**: `ddc23bc` (backend voice notes + topic research agents)
+**Date**: March 8, 2026 (last updated, late evening — session 5)
+**Status**: Full corpus deployed with knowledge system, reader interactions, voice notes, AI chat, research agents, entity deep-dive, follow-up research, voice note browser + action extraction
+**Latest commits**: Session 5 parallel agent implementation (entity deep-dive, follow-up prompts, voice notes browser, action extraction)
 
 ---
 
 ## What Was Built
 
-On March 8, 2026, the full knowledge-aware reading system was implemented end-to-end based on the design in `research/novelty-system-architecture.md` and validated by 11 experiments documented in `research/experiment-results-report.md`. Subsequently, the full 171-article corpus was restored with claims, embeddings, and knowledge index, and a cost auditing system was added.
+On March 8, 2026, the full knowledge-aware reading system was implemented end-to-end based on the design in `research/novelty-system-architecture.md` and validated by 11 experiments documented in `research/experiment-results-report.md`. Subsequently, the full 182-article corpus was restored with claims, embeddings, and knowledge index, and a cost auditing system was added. In session 4, the LLM infrastructure was migrated from litellm to the native `google.genai` SDK (fixing output truncation with newer Gemini models), topic research was rewritten from `claude -p` to Gemini search grounding (reducing latency from 60-120s to ~2.5s), and write contention was fixed with file locking. In session 5, four features were implemented via parallel agents: entity deep-dive (long-press entities in reader), follow-up research prompts (end-of-article questions), voice note browser (new screen), and voice note action extraction (LLM intent extraction from transcripts).
 
 ### Architecture Overview
 
@@ -16,9 +16,10 @@ The system splits into **server-computed INDEX** (user-independent) and **client
 
 ```
 Server Pipeline (cron every 4 hours):
-  Twitter + Readwise → build_articles.py --claims → atomic claims (parallel, 10 workers)
+  Twitter + Readwise → build_articles.py --claims → atomic claims + entities + follow-up questions
   → build_claim_embeddings.py → Gemini embedding-001 (batch 100)
   → build_knowledge_index.py → knowledge_index.json (parallel delta reports, 10 workers)
+  → All LLM calls via gemini_llm.py (google.genai SDK, Gemini 3.1 Flash-Lite)
   → All calls tracked by llm_audit.py → data/llm_audit.jsonl
 
 App (Expo SDK 54):
@@ -49,6 +50,22 @@ App (Expo SDK 54):
 | `app/lib/chat-api.ts` | API client for research server: `askAI()`, `uploadVoiceNote()`, `spawnTopicResearch()`, `fetchNotes()`. |
 | `app/public/guide/index.html` | HTML user guide (Annotated Folio styled). Covers all 5 capture flows, 3 tabs, reader modes, knowledge system, usage patterns. Linked from Feed header. |
 | `research/user-guide.md` | Markdown source for user guide. Describes all implemented features accurately. |
+| `scripts/gemini_llm.py` | Shared Gemini LLM wrapper (google.genai SDK). Three functions: `call_llm()`, `call_chat()`, `call_with_search()`. Default model: `gemini-3.1-flash-lite-preview` (via `PETRARCA_LLM_MODEL` env var). Replaces all litellm usage. |
+| `app/app/voice-notes.tsx` | Voice notes browser screen. Global notes view with date-grouped sections, ✦ markers, Cormorant Garamond header. Accessible from Feed header "Notes" link. |
+| `app/components/VoiceNoteCard.tsx` | Reusable voice note card component. Shows timestamp, duration badge, transcript (3-line max), article link, action chips with type-colored borders. |
+| `app/lib/voice-notes-api.ts` | Voice notes API module. `fetchAllNotes()`, `fetchArticleNotes()`, `executeNoteAction()`. TypeScript interfaces for `VoiceNote` and `NoteAction`. |
+
+#### Modified Files (Session 4+5: LLM migration + four features)
+
+| File | Changes |
+|------|---------|
+| `scripts/build_articles.py` | Migrated from litellm to `gemini_llm.call_llm()`. Added `_locked_append_article()` with `fcntl.flock` for write contention safety. Extended prompt schema with `entities[]` and `follow_up_questions[]`. Fixed `normalize_topic()` to handle dict inputs. |
+| `scripts/research-server.py` | Migrated chat from litellm to `gemini_llm.call_chat()`. Rewrote topic research from `claude -p` to `gemini_llm.call_with_search()` (Gemini search grounding). Added `extract_note_actions()` for LLM intent extraction from transcripts. Added `POST /notes/{note_id}/execute-action` endpoint. |
+| `scripts/import_url.py` | Added import of `_locked_append_article` from `build_articles` for concurrent write safety. |
+| `app/data/types.ts` | Added `ArticleEntity` interface (7 entity types), `FollowUpQuestion` interface, extended `Article` with `entities?` and `follow_up_questions?`. |
+| `app/app/reader.tsx` | Added `EntityHighlightText` (dotted underline on entity mentions, long-press popup), `EntityPopup` (inline marginalia card with entity info + "Research more"), `FollowUpSection` ("✦ FURTHER INQUIRY" section after article with tappable research questions). ~320 lines added. |
+| `app/app/(tabs)/index.tsx` | Added "Notes" link in feed header navigating to `/voice-notes`. |
+| `app/app/_layout.tsx` | Added `voice-notes` screen to Stack navigator. |
 
 #### Modified Files (Mar 8 session 2)
 
@@ -79,7 +96,7 @@ App (Expo SDK 54):
 
 | File | Size | Contents |
 |------|------|----------|
-| `data/articles.json` | 6.3 MB | 171 articles with `atomic_claims[]` (2,954 claims total) |
+| `data/articles.json` | ~7 MB | 182 articles with `atomic_claims[]`, `entities[]`, `follow_up_questions[]` |
 | `data/claim_embeddings.npz` | 33 MB | 2,954 Gemini embedding-001 vectors |
 | `data/knowledge_index.json` | 4.3 MB | 2,954 claims, cross-article similarity pairs (≥0.68), 126 article paragraph maps, article novelty matrix (3,488 pair entries), 300 LLM delta reports |
 | `data/llm_audit.jsonl` | ~77 KB | Per-call LLM usage records (tokens, cost, model, purpose) |
@@ -112,17 +129,17 @@ App (Expo SDK 54):
 | Static web app (:8084) | ✅ Deployed | Rebuilt Mar 8 with bookmarks, AI chat, voice notes, research agents, guide |
 | Expo native (:8082) | ✅ Running | systemd `petrarca-expo` |
 | Log server (:8091) | ✅ Running | systemd `petrarca-log`, collects app interaction logs |
-| articles.json | ✅ 171 articles | Full corpus with 2,954 atomic claims |
+| articles.json | ✅ 182 articles | Full corpus with atomic claims, entities, follow-up questions |
 | knowledge_index.json | ✅ 4.3MB | 300 delta reports, novelty matrix, paragraph maps |
 | claim_embeddings.npz | ✅ 33MB | Gemini embedding-001, 2,954 vectors |
 | manifest.json | ✅ Updated | `articles_hash` + `knowledge_index_hash` |
 | llm_audit.jsonl | ✅ Collecting | 330 records from pipeline run ($0.035 total) |
-| Python deps | ✅ All installed | numpy, litellm, google-generativeai in `/opt/petrarca/.venv` |
+| Python deps | ✅ All installed | numpy, google-genai (native SDK) in `/opt/petrarca/.venv` |
 | Cron pipeline | ✅ Working | `content-refresh.sh` runs full pipeline including claims + embeddings + knowledge index |
-| GEMINI_KEY | ✅ Configured | In `/opt/petrarca/.env` (also `GEMINI_API_KEY` for litellm) |
+| GEMINI_KEY | ✅ Configured | In `/opt/petrarca/.env` (used by `gemini_llm.py`, also `GEMINI_API_KEY` alias) |
 | Voice notes storage | ✅ Working | `/opt/petrarca/data/notes/` (JSON) + `/opt/petrarca/data/audio/` (m4a) |
 | Chat conversations | ✅ Working | `/opt/petrarca/data/chats/` (JSON, per conversation_id) |
-| Research server endpoints | ✅ Updated | `/chat`, `/note`, `/research/topic`, `/notes` added to port 8090 |
+| Research server endpoints | ✅ Updated | `/chat`, `/note`, `/research/topic`, `/notes`, `/notes/{id}/execute-action`, `/research`, `/research/results` on port 8090 |
 
 ### SSH Access
 - Use `ssh alif` (configured in `~/.ssh/config` → `root@46.225.75.29` via `~/.ssh/hetzner_ed25519`)
@@ -142,7 +159,7 @@ App (Expo SDK 54):
 
 5. ~~**Server has only 47 articles**~~ — **RESOLVED**: Full 171-article corpus restored with 2,954 atomic claims, embeddings, and knowledge index.
 6. ~~**Duplicate topic variants**~~ — **RESOLVED**: Added client-side topic normalization in `app/lib/display-utils.ts` (`normalizeTopic()` + `displayTopic()`). Used across feed filter chips, topic tags, and Topics tab grouping. Reduced 67→58 topic groups.
-7. **google.generativeai deprecation warning** — Embedding script uses deprecated `google.generativeai` package, should migrate to `google.genai`.
+7. ~~**google.generativeai deprecation warning**~~ — **RESOLVED**: Migrated all LLM calls to `google.genai` SDK via shared `gemini_llm.py` wrapper. litellm fully removed.
 
 ### Logic Issues
 
@@ -201,16 +218,21 @@ App (Expo SDK 54):
 18. ~~**Inline topic chips**~~ — DONE: +/- buttons at end of article content, not just post-read modal
 19. ~~**AskAI initialQuestion**~~ — DONE: Pre-fill AI chat with questions from research context
 
+### Completed (Session 4+5)
+4. ~~**Voice note visibility**~~ — DONE: Voice notes browser screen (`voice-notes.tsx`), accessible from Feed header "Notes" link. Date-grouped notes with transcript, duration, article link, action chips.
+5. ~~**Voice note action extraction**~~ — DONE: `extract_note_actions()` in research-server.py uses Gemini to extract research/tag/remember intents from transcripts. Actions shown as tappable chips in VoiceNoteCard. Execute via `POST /notes/{id}/execute-action`.
+6. ~~**Claude CLI token expired**~~ — RESOLVED: Topic research completely rewritten from `claude -p` to Gemini search grounding (`call_with_search()`). No longer depends on Claude CLI.
+7. ~~**Follow-up research prompts**~~ — DONE: Pipeline extracts 2-3 curiosity-driven questions per article. "✦ FURTHER INQUIRY" section in reader after claims. Tap to spawn topic research via `/research/topic`.
+20. ~~**Entity deep-dive**~~ — DONE: Pipeline extracts entities (person/book/company/concept/event/place/technology). Reader highlights entity mentions with dotted underline. Long-press shows marginalia popup with synthesis + "Research more".
+21. ~~**LLM migration**~~ — DONE: All LLM calls use `google.genai` SDK via `gemini_llm.py`. litellm removed. Default model: Gemini 3.1 Flash-Lite.
+
 ### Immediate (next session)
-4. **Voice note visibility** — Notes are stored server-side but not yet surfaced in the app UI. Need: (a) notes list on article info in ⋯ menu, (b) notes shown in topic clusters, (c) possibly a "Notes" section in the app.
-5. **Voice note action extraction** — User expects voice notes to trigger actions like "add tag", "research this", "I'm interested in X". Need LLM post-processing of transcripts to extract intents and execute them.
-6. **Claude CLI token expired** — `claude -p` on server returns 401. Topic research feature broken until token refreshed. Entity research works via Gemini.
-7. **Follow-up research prompts** — Generate interesting questions during article processing; clicking one spawns background AI research. Like a chat with suggested replies but multi-threaded via the inbox.
+22. **Re-run pipeline for entities/questions** — Only ~7 articles have entities + follow-up questions. Need full pipeline run with `--claims` to populate all 182 articles.
+23. **Resourceful bookmark pipeline enhancement** — When a tweet mentions a book/product/article without linking, pipeline should web-search, gather info, synthesize a small article.
 
 ### Short-term (quality improvements)
 8. **Incremental embedding** — Only embed new claims, append to existing .npz
 9. **LLM judge for ambiguous range** — 0.68-0.78 cosine gets LLM verification
-10. **Migrate to `google.genai`** — Replace deprecated `google.generativeai`
 11. **Production bundle optimization** — Remove bundled `knowledge_index.json` from JS bundle
 
 ### Medium-term (feature completion)
@@ -246,8 +268,9 @@ App (Expo SDK 54):
 
 | Script | Purpose |
 |--------|---------|
-| `scripts/build_articles.py --claims` | Extract atomic claims from articles (Gemini Flash, 10 parallel workers) |
-| `scripts/build_articles.py --claims-only` | Extract claims for articles that don't have them yet |
+| `scripts/gemini_llm.py` | Shared Gemini LLM wrapper (google.genai SDK). `call_llm()`, `call_chat()`, `call_with_search()`. Model: `gemini-3.1-flash-lite-preview` |
+| `scripts/build_articles.py --claims` | Extract atomic claims, entities, and follow-up questions (Gemini 3.1 Flash-Lite, 10 parallel workers) |
+| `scripts/build_articles.py --claims-only` | Extract claims/entities/questions for articles that don't have them yet |
 | `scripts/build_claim_embeddings.py` | Generate Gemini embeddings for all claims (batch 100) |
 | `scripts/build_knowledge_index.py` | Build knowledge_index.json from embeddings (parallel delta reports) |
 | `scripts/build_knowledge_index.py --skip-delta` | Build without LLM delta reports (faster) |

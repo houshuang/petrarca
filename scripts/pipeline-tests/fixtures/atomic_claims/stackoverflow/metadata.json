@@ -1,0 +1,11 @@
+{
+  "title": "Why is processing a sorted array faster than processing an unsorted array?",
+  "url": "",
+  "hostname": "stackoverflow",
+  "word_count": 1298,
+  "content_type": "tech-blog",
+  "expected_claim_count_range": [
+    5,
+    35
+  ]
+}

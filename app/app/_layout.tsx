@@ -54,6 +54,7 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="reader" />
+        <Stack.Screen name="voice-notes" />
         <Stack.Screen name="+not-found" />
       </Stack>
     </SafeAreaView>
