@@ -40,6 +40,16 @@ import trafilatura
 from lxml import html as lxml_html
 
 # ---------------------------------------------------------------------------
+# Topic normalization
+# ---------------------------------------------------------------------------
+
+
+def normalize_topic(topic: str) -> str:
+    """Normalize a topic string: hyphens to spaces, lowercase, strip whitespace."""
+    return re.sub(r"\s+", " ", topic.replace("-", " ")).strip().lower()
+
+
+# ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
 
@@ -868,7 +878,7 @@ def build_articles(candidates: list[dict], existing_articles: list[dict],
             "topics": llm.get("topics", []),
             "estimated_read_minutes": llm.get("estimated_read_minutes", max(1, best["word_count"] // 200)),
             "content_type": llm.get("content_type", "unknown"),
-            "interest_topics": llm.get("interest_topics", []),
+            "interest_topics": [normalize_topic(t) for t in llm.get("interest_topics", [])],
             "novelty_claims": llm.get("novelty_claims", []),
             "word_count": best["word_count"],
             "sources": [source],
@@ -1297,6 +1307,8 @@ def _extract_claims_for_article(article: dict, index: int, total: int) -> None:
                         "source_paragraphs": raw_claim.get("source_paragraphs", []),
                         "topics": raw_claim.get("topics", []),
                     })
+                for c in claims:
+                    c["topics"] = [normalize_topic(t) for t in c["topics"]]
                 claims = _fix_pronoun_starts(claims)
                 for c in claims:
                     c["id"] = _claim_id(c["normalized_text"])

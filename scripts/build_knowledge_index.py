@@ -14,6 +14,7 @@ Usage:
 
 import json
 import os
+import re
 import sys
 import time
 import argparse
@@ -34,6 +35,11 @@ OUTPUT_PATH = DATA_DIR / "knowledge_index.json"
 # Thresholds validated by experiments
 THRESHOLD_KNOWN = 0.78
 THRESHOLD_EXTENDS = 0.68
+
+
+def normalize_topic(topic: str) -> str:
+    """Normalize a topic string: hyphens to spaces, lowercase, strip whitespace."""
+    return re.sub(r"\s+", " ", topic.replace("-", " ")).strip().lower()
 
 # Load env from .env file if present
 for env_path in [PROJECT_DIR / ".env", Path("/opt/petrarca/.env")]:
@@ -70,7 +76,7 @@ def load_articles_and_claims() -> tuple[list[dict], list[dict], dict[str, int]]:
                 "original_text": claim.get("original_text", ""),
                 "claim_type": claim.get("claim_type", "factual"),
                 "source_paragraphs": claim.get("source_paragraphs", []),
-                "topics": claim.get("topics", []),
+                "topics": [normalize_topic(t) for t in claim.get("topics", [])],
                 "article_id": article_id,
             })
 
