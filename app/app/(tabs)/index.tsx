@@ -92,11 +92,13 @@ function ArticleCard({ article, onDismiss, onQueue }: {
   const handleSwipeRight = () => {
     dismissArticle(article.id, 'swiped');
     recordInterestSignal('swipe_dismiss', article.id);
+    logEvent('feed_swipe_dismiss', { article_id: article.id });
     onDismiss();
   };
 
   const handleSwipeLeft = () => {
     addToQueue(article.id);
+    logEvent('feed_swipe_queue', { article_id: article.id });
     onQueue();
   };
 
@@ -219,12 +221,19 @@ export default function FeedScreen() {
 
   const readArticles = getReadArticles();
 
-  // Articles currently being read (started but not finished)
+  // Articles currently being read (started but not finished) — show max 2
   const continueReading = useMemo(() => {
-    return getArticles().filter(a => {
-      const state = getReadingState(a.id);
-      return state.status === 'reading';
-    });
+    return getArticles()
+      .filter(a => {
+        const state = getReadingState(a.id);
+        return state.status === 'reading';
+      })
+      .sort((a, b) => {
+        const sa = getReadingState(a.id);
+        const sb = getReadingState(b.id);
+        return (sb.last_read_at || 0) - (sa.last_read_at || 0);
+      })
+      .slice(0, 2);
   }, []);
 
   // Gather all topics for filter chips
@@ -409,17 +418,18 @@ const styles = StyleSheet.create({
 
   // Topic filter chips
   filterScroll: {
-    maxHeight: 40,
+    flexGrow: 0,
   },
   filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: layout.screenPadding,
-    paddingVertical: 10,
+    paddingVertical: 8,
     gap: 8,
   },
   filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   filterChipActive: {
     backgroundColor: colors.ink,
@@ -445,10 +455,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   continueCard: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: colors.parchmentDark,
-    marginBottom: 8,
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.rule,
   },
   continueTitle: {
     ...type.entryTitle,

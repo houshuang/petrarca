@@ -101,7 +101,9 @@ function TopicCluster({ topic, articles, expanded, onToggle }: {
         <View style={styles.clusterBody}>
           {/* Delta report */}
           {delta && delta.summary ? (
-            <View style={styles.deltaSection}>
+            <View style={styles.deltaSection}
+              onLayout={() => logEvent('delta_report_viewed', { topic, claim_count: delta.claim_count, article_count: delta.article_count })}
+            >
               <Text style={styles.sectionHead}>
                 <Text style={{ color: colors.rubric }}>{'\u2726'} </Text>
                 {"What\u2019s new in "}{topic}

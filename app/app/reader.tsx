@@ -168,7 +168,10 @@ function renderInlineMarkdown(text: string): (string | React.ReactElement)[] {
           <Text
             key={`link-${i}`}
             style={styles.markdownLink}
-            onPress={() => Linking.openURL(seg.url)}
+            onPress={() => {
+              logEvent('reader_link_tap', { url: seg.url, link_text: seg.text?.slice(0, 80) });
+              Linking.openURL(seg.url);
+            }}
             {...(Platform.OS === 'web' ? { accessibilityRole: 'link', href: seg.url, hrefAttrs: { target: '_blank', rel: 'noopener noreferrer' } } as any : {})}
           >
             {seg.text}
@@ -387,6 +390,7 @@ function MarkdownText({ content, highlightedBlocks, onBlockLongPress, blockDimmi
                       next.delete(item.startIndex);
                       return next;
                     });
+                    logEvent('collapsed_bar_collapse', { block_count: item.count });
                   }}
                 >
                   <Text style={styles.collapsedBarText}>{'▲ Collapse'}</Text>
@@ -540,6 +544,7 @@ export default function ReaderScreen() {
         next.delete(blockIndex);
         return next;
       });
+      logEvent('reader_highlight_remove', { article_id: article.id, block_index: blockIndex });
     } else {
       addHighlight({
         id: `hl_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -551,6 +556,7 @@ export default function ReaderScreen() {
       });
       setHighlightedBlocks((prev: Set<number>) => new Set(prev).add(blockIndex));
       recordInterestSignal('highlight_paragraph', article.id);
+      logEvent('reader_highlight_add', { article_id: article.id, block_index: blockIndex, text_preview: text.slice(0, 80) });
     }
   }, [article]);
 
@@ -566,6 +572,7 @@ export default function ReaderScreen() {
     const topics = article.interest_topics || [];
     if (topics.length > 0) {
       setShowInterestCard(true);
+      logEvent('interest_card_shown', { article_id: article.id, topic_count: topics.length });
     } else {
       router.back();
     }
@@ -580,9 +587,10 @@ export default function ReaderScreen() {
   }, [article]);
 
   const handleInterestClose = useCallback(() => {
+    logEvent('interest_card_close', { article_id: article?.id });
     setShowInterestCard(false);
     router.back();
-  }, [router]);
+  }, [article, router]);
 
   if (!article) {
     return (
@@ -599,7 +607,10 @@ export default function ReaderScreen() {
     <View style={styles.container}>
       {/* Top bar */}
       <View style={styles.topBar}>
-        <Pressable onPress={() => router.back()} style={styles.backButton}>
+        <Pressable onPress={() => {
+          logEvent('reader_back', { article_id: article.id });
+          router.back();
+        }} style={styles.backButton}>
           <Text style={styles.backLinkText}>{'← Feed'}</Text>
         </Pressable>
         <View style={{ flex: 1 }} />

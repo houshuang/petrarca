@@ -58,6 +58,16 @@ log "Step 3c: Extracting entity concepts for new articles..."
 python3 "$SCRIPT_DIR/extract_entity_concepts.py" --incremental \
     || log "Step 3c FAILED: extract_entity_concepts.py"
 
+# Step 3d: Extract atomic claims for new articles
+log "Step 3d: Extracting atomic claims..."
+python3 "$SCRIPT_DIR/build_articles.py" --claims-only \
+    || log "Step 3d FAILED: build_articles.py --claims-only"
+
+# Step 3e: Generate claim embeddings (Gemini API)
+log "Step 3e: Generating claim embeddings..."
+python3 "$SCRIPT_DIR/build_claim_embeddings.py" \
+    || log "Step 3e FAILED: build_claim_embeddings.py"
+
 # Step 4: Build knowledge index (claim similarities, novelty matrix, delta reports)
 log "Step 4: Building knowledge index..."
 python3 "$SCRIPT_DIR/build_knowledge_index.py" \
@@ -102,7 +112,7 @@ fi
 
 # Step 6: Copy output to app data directory (with file size validation)
 log "Step 6: Copying output files..."
-for f in articles.json concepts.json manifest.json books.json knowledge_index.json; do
+for f in articles.json concepts.json manifest.json books.json knowledge_index.json claim_embeddings.npz; do
     if [ -s "$PROJECT_DIR/data/$f" ]; then
         cp "$PROJECT_DIR/data/$f" "$PROJECT_DIR/app/data/"
     elif [ -f "$PROJECT_DIR/data/$f" ]; then
@@ -114,7 +124,7 @@ done
 log "Copied to $PROJECT_DIR/app/data/"
 
 if [ -d "/opt/petrarca/data" ]; then
-    for f in articles.json concepts.json manifest.json books.json knowledge_index.json; do
+    for f in articles.json concepts.json manifest.json books.json knowledge_index.json claim_embeddings.npz; do
         if [ -s "$PROJECT_DIR/data/$f" ]; then
             cp "$PROJECT_DIR/data/$f" /opt/petrarca/data/
         else

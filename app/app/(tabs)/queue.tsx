@@ -34,6 +34,7 @@ function QueueArticleCard({ article, onRemove }: {
 
   const handleSwipe = async () => {
     await removeFromQueue(article.id);
+    logEvent('queue_swipe_remove', { article_id: article.id });
     onRemove();
   };
 

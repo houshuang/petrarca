@@ -27,7 +27,8 @@ SCRIPT_DIR = Path(__file__).parent
 PROJECT_DIR = SCRIPT_DIR.parent
 DATA_DIR = PROJECT_DIR / "data"
 ARTICLES_PATH = DATA_DIR / "articles.json"
-EMBEDDINGS_PATH = DATA_DIR / "claim_embeddings_nomic.npz"
+EMBEDDINGS_PATH_NOMIC = DATA_DIR / "claim_embeddings_nomic.npz"
+EMBEDDINGS_PATH_GEMINI = DATA_DIR / "claim_embeddings.npz"
 OUTPUT_PATH = DATA_DIR / "knowledge_index.json"
 
 # Thresholds validated by experiments
@@ -77,12 +78,23 @@ def load_articles_and_claims() -> tuple[list[dict], list[dict], dict[str, int]]:
 
 
 def load_embeddings(expected_count: int) -> np.ndarray:
-    """Load pre-computed embeddings and verify dimensions."""
-    if not EMBEDDINGS_PATH.exists():
-        log(f"ERROR: Embeddings file not found: {EMBEDDINGS_PATH}")
+    """Load pre-computed embeddings and verify dimensions.
+
+    Tries Nomic embeddings first (calibrated thresholds), falls back to Gemini.
+    """
+    embeddings_path = None
+    if EMBEDDINGS_PATH_NOMIC.exists():
+        embeddings_path = EMBEDDINGS_PATH_NOMIC
+        log(f"  Using Nomic embeddings: {embeddings_path}")
+    elif EMBEDDINGS_PATH_GEMINI.exists():
+        embeddings_path = EMBEDDINGS_PATH_GEMINI
+        log(f"  Using Gemini embeddings: {embeddings_path}")
+    else:
+        log(f"ERROR: No embeddings found. Expected {EMBEDDINGS_PATH_NOMIC} or {EMBEDDINGS_PATH_GEMINI}")
+        log("Run build_claim_embeddings.py to generate embeddings.")
         sys.exit(1)
 
-    data = np.load(EMBEDDINGS_PATH)
+    data = np.load(embeddings_path)
     embeddings = data["embeddings"]
 
     if len(embeddings) != expected_count:
