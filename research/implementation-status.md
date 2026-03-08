@@ -1,14 +1,14 @@
 # Knowledge System Implementation Status
 
-**Date**: March 8, 2026
-**Status**: V1 deployed, UI polish needed
-**Commit**: `426237e` — "Add knowledge-aware reading system"
+**Date**: March 8, 2026 (last updated)
+**Status**: Full corpus deployed with knowledge system, audit system live
+**Latest commits**: `766af06` (LLM audit), `a76d25d` (parallel delta reports)
 
 ---
 
 ## What Was Built
 
-On March 8, 2026, the full knowledge-aware reading system was implemented end-to-end based on the design in `research/novelty-system-architecture.md` and validated by 11 experiments documented in `research/experiment-results-report.md`.
+On March 8, 2026, the full knowledge-aware reading system was implemented end-to-end based on the design in `research/novelty-system-architecture.md` and validated by 11 experiments documented in `research/experiment-results-report.md`. Subsequently, the full 171-article corpus was restored with claims, embeddings, and knowledge index, and a cost auditing system was added.
 
 ### Architecture Overview
 
@@ -16,15 +16,17 @@ The system splits into **server-computed INDEX** (user-independent) and **client
 
 ```
 Server Pipeline (cron every 4 hours):
-  Twitter + Readwise → build_articles.py --claims → atomic claims
-  → build_claim_embeddings.py → Nomic-embed-text-v1.5 (768-dim)
-  → build_knowledge_index.py → knowledge_index.json (served via nginx)
+  Twitter + Readwise → build_articles.py --claims → atomic claims (parallel, 10 workers)
+  → build_claim_embeddings.py → Gemini embedding-001 (batch 100)
+  → build_knowledge_index.py → knowledge_index.json (parallel delta reports, 10 workers)
+  → All calls tracked by llm_audit.py → data/llm_audit.jsonl
 
 App (Expo SDK 54):
   content-sync.ts downloads knowledge_index.json
   → knowledge-engine.ts classifies claims against user's ledger
   → paragraph dimming, curiosity scoring, delta reports
   → AsyncStorage persists knowledge ledger (@petrarca/knowledge_ledger)
+  → All interactions logged via logger.ts → local + server (port 8091)
 ```
 
 ### Files Created/Modified
@@ -37,8 +39,10 @@ App (Expo SDK 54):
 | `app/data/queue.ts` | Reading queue with AsyncStorage persistence. Add/remove/list queued article IDs. |
 | `app/app/(tabs)/topics.tsx` | Topics screen — articles grouped by broad topic, expandable clusters with delta report summaries and top claims. |
 | `app/app/(tabs)/queue.tsx` | Queue screen — saved-for-later articles with swipe-to-remove. |
-| `scripts/build_knowledge_index.py` | Server pipeline — loads articles + Nomic embeddings, computes cosine similarity matrix, extracts cross-article pairs, builds paragraph mappings, generates LLM delta reports (Gemini Flash via litellm). Outputs `data/knowledge_index.json`. |
+| `scripts/build_knowledge_index.py` | Server pipeline — loads articles + embeddings, computes cosine similarity matrix, extracts cross-article pairs, builds paragraph mappings, generates LLM delta reports (parallel, 10 workers). Outputs `data/knowledge_index.json`. |
 | `scripts/deploy_knowledge_index.sh` | Deploys knowledge_index.json to nginx + updates manifest hash. Supports `--local` mode. |
+| `scripts/llm_audit.py` | Thread-safe JSONL audit trail for all LLM calls. Tracks tokens, cost, cache hits per-call. CLI: `python3 scripts/llm_audit.py --days 7`. |
+| `scripts/log_server.py` | HTTP server (port 8091) for collecting app interaction logs. Accepts POST /log with JSONL body, stores as daily files in `/opt/petrarca/data/logs/`. |
 
 #### Modified Files
 
@@ -48,17 +52,19 @@ App (Expo SDK 54):
 | `app/data/content-sync.ts` | Downloads `knowledge_index.json` alongside articles. Added `KNOWLEDGE_INDEX_URL`, `knowledge_index_hash` to manifest checking, graceful fallback if index doesn't exist. |
 | `app/data/store.ts` | Imports and initializes knowledge engine + queue in `initStore()`. Exports wrapper functions. Added bundled fallback `require('./knowledge_index.json')`. |
 | `app/app/reader.tsx` | 3 reading modes (Full/Guided/New Only), paragraph dimming via `blockDimming` map, collapsible familiar sections (`CollapsedBar` component), "What's new for you" claims card, `ReadingModeToggle` component, `buildParagraphToBlockMap()` for mapping pipeline paragraph indices to markdown block indices. Calls `markArticleEncountered()` on Done. |
-| `app/app/(tabs)/index.tsx` | Curiosity-zone re-ranking (with 0.05 threshold for stability), topic filter chips (horizontal ScrollView), swipe-right-to-queue, novelty hints ("N new claims"), `ContinueReadingCard` component (limited to 2 most recent). |
+| `app/app/(tabs)/index.tsx` | Curiosity-zone re-ranking (with 0.05 threshold for stability), topic filter chips (horizontal ScrollView), swipe-right-to-queue, novelty hints ("N new claims"), `ContinueReadingCard` component (limited to 2 most recent). Interaction logging for swipe-dismiss and swipe-queue. |
 | `app/app/(tabs)/_layout.tsx` | 3-tab layout: Feed / Topics / Queue. Text-only labels (EB Garamond), rubric dot active indicator. |
-| `scripts/content-refresh.sh` | Added Step 4: `build_knowledge_index.py`. Added `knowledge_index.json` to file copy loops. |
+| `app/data/logger.ts` | Dual-write logging: local (localStorage/filesystem) + server buffer (batched POST to port 8091 every 5s). |
+| `scripts/content-refresh.sh` | Full 6-step pipeline: fetch sources → build articles → validate → extract entities → extract claims → embed claims → build knowledge index → copy to nginx. |
 
 ### Data Generated
 
 | File | Size | Contents |
 |------|------|----------|
-| `data/knowledge_index.json` | 932 KB | 858 claims, 8,863 similarity pairs (≥0.68), 47 article paragraph maps, article novelty matrix, 116 LLM delta reports |
-| `data/claim_embeddings_nomic.npz` | 2.4 MB | 858 × 768 Nomic-embed-text-v1.5 embeddings |
-| `data/articles.json` | ~2 MB | 47 articles with `atomic_claims[]` (10-30 claims each) |
+| `data/articles.json` | 6.3 MB | 171 articles with `atomic_claims[]` (2,954 claims total) |
+| `data/claim_embeddings.npz` | 33 MB | 2,954 Gemini embedding-001 vectors |
+| `data/knowledge_index.json` | 4.3 MB | 2,954 claims, cross-article similarity pairs (≥0.68), 126 article paragraph maps, article novelty matrix (3,488 pair entries), 300 LLM delta reports |
+| `data/llm_audit.jsonl` | ~77 KB | Per-call LLM usage records (tokens, cost, model, purpose) |
 
 ### Algorithm Parameters (validated by experiments)
 
@@ -85,14 +91,17 @@ App (Expo SDK 54):
 | Component | Status | Notes |
 |-----------|--------|-------|
 | nginx content server (:8083) | ✅ Working | Serves articles.json, knowledge_index.json, manifest.json |
-| Static web app (:8084) | ✅ Deployed | Rebuilt with `npx expo export --platform web`, `/content/` proxied to :8083 |
-| Expo native (:8082) | ✅ Running | systemd `petrarca-expo`, pulled latest commit |
-| knowledge_index.json | ✅ Deployed | 932KB with 116 delta reports |
-| articles.json | ✅ 47 articles with claims | Server backup of original 171 articles at `articles_backup_171.json` |
-| claim_embeddings_nomic.npz | ✅ Uploaded | 2.4MB, 858 embeddings |
-| manifest.json | ✅ Updated | Has `knowledge_index_hash` field |
-| Python deps | ✅ numpy + litellm installed | In `/opt/petrarca/.venv` |
-| Cron pipeline | ⚠️ Partially working | `content-refresh.sh` updated, but Nomic model not installed (can't generate embeddings for new articles) |
+| Static web app (:8084) | ✅ Deployed | Rebuilt Mar 8 with latest code (logging, audit) |
+| Expo native (:8082) | ✅ Running | systemd `petrarca-expo` |
+| Log server (:8091) | ✅ Running | systemd `petrarca-log`, collects app interaction logs |
+| articles.json | ✅ 171 articles | Full corpus with 2,954 atomic claims |
+| knowledge_index.json | ✅ 4.3MB | 300 delta reports, novelty matrix, paragraph maps |
+| claim_embeddings.npz | ✅ 33MB | Gemini embedding-001, 2,954 vectors |
+| manifest.json | ✅ Updated | `articles_hash` + `knowledge_index_hash` |
+| llm_audit.jsonl | ✅ Collecting | 330 records from pipeline run ($0.035 total) |
+| Python deps | ✅ All installed | numpy, litellm, google-generativeai in `/opt/petrarca/.venv` |
+| Cron pipeline | ✅ Working | `content-refresh.sh` runs full pipeline including claims + embeddings + knowledge index |
+| GEMINI_KEY | ✅ Configured | In `/opt/petrarca/.env` |
 
 ### SSH Access
 - Use `ssh alif` (configured in `~/.ssh/config` → `root@46.225.75.29` via `~/.ssh/hetzner_ed25519`)
@@ -103,16 +112,16 @@ App (Expo SDK 54):
 
 ### UI Issues (from user screenshot, Mar 8)
 
-1. **Filter chips row clipped** — `maxHeight: 40` on the horizontal ScrollView cuts off chip text. **FIX APPLIED** (changed to `flexGrow: 0`) but not yet deployed.
-2. **Continue Reading section too large** — shows all in-progress articles (user had 5), pushing feed below fold. **FIX APPLIED** (limited to 2 most recent) but not yet deployed.
-3. **Continue Reading cards have card-like backgrounds** — too heavy visually. **FIX APPLIED** (removed parchmentDark background) but not yet deployed.
-4. **UI not visually tested** — Agent only did TypeScript compilation and bundle checks, did not use agent-browser or screenshot verification. **Must visually verify all screens before considering done.**
+1. **Filter chips row clipped** — `maxHeight: 40` on the horizontal ScrollView cuts off chip text. **FIX APPLIED** (changed to `flexGrow: 0`), deployed.
+2. **Continue Reading section too large** — shows all in-progress articles (user had 5), pushing feed below fold. **FIX APPLIED** (limited to 2 most recent), deployed.
+3. **Continue Reading cards have card-like backgrounds** — too heavy visually. **FIX APPLIED** (removed parchmentDark background), deployed.
+4. **UI not visually tested** — Must visually verify all screens before considering done.
 
 ### Data Issues
 
-5. **Server has only 47 articles** — Original 171-article corpus backed up as `articles_backup_171.json`. Need to run `build_articles.py --claims-only` on full corpus, re-embed, rebuild index.
-6. **Nomic model not installed on server** — `sentence-transformers` + `nomic-embed-text-v1.5` needed for cron to auto-embed new articles.
-7. **GEMINI_KEY on server** — Needs verification in `/opt/petrarca/.env` for delta report generation during cron.
+5. ~~**Server has only 47 articles**~~ — **RESOLVED**: Full 171-article corpus restored with 2,954 atomic claims, embeddings, and knowledge index.
+6. **Duplicate topic variants** — Claim extraction produces inconsistent topic formatting (e.g., "Italian unification" vs "Italian-unification", "Il Gattopardo" vs "Il-Gattopardo"). Results in redundant delta reports. Needs topic normalization in the extraction prompt or post-processing.
+7. **google.generativeai deprecation warning** — Embedding script uses deprecated `google.generativeai` package, should migrate to `google.genai`.
 
 ### Logic Issues
 
@@ -158,26 +167,26 @@ App (Expo SDK 54):
 ## Next Steps (Priority Order)
 
 ### Immediate (before daily use)
-1. **Deploy UI fixes** — filter chips, continue reading limits, card styling. Commit + push + rebuild on server.
-2. **Visual testing** — Use agent-browser or Expo Go to verify every screen on mobile before declaring done.
-3. **Verify GEMINI_KEY** on server `/opt/petrarca/.env`
+1. **Visual testing** — Use agent-browser or Expo Go to verify every screen on mobile. This has never been done.
+2. **Topic normalization** — Fix duplicate topic variants in claim extraction (dashes vs spaces, capitalization). Either fix the prompt or add post-processing.
+3. **Production bundle optimization** — Remove bundled `knowledge_index.json` from JS (now 4.3MB — load from server only, cache in AsyncStorage)
 
-### Short-term (enable full pipeline)
-4. **Restore full article corpus** — Run `build_articles.py --claims-only` on server's 171 articles → re-embed → rebuild index
-5. **Install Nomic model on server** — `pip install sentence-transformers` in venv, download `nomic-embed-text-v1.5`
-6. **Add embedding step to cron** — `build_claim_embeddings.py` needs to run incrementally (embed only new claims)
-7. **Production bundle optimization** — Remove bundled `knowledge_index.json` from JS (load from server only, cache in AsyncStorage)
+### Short-term (quality improvements)
+4. **Incremental embedding** — `build_claim_embeddings.py` currently re-embeds all claims. Should detect new claims and only embed those (append to existing .npz).
+5. **LLM judge for ambiguous range** — Claims with 0.68-0.78 cosine similarity get LLM verification (cosine overestimates in this range)
+6. **Sub-topic splitting** — Use embedding clusters for broad topics like "Sicily" (110 claims) that are too general for useful delta reports
+7. **Migrate to `google.genai`** — Replace deprecated `google.generativeai` in embedding script
 
 ### Medium-term (feature completion)
-8. **LLM judge for ambiguous range** — Claims with 0.68-0.78 cosine similarity get LLM verification (cosine overestimates in this range)
-9. **Sub-topic splitting** — Use embedding clusters for broad topics like "ai-agents" (110 claims)
-10. **Micro-delights** — Pull-to-refresh ornament, claim reveal animations, completion flash
-11. **Entry row sidebar** — Design system calls for 76px sidebar with large numbers + depth dots (not yet implemented in feed)
+8. **Micro-delights** — Pull-to-refresh ✦ ornament, claim reveal animations, completion flash (from design spec)
+9. **Entry row sidebar** — Design system calls for 76px sidebar with large numbers + depth dots (not yet implemented in feed)
+10. **Research agent button** — Capture ideas while reading → spawn background research agents
+11. **Voice notes** — Record → Soniox transcription → link to reading context
 
 ### Longer-term
-12. **Contradiction detection** — Current corpus too harmonious (mostly tech blogs). Needs diverse sources.
-13. **Research agent button** — Capture ideas while reading → spawn background research
-14. **Voice notes** — Record → Soniox transcription → link to reading context
+12. **Contradiction detection** — Current corpus too harmonious (mostly tech blogs). Needs diverse sources. Experiment showed 0 real contradictions in current data.
+13. **Web clipper** — Browser extension for capturing articles (see `research/ingestion-sources.md`)
+14. **Book reader** — Section-based long-form reading with cross-book connections (see `research/book-reader-design.md`)
 
 ---
 
@@ -199,12 +208,13 @@ App (Expo SDK 54):
 
 | Script | Purpose |
 |--------|---------|
-| `scripts/build_articles.py --claims` | Extract atomic claims from articles (Gemini Flash) |
-| `scripts/build_claim_embeddings.py` | Generate Nomic embeddings for all claims |
-| `scripts/build_knowledge_index.py` | Build knowledge_index.json from embeddings |
+| `scripts/build_articles.py --claims` | Extract atomic claims from articles (Gemini Flash, 10 parallel workers) |
+| `scripts/build_articles.py --claims-only` | Extract claims for articles that don't have them yet |
+| `scripts/build_claim_embeddings.py` | Generate Gemini embeddings for all claims (batch 100) |
+| `scripts/build_knowledge_index.py` | Build knowledge_index.json from embeddings (parallel delta reports) |
 | `scripts/build_knowledge_index.py --skip-delta` | Build without LLM delta reports (faster) |
+| `scripts/llm_audit.py` | View LLM usage/cost audit. `--days 7`, `--since 2026-03-01`, `--json` |
+| `scripts/log_server.py` | Interaction log collector (port 8091, systemd `petrarca-log`) |
 | `scripts/deploy_knowledge_index.sh` | Deploy to nginx + update manifest |
-| `scripts/deploy_knowledge_index.sh --local` | Update local copies only |
-| `scripts/content-refresh.sh` | Full cron pipeline (fetch → extract → embed → index → deploy) |
-| `scripts/simulate_reading.py` | Simulate reading journeys for testing |
+| `scripts/content-refresh.sh` | Full cron pipeline (fetch → extract → claims → embed → index → deploy) |
 | `scripts/experiment_*.py` | 11 experiment scripts (see experiment-results-report.md) |
