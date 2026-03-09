@@ -232,7 +232,7 @@ App (Expo SDK 54):
 | Voice notes storage | ✅ Working | `/opt/petrarca/data/notes/` (JSON) + `/opt/petrarca/data/audio/` (m4a) |
 | Chat conversations | ✅ Working | `/opt/petrarca/data/chats/` (JSON, per conversation_id) |
 | Research server endpoints | ✅ Updated | `/chat`, `/note`, `/research/topic`, `/notes`, `/notes/{id}/execute-action`, `/research`, `/research/results`, `/twitter/status`, `/twitter/cookies`, `/ingest-note`, `/ingest-cancel`, `/report-scrape`, `/scrape-reports` on port 8090 |
-| Scrape reports queue | ✅ Working | `/opt/petrarca/data/scrape_reports.json` — user-reported bad scrapes, `GET /scrape-reports` lists pending |
+| Scrape reports queue | ✅ Working | `/opt/petrarca/data/scrape_reports.json` — user-reported bad scrapes, `GET /scrape-reports` lists pending. **Review periodically** to identify scraping failure patterns and strengthen the pipeline (e.g. site-specific extractors, better fallback logic). |
 
 ### SSH Access
 - Use `ssh alif` (configured in `~/.ssh/config` → `root@46.225.75.29` via `~/.ssh/hetzner_ed25519`)
@@ -382,6 +382,7 @@ App (Expo SDK 54):
 | G2 | **LLM judge for ambiguous claims** | Medium | 0.68–0.78 cosine range gets LLM verification. Experiment validated, not integrated into pipeline. |
 | G8 | **Web split panel + keyboard shortcuts** | Medium | Desktop experience. Left pane article list + right pane reader, `j/k/d/x/q/Space/s` keys. |
 | G11 | **Scrollbar novelty minimap** | Low | Colored dots on scrollbar showing novel content locations. |
+| G14 | **Scrape report triage + pipeline hardening** | Medium | Periodically review `/opt/petrarca/data/scrape_reports.json` (`GET /scrape-reports`). Analyze failure patterns (paywalls, JS-rendered sites, unusual DOM structures). Use findings to add site-specific extractors, improve `clean_markdown`, or add fallback scraping strategies. First report: Claude docs page (2026-03-09). |
 | G13 | **AnimatedHighlightWrap** | Low | Amber long-press border animation. Deferred due to block rendering complexity. |
 | G14 | **Entry row sidebar** | Low | 76px sidebar with large Cormorant numbers + depth dots. Design polish. |
 | G15 | **Depth navigator** | Low | Summary / Claims / Sections / Full horizontal toggle in reader. |

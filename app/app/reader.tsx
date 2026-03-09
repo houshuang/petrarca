@@ -9,7 +9,8 @@ import VoiceFeedback from '../components/VoiceFeedback';
 import { spawnTopicResearch, ingestUrl, getIngestStatus, reportBadScrape } from '../lib/chat-api';
 import { addToQueue, addToQueueFront } from '../data/queue';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { getArticleById, getArticles, getReadingState, updateReadingState, getHighlightBlockIndices, addHighlight, removeHighlight, markArticleRead, recordInterestSignal, recordTopicInterestSignalAtLevel, getCrossArticleConnections, getParagraphConnections, dismissArticle } from '../data/store';
+import { getArticleById, getArticles, getReadingState, updateReadingState, getHighlightBlockIndices, addHighlight, removeHighlight, markArticleRead, recordInterestSignal, recordTopicInterestSignalAtLevel, getCrossArticleConnections, getParagraphConnections, dismissArticle, getAdjacentArticleId } from '../data/store';
+import type { FeedLens } from '../data/store';
 import { Article, ArticleEntity, FollowUpQuestion, InterestTopic } from '../data/types';
 import type { CrossArticleConnection } from '../data/knowledge-engine';
 import * as Haptics from 'expo-haptics';
@@ -19,6 +20,8 @@ import { getDisplayTitle } from '../lib/display-utils';
 import { toggleBookmark, isBookmarked } from '../data/bookmarks';
 import { getQueuedArticleIds, removeFromQueue } from '../data/queue';
 import RelatedArticles from '../components/RelatedArticles';
+import KeyboardHintBar from '../components/KeyboardHintBar';
+import { useKeyboardShortcuts, type ShortcutMap } from '../hooks/useKeyboardShortcuts';
 import { colors, fonts, type, spacing, layout } from '../design/tokens';
 import {
   computeParagraphDimming, classifyArticleClaims,
@@ -1054,8 +1057,9 @@ function buildAIChatContext(article: Article): string {
 // --- Main Reader Screen ---
 
 export default function ReaderScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, lens } = useLocalSearchParams<{ id: string; lens?: string }>();
   const router = useRouter();
+  const feedLens = (lens || 'best') as FeedLens;
   const article = getArticleById(id || '');
 
   const scrollRef = useRef<ScrollView>(null);
@@ -1096,6 +1100,44 @@ export default function ReaderScreen() {
     const t = setTimeout(() => setStatusMessage(null), 2000);
     return () => clearTimeout(t);
   }, [statusMessage]);
+
+  // --- Keyboard shortcuts (web only) ---
+  const readingModes: ReadingMode[] = ['full', 'guided', 'new_only'];
+  const readerShortcuts = useMemo((): ShortcutMap => {
+    if (!article) return {};
+    return {
+      j: { handler: () => {
+        const next = getAdjacentArticleId(article.id, 'next', feedLens);
+        if (next) router.replace({ pathname: '/reader', params: { id: next, lens: feedLens } });
+      }, label: 'next' },
+      k: { handler: () => {
+        const prev = getAdjacentArticleId(article.id, 'prev', feedLens);
+        if (prev) router.replace({ pathname: '/reader', params: { id: prev, lens: feedLens } });
+      }, label: 'prev' },
+      Escape: { handler: () => router.back(), label: 'back' },
+      s: { handler: () => {
+        const next = !bookmarked;
+        toggleBookmark(article.id);
+        setBookmarked(next);
+        setStatusMessage(next ? 'Bookmarked' : 'Unbookmarked');
+      }, label: 'star' },
+      e: { handler: () => {
+        dismissArticle(article.id, 'keyboard');
+        recordInterestSignal('swipe_dismiss', article.id);
+        setStatusMessage('Disregarded');
+        setTimeout(() => router.back(), 600);
+      }, label: 'disregard' },
+      d: { handler: () => handleDone(), label: 'done' },
+      m: { handler: () => {
+        const idx = readingModes.indexOf(readingMode);
+        setReadingMode(readingModes[(idx + 1) % readingModes.length]);
+      }, label: 'mode' },
+      a: { handler: () => setShowAIChat(true), label: 'ask AI' },
+      '?': { handler: () => {}, label: 'shortcuts' },
+    };
+  }, [article, bookmarked, readingMode, feedLens, router]);
+
+  useKeyboardShortcuts(readerShortcuts, !showAIChat && !showVoiceFeedback && !showMenu);
 
   // Link ingestion state
   const [ingestStates, setIngestStates] = useState<Record<string, IngestState>>({});
@@ -1768,6 +1810,8 @@ export default function ReaderScreen() {
           />
         </View>
       )}
+
+      <KeyboardHintBar shortcuts={readerShortcuts} />
     </View>
   );
 }

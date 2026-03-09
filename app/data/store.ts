@@ -459,6 +459,21 @@ export function getArticlesByLens(lens: FeedLens, topicFilter?: string): Article
 }
 
 /**
+ * Get the next or previous article ID in the current feed order.
+ */
+export function getAdjacentArticleId(
+  currentId: string,
+  direction: 'next' | 'prev',
+  lens: FeedLens = 'best'
+): string | null {
+  const list = getArticlesByLens(lens);
+  const idx = list.findIndex(a => a.id === currentId);
+  if (idx === -1) return null;
+  const target = direction === 'next' ? idx + 1 : idx - 1;
+  return list[target]?.id ?? null;
+}
+
+/**
  * Get articles grouped by broad topic for the Topics lens.
  * Returns groups sorted by topic interest score.
  */

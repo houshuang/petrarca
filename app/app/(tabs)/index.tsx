@@ -25,6 +25,8 @@ import DoubleRule from '../../components/DoubleRule';
 import LensTabs from '../../components/LensTabs';
 import TopicsGroupedList from '../../components/TopicsGroupedList';
 import PetrarcaDrawer from '../../components/PetrarcaDrawer';
+import KeyboardHintBar from '../../components/KeyboardHintBar';
+import { useKeyboardShortcuts, type ShortcutMap } from '../../hooks/useKeyboardShortcuts';
 
 // --- Article Card ---
 
@@ -56,12 +58,14 @@ function formatSourceLabel(sources: Article['sources']): string | null {
   return labels[type] || null;
 }
 
-function ArticleCard({ article, onDismiss, onQueue, compact, showIngestInfo }: {
+function ArticleCard({ article, onDismiss, onQueue, compact, showIngestInfo, isFocused, lens }: {
   article: Article;
   onDismiss: () => void;
   onQueue: () => void;
   compact?: boolean;
   showIngestInfo?: boolean;
+  isFocused?: boolean;
+  lens?: FeedLens;
 }) {
   const router = useRouter();
   const state = getReadingState(article.id);
@@ -134,12 +138,13 @@ function ArticleCard({ article, onDismiss, onQueue, compact, showIngestInfo }: {
         style={({ pressed }: any) => [
           styles.card,
           isRead && styles.cardRead,
+          isFocused && styles.cardFocused,
           pressed && { opacity: 0.9 },
         ] as ViewStyle[]}
         onPress={() => {
           logEvent('feed_article_tap', { article_id: article.id });
           recordInterestSignal('open_article', article.id);
-          router.push({ pathname: '/reader', params: { id: article.id } });
+          router.push({ pathname: '/reader', params: { id: article.id, lens: lens || 'best' } });
         }}
       >
         <Text style={[styles.cardTitle, isRead && styles.cardTitleRead]} numberOfLines={compact ? 1 : 2}>
@@ -196,6 +201,7 @@ export default function FeedScreen() {
   const [topicFilter, setTopicFilter] = useState<string | undefined>(undefined);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [focusedIndex, setFocusedIndex] = useState(-1);
   const spinAnim = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef<FlatList>(null);
 
@@ -295,6 +301,74 @@ export default function FeedScreen() {
     forceUpdate(n => n + 1);
   }, []);
 
+  // Get article items for keyboard navigation
+  const articleItems = useMemo(() =>
+    listData.filter((item): item is Extract<ListItem, { type: 'article' }> => item.type === 'article'),
+    [listData]
+  );
+
+  const getFocusedArticle = useCallback(() => {
+    if (focusedIndex < 0 || focusedIndex >= articleItems.length) return null;
+    return articleItems[focusedIndex].article;
+  }, [focusedIndex, articleItems]);
+
+  // Reset focused index on lens change
+  useEffect(() => { setFocusedIndex(-1); }, [activeLens]);
+
+  const focusedArticleId = focusedIndex >= 0 && focusedIndex < articleItems.length
+    ? articleItems[focusedIndex].article.id
+    : null;
+
+  // Keyboard shortcuts (web only)
+  const feedShortcuts = useMemo((): ShortcutMap => ({
+    j: { handler: () => setFocusedIndex(i => {
+      const next = Math.min(i + 1, articleItems.length - 1);
+      try { flatListRef.current?.scrollToIndex({ index: next + 1, viewPosition: 0.3, animated: true }); } catch {}
+      return next;
+    }), label: 'next' },
+    k: { handler: () => setFocusedIndex(i => {
+      const prev = Math.max(i - 1, 0);
+      try { flatListRef.current?.scrollToIndex({ index: prev + 1, viewPosition: 0.3, animated: true }); } catch {}
+      return prev;
+    }), label: 'prev' },
+    Enter: { handler: () => {
+      const a = getFocusedArticle();
+      if (a) {
+        logEvent('feed_article_tap', { article_id: a.id, via: 'keyboard' });
+        recordInterestSignal('open_article', a.id);
+        router.push({ pathname: '/reader', params: { id: a.id, lens: activeLens } });
+      }
+    }, label: 'open' },
+    o: { handler: () => {
+      const a = getFocusedArticle();
+      if (a) {
+        logEvent('feed_article_tap', { article_id: a.id, via: 'keyboard' });
+        recordInterestSignal('open_article', a.id);
+        router.push({ pathname: '/reader', params: { id: a.id, lens: activeLens } });
+      }
+    }, label: 'open' },
+    e: { handler: () => {
+      const a = getFocusedArticle();
+      if (a) {
+        dismissArticle(a.id, 'keyboard');
+        recordInterestSignal('swipe_dismiss', a.id);
+        handleDismiss();
+      }
+    }, label: 'dismiss' },
+    q: { handler: () => {
+      const a = getFocusedArticle();
+      if (a) { addToQueue(a.id); handleQueue(); }
+    }, label: 'queue' },
+    '1': { handler: () => handleLensChange('latest'), label: 'Latest' },
+    '2': { handler: () => handleLensChange('best'), label: 'Best' },
+    '3': { handler: () => handleLensChange('topics'), label: 'Topics' },
+    '4': { handler: () => handleLensChange('quick'), label: 'Quick' },
+    r: { handler: () => { if (!refreshing) handleRefresh(); }, label: 'refresh' },
+    '?': { handler: () => {}, label: 'shortcuts' },
+  }), [articleItems, getFocusedArticle, activeLens, refreshing, handleLensChange, handleDismiss, handleQueue, handleRefresh, router]);
+
+  useKeyboardShortcuts(feedShortcuts, !drawerOpen);
+
   // Compute the Up Next article ID so Recommended can skip it
   const upNextArticleId = useMemo(() => {
     const inProgress = getInProgressArticles();
@@ -352,6 +426,8 @@ export default function FeedScreen() {
               onQueue={handleQueue}
               compact={activeLens === 'latest'}
               showIngestInfo={activeLens === 'latest'}
+              isFocused={item.article.id === focusedArticleId}
+              lens={activeLens}
             />
           </View>
         );
@@ -377,7 +453,7 @@ export default function FeedScreen() {
       default:
         return null;
     }
-  }, [activeLens, handleLensChange, handleDismiss, handleQueue]);
+  }, [activeLens, handleLensChange, handleDismiss, handleQueue, focusedArticleId]);
 
   const keyExtractor = useCallback((item: ListItem, index: number) => {
     if (item.type === 'article' || item.type === 'read') return item.article.id;
@@ -421,6 +497,7 @@ export default function FeedScreen() {
         }
       />
 
+      <KeyboardHintBar shortcuts={feedShortcuts} />
       <PetrarcaDrawer visible={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </GestureHandlerRootView>
   );
@@ -464,6 +541,12 @@ const styles = StyleSheet.create({
   },
   cardRead: {
     opacity: 0.5,
+  },
+  cardFocused: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.rubric,
+    paddingLeft: 12,
+    backgroundColor: 'rgba(139,37,0,0.03)',
   },
   cardTitle: {
     ...type.entryTitle,
