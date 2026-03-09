@@ -1235,15 +1235,18 @@ class ResearchHandler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps(result).encode())
 
     def _handle_ingest(self):
-        if INGEST_TOKEN:
+        body = self._read_json_body()
+        if body is None:
+            return
+
+        source = body.get('source', 'unknown')
+
+        # App-originated ingests (reader links) skip auth; external sources need a token
+        if INGEST_TOKEN and source not in ('reader_link',):
             token = self.headers.get('X-Petrarca-Token', '')
             if token != INGEST_TOKEN:
                 self._send_json_response(401, {'error': 'Invalid or missing auth token'})
                 return
-
-        body = self._read_json_body()
-        if body is None:
-            return
 
         url = body.get('url', '').strip()
         if not url:
@@ -1254,7 +1257,6 @@ class ResearchHandler(BaseHTTPRequestHandler):
         content = body.get('content', '')
         selected_text = body.get('selected_text', '')
         comment = body.get('comment', '')
-        source = body.get('source', 'unknown')
 
         # Generate IDs before spawning thread so we can return them
         ingest_id = f'ingest_{int(time.time())}_{hash(url) % 10000:04d}'

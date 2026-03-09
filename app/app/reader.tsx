@@ -477,8 +477,8 @@ function EntityHighlightText({
               <Text
                 key={`ent-${ci}-${pi}`}
                 style={entityStyles.entityMention}
-                onLongPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   onEntityLongPress(entity);
                 }}
               >
