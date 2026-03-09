@@ -385,60 +385,64 @@ def main():
         print("Embedding all claims (--force)...", file=sys.stderr)
         embeddings = embed_claims(claims)
         np.savez_compressed(EMBEDDINGS_PATH, embeddings=embeddings)
+        print(f"  Embedded {len(claims)} claims (full rebuild). Total: {len(claims)}", file=sys.stderr)
         print(f"  Saved {EMBEDDINGS_PATH} ({embeddings.shape})", file=sys.stderr)
     else:
-        # Incremental mode: load existing, embed only new claims
+        # Incremental mode: load existing, embed only new claims, prune removed
         existing_embeddings, existing_id_to_row = load_existing_embeddings()
 
         if existing_embeddings is not None and existing_id_to_row is not None:
             existing_ids = set(existing_id_to_row.keys())
 
-            # Check for removed claims — if any old claim is gone, rebuild from scratch
+            # Compute delta: new claims to embed, removed claims to prune
+            new_claims = [c for c in claims if c["id"] not in existing_ids]
             removed_ids = existing_ids - current_claim_ids
-            if removed_ids:
-                print(f"  {len(removed_ids)} claims removed since last run. Rebuilding from scratch.", file=sys.stderr)
-                embeddings = embed_claims(claims)
-                np.savez_compressed(EMBEDDINGS_PATH, embeddings=embeddings)
-                print(f"  Saved {EMBEDDINGS_PATH} ({embeddings.shape})", file=sys.stderr)
-            else:
-                # Find new claims (preserving their order from articles.json)
-                new_claims = [c for c in claims if c["id"] not in existing_ids]
+            kept_count = len(existing_ids) - len(removed_ids)
 
-                if not new_claims:
-                    print("  No new claims to embed.", file=sys.stderr)
-                    # Reorder existing embeddings to match current articles.json order
-                    # (order may have changed if articles were reordered)
-                    reordered = np.stack([existing_embeddings[existing_id_to_row[c["id"]]] for c in claims])
-                    embeddings = reordered
-                    # Save only if order actually changed
-                    order_matches = all(
-                        existing_id_to_row[c["id"]] == i for i, c in enumerate(claims)
-                    )
-                    if not order_matches:
-                        print("  Reordering embeddings to match current articles.json order.", file=sys.stderr)
-                        np.savez_compressed(EMBEDDINGS_PATH, embeddings=embeddings)
-                else:
-                    print(f"  {len(new_claims)} new claims to embed (skipping {len(existing_ids)} existing).", file=sys.stderr)
-                    new_embeddings = embed_claims(new_claims)
-
-                    # Build a lookup: claim_id -> embedding row (combining old + new)
-                    new_id_to_row = {c["id"]: i for i, c in enumerate(new_claims)}
-                    combined_rows = []
-                    for c in claims:
-                        cid = c["id"]
-                        if cid in existing_id_to_row:
-                            combined_rows.append(existing_embeddings[existing_id_to_row[cid]])
-                        else:
-                            combined_rows.append(new_embeddings[new_id_to_row[cid]])
-
-                    embeddings = np.stack(combined_rows)
+            if not new_claims and not removed_ids:
+                print(f"  No new claims to embed. Embedded 0 new claims ({len(existing_ids)} existing, 0 pruned). Total: {len(claims)}", file=sys.stderr)
+                # Reorder existing embeddings to match current articles.json order
+                reordered = np.stack([existing_embeddings[existing_id_to_row[c["id"]]] for c in claims])
+                embeddings = reordered
+                # Save only if order actually changed
+                order_matches = all(
+                    existing_id_to_row[c["id"]] == i for i, c in enumerate(claims)
+                )
+                if not order_matches:
+                    print("  Reordering embeddings to match current articles.json order.", file=sys.stderr)
                     np.savez_compressed(EMBEDDINGS_PATH, embeddings=embeddings)
-                    print(f"  Saved {EMBEDDINGS_PATH} ({embeddings.shape})", file=sys.stderr)
+            else:
+                if removed_ids:
+                    print(f"  Pruning {len(removed_ids)} removed claims.", file=sys.stderr)
+
+                # Embed only new claims (if any)
+                new_embeddings = None
+                new_id_to_row = {}
+                if new_claims:
+                    print(f"  Embedding {len(new_claims)} new claims (reusing {kept_count} existing)...", file=sys.stderr)
+                    new_embeddings = embed_claims(new_claims)
+                    new_id_to_row = {c["id"]: i for i, c in enumerate(new_claims)}
+
+                # Build combined embeddings in current articles.json order,
+                # pulling from existing or newly-embedded as appropriate
+                combined_rows = []
+                for c in claims:
+                    cid = c["id"]
+                    if cid in existing_id_to_row:
+                        combined_rows.append(existing_embeddings[existing_id_to_row[cid]])
+                    else:
+                        combined_rows.append(new_embeddings[new_id_to_row[cid]])
+
+                embeddings = np.stack(combined_rows)
+                np.savez_compressed(EMBEDDINGS_PATH, embeddings=embeddings)
+                print(f"  Embedded {len(new_claims)} new claims ({kept_count} existing, {len(removed_ids)} pruned). Total: {len(claims)}", file=sys.stderr)
+                print(f"  Saved {EMBEDDINGS_PATH} ({embeddings.shape})", file=sys.stderr)
         else:
             # No existing embeddings — full embed
             print("Embedding all claims...", file=sys.stderr)
             embeddings = embed_claims(claims)
             np.savez_compressed(EMBEDDINGS_PATH, embeddings=embeddings)
+            print(f"  Embedded {len(claims)} new claims (0 existing, 0 pruned). Total: {len(claims)}", file=sys.stderr)
             print(f"  Saved {EMBEDDINGS_PATH} ({embeddings.shape})", file=sys.stderr)
 
     # Save claims index for cross-referencing
