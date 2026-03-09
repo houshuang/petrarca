@@ -17,6 +17,7 @@ import { logEvent } from '../data/logger';
 import { isSectionValid, parseInlineMarkdown, splitMarkdownBlocks, parseMarkdownBlock } from '../lib/markdown-utils';
 import { getDisplayTitle } from '../lib/display-utils';
 import { toggleBookmark, isBookmarked } from '../data/bookmarks';
+import { getQueuedArticleIds, removeFromQueue } from '../data/queue';
 import RelatedArticles from '../components/RelatedArticles';
 import { colors, fonts, type, spacing, layout } from '../design/tokens';
 import {
@@ -1064,6 +1065,14 @@ export default function ReaderScreen() {
     onIngest: handleLinkIngest,
   }), [ingestStates, handleLinkIngest]);
 
+  // Next queued article for "Up next" footer
+  const nextQueuedArticle = useMemo(() => {
+    const queuedIds = getQueuedArticleIds();
+    const nextId = queuedIds.find(qId => qId !== id);
+    if (!nextId) return null;
+    return getArticleById(nextId) || null;
+  }, [id]);
+
   // Knowledge engine data
   const paragraphDimming = useMemo(() => {
     if (!article || !isKnowledgeReady()) return null;
@@ -1251,6 +1260,17 @@ export default function ReaderScreen() {
       router.back();
     }
   }, [article, router]);
+
+  // Up next handler — navigate to next queued article
+  const handleUpNext = useCallback(async () => {
+    if (!article || !nextQueuedArticle) return;
+    markArticleRead(article.id);
+    markArticleEncountered(article.id, 'read');
+    recordInterestSignal('tap_done', article.id);
+    await removeFromQueue(article.id);
+    logEvent('reader_up_next', { from_article_id: article.id, to_article_id: nextQueuedArticle.id });
+    router.replace({ pathname: '/reader', params: { id: nextQueuedArticle.id } });
+  }, [article, nextQueuedArticle, router]);
 
   const handleLevelSignal = useCallback((topicKey: string, level: 'broad' | 'specific' | 'entity', positive: boolean, parent?: string) => {
     if (!article) return;
@@ -1522,15 +1542,34 @@ export default function ReaderScreen() {
         {/* Related articles */}
         <RelatedArticles article={article} />
 
-        {/* Bottom spacer for Done button */}
+        {/* Bottom spacer for footer bar */}
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* Floating Done button */}
+      {/* Bottom footer bar: Done + Up Next */}
       {!showInterestCard && (
-        <Pressable style={styles.doneButton} onPress={handleDone}>
-          <Text style={styles.doneButtonText}>Done</Text>
-        </Pressable>
+        <View style={styles.footerBar}>
+          <Pressable style={styles.doneButton} onPress={handleDone}>
+            <Text style={styles.doneButtonText}>Done</Text>
+          </Pressable>
+          {nextQueuedArticle ? (
+            <Pressable style={styles.upNextButton} onPress={handleUpNext}>
+              <Text style={styles.upNextLabel}>UP NEXT</Text>
+              <Text style={styles.upNextTitle} numberOfLines={1}>
+                {getDisplayTitle(nextQueuedArticle)}
+              </Text>
+              <Text style={styles.upNextArrow}>{'\u2192'}</Text>
+            </Pressable>
+          ) : (
+            <Pressable style={styles.upNextButton} onPress={() => {
+              logEvent('reader_back_to_feed', { article_id: article.id });
+              router.back();
+            }}>
+              <Text style={styles.upNextArrow}>{'\u2190'}</Text>
+              <Text style={styles.upNextTitle}>Back to feed</Text>
+            </Pressable>
+          )}
+        </View>
       )}
 
       {/* Post-Read Interest Card */}
@@ -1831,30 +1870,56 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  // Done button
-  doneButton: {
-    position: 'absolute',
-    bottom: 24,
-    right: 24,
-    backgroundColor: colors.ink,
-    paddingHorizontal: 28,
+  // Footer bar (Done + Up Next)
+  footerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: layout.screenPadding,
     paddingVertical: 12,
-    borderRadius: 24,
-    ...(Platform.OS === 'web' ? {
-      boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-    } : {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.15,
-      shadowRadius: 8,
-      elevation: 4,
-    }),
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.rule,
+    backgroundColor: colors.parchment,
+    gap: 12,
+  },
+  doneButton: {
+    backgroundColor: colors.ink,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    minHeight: layout.touchTarget,
+    justifyContent: 'center',
   },
   doneButtonText: {
     fontFamily: fonts.uiMedium,
-    fontSize: 15,
+    fontSize: 14,
     color: colors.parchment,
     ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}),
+  },
+  upNextButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: layout.touchTarget,
+    paddingHorizontal: 8,
+  },
+  upNextLabel: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 9,
+    letterSpacing: 0.8,
+    color: colors.textMuted,
+    ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}),
+  },
+  upNextTitle: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.textSecondary,
+    flex: 1,
+  },
+  upNextArrow: {
+    fontFamily: fonts.body,
+    fontSize: 15,
+    color: colors.rubric,
   },
 
   // Markdown styles
