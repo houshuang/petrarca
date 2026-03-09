@@ -769,10 +769,14 @@ function MarkdownText({ content, highlightedBlocks, onBlockLongPress, blockDimmi
     const blockOpacity = readingMode === 'guided' && dimming ? dimming.opacity : opacityOverride ?? 1;
     const opacityStyle = blockOpacity < 1 ? { opacity: blockOpacity } : undefined;
 
+    // Novel marker: green left border on novel paragraphs in guided/new_only modes
+    const isNovel = dimming && (dimming.novelty === 'novel' || dimming.novelty === 'mostly_novel') && readingMode !== 'full';
+    const novelMarkerStyle = isNovel ? { borderLeftWidth: 2, borderLeftColor: colors.claimNew, paddingLeft: 8 } as const : undefined;
+
     switch (block.type) {
       case 'heading':
         return (
-          <View key={i} style={opacityStyle}>
+          <View key={i} style={[opacityStyle, novelMarkerStyle]}>
             <Text style={[
               styles.markdownHeading,
               block.level === 1 && { fontSize: 22 },
@@ -785,13 +789,13 @@ function MarkdownText({ content, highlightedBlocks, onBlockLongPress, blockDimmi
         );
 
       case 'hr':
-        return <View key={i} style={[styles.markdownHr, opacityStyle]} />;
+        return <View key={i} style={[styles.markdownHr, opacityStyle, novelMarkerStyle]} />;
 
       case 'ul':
         return (
           <Pressable
             key={i}
-            style={[styles.markdownList, isHighlighted && styles.paragraphHighlight, opacityStyle]}
+            style={[styles.markdownList, isHighlighted && styles.paragraphHighlight, opacityStyle, novelMarkerStyle]}
             onLongPress={onBlockLongPress ? () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onBlockLongPress(i, raw); } : undefined}
           >
             {(block.items || []).map((item, j) => (
@@ -807,7 +811,7 @@ function MarkdownText({ content, highlightedBlocks, onBlockLongPress, blockDimmi
         return (
           <Pressable
             key={i}
-            style={[styles.markdownList, isHighlighted && styles.paragraphHighlight, opacityStyle]}
+            style={[styles.markdownList, isHighlighted && styles.paragraphHighlight, opacityStyle, novelMarkerStyle]}
             onLongPress={onBlockLongPress ? () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onBlockLongPress(i, raw); } : undefined}
           >
             {(block.items || []).map((item, j) => (
@@ -821,7 +825,7 @@ function MarkdownText({ content, highlightedBlocks, onBlockLongPress, blockDimmi
 
       case 'code':
         return (
-          <View key={i} style={[styles.codeBlock, isHighlighted && styles.paragraphHighlight, opacityStyle]}>
+          <View key={i} style={[styles.codeBlock, isHighlighted && styles.paragraphHighlight, opacityStyle, novelMarkerStyle]}>
             <Text style={styles.codeText}>{block.content}</Text>
           </View>
         );
@@ -831,7 +835,7 @@ function MarkdownText({ content, highlightedBlocks, onBlockLongPress, blockDimmi
           <Pressable
             key={i}
             onLongPress={onBlockLongPress ? () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onBlockLongPress(i, raw); } : undefined}
-            style={[styles.markdownBlockquote, isHighlighted && styles.paragraphHighlight, opacityStyle]}
+            style={[styles.markdownBlockquote, isHighlighted && styles.paragraphHighlight, opacityStyle, novelMarkerStyle]}
           >
             <Text style={styles.markdownBlockquoteText}>{renderInlineMarkdown(block.content, linkHandler)}</Text>
           </Pressable>
@@ -839,7 +843,7 @@ function MarkdownText({ content, highlightedBlocks, onBlockLongPress, blockDimmi
 
       case 'table':
         return (
-          <View key={i} style={[styles.tableContainer, opacityStyle]}>
+          <View key={i} style={[styles.tableContainer, opacityStyle, novelMarkerStyle]}>
             {block.headers && block.headers.length > 0 && (
               <View style={styles.tableRow}>
                 {block.headers.map((h, hi) => (
@@ -872,7 +876,7 @@ function MarkdownText({ content, highlightedBlocks, onBlockLongPress, blockDimmi
           <View key={i}>
             <Pressable
               onLongPress={onBlockLongPress ? () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onBlockLongPress(i, block.content); } : undefined}
-              style={[isHighlighted ? styles.paragraphHighlight : undefined, opacityStyle]}
+              style={[isHighlighted ? styles.paragraphHighlight : undefined, opacityStyle, novelMarkerStyle]}
             >
               <Text style={styles.markdownText}>
                 {entities && entities.length > 0 && onEntityLongPress ? (
