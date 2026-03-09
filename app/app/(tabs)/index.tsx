@@ -112,10 +112,12 @@ function ArticleCard({ article, onDismiss, onQueue, compact, showIngestInfo }: {
     onQueue();
   };
 
-  const topics = (article.interest_topics || [])
-    .slice(0, 2)
-    .map(t => t.specific || t.broad);
-  const fallbackTopics = topics.length > 0 ? topics : article.topics.slice(0, 2);
+  const topics = [...new Set(
+    (article.interest_topics || [])
+      .slice(0, 2)
+      .map(t => t.specific || t.broad)
+  )];
+  const fallbackTopics = topics.length > 0 ? topics : [...new Set(article.topics.slice(0, 2))];
 
   return (
     <Swipeable
