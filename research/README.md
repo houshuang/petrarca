@@ -56,6 +56,11 @@ Master index of all research documents. **Always update this file when adding ne
 | [ingestion-sources.md](ingestion-sources.md) | Email-to-article ingestion (Cloudflare Email Workers, Postfix) and browser web clipper extension | Done |
 | [kindle-integration.md](kindle-integration.md) | Kindle data integration: APIs, highlights export, reading progress, Readwise middleware, practical plan | Done |
 
+## UX Redesign
+| Document | Description | Status |
+|----------|-------------|--------|
+| [feed-redesign-plan.md](feed-redesign-plan.md) | **Navigation overhaul**: Replace 4-tab layout with single unified screen + lens tabs + ✦ drawer. Queue → "Up Next", Topics → lens, Log → drawer. 3 rounds of mockup exploration, approved direction, detailed implementation plan. | Active |
+
 ## Experiments & Development
 | Document | Description | Status |
 |----------|-------------|--------|

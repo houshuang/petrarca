@@ -4,6 +4,73 @@
 
 ---
 
+## 2026-03-09 — Session 9: Feed & Navigation Redesign (Design + Implementation)
+
+**What**: Major UX redesign — 3 rounds of mockups (15 total), user interview, full implementation of unified single-screen architecture replacing the 4-tab layout. Complete rebuild of feed, navigation, and ranking system.
+
+### Design Exploration
+- **Round 1** (5 mockups): Compact Timeline, Sectioned Feed, Source Streams, Magazine Hero, Dual Mode Triage. All neutral — too incremental.
+- **Round 2** (5 mockups): Reading Desk, Swipeable Lenses, Contextual Home, Manuscript Marginalia, Card Stack Tinder. Three thumbs up (Desk, Lenses, Contextual Home). Card Stack interesting as alternative mode.
+- **Round 3** (5 mockups): Unified Sections, Lens Tabs, Hybrid Scroll+Lenses, Topics Lens Active, ✦ Drawer. All thumbs up. Direction approved.
+
+### User Interview Findings
+- **Mindset varies by day** — needs easy mode switching, not one fixed default
+- **Queue should be integrated into feed** as "Up Next", not a separate destination
+- **Topics and Log are secondary** — can be demoted from top-level nav
+- **Mental model is mixed** — topic, urgency, commitment all matter at different times
+- **"This is a river, not a todo list"** — no counts, no stats, important stuff rises to top
+- **Dynamic reranking** — reading related content should deprioritize similar articles
+
+### Implementation (all 5 phases complete)
+
+#### New Components (7 files)
+- `DoubleRule.tsx` — Reusable double rule separator (2px + 5px gap + 1px)
+- `LensTabs.tsx` — Latest/Best/Topics/Quick tab switcher, rubric underline active indicator, sticky on scroll
+- `UpNextSection.tsx` — Pinned top: in-progress resume (with progress bar) → next queued → algorithmic pick. ✦ drawer trigger button.
+- `RecommendedSection.tsx` — Hero card for top-ranked article with Cormorant title, claim preview, novelty badge
+- `TopicPillsSection.tsx` — Horizontal scroll of topic pills (first gets ink treatment), article counts
+- `TopicsGroupedList.tsx` — Articles grouped by topic with tree-line indentation, expand/collapse (+N more)
+- `PetrarcaDrawer.tsx` — Bottom sheet (ink bg): Triage/Voice Note quick actions + nav to Voice Notes, Log, Progress, Queue
+
+#### Rewritten Files
+- `app/(tabs)/index.tsx` — Complete rewrite. Single FlatList: ListHeaderComponent (UpNext → Recommended → Topics → DoubleRule), lens tabs as sticky data[0], articles sorted/grouped by lens. No header chrome. Swipe dismiss/queue preserved.
+- `app/(tabs)/_layout.tsx` — Tab bar hidden (display:none), Topics/Queue/Log routes kept with `href:null` for drawer access.
+
+#### Data Layer
+- `store.ts` — Added `FeedLens` type, `getTopRecommendedArticle()`, `getArticlesByLens()`, `getArticlesGroupedByTopic()`, `getInProgressArticles()`, `getFeedVersion()`/`bumpFeedVersion()`. Integrated knowledge engine curiosity scores into `getRankedFeedArticles()`: blended ranking = interest model (60%) + curiosity score (40%).
+- `queue.ts` — Added `getNextQueued()`, `peekQueue(n)`
+
+#### Dynamic Reranking
+- `useFocusEffect` on feed screen bumps `feedVersion` when returning from reader → triggers full re-rank
+- `getRankedFeedArticles()` now blends interest model (60%) with knowledge curiosity (40%)
+- Reading article X → `markArticleEncountered()` → FSRS ledger updated → articles sharing claims (cosine ≥0.78) lose novelty → rank lower on return
+- Topic interest changes (+/- chips in reader) → `recordTopicSignalAtLevel()` → immediate effect on next feed render
+
+### Hypotheses to Validate
+1. **Lens usage distribution** — Which lenses get used most? Hypothesis: "Best" is default but "Latest" gets used when user wants to see what just arrived. Track via `lens_switch` events.
+2. **Up Next engagement** — Does integrating queue into feed increase queue-to-read conversion? Track `up_next_tap` events by type (resume/queued/algorithmic).
+3. **Topic pills → deeper exploration** — Do topic pills drive users into the Topics lens? Track `topic_pill_tap` → subsequent `lens_switch` to topics.
+4. **Drawer discoverability** — Is ✦ obvious enough? Track `drawer_open` frequency. If low, may need onboarding hint.
+5. **Dynamic reranking perceptibility** — After reading an article and returning to feed, does the user notice articles have moved? No direct metric — observe via session logs whether user scrolls to find things they saw before.
+6. **Blended ranking quality** — 60/40 interest/curiosity blend: does curiosity scoring add value over pure interest model? Compare `recommended_tap` click-through rates with knowledge engine on vs. cold start.
+7. **Chrome reduction** — Old: ~210px fixed chrome. New: ~56px (UpNext). Does content density improve engagement? Track scroll depth and articles-per-session.
+8. **Quick lens utility** — Are ≤3min articles actually read more when surfaced separately? Track `lens_switch` to quick + subsequent article opens.
+
+### Events Logged
+- `lens_switch` — { from, to }
+- `recommended_tap` — { article_id }
+- `topic_pill_tap` — { topic }
+- `up_next_tap` — { article_id, type: resume/queued/algorithmic }
+- `drawer_open` / `drawer_close`
+- `drawer_item_tap` — { item }
+- `topic_group_article_tap` — { article_id, topic }
+- All existing events preserved (feed_article_tap, feed_swipe_dismiss, feed_swipe_queue, feed_pull_refresh, feed_articles_visible)
+
+### Mockups
+- Approved mockups in `/mockups/`: unified-sections, lens-tabs-top, hybrid-scroll-lenses, topic-lens-view, drawer-menu
+
+---
+
 ## 2026-03-09 — Session 7: Claim feedback design exploration + behavioral encounter tracking
 
 **What**: Explored claim-level feedback UI via 4 design mockups, then pivoted to behavioral inference approach. Implemented scroll-aware encounter tracking and curated "What's new" card.

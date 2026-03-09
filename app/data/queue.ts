@@ -56,3 +56,13 @@ export function getQueuedArticleIds(): string[] {
 export function isQueued(articleId: string): boolean {
   return queuedIds.includes(articleId);
 }
+
+/** Returns the first queued article ID without removing it */
+export function getNextQueued(): string | null {
+  return queuedIds.length > 0 ? queuedIds[0] : null;
+}
+
+/** Returns the first N queued article IDs */
+export function peekQueue(n: number = 3): string[] {
+  return queuedIds.slice(0, n);
+}

@@ -1,67 +1,47 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, Pressable, Animated,
-  Platform, ViewStyle, ScrollView, Linking, RefreshControl,
+  Platform, ViewStyle, RefreshControl,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import {
-  getRankedFeedArticles, getReadingState, dismissArticle,
-  getReadArticles, getArticles, recordInterestSignal, refreshContent,
+  getArticlesByLens, getReadingState, dismissArticle,
+  getReadArticles, recordInterestSignal, refreshContent,
+  bumpFeedVersion, getFeedVersion,
 } from '../../data/store';
+import type { FeedLens } from '../../data/store';
 import { Article } from '../../data/types';
 import { logEvent } from '../../data/logger';
-import { getDisplayTitle, normalizeTopic, displayTopic } from '../../lib/display-utils';
-import { colors, fonts, type, spacing, layout } from '../../design/tokens';
+import { getDisplayTitle, displayTopic } from '../../lib/display-utils';
+import { colors, fonts, type, layout } from '../../design/tokens';
 import { isKnowledgeReady, getArticleNovelty } from '../../data/knowledge-engine';
 import { addToQueue } from '../../data/queue';
-
-// --- Continue Reading Card ---
-
-function ContinueReadingCard({ article }: { article: Article }) {
-  const router = useRouter();
-  const state = getReadingState(article.id);
-  const progressRatio = state.time_spent_ms > 0
-    ? Math.min(state.time_spent_ms / (article.estimated_read_minutes * 60 * 1000), 0.95)
-    : 0.1;
-
-  return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.continueCard,
-        pressed && { opacity: 0.9 },
-      ]}
-      onPress={() => {
-        logEvent('continue_reading_tap', { article_id: article.id });
-        recordInterestSignal('open_article', article.id);
-        router.push({ pathname: '/reader', params: { id: article.id } });
-      }}
-    >
-      <Text style={styles.continueTitle} numberOfLines={1}>
-        {getDisplayTitle(article)}
-      </Text>
-      <Text style={styles.continueMeta}>{article.hostname}</Text>
-      <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: `${progressRatio * 100}%` }]} />
-      </View>
-    </Pressable>
-  );
-}
+import UpNextSection from '../../components/UpNextSection';
+import RecommendedSection from '../../components/RecommendedSection';
+import TopicPillsSection from '../../components/TopicPillsSection';
+import DoubleRule from '../../components/DoubleRule';
+import LensTabs from '../../components/LensTabs';
+import TopicsGroupedList from '../../components/TopicsGroupedList';
+import PetrarcaDrawer from '../../components/PetrarcaDrawer';
 
 // --- Article Card ---
 
-function ArticleCard({ article, onDismiss, onQueue }: {
+function ArticleCard({ article, onDismiss, onQueue, compact }: {
   article: Article;
   onDismiss: () => void;
   onQueue: () => void;
+  compact?: boolean;
 }) {
   const router = useRouter();
   const state = getReadingState(article.id);
   const isRead = state.status === 'read';
 
   const novelty = isKnowledgeReady() ? getArticleNovelty(article.id) : null;
-  const bestClaim = (article.novelty_claims || []).find(c => c.specificity === 'high')
-    || (article.novelty_claims || [])[0];
+  const bestClaim = !compact
+    ? ((article.novelty_claims || []).find(c => c.specificity === 'high')
+      || (article.novelty_claims || [])[0])
+    : null;
 
   const renderRightActions = (_progress: Animated.AnimatedInterpolation<number>, dragX: Animated.AnimatedInterpolation<number>) => {
     const scale = dragX.interpolate({
@@ -103,9 +83,9 @@ function ArticleCard({ article, onDismiss, onQueue }: {
   };
 
   const topics = (article.interest_topics || [])
-    .slice(0, 3)
+    .slice(0, 2)
     .map(t => t.specific || t.broad);
-  const fallbackTopics = topics.length > 0 ? topics : article.topics.slice(0, 3);
+  const fallbackTopics = topics.length > 0 ? topics : article.topics.slice(0, 2);
 
   return (
     <Swipeable
@@ -130,10 +110,10 @@ function ArticleCard({ article, onDismiss, onQueue }: {
           router.push({ pathname: '/reader', params: { id: article.id } });
         }}
       >
-        <Text style={[styles.cardTitle, isRead && styles.cardTitleRead]} numberOfLines={2}>
+        <Text style={[styles.cardTitle, isRead && styles.cardTitleRead]} numberOfLines={compact ? 1 : 2}>
           {getDisplayTitle(article)}
         </Text>
-        {article.one_line_summary ? (
+        {!compact && article.one_line_summary ? (
           <Text style={[styles.cardSummary, isRead && styles.cardSummaryRead]} numberOfLines={2}>
             {article.one_line_summary}
           </Text>
@@ -148,23 +128,13 @@ function ArticleCard({ article, onDismiss, onQueue }: {
         ) : null}
 
         <View style={styles.cardFooter}>
-          <View style={styles.cardFooterLeft}>
-            <Text style={styles.cardMeta}>
-              {article.hostname}
-              {article.author ? ` \u00b7 ${article.author}` : ''}
-              {` \u00b7 ${article.estimated_read_minutes} min`}
-            </Text>
-            {novelty ? (
-              <Text style={[
-                styles.noveltyHint,
-                novelty.novelty_ratio > 0.5
-                  ? { color: colors.claimNew }
-                  : { color: colors.textMuted },
-              ]}>
-                {novelty.new_claims} new claim{novelty.new_claims !== 1 ? 's' : ''}
-              </Text>
-            ) : null}
-          </View>
+          <Text style={styles.cardMeta}>
+            {article.hostname}
+            {` · ${article.estimated_read_minutes} min`}
+            {novelty && novelty.new_claims > 0
+              ? ` · ${novelty.new_claims} new`
+              : ''}
+          </Text>
           <View style={styles.topicTags}>
             {fallbackTopics.map(t => (
               <Text key={t} style={styles.topicTagText}>{displayTopic(t)}</Text>
@@ -176,34 +146,33 @@ function ArticleCard({ article, onDismiss, onQueue }: {
   );
 }
 
-// --- Topic Filter Chip ---
-
-function TopicChip({ label, count, active, onPress }: {
-  label: string;
-  count: number;
-  active: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      style={[styles.filterChip, active && styles.filterChipActive]}
-      onPress={onPress}
-    >
-      <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-        {label} ({count})
-      </Text>
-    </Pressable>
-  );
-}
-
 // --- Feed Screen ---
+
+type ListItem =
+  | { type: 'lens-tabs' }
+  | { type: 'topics-grouped'; topicFilter?: string }
+  | { type: 'article'; article: Article }
+  | { type: 'separator' }
+  | { type: 'read'; article: Article };
 
 export default function FeedScreen() {
   const router = useRouter();
   const [, forceUpdate] = useState(0);
-  const [activeTopic, setActiveTopic] = useState<string | null>(null);
+  const [activeLens, setActiveLens] = useState<FeedLens>('best');
+  const [topicFilter, setTopicFilter] = useState<string | undefined>(undefined);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const spinAnim = useRef(new Animated.Value(0)).current;
+  const flatListRef = useRef<FlatList>(null);
+
+  // Re-rank feed when screen regains focus (e.g. returning from reader)
+  // This ensures reading an article deprioritizes similar content via the knowledge model
+  useFocusEffect(
+    useCallback(() => {
+      bumpFeedVersion();
+      forceUpdate(n => n + 1);
+    }, [])
+  );
 
   useEffect(() => {
     if (refreshing) {
@@ -227,163 +196,158 @@ export default function FeedScreen() {
       await refreshContent();
     } finally {
       setRefreshing(false);
+      bumpFeedVersion();
       forceUpdate(n => n + 1);
     }
   }, []);
 
-  const feedArticles = useMemo(() => {
-    const base = getRankedFeedArticles();
-    if (!isKnowledgeReady()) return base;
-
-    return base
-      .map((a, rank) => ({ article: a, novelty: getArticleNovelty(a.id), rank }))
-      .sort((a, b) => {
-        const aBoost = a.novelty?.curiosity_score || 0.5;
-        const bBoost = b.novelty?.curiosity_score || 0.5;
-        const scoreDiff = bBoost - aBoost;
-        // Only re-rank if curiosity scores differ meaningfully
-        if (Math.abs(scoreDiff) > 0.05) return scoreDiff;
-        return a.rank - b.rank; // preserve interest model order as tiebreaker
-      })
-      .map(x => x.article);
+  const handleLensChange = useCallback((lens: FeedLens) => {
+    setActiveLens(lens);
+    setTopicFilter(undefined);
   }, []);
 
-  const readArticles = getReadArticles();
-
-  // Articles currently being read (started but not finished) — show max 2
-  const continueReading = useMemo(() => {
-    return getArticles()
-      .filter(a => {
-        const state = getReadingState(a.id);
-        return state.status === 'reading';
-      })
-      .sort((a, b) => {
-        const sa = getReadingState(a.id);
-        const sb = getReadingState(b.id);
-        return (sb.last_read_at || 0) - (sa.last_read_at || 0);
-      })
-      .slice(0, 2);
+  const handleTopicPress = useCallback((topic: string) => {
+    setActiveLens('topics');
+    setTopicFilter(topic);
   }, []);
 
-  // Gather all topics for filter chips (normalized)
-  const topicCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const a of feedArticles) {
-      const topics = (a.interest_topics || []).map(t => normalizeTopic(t.broad));
-      const fallback = topics.length > 0 ? topics : a.topics.slice(0, 2).map(normalizeTopic);
-      for (const t of fallback) {
-        counts.set(t, (counts.get(t) || 0) + 1);
+  const handleSeeAllBest = useCallback(() => {
+    setActiveLens('best');
+    setTopicFilter(undefined);
+  }, []);
+
+  const handleSeeAllTopics = useCallback(() => {
+    setActiveLens('topics');
+    setTopicFilter(undefined);
+  }, []);
+
+  const feedVersion = getFeedVersion();
+
+  // Build the list data based on active lens
+  const listData = useMemo((): ListItem[] => {
+    const items: ListItem[] = [];
+
+    // Lens tabs are always first (will be sticky)
+    items.push({ type: 'lens-tabs' });
+
+    if (activeLens === 'topics') {
+      items.push({ type: 'topics-grouped', topicFilter });
+    } else {
+      const articles = getArticlesByLens(activeLens, topicFilter);
+      for (const a of articles) {
+        items.push({ type: 'article', article: a });
+      }
+
+      // Read articles at the bottom
+      const readArticles = getReadArticles();
+      if (readArticles.length > 0) {
+        items.push({ type: 'separator' });
+        for (const a of readArticles) {
+          items.push({ type: 'read', article: a });
+        }
       }
     }
-    return [...counts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 8);
-  }, [feedArticles]);
 
-  // Filter articles by active topic (compare normalized)
-  const filteredArticles = useMemo(() => {
-    if (!activeTopic) return feedArticles;
-    return feedArticles.filter(a => {
-      const topics = (a.interest_topics || []).map(t => normalizeTopic(t.broad));
-      const fallback = topics.length > 0 ? topics : a.topics.map(normalizeTopic);
-      return fallback.includes(activeTopic);
-    });
-  }, [feedArticles, activeTopic]);
+    return items;
+  }, [activeLens, topicFilter, feedVersion]);
 
   const handleDismiss = useCallback(() => {
+    bumpFeedVersion();
     forceUpdate(n => n + 1);
   }, []);
 
   const handleQueue = useCallback(() => {
+    bumpFeedVersion();
     forceUpdate(n => n + 1);
   }, []);
 
-  const today = new Date();
-  const dateStr = today.toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-  });
+  const renderHeader = useCallback(() => (
+    <View>
+      {refreshing && (
+        <View style={styles.refreshOrnament}>
+          <Animated.Text style={[
+            styles.refreshStar,
+            {
+              transform: [{
+                rotate: spinAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ['0deg', '360deg'],
+                }),
+              }],
+            },
+          ]}>
+            {'\u2726'}
+          </Animated.Text>
+        </View>
+      )}
+      <UpNextSection onDrawerOpen={() => setDrawerOpen(true)} />
+      <RecommendedSection onSeeAll={handleSeeAllBest} />
+      <TopicPillsSection onTopicPress={handleTopicPress} onSeeAll={handleSeeAllTopics} />
+      <DoubleRule />
+    </View>
+  ), [refreshing, spinAnim, handleSeeAllBest, handleTopicPress, handleSeeAllTopics]);
 
-  const allItems = [
-    ...(continueReading.length > 0 ? [{ type: 'continue' as const, article: null as any }] : []),
-    ...filteredArticles.map(a => ({ type: 'article' as const, article: a })),
-    ...(readArticles.length > 0 ? [{ type: 'separator' as const, article: null as any }] : []),
-    ...readArticles.map(a => ({ type: 'read' as const, article: a })),
-  ];
+  const renderItem = useCallback(({ item }: { item: ListItem }) => {
+    switch (item.type) {
+      case 'lens-tabs':
+        return (
+          <LensTabs activeLens={activeLens} onLensChange={handleLensChange} />
+        );
+      case 'topics-grouped':
+        return (
+          <View style={styles.listPadding}>
+            <TopicsGroupedList topicFilter={item.topicFilter} />
+          </View>
+        );
+      case 'article':
+        return (
+          <View style={styles.listPadding}>
+            <ArticleCard
+              article={item.article}
+              onDismiss={handleDismiss}
+              onQueue={handleQueue}
+              compact={activeLens === 'latest'}
+            />
+          </View>
+        );
+      case 'separator':
+        return (
+          <View style={[styles.readSeparator, styles.listPadding]}>
+            <View style={styles.readSeparatorLine} />
+            <Text style={styles.readSeparatorText}>Read</Text>
+            <View style={styles.readSeparatorLine} />
+          </View>
+        );
+      case 'read':
+        return (
+          <View style={styles.listPadding}>
+            <ArticleCard
+              article={item.article}
+              onDismiss={handleDismiss}
+              onQueue={handleQueue}
+              compact
+            />
+          </View>
+        );
+      default:
+        return null;
+    }
+  }, [activeLens, handleLensChange, handleDismiss, handleQueue]);
+
+  const keyExtractor = useCallback((item: ListItem, index: number) => {
+    if (item.type === 'article' || item.type === 'read') return item.article.id;
+    return `${item.type}-${index}`;
+  }, []);
 
   return (
     <GestureHandlerRootView style={styles.container}>
-      <View style={styles.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>Petrarca</Text>
-          <Text style={styles.headerSubtitle}>{dateStr}</Text>
-        </View>
-        <View style={styles.headerLinks}>
-          <Pressable
-            onPress={() => {
-              logEvent('voice_notes_menu_tap');
-              router.push('/voice-notes');
-            }}
-            style={styles.guideLink}
-          >
-            <Text style={styles.guideLinkText}>Notes</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              logEvent('user_guide_opened');
-              const url = Platform.OS === 'web' ? '/guide/' : 'https://alifstian.duckdns.org/guide/';
-              Linking.openURL(url);
-            }}
-            style={styles.guideLink}
-          >
-            <Text style={styles.guideLinkText}>Guide</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      {/* Double rule */}
-      <View style={styles.doubleRule}>
-        <View style={styles.doubleRuleTop} />
-        <View style={styles.doubleRuleGap} />
-        <View style={styles.doubleRuleBottom} />
-      </View>
-
-      {/* Topic filter chips */}
-      {topicCounts.length > 0 ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterRow}
-          style={styles.filterScroll}
-        >
-          <TopicChip
-            label="All"
-            count={feedArticles.length}
-            active={activeTopic === null}
-            onPress={() => {
-              setActiveTopic(null);
-              logEvent('feed_filter', { topic: 'all' });
-            }}
-          />
-          {topicCounts.map(([topic, count]) => (
-            <TopicChip
-              key={topic}
-              label={displayTopic(topic)}
-              count={count}
-              active={activeTopic === topic}
-              onPress={() => {
-                setActiveTopic(activeTopic === topic ? null : topic);
-                logEvent('feed_filter', { topic });
-              }}
-            />
-          ))}
-        </ScrollView>
-      ) : null}
-
       <FlatList
-        data={allItems}
-        keyExtractor={(item, index) => item.article?.id || `section-${item.type}-${index}`}
+        ref={flatListRef}
+        data={listData}
+        keyExtractor={keyExtractor}
+        ListHeaderComponent={renderHeader}
+        stickyHeaderIndices={[0]}
+        renderItem={renderItem}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -393,23 +357,6 @@ export default function FeedScreen() {
             style={{ backgroundColor: 'transparent' }}
           />
         }
-        ListHeaderComponent={refreshing ? (
-          <View style={styles.refreshOrnament}>
-            <Animated.Text style={[
-              styles.refreshStar,
-              {
-                transform: [{
-                  rotate: spinAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: ['0deg', '360deg'],
-                  }),
-                }],
-              },
-            ]}>
-              {'\u2726'}
-            </Animated.Text>
-          </View>
-        ) : null}
         onViewableItemsChanged={useCallback(({ viewableItems }: any) => {
           const articleIds = viewableItems
             .filter((v: any) => v.item?.article?.id)
@@ -419,37 +366,6 @@ export default function FeedScreen() {
           }
         }, [])}
         viewabilityConfig={{ itemVisiblePercentThreshold: 50, minimumViewTime: 1000 }}
-        renderItem={({ item }) => {
-          if (item.type === 'continue') {
-            return (
-              <View style={styles.continueSection}>
-                <Text style={styles.sectionHead}>
-                  <Text style={{ color: colors.rubric }}>{'\u2726'} </Text>
-                  Continue Reading
-                </Text>
-                {continueReading.map(a => (
-                  <ContinueReadingCard key={a.id} article={a} />
-                ))}
-              </View>
-            );
-          }
-          if (item.type === 'separator') {
-            return (
-              <View style={styles.readSeparator}>
-                <View style={styles.readSeparatorLine} />
-                <Text style={styles.readSeparatorText}>Read</Text>
-                <View style={styles.readSeparatorLine} />
-              </View>
-            );
-          }
-          return (
-            <ArticleCard
-              article={item.article}
-              onDismiss={handleDismiss}
-              onQueue={handleQueue}
-            />
-          );
-        }}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
@@ -459,6 +375,8 @@ export default function FeedScreen() {
           </View>
         }
       />
+
+      <PetrarcaDrawer visible={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </GestureHandlerRootView>
   );
 }
@@ -469,84 +387,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.parchment,
   },
 
-  // Header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
+  listContent: {
+    paddingBottom: 40,
+  },
+  listPadding: {
     paddingHorizontal: layout.screenPadding,
-    paddingTop: 12,
-    paddingBottom: 8,
-  },
-  headerTitle: {
-    ...type.screenTitle,
-    color: colors.ink,
-  },
-  headerSubtitle: {
-    ...type.screenSubtitle,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  headerLinks: {
-    flexDirection: 'row',
-    gap: 4,
-    alignSelf: 'flex-start',
-    marginTop: 2,
-  },
-  guideLink: {
-    alignSelf: 'flex-start',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-  },
-  guideLinkText: {
-    fontFamily: fonts.ui,
-    fontSize: 11,
-    color: colors.rubric,
-  },
-
-  // Double rule
-  doubleRule: {
-    paddingHorizontal: layout.screenPadding,
-  },
-  doubleRuleTop: {
-    borderTopWidth: layout.doubleRuleTop,
-    borderTopColor: colors.ink,
-  },
-  doubleRuleGap: {
-    height: layout.doubleRuleGap,
-  },
-  doubleRuleBottom: {
-    borderTopWidth: layout.doubleRuleBottom,
-    borderTopColor: colors.ink,
-  },
-
-  // Topic filter chips
-  filterScroll: {
-    flexGrow: 0,
-    minHeight: 44,
-  },
-  filterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: layout.screenPadding,
-    paddingVertical: 8,
-    gap: 8,
-  },
-  filterChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  filterChipActive: {
-    backgroundColor: colors.ink,
-  },
-  filterChipText: {
-    fontFamily: fonts.bodyItalic,
-    fontSize: 12,
-    color: colors.rubric,
-    ...(Platform.OS === 'web' ? { fontStyle: 'italic' } : {}),
-  },
-  filterChipTextActive: {
-    color: colors.parchment,
   },
 
   // Pull-to-refresh ornament
@@ -560,49 +405,9 @@ const styles = StyleSheet.create({
     color: colors.rubric,
   },
 
-  // Continue reading section
-  continueSection: {
-    paddingTop: 12,
-    paddingBottom: 4,
-  },
-  sectionHead: {
-    ...type.sectionHead,
-    color: colors.rubric,
-    marginBottom: 8,
-  },
-  continueCard: {
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.rule,
-  },
-  continueTitle: {
-    ...type.entryTitle,
-    color: colors.textPrimary,
-    fontSize: 14,
-    marginBottom: 2,
-  },
-  continueMeta: {
-    ...type.metadata,
-    color: colors.textMuted,
-    marginBottom: 6,
-  },
-  progressTrack: {
-    height: layout.progressBarHeight,
-    backgroundColor: colors.rule,
-  },
-  progressFill: {
-    height: layout.progressBarHeight,
-    backgroundColor: colors.rubric,
-  },
-
-  listContent: {
-    paddingHorizontal: layout.screenPadding,
-    paddingBottom: 40,
-  },
-
   // Article card
   card: {
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.rule,
   },
@@ -645,19 +450,12 @@ const styles = StyleSheet.create({
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  cardFooterLeft: {
-    flex: 1,
-    gap: 2,
+    alignItems: 'center',
   },
   cardMeta: {
     ...type.metadata,
     color: colors.textMuted,
-  },
-  noveltyHint: {
-    ...type.metadata,
-    fontSize: 10,
+    flex: 1,
   },
   topicTags: {
     flexDirection: 'row',

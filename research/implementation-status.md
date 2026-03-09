@@ -1,8 +1,8 @@
 # Knowledge System Implementation Status
 
-**Date**: March 9, 2026 (last updated — session 8)
-**Status**: Full corpus deployed with knowledge system, reader interactions, voice notes, AI chat, research agents, entity deep-dive, follow-up research, voice note browser + action extraction, activity log tab, scroll-aware encounter tracking, curated novelty card, **hierarchical topic feedback**, **cross-article connections**, **LLM-verified topic normalization**, **automatic defragmentation**
-**Latest commits**: Session 8 — hierarchical topic interest card (G9), cross-article connections in reader (G10), canonical topic registry + LLM-verified normalization + automatic defragmentation pipeline
+**Date**: March 9, 2026 (last updated — session 9)
+**Status**: Full corpus deployed with knowledge system, reader interactions, voice notes, AI chat, research agents, entity deep-dive, follow-up research, voice note browser + action extraction, activity log tab, scroll-aware encounter tracking, curated novelty card, hierarchical topic feedback, cross-article connections, LLM-verified topic normalization, automatic defragmentation, **unified single-screen feed with lens tabs**, **dynamic reranking**, **✦ drawer navigation**
+**Latest commits**: Session 9 — unified feed redesign: replaced 4-tab layout with single screen + lens tabs (Latest/Best/Topics/Quick) + ✦ drawer. 7 new components, blended interest+curiosity ranking, dynamic reranking on reader return.
 
 ---
 
@@ -60,6 +60,30 @@ App (Expo SDK 54):
 | File | Description |
 |------|-------------|
 | `app/app/(tabs)/log.tsx` | Activity Log tab — vertical timeline with reading/system/research/interest nodes. Filter toggles (All/Reading/System/Research). Paged fetch: loads last day first, then 7 days in background. Colored dots per event type, ✦ markers for interest signals, day separators. |
+
+#### New Files (Session 9: Unified Feed Redesign)
+
+| File | Description |
+|------|-------------|
+| `app/components/DoubleRule.tsx` | Reusable double rule separator (2px + 5px gap + 1px ink lines) using layout tokens. |
+| `app/components/LensTabs.tsx` | Horizontal tab switcher for Latest/Best/Topics/Quick lenses. EB Garamond 13px, rubric underline active indicator, logs `lens_switch`. |
+| `app/components/UpNextSection.tsx` | Pinned top section: shows in-progress article (with progress bar), next queued, or algorithmic pick. Contains ✦ drawer trigger button. Logs `up_next_tap` with type. |
+| `app/components/RecommendedSection.tsx` | Hero card for algorithmically top-ranked article. Cormorant Garamond 20px title, claim preview (green left border), novelty badge, "See all" link. Logs `recommended_tap`. |
+| `app/components/TopicPillsSection.tsx` | Horizontal scroll of topic pills from `getArticlesGroupedByTopic()`. First pill gets ink (dark) treatment. Logs `topic_pill_tap`. |
+| `app/components/TopicsGroupedList.tsx` | Articles grouped by topic with tree-line indentation. Expand/collapse (shows 3, "+N more" to expand). Optional `topicFilter` prop. Logs `topic_group_article_tap`. |
+| `app/components/PetrarcaDrawer.tsx` | Bottom sheet (ink background). Quick actions: Triage, Voice Note. Nav items: Voice Notes, Activity Log, Reading Progress, Queue. Logs `drawer_open/close`, `drawer_item_tap`. |
+| `research/feed-redesign-plan.md` | Comprehensive plan: 3 rounds of mockup feedback, approved architecture, screen layout, 5-phase implementation order, component specs. |
+
+#### Modified Files (Session 9: Unified Feed Redesign)
+
+| File | Changes |
+|------|---------|
+| `app/app/(tabs)/index.tsx` | Complete rewrite. Single FlatList with ListHeaderComponent (UpNext → Recommended → Topics → DoubleRule). Lens tabs as sticky `data[0]` via `stickyHeaderIndices={[0]}`. Articles sorted/grouped by active lens. Swipe dismiss/queue preserved. `useFocusEffect` triggers rerank on return from reader. No header chrome (no app name, no date). ~320 lines (was 728). |
+| `app/app/(tabs)/_layout.tsx` | Tab bar hidden (`display: 'none'`). Topics/Queue/Log routes preserved with `href: null` for drawer navigation access. ~40 lines (was 82). |
+| `app/data/store.ts` | Added `FeedLens` type, `getTopRecommendedArticle()` (highest-scored not in queue/in-progress), `getArticlesByLens()` (filters+sorts by lens), `getArticlesGroupedByTopic()` (groups by broad topic), `getInProgressArticles()`, `getFeedVersion()`/`bumpFeedVersion()` (reactive counter). Integrated `isKnowledgeReady()` + `_getArticleNovelty()` into `getRankedFeedArticles()`: blended score = interest (60%) + curiosity (40%). Quick lens also uses blended scoring. |
+| `app/data/queue.ts` | Added `getNextQueued()` (front of queue without removing), `peekQueue(n)` (first N items). |
+| `research/README.md` | Added UX Redesign section linking to `feed-redesign-plan.md`. |
+| `research/experiment-log.md` | Session 9 entry: design exploration (3 rounds), user interview findings, implementation details, 8 hypotheses to validate, events logged. |
 
 #### New Files (Session 8: Swarm Build + Topic Normalization)
 
@@ -129,7 +153,7 @@ App (Expo SDK 54):
 | `app/data/store.ts` | Imports and initializes knowledge engine + queue in `initStore()`. Exports wrapper functions. Added bundled fallback `require('./knowledge_index.json')`. |
 | `app/app/reader.tsx` | 3 reading modes (Full/Guided/New Only), paragraph dimming via `blockDimming` map, collapsible familiar sections (`CollapsedBar` component), "What's new for you" claims card, `ReadingModeToggle` component, `buildParagraphToBlockMap()` for mapping pipeline paragraph indices to markdown block indices. Calls `markArticleEncountered()` on Done. |
 | `app/app/(tabs)/index.tsx` | Curiosity-zone re-ranking (with 0.05 threshold for stability), topic filter chips (horizontal ScrollView), swipe-right-to-queue, novelty hints ("N new claims"), `ContinueReadingCard` component (limited to 2 most recent). Interaction logging for swipe-dismiss and swipe-queue. |
-| `app/app/(tabs)/_layout.tsx` | 3-tab layout: Feed / Topics / Queue. Text-only labels (EB Garamond), rubric dot active indicator. |
+| `app/app/(tabs)/_layout.tsx` | Originally 3-tab layout → expanded to 4 tabs (session 6) → **session 9: tab bar hidden, single screen with drawer**. Routes preserved via `href: null`. |
 | `app/data/logger.ts` | Dual-write logging: local (localStorage/filesystem) + server buffer (batched POST to port 8091 every 5s). AsyncStorage-backed offline queue retries failed sends on session start. |
 | `scripts/content-refresh.sh` | Full 6-step pipeline: fetch sources → build articles → validate → extract entities → extract claims → embed claims → build knowledge index → copy to nginx. Writes structured JSONL pipeline events to interaction log for activity feed. |
 
@@ -167,7 +191,7 @@ App (Expo SDK 54):
 | Component | Status | Notes |
 |-----------|--------|-------|
 | nginx content server (:8083) | ✅ Working | Serves articles.json, knowledge_index.json, manifest.json |
-| Static web app (:8084) | ✅ Deployed | Rebuilt Mar 9 with entity deep-dive, follow-up prompts, voice notes browser, action extraction |
+| Static web app (:8084) | ⏳ Needs rebuild | Session 9: unified feed redesign, lens tabs, drawer nav, dynamic reranking |
 | Expo native (:8082) | ✅ Running | systemd `petrarca-expo` |
 | Log server (:8091) | ✅ Running | systemd `petrarca-log`, collects app interaction logs |
 | articles.json | ✅ 182 articles | Full corpus with atomic claims, entities, follow-up questions |

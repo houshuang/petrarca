@@ -1,23 +1,14 @@
 import { Tabs } from 'expo-router';
-import { View, Text, StyleSheet, Platform } from 'react-native';
-import { colors, fonts } from '../../design/tokens';
+import { StyleSheet } from 'react-native';
+import { colors } from '../../design/tokens';
 import { logEvent } from '../../data/logger';
-
-function TabBarLabel({ label, focused }: { label: string; focused: boolean }) {
-  return (
-    <View style={tabStyles.labelContainer}>
-      <Text style={[tabStyles.label, focused && tabStyles.labelActive]}>{label}</Text>
-      {focused && <View style={tabStyles.activeDot} />}
-    </View>
-  );
-}
 
 export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: tabStyles.bar,
+        tabBarStyle: tabStyles.hidden,
         tabBarShowLabel: false,
       }}
       screenListeners={{
@@ -28,55 +19,26 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" options={{
         title: 'Feed',
-        tabBarAccessibilityLabel: 'Feed',
-        tabBarIcon: ({ focused }) => <TabBarLabel label="Feed" focused={focused} />,
       }} />
       <Tabs.Screen name="topics" options={{
         title: 'Topics',
-        tabBarAccessibilityLabel: 'Topics',
-        tabBarIcon: ({ focused }) => <TabBarLabel label="Topics" focused={focused} />,
+        href: null,
       }} />
       <Tabs.Screen name="queue" options={{
         title: 'Queue',
-        tabBarAccessibilityLabel: 'Queue',
-        tabBarIcon: ({ focused }) => <TabBarLabel label="Queue" focused={focused} />,
+        href: null,
       }} />
       <Tabs.Screen name="log" options={{
         title: 'Log',
-        tabBarAccessibilityLabel: 'Activity Log',
-        tabBarIcon: ({ focused }) => <TabBarLabel label="Log" focused={focused} />,
+        href: null,
       }} />
     </Tabs>
   );
 }
 
 const tabStyles = StyleSheet.create({
-  bar: {
-    backgroundColor: colors.parchmentDark,
-    borderTopWidth: 1.5,
-    borderTopColor: colors.ink,
-    paddingTop: 12,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 12,
-    height: Platform.OS === 'ios' ? 80 : 60,
-  },
-  labelContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 44,
-    gap: 4,
-  },
-  label: {
-    fontFamily: fonts.body,
-    fontSize: 11,
-    color: colors.textMuted,
-  },
-  labelActive: {
-    color: colors.ink,
-  },
-  activeDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.rubric,
+  hidden: {
+    display: 'none',
+    height: 0,
   },
 });

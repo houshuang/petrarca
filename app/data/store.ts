@@ -7,6 +7,7 @@ import { loadInterestProfile, scoreArticle, recordSignal, recordTopicSignal as _
 import type { SignalAction } from './interest-model';
 import {
   initKnowledgeEngine,
+  isKnowledgeReady,
   getArticleNovelty as _getArticleNovelty,
   classifyArticleClaims as _classifyArticleClaims,
   computeParagraphDimming as _computeParagraphDimming,
@@ -16,7 +17,7 @@ import {
   getParagraphConnections as _getParagraphConnections,
 } from './knowledge-engine';
 import type { CrossArticleConnection } from './knowledge-engine';
-import { loadQueue } from './queue';
+import { loadQueue, getQueuedArticleIds, isQueued } from './queue';
 import { loadBookmarks } from './bookmarks';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -195,8 +196,18 @@ export function getRankedFeedArticles(): Article[] {
     .slice(0, 10)
     .flatMap(a => (a.interest_topics || []).map(t => t.specific));
 
+  const useKnowledge = isKnowledgeReady();
+
   return candidates
-    .map(a => ({ article: a, score: scoreArticle(a, recentTopics) }))
+    .map(a => {
+      const interestScore = scoreArticle(a, recentTopics);
+      if (!useKnowledge) return { article: a, score: interestScore };
+      const novelty = _getArticleNovelty(a.id);
+      const curiosity = novelty.curiosity_score;
+      // Blend: interest model (60%) + knowledge curiosity (40%)
+      // Curiosity score already peaks at 70% novelty via Gaussian
+      return { article: a, score: interestScore * 0.6 + curiosity * 0.4 };
+    })
     .sort((a, b) => b.score - a.score)
     .map(x => x.article);
 }
@@ -357,6 +368,137 @@ export function getCrossArticleConnections(articleId: string): CrossArticleConne
 
 export function getParagraphConnections(articleId: string): Map<number, Array<{ articleId: string; claimText: string }>> {
   return _getParagraphConnections(articleId);
+}
+
+// --- Feed version (for reactive reranking) ---
+
+let feedVersion = 0;
+
+export function getFeedVersion(): number {
+  return feedVersion;
+}
+
+export function bumpFeedVersion(): void {
+  feedVersion++;
+}
+
+// --- Lens-based article retrieval ---
+
+export type FeedLens = 'latest' | 'best' | 'topics' | 'quick';
+
+/**
+ * Get the single top-recommended article (highest curiosity × interest score),
+ * excluding articles that are queued or in-progress.
+ */
+export function getTopRecommendedArticle(): Article | null {
+  const ranked = getRankedFeedArticles();
+  const queuedSet = new Set(getQueuedArticleIds());
+  for (const a of ranked) {
+    const state = readingStates.get(a.id);
+    if (queuedSet.has(a.id)) continue;
+    if (state && state.status === 'reading') continue;
+    return a;
+  }
+  return ranked[0] || null;
+}
+
+/**
+ * Get articles organized by the active lens.
+ * For 'topics' lens, use getArticlesGroupedByTopic() instead.
+ */
+export function getArticlesByLens(lens: FeedLens, topicFilter?: string): Article[] {
+  let candidates = articles.filter(a => {
+    if (dismissedArticles.has(a.id)) return false;
+    const state = readingStates.get(a.id);
+    if (state && state.status === 'read') return false;
+    return true;
+  });
+
+  if (topicFilter) {
+    candidates = candidates.filter(a => {
+      const topics = (a.interest_topics || []).map(t => t.broad);
+      const fallback = topics.length > 0 ? topics : a.topics;
+      return fallback.some(t => t.toLowerCase().includes(topicFilter.toLowerCase()));
+    });
+  }
+
+  switch (lens) {
+    case 'latest':
+      return candidates.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+    case 'best':
+      return getRankedFeedArticles().filter(a => {
+        if (topicFilter) {
+          const topics = (a.interest_topics || []).map(t => t.broad);
+          const fallback = topics.length > 0 ? topics : a.topics;
+          return fallback.some(t => t.toLowerCase().includes(topicFilter.toLowerCase()));
+        }
+        return true;
+      });
+
+    case 'quick': {
+      const quickCandidates = candidates.filter(a => a.estimated_read_minutes <= 3);
+      const hasEnough = getTotalSignalCount() >= 10;
+      if (!hasEnough) return quickCandidates.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      const recentTopics = quickCandidates.slice(0, 10).flatMap(x => (x.interest_topics || []).map(t => t.specific));
+      const useKnowledge = isKnowledgeReady();
+      return quickCandidates
+        .map(a => {
+          const interest = scoreArticle(a, recentTopics);
+          if (!useKnowledge) return { article: a, score: interest };
+          const curiosity = _getArticleNovelty(a.id).curiosity_score;
+          return { article: a, score: interest * 0.6 + curiosity * 0.4 };
+        })
+        .sort((a, b) => b.score - a.score)
+        .map(x => x.article);
+    }
+
+    default:
+      return candidates;
+  }
+}
+
+/**
+ * Get articles grouped by broad topic for the Topics lens.
+ * Returns groups sorted by topic interest score.
+ */
+export function getArticlesGroupedByTopic(): Array<{ topic: string; articles: Article[] }> {
+  const candidates = articles.filter(a => {
+    if (dismissedArticles.has(a.id)) return false;
+    const state = readingStates.get(a.id);
+    if (state && state.status === 'read') return false;
+    return true;
+  });
+
+  const groups = new Map<string, Article[]>();
+  for (const a of candidates) {
+    const topics = (a.interest_topics || []).map(t => t.broad);
+    const fallback = topics.length > 0 ? topics : a.topics.slice(0, 2);
+    for (const t of fallback) {
+      if (!groups.has(t)) groups.set(t, []);
+      groups.get(t)!.push(a);
+    }
+  }
+
+  return [...groups.entries()]
+    .map(([topic, arts]) => ({ topic, articles: arts }))
+    .sort((a, b) => b.articles.length - a.articles.length);
+}
+
+/**
+ * Get in-progress articles (status === 'reading'), sorted by last_read_at descending.
+ */
+export function getInProgressArticles(): Article[] {
+  return articles
+    .filter(a => {
+      const state = readingStates.get(a.id);
+      return state && state.status === 'reading';
+    })
+    .sort((a, b) => {
+      const sa = readingStates.get(a.id);
+      const sb = readingStates.get(b.id);
+      return (sb?.last_read_at || 0) - (sa?.last_read_at || 0);
+    });
 }
 
 // --- Stats (simplified) ---
