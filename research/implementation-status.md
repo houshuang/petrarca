@@ -61,6 +61,12 @@ App (Expo SDK 54):
 |------|-------------|
 | `app/app/(tabs)/log.tsx` | Activity Log tab — vertical timeline with reading/system/research/interest nodes. Filter toggles (All/Reading/System/Research). Paged fetch: loads last day first, then 7 days in background. Colored dots per event type, ✦ markers for interest signals, day separators. |
 
+#### New Files (Session 8: Swarm Build + Topic Normalization)
+
+| File | Description |
+|------|-------------|
+| `app/components/RelatedArticles.tsx` | Related articles component at bottom of reader. Three relationship finders (same topic, shared concepts via knowledge index, same source). Deduped, max 3 per group. Design system tokens. |
+
 #### New Files (Session 8: Topic Hierarchy + Cross-Article + Normalization)
 
 | File | Description |
@@ -131,7 +137,7 @@ App (Expo SDK 54):
 
 | File | Size | Contents |
 |------|------|----------|
-| `data/articles.json` | ~7 MB | 182 articles with `atomic_claims[]`, `entities[]`, `follow_up_questions[]` |
+| `data/articles.json` | ~7 MB | 186 articles with `atomic_claims[]`, `entities[]`, `follow_up_questions[]` |
 | `data/claim_embeddings.npz` | 33 MB | 2,954 Gemini embedding-001 vectors |
 | `data/knowledge_index.json` | 4.3 MB | 2,954 claims, cross-article similarity pairs (≥0.68), 126 article paragraph maps, article novelty matrix (3,488 pair entries), 300 LLM delta reports |
 | `data/llm_audit.jsonl` | ~77 KB | Per-call LLM usage records (tokens, cost, model, purpose) |
@@ -314,8 +320,6 @@ App (Expo SDK 54):
 | G20 | **Contradiction detection** | Deferred | Corpus too harmonious (86% compatible). |
 | G21 | **Book reader** | Deferred | Section-based long-form reading. |
 | G22 | **Nomic embeddings** | Low | Experiments preferred Nomic over Gemini embeddings. Works fine with Gemini. |
-2. **Pipeline accuracy** (G2, G3) — LLM judge for ambiguous 0.68–0.78 cosine range, incremental embedding to avoid re-embedding all claims.
-3. **Web experience** (G8) — split panel + keyboard shortcuts for desktop use.
 
 ### User Feedback Summary (from voice notes, Mar 8)
 - **Article `6e3cb28c19e1`** (NotebookLM learning compression): User wants to bookmark AND follow multiple topics (AI-assisted learning, learning strategies). Wants topic overview to surface recently-bookmarked articles prominently. Voice feedback should support actionable commands (add tags, research topics, express interest).

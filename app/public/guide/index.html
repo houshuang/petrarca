@@ -539,16 +539,21 @@
       <nav>
         <ul>
           <li><a href="#overview">Overview</a></li>
-          <li><a href="#getting-started">Getting Started</a></li>
-          <li><a href="#capture">Capturing Articles</a></li>
-          <li><a href="#pipeline">The AI Pipeline</a></li>
+          <li><a href="#capture">Getting Content In</a></li>
           <li><a href="#feed">Feed Tab</a></li>
           <li><a href="#topics">Topics Tab</a></li>
           <li><a href="#queue">Queue Tab</a></li>
+          <li><a href="#log">Log Tab</a></li>
           <li><a href="#reader">The Reader</a></li>
+          <li><a href="#voice-ai">Voice &amp; AI</a></li>
+          <li><a href="#entity-research">Entity Research</a></li>
           <li><a href="#knowledge">Knowledge System</a></li>
-          <li><a href="#gestures">Gestures &amp; Interactions</a></li>
-          <li><a href="#sync">Content Sync</a></li>
+          <li><a href="#gestures">Gestures &amp; Signals</a></li>
+          <li><a href="#pipeline">The Pipeline</a></li>
+          <li><a href="#patterns">Usage Patterns</a></li>
+          <li><a href="#non-obvious">Non-Obvious Features</a></li>
+          <li><a href="#issues">Known Issues</a></li>
+          <li><a href="#reference">Quick Reference</a></li>
         </ul>
       </nav>
       <a href="/" class="back-link">&larr; Back to app</a>
@@ -558,19 +563,24 @@
       <!-- Header -->
       <header class="page-header">
         <h1>Petrarca</h1>
-        <p class="subtitle">An intelligent read-later app for the curious mind</p>
+        <p class="subtitle">How to actually use this thing &mdash; flows, integrations, and what everything does</p>
         <hr class="double-rule" />
       </header>
 
       <!-- Overview -->
       <section id="overview">
-        <h2><span class="marker">✦</span> Overview</h2>
+        <h2><span class="marker">✦</span> The Big Picture</h2>
         <p>
-          Petrarca is a knowledge-aware read-later app. It ingests articles from your Twitter bookmarks, Readwise saves, a Chrome extension, and email forwarding, then processes each one with AI to extract claims, topics, and summaries. Over time it builds a model of what you already know and what you find interesting, so it can surface genuinely novel content and dim the familiar.
+          Petrarca is a read-later system that models what you know. Content flows in from multiple sources (Twitter bookmarks, Readwise Reader, Chrome web clipper, email forwarding, link ingest from the reader, topic research), gets processed by Gemini Flash on a server every 4 hours, and arrives in the app as structured articles with summaries, atomic claims, interest topics, novelty scores, entity annotations, and follow-up research questions.
         </p>
         <p>
-          Named after Francesco Petrarca (Petrarch), the Renaissance humanist who pioneered systematic methods for reading, annotating, and synthesizing knowledge from texts.
+          As you read, the system automatically tracks what you've encountered and uses FSRS-based memory decay to determine which claims are still &ldquo;known&rdquo; vs forgotten &mdash; shaping what gets highlighted as new in future articles.
         </p>
+        <div class="callout">
+          <p>
+            Capture (bookmark / clip / email / link ingest / topic research) &rarr; Pipeline processes (every 4h) &rarr; Content appears in app &rarr; You browse, swipe, read &rarr; Knowledge model updates automatically &rarr; Familiar paragraphs dim &rarr; Feed re-ranks based on novelty and interest.
+          </p>
+        </div>
         <div class="feature-row">
           <div class="feature-card">
             <div class="card-title">AI-Extracted Claims</div>
@@ -585,41 +595,26 @@
             <p>Your reading signals shape a personal interest model that ranks articles by relevance and novelty.</p>
           </div>
           <div class="feature-card">
-            <div class="card-title">Delta Reports</div>
-            <p>Per-topic AI syntheses show you what's new across all the articles in a given topic.</p>
+            <div class="card-title">Entity Deep-Dive</div>
+            <p>People, books, concepts, and places are annotated with dotted underlines. Long-press to explore.</p>
+          </div>
+          <div class="feature-card">
+            <div class="card-title">Cross-Article Connections</div>
+            <p>Claims shared between articles surface as inline &ldquo;Also in&rdquo; links and a connected reading section.</p>
+          </div>
+          <div class="feature-card">
+            <div class="card-title">Voice &amp; AI Chat</div>
+            <p>Record voice notes while reading; ask the AI follow-up questions with full article context.</p>
           </div>
         </div>
       </section>
 
       <hr class="section-rule" />
 
-      <!-- Getting Started -->
-      <section id="getting-started">
-        <h2><span class="marker">✦</span> Getting Started</h2>
-        <p>
-          Petrarca runs as a mobile-first app (Expo/React Native) and is also accessible as a web app. Content is fetched and processed on a server every four hours, then served via nginx. The app syncs automatically on launch.
-        </p>
-        <dl class="kv-grid">
-          <dt>Web App</dt>
-          <dd><code>alifstian.duckdns.org:8084</code></dd>
-          <dt>Expo (native)</dt>
-          <dd><code>exp://alifstian.duckdns.org:8082</code></dd>
-          <dt>Content Server</dt>
-          <dd>Port 8083, nginx, 4-hour refresh cycle</dd>
-          <dt>Pipeline</dt>
-          <dd>Gemini Flash for extraction, Gemini embeddings for claims</dd>
-        </dl>
-        <p>
-          On first launch the app downloads all articles and the knowledge index from the server. After that, it caches everything locally and checks for updates in the background each time you open it.
-        </p>
-      </section>
-
-      <hr class="section-rule" />
-
       <!-- Capturing Articles -->
       <section id="capture">
-        <h2><span class="marker">✦</span> Capturing Articles</h2>
-        <p>There are four ways to get articles into Petrarca. All of them feed into the same AI processing pipeline.</p>
+        <h2><span class="marker">✦</span> Getting Content In</h2>
+        <p>You have seven ways to feed Petrarca. They all end at the same place: <code>import_url.py</code> on the server, which fetches the article, extracts text, runs it through Gemini Flash for structuring (summary, claims, sections, topics, entities, follow-up questions), and adds it to the content pool.</p>
 
         <div class="capture-method">
           <div class="method-name">Twitter / X Bookmarks</div>
@@ -632,14 +627,15 @@
         <div class="capture-method">
           <div class="method-name">Readwise Reader</div>
           <p>
-            Save articles through Readwise's browser extension, share sheet, or RSS subscriptions. Articles with reading progress in Readwise get priority. Same four-hour sync cycle as Twitter bookmarks.
+            Save articles through Readwise's browser extension, share sheet, or RSS subscriptions. The same four-hour cron fetches your Readwise items via their API and processes them identically to Twitter bookmarks.
           </p>
+          <p class="note">Why both? Twitter catches spontaneous discoveries. Readwise catches deliberate saves and RSS reading.</p>
         </div>
 
         <div class="capture-method">
           <div class="method-name">Chrome Extension (Web Clipper)</div>
           <p>
-            A lightweight Chrome extension lives in the <code>clipper/</code> directory. Click the floating <strong>✦</strong> button in the bottom-right corner of any page, or use the keyboard shortcut <strong>Cmd+Shift+S</strong>. The clipper captures the URL, page content, and any selected text, then sends it to the server immediately. You can see detected topic tags and add a note before saving.
+            Click the floating <strong>&#10022;</strong> button in the bottom-right corner of any page, or use <strong>Cmd+Shift+S</strong>. The clipper captures the URL, page content, and any selected text, then sends it to the server immediately. You can see detected topic tags and add a note before saving.
           </p>
           <p class="note">Install: chrome://extensions &rarr; Developer Mode &rarr; Load unpacked &rarr; select the clipper/ folder.</p>
         </div>
@@ -647,26 +643,31 @@
         <div class="capture-method">
           <div class="method-name">Email Forwarding</div>
           <p>
-            Forward newsletters or article links to the configured email address. A Cloudflare Email Worker receives the message, extracts article URLs (filtering out tracking and image links), and processes them through the pipeline. Particularly useful for newsletters, which often have a "view in browser" link the worker can follow. Handles up to three URLs per email.
+            Forward newsletters or article links to the configured email address. A Cloudflare Email Worker receives the message, extracts article URLs (filtering out tracking and image links), and processes them. Handles up to three URLs per email.
           </p>
         </div>
-      </section>
 
-      <hr class="section-rule" />
+        <div class="capture-method">
+          <div class="method-name">Manual URL Import</div>
+          <p>
+            From a terminal: <code>ssh alif</code> then <code>cd /opt/petrarca &amp;&amp; .venv/bin/python3 scripts/import_url.py "URL" --tag manual</code>
+          </p>
+          <p class="note">Developer-only. Immediate processing.</p>
+        </div>
 
-      <!-- The Pipeline -->
-      <section id="pipeline">
-        <h2><span class="marker">✦</span> The AI Pipeline</h2>
-        <p>
-          Every article passes through a multi-stage processing pipeline on the server. Here is what happens to each piece of content.
-        </p>
-        <ol class="pipeline-steps">
-          <li><span><strong>Fetch</strong> &mdash; Content is retrieved using a three-tier strategy: trafilatura first, then requests with browser headers, then lxml as a fallback. Markdown is cleaned of nav menus, cookie banners, and subscribe cruft.</span></li>
-          <li><span><strong>Extract</strong> &mdash; Gemini Flash reads the full text and produces: title, author, one-line summary, full summary, sections, key claims, broad and specific topics, entity topics, novelty claims, and content type.</span></li>
-          <li><span><strong>Decompose</strong> &mdash; The article is broken into 10&ndash;30 atomic claims, each typed as factual, procedural, evaluative, relational, or temporal. Every claim is self-contained and never starts with a pronoun.</span></li>
-          <li><span><strong>Embed</strong> &mdash; All claims receive Gemini embeddings. Cosine similarity between claims is computed to build a knowledge index: paragraph-level novelty mappings, a cross-article novelty matrix, and per-topic delta reports.</span></li>
-          <li><span><strong>Serve</strong> &mdash; Processed articles and the knowledge index are written to JSON and served via nginx on port 8083. The app syncs on launch.</span></li>
-        </ol>
+        <div class="capture-method">
+          <div class="method-name">Link Auto-Ingest from Reader</div>
+          <p>
+            While reading an article, tap any link in the text. The URL is sent to the server's <code>/ingest</code> endpoint and processed in the background. An inline badge shows the ingest status. The article will appear in your feed after processing &mdash; no need to leave the app or copy-paste URLs.
+          </p>
+        </div>
+
+        <div class="capture-method">
+          <div class="method-name">Topic Research</div>
+          <p>
+            On the Topics tab, expand any topic and tap <strong>&nearr; Find more on [Topic]</strong>. Gemini search grounding finds real articles on that topic from the open web &mdash; not hallucinated URLs, but actual Google-discovered pages. The top 3 results are auto-ingested into your pipeline.
+          </p>
+        </div>
       </section>
 
       <hr class="section-rule" />
@@ -675,7 +676,7 @@
       <section id="feed">
         <h2><span class="marker">✦</span> Feed Tab</h2>
         <p>
-          The Feed is the main landing screen. Articles are ranked by a composite score drawn from your personal interest model.
+          The Feed is the main landing screen. Articles are ranked by a composite score drawn from your personal interest model. On launch, the app checks the server for new content by comparing a manifest hash. If the hash changed (pipeline ran, new articles arrived), it downloads the updated content and merges it with your existing state. Your reading progress and signals are stored locally and never lost.
         </p>
         <dl class="kv-grid">
           <dt>Interest Match</dt>
@@ -691,9 +692,25 @@
           After you have read several articles, a curiosity scoring layer re-ranks the feed: articles with roughly 70% novel claims score highest, balancing learning with familiarity.
         </p>
 
-        <h3><span class="marker">✦</span> Feed elements</h3>
+        <h3><span class="marker">✦</span> Feed Elements</h3>
         <p>
-          <strong>Topic filter chips</strong> scroll horizontally at the top, letting you narrow the feed to a single topic. Each article row shows the title, a one-line summary, a novelty claim preview, hostname and reading time, topic tags, and a "N new claims" hint. In-progress articles appear in a <strong>Continue Reading</strong> section at the top (maximum two). Articles you have already read appear at the bottom of the feed, dimmed.
+          Each article row shows the <strong>title</strong> and one-line summary, a <strong>best claim preview</strong> (green left border) showing the highest-specificity novelty claim, <strong>novelty hints</strong> (&ldquo;3 new claims&rdquo; in green), <strong>topic tags</strong>, and <strong>metadata</strong> (hostname, author, read time estimate).
+        </p>
+
+        <h3><span class="marker">✦</span> Swipe Gestures</h3>
+        <ul>
+          <li><strong>Swipe left</strong> &rarr; Queue (green, adds to your reading queue)</li>
+          <li><strong>Swipe right</strong> &rarr; Dismiss (rubric red, hides from feed)</li>
+        </ul>
+
+        <h3><span class="marker">✦</span> Continue Reading</h3>
+        <p>
+          A <strong>&ldquo;Continue Reading&rdquo; section</strong> appears at the top when you have articles in progress, showing a progress bar based on time spent.
+        </p>
+
+        <h3><span class="marker">✦</span> Topic Filter Chips</h3>
+        <p>
+          A horizontal scroll row of the most common topics in your feed. Tap to filter; tap again (or &ldquo;All&rdquo;) to show everything.
         </p>
       </section>
 
@@ -703,10 +720,13 @@
       <section id="topics">
         <h2><span class="marker">✦</span> Topics Tab</h2>
         <p>
-          Articles grouped by broad topic, with duplicates merged and formatting normalized. Each topic row shows the article count and, when the knowledge index is loaded, a <strong>knowledge progress bar</strong>&thinsp;&mdash;&thinsp;green for new claims, gray for known.
+          Articles grouped by primary topic. Each topic is a collapsible cluster with article count. Topics show reading state with colored dots (grey = unread, rubric = reading, green = read) and a count breakdown.
         </p>
         <p>
-          Tap a topic to expand it and see two things: a <strong>delta report</strong> ("What's new in [Topic]"), which is an AI-generated synthesis of novel information across all articles in that topic along with the top three novel claims; and the <strong>article list</strong> for that topic, where tapping any article opens the reader.
+          When the knowledge engine is ready, topics can show <strong>delta reports</strong> &mdash; a summary of what's new across all articles in that topic.
+        </p>
+        <p>
+          Each expanded topic has a <strong>&ldquo;&nearr; Find more on [Topic]&rdquo;</strong> button that triggers topic research via Gemini search grounding, auto-ingesting the top 3 results.
         </p>
       </section>
 
@@ -716,7 +736,30 @@
       <section id="queue">
         <h2><span class="marker">✦</span> Queue Tab</h2>
         <p>
-          The Queue holds articles you have explicitly saved for later by swiping right in the Feed. It is a simple, personal reading list. Swipe right on a queued article to remove it. Tap to open the reader. When empty, the screen explains how to add articles.
+          Your explicit reading list. Articles you've swiped left to queue from the Feed show here in order. Swipe right to remove. The queue is persisted to AsyncStorage and survives app restarts.
+        </p>
+      </section>
+
+      <hr class="section-rule" />
+
+      <!-- Log Tab -->
+      <section id="log">
+        <h2><span class="marker">✦</span> Log Tab</h2>
+        <p>
+          A vertical timeline of everything happening in the system. Reading sessions, pipeline runs, research dispatches, interest signals &mdash; all in one chronological view.
+        </p>
+        <p>
+          Each entry shows a <strong>colored dot</strong> per event type, <strong>&#10022; markers</strong> for interest signals, and <strong>day separators</strong> grouping events. Timestamps, event descriptions, and relevant context are displayed for each entry.
+        </p>
+
+        <h3><span class="marker">✦</span> Filter Toggles</h3>
+        <p>
+          <strong>All / Reading / System / Research</strong> &mdash; tap to narrow the timeline to what you care about.
+        </p>
+
+        <h3><span class="marker">✦</span> Paging</h3>
+        <p>
+          Loads the last day of events first, then fetches the previous 7 days in the background. Keeps the initial load fast.
         </p>
       </section>
 
@@ -726,29 +769,138 @@
       <section id="reader">
         <h2><span class="marker">✦</span> The Reader</h2>
         <p>
-          Tapping any article opens the reader, which renders the full article text from cleaned markdown. A header shows the title, author, hostname, estimated reading time, and topic tags. Scroll position is saved and restored between sessions, so you can pick up exactly where you left off.
+          Tap any article to open the reader. The reader presents the full article with intelligent paragraph dimming based on the knowledge engine's assessment of what you already know, entity annotations, cross-article connections, and follow-up research prompts.
         </p>
 
-        <h3><span class="marker">✦</span> Reading modes</h3>
-        <p>When the knowledge system has enough data, a mode toggle appears with three options:</p>
+        <h3><span class="marker">✦</span> Reader Structure</h3>
+        <ul>
+          <li><strong>Header</strong>: Title, author, source, date, &#9734; bookmark toggle, and &hellip; menu</li>
+          <li><strong>Summary</strong>: One-paragraph overview</li>
+          <li><strong>Mode toggle</strong>: Full / Guided / New Only</li>
+          <li><strong>Article body</strong>: Full markdown-rendered content with paragraph-level dimming and entity underlines</li>
+          <li><strong>Highlighting</strong>: Long-press any paragraph to highlight it (amber border, haptic feedback on mobile)</li>
+          <li><strong>Claims card</strong>: Atomic claims extracted from the article</li>
+          <li><strong>&#10022; FURTHER INQUIRY</strong>: Follow-up research questions generated by the pipeline</li>
+          <li><strong>&#10022; CONNECTED READING</strong>: Cross-article connections based on shared claims</li>
+          <li><strong>Related articles</strong>: Same Topic / Shared Concepts / Same Source</li>
+          <li><strong>Footer bar</strong>: Done button + &ldquo;UP NEXT&rdquo; showing next queued article title</li>
+          <li><strong>Post-read interest card</strong>: After tapping &ldquo;Done&rdquo;, hierarchical topic feedback</li>
+        </ul>
+
+        <h3><span class="marker">✦</span> Reading Modes</h3>
+        <p>A mode toggle at the top of the reader lets you switch between three modes:</p>
         <div class="modes">
           <div class="mode-card">
             <div class="mode-name">Full</div>
-            <p>All content at normal opacity. The default reading experience.</p>
+            <p>All content at normal opacity. No filtering. The default reading experience.</p>
           </div>
           <div class="mode-card">
             <div class="mode-name">Guided</div>
-            <p>Familiar paragraphs are dimmed to 55% opacity. Novel content stays vivid.</p>
+            <p>Familiar paragraphs dimmed. Novel content stays vivid. Green left border on novel paragraphs draws the eye.</p>
           </div>
           <div class="mode-card">
             <div class="mode-name">New Only</div>
-            <p>Familiar sections collapse into "tap to expand" bars. Only novel material is visible.</p>
+            <p>Familiar paragraphs collapsed into &ldquo;skip&rdquo; indicators. Only novel sections expanded. Green left border on novel content.</p>
           </div>
         </div>
-
-        <h3><span class="marker">✦</span> Claims card</h3>
         <p>
-          A "What's new for you" card shows each article's claims classified against your knowledge ledger. Claims appear in green (NEW), gray (KNOWN), or an intermediate state (EXTENDS). Pressing <strong>Done</strong> at the end of an article marks all its claims as encountered in the knowledge system.
+          The dimming is automatic &mdash; it comes from the knowledge engine comparing the article's atomic claims against claims you've previously encountered, using embedding similarity and FSRS-based memory decay.
+        </p>
+
+        <h3><span class="marker">✦</span> Novel Paragraph Markers</h3>
+        <p>
+          In Guided and New Only modes, novel and mostly-novel paragraphs get a <strong>2px green left border</strong> to draw the eye. This is the primary visual cue for &ldquo;this is new to you.&rdquo;
+        </p>
+
+        <h3><span class="marker">✦</span> &#9734; Bookmark and &hellip; Menu</h3>
+        <p>
+          <strong>&#9734; Bookmark</strong>: Tap to toggle bookmark status. Persisted across sessions.
+        </p>
+        <p>
+          <strong>&hellip; Menu</strong> opens a dropdown with: <strong>Article info</strong> (metadata, word count, source), <strong>Open source</strong> (original URL), <strong>Ask AI</strong> (bottom-sheet chat), <strong>Voice note</strong> (record a voice memo), and <strong>Research topic</strong> (background research).
+        </p>
+
+        <h3><span class="marker">✦</span> Claims Card</h3>
+        <p>
+          A &ldquo;What's new for you&rdquo; card shows each article's claims classified against your knowledge ledger. Claims appear in green (NEW), gray (KNOWN), or an intermediate state (EXTENDS). Claims slide up with a staggered 80ms animation.
+        </p>
+
+        <h3><span class="marker">✦</span> Cross-Article Connections</h3>
+        <p>Two surfaces show how the current article connects to others:</p>
+        <ul>
+          <li><strong>Inline annotations</strong>: Below paragraphs that share claims with other articles, you'll see &ldquo;Also in: [article title]&rdquo; links (max 2 per paragraph). Based on cosine similarity &ge;0.78 between claims.</li>
+          <li><strong>&#10022; CONNECTED READING section</strong>: At the bottom of the reader, up to 5 related articles with shared claim counts and &ldquo;+ Queue&rdquo; buttons (LIFO insertion &mdash; the queued article goes to the top of your queue).</li>
+        </ul>
+
+        <h3><span class="marker">✦</span> Related Articles</h3>
+        <p>Below cross-article connections, three groups of related articles appear:</p>
+        <ul>
+          <li><strong>Same Topic</strong>: Other articles sharing the primary topic</li>
+          <li><strong>Shared Concepts</strong>: Articles connected via embedding similarity &mdash; may not share an explicit topic but cover related ground</li>
+          <li><strong>Same Source</strong>: Other articles from the same publication/domain</li>
+        </ul>
+        <p>Max 3 per group, deduplicated across groups.</p>
+
+        <h3><span class="marker">✦</span> Footer Bar</h3>
+        <p>
+          The persistent footer bar shows a <strong>Done button</strong> on the left and <strong>&ldquo;UP NEXT&rdquo;</strong> on the right, showing the title of the next queued article &mdash; tap to go directly to it. If the queue is empty, shows <strong>&ldquo;&larr; Back to feed&rdquo;</strong> instead.
+        </p>
+
+        <h3><span class="marker">✦</span> Hierarchical Topic Feedback</h3>
+        <p>
+          After tapping Done, the PostReadInterestCard appears as a bottom sheet. It shows a <strong>tree display</strong> of topics: broad &rarr; specific &rarr; entity levels. Each level has +/&minus; buttons for independent feedback. Smart expand: if there are &le;2 broad categories, they auto-expand so you see the specific topics immediately. Signals are level-specific &mdash; tapping + on a specific topic doesn't cascade up or down.
+        </p>
+
+        <h3><span class="marker">✦</span> Scroll-Aware Tracking</h3>
+        <p>
+          Reading progress is tracked by scroll depth, not just the &ldquo;Done&rdquo; button. If you scroll through 60% of an article, claims in the first 60% are marked as encountered in the knowledge ledger. Engagement level is determined by time: &lsquo;read&rsquo; (&gt;60s in the article) or &lsquo;skim&rsquo; (&le;60s). Tapping &ldquo;Done&rdquo; marks all claims regardless of scroll position.
+        </p>
+
+        <h3><span class="marker">✦</span> Micro-Delights</h3>
+        <ul>
+          <li><strong>Pull-to-refresh</strong>: A rotating &#10022; ornament (rubric-colored, 1200ms loop) replaces the default spinner</li>
+          <li><strong>Claim reveal</strong>: Claims slide up with a staggered 80ms animation in the claims card</li>
+          <li><strong>Completion flash</strong>: A gold (#c9a84c) sweep runs across the progress bar when you tap Done (600ms duration)</li>
+        </ul>
+      </section>
+
+      <hr class="section-rule" />
+
+      <!-- Voice & AI -->
+      <section id="voice-ai">
+        <h2><span class="marker">✦</span> Voice &amp; AI</h2>
+
+        <h3><span class="marker">✦</span> AI Chat</h3>
+        <p>
+          Tap <strong>&ldquo;Ask AI&rdquo;</strong> from the &hellip; menu, or tap <strong>&ldquo;Research more&rdquo;</strong> from an entity popup. A bottom-sheet chat modal opens with the AI (Gemini Flash on the server) having full article context &mdash; title, summary, claims, topics, and truncated article text. You can ask follow-up questions, request explanations, or explore tangents. Supports threaded conversation. When opened from an entity popup, the question is pre-filled with entity context.
+        </p>
+
+        <h3><span class="marker">✦</span> Voice Feedback</h3>
+        <p>
+          Tap <strong>&ldquo;Voice note&rdquo;</strong> from the &hellip; menu while reading. The app starts recording locally. When you stop, the audio is uploaded to the server, transcribed via Soniox, and then Gemini extracts structured actions from the transcript &mdash; things like &ldquo;research this topic&rdquo;, &ldquo;tag this article as X&rdquo;, &ldquo;remember that Y&rdquo;. The extracted actions appear as tappable chips with status tracking.
+        </p>
+        <p>
+          <strong>The flow</strong>: Record locally &rarr; upload to server &rarr; Soniox transcription &rarr; Gemini action extraction &rarr; tappable action cards.
+        </p>
+
+        <h3><span class="marker">✦</span> Follow-Up Research Prompts</h3>
+        <p>
+          The pipeline generates 2&ndash;3 curiosity questions per article. The <strong>&ldquo;&#10022; FURTHER INQUIRY&rdquo;</strong> section appears at the end of the reader. Tap any question to spawn topic research via Gemini search grounding &mdash; finding real articles on the web and auto-ingesting them. The results appear in your feed after processing.
+        </p>
+      </section>
+
+      <hr class="section-rule" />
+
+      <!-- Entity Research -->
+      <section id="entity-research">
+        <h2><span class="marker">✦</span> Entity Research</h2>
+        <p>
+          The pipeline extracts 3&ndash;8 entities per article &mdash; people, books, concepts, companies, events, places, technologies. In the reader, entity mentions appear with <strong>dotted underlines</strong>.
+        </p>
+
+        <h3><span class="marker">✦</span> Entity Deep-Dive</h3>
+        <p>
+          <strong>Long-press</strong> an underlined entity name. A marginalia popup appears alongside the text with a synthesis of what the pipeline knows about that entity &mdash; a compact description drawn from the article context. At the bottom is a <strong>&ldquo;Research more&rdquo;</strong> button that opens the AI chat with the entity name pre-filled as a question, so you can dive deeper without losing your place.
         </p>
       </section>
 
@@ -758,24 +910,51 @@
       <section id="knowledge">
         <h2><span class="marker">✦</span> Knowledge System</h2>
         <p>
-          Petrarca builds a personal knowledge model that tracks which claims you have encountered and how well you remember them. This happens automatically in the background&thinsp;&mdash;&thinsp;you do not need to do anything special.
+          This is the core of what makes Petrarca different from a plain read-later app. It tracks which claims you have encountered and how well you remember them, automatically in the background.
         </p>
 
-        <h3><span class="marker">✦</span> How it works</h3>
+        <h3><span class="marker">✦</span> How It Works</h3>
+        <ol>
+          <li><strong>Atomic decomposition</strong>: When an article enters the pipeline, Gemini Flash decomposes it into 10&ndash;30 atomic claims &mdash; single facts or assertions that stand alone.</li>
+          <li><strong>Embedding</strong>: Claims are embedded using Nomic-embed-text-v1.5 and stored in a vector index.</li>
+          <li><strong>Similarity</strong>: When you read an article, its claims are compared against all claims you've previously encountered. High similarity = &ldquo;you know this.&rdquo; Moderate similarity = &ldquo;this extends what you know.&rdquo;</li>
+          <li><strong>FSRS decay</strong>: Knowledge doesn't last forever. Each claim in your ledger has a stability value (in days). Over time, retrievability decays exponentially.</li>
+          <li><strong>Classification</strong>: Each claim is classified as NEW, KNOWN, or EXTENDS based on similarity scores and your current retrievability.</li>
+        </ol>
+
+        <h3><span class="marker">✦</span> Stability Values</h3>
+        <dl class="kv-grid">
+          <dt>Skim</dt>
+          <dd>9 days &mdash; article opened, scrolled</dd>
+          <dt>Read</dt>
+          <dd>30 days &mdash; article completed</dd>
+          <dt>Highlight</dt>
+          <dd>60 days &mdash; paragraph highlighted</dd>
+          <dt>Reinforcement</dt>
+          <dd>2.5&times; &mdash; re-encountering a claim multiplies its stability</dd>
+        </dl>
+
+        <h3><span class="marker">✦</span> Cross-Article Connections</h3>
         <p>
-          The server pre-computes claim similarities, paragraph-level novelty mappings, and per-topic delta reports. On the client side, a lightweight FSRS-inspired decay model tracks each claim:
+          The knowledge index powers cross-article connections in the reader. When two articles share claims with cosine similarity &ge;0.78, they're linked &mdash; surfaced as inline &ldquo;Also in&rdquo; annotations and in the &ldquo;&#10022; CONNECTED READING&rdquo; section at the bottom of the reader.
         </p>
+
+        <h3><span class="marker">✦</span> Topic Normalization</h3>
+        <p>
+          Topics go through a canonical registry with LLM-verified merge-or-create for new topics. When the same concept appears under different names (&ldquo;machine learning&rdquo; vs &ldquo;ML&rdquo; vs &ldquo;statistical learning&rdquo;), the normalization step merges them. Automatic defragmentation runs when categories exceed limits, keeping the topic space clean.
+        </p>
+
+        <h3><span class="marker">✦</span> What You See</h3>
         <ul>
-          <li><strong>Reading</strong> an article gives its claims a 30-day stability window.</li>
-          <li><strong>Highlighting</strong> a paragraph doubles stability to 60 days.</li>
-          <li><strong>Re-reading</strong> reinforces: stability is multiplied by 2.5.</li>
-          <li>Claims <strong>decay</strong> over time. If you haven't encountered a claim in months, the system eventually treats it as unknown again.</li>
+          <li><strong>Paragraph dimming</strong> in Guided/New Only modes &mdash; familiar paragraphs fade</li>
+          <li><strong>Novel paragraph markers</strong> in Guided/New Only modes &mdash; 2px green left border on novel content</li>
+          <li><strong>Novelty hints</strong> in the feed &mdash; &ldquo;3 new claims&rdquo; tells you how much is genuinely new</li>
+          <li><strong>Curiosity score</strong> affects feed ranking &mdash; articles with more novel claims float higher</li>
+          <li><strong>Delta reports</strong> on the Topics tab &mdash; summaries of what's new in a topic area</li>
+          <li><strong>Cross-article connections</strong> &mdash; inline &ldquo;Also in&rdquo; links and &ldquo;&#10022; CONNECTED READING&rdquo; section</li>
         </ul>
-        <p>
-          When you open the next article on a related topic, the system finds matching claims via embedding similarity and classifies them as NEW, KNOWN, or EXTENDS. This drives the paragraph dimming in Guided and New Only modes, the claims card in the reader, and the curiosity-based re-ranking in the feed.
-        </p>
 
-        <h3><span class="marker">✦</span> Interest model</h3>
+        <h3><span class="marker">✦</span> Interest Model</h3>
         <p>
           Separate from knowledge tracking, the interest model learns what topics you care about. Every interaction contributes a weighted signal: swiping to keep an article, opening it, finishing it, highlighting passages, and tapping topic chips all shape your profile. Signals decay over 30 days with Bayesian smoothing, so your interests can evolve naturally. The feed ranking formula uses this model as its primary input.
         </p>
@@ -783,56 +962,252 @@
 
       <hr class="section-rule" />
 
-      <!-- Gestures -->
+      <!-- Gestures & Signals -->
       <section id="gestures">
-        <h2><span class="marker">✦</span> Gestures &amp; Interactions</h2>
+        <h2><span class="marker">✦</span> Gestures &amp; Signals</h2>
         <ul class="gesture-list">
           <li>
             <span class="gesture-label">Tap</span>
             <span>Open an article in the reader. Navigate between tabs, topics, and modes.</span>
           </li>
           <li>
-            <span class="gesture-label">Swipe Right</span>
-            <span>In the Feed, adds an article to your Queue. In the Queue, removes it.</span>
+            <span class="gesture-label">Swipe Left</span>
+            <span>In the Feed, adds an article to your Queue (green).</span>
           </li>
           <li>
-            <span class="gesture-label">Swipe Left</span>
-            <span>In the Feed, dismisses an article from view.</span>
+            <span class="gesture-label">Swipe Right</span>
+            <span>In the Feed, dismisses an article (rubric red). In the Queue, removes it.</span>
           </li>
           <li>
             <span class="gesture-label">Long Press</span>
             <span>In the reader, highlights a paragraph with a warm amber left border and haptic feedback on mobile.</span>
           </li>
           <li>
+            <span class="gesture-label">Entity Long Press</span>
+            <span>On a dotted-underlined entity name, opens a marginalia popup with entity info and a &ldquo;Research more&rdquo; button.</span>
+          </li>
+          <li>
             <span class="gesture-label">Pull Down</span>
-            <span>Refreshes content. A rotating ✦ ornament serves as the loading indicator.</span>
+            <span>Refreshes content. A rotating &#10022; ornament serves as the loading indicator.</span>
+          </li>
+          <li>
+            <span class="gesture-label">Voice Note</span>
+            <span>From the &hellip; menu in the reader, records a voice memo. Transcribed and actions extracted automatically.</span>
+          </li>
+          <li>
+            <span class="gesture-label">Ask AI</span>
+            <span>From the &hellip; menu, opens a bottom-sheet chat with full article context.</span>
+          </li>
+          <li>
+            <span class="gesture-label">Research Tap</span>
+            <span>Tap a question in &#10022; FURTHER INQUIRY to spawn background research and auto-ingest articles.</span>
+          </li>
+          <li>
+            <span class="gesture-label">Link Tap</span>
+            <span>Tap any link in the reader to auto-ingest the linked URL into your pipeline.</span>
+          </li>
+          <li>
+            <span class="gesture-label">Topic +/&minus;</span>
+            <span>On the post-read card, hierarchical topic feedback: broad &rarr; specific &rarr; entity levels.</span>
           </li>
           <li>
             <span class="gesture-label">Done</span>
-            <span>At the bottom of the reader, marks the article as read and records all its claims in the knowledge ledger.</span>
+            <span>In the reader footer bar, marks the article as read and records all claims in the knowledge ledger.</span>
           </li>
         </ul>
       </section>
 
       <hr class="section-rule" />
 
-      <!-- Sync -->
-      <section id="sync">
-        <h2><span class="marker">✦</span> Content Sync</h2>
+      <!-- The Pipeline -->
+      <section id="pipeline">
+        <h2><span class="marker">✦</span> The Pipeline</h2>
         <p>
-          On launch the app checks a manifest hash against the cached version. If it is the first launch, a blocking download fetches all articles and the knowledge index from the server. On subsequent launches the app loads from cache immediately and checks for updates in the background. New articles and an updated knowledge index are synced automatically whenever the server pipeline completes a fresh run.
+          Understanding the processing pipeline helps you understand timing and quality. Every article passes through these stages on the server.
         </p>
 
-        <div class="callout">
-          <p>
-            The server pipeline runs every four hours. After bookmarking a tweet or saving a Readwise article, expect your content to appear in the app within that window. The Chrome extension and email forwarding trigger processing immediately, but the article still needs to pass through the full AI pipeline before it shows up in your feed.
-          </p>
+        <h3><span class="marker">✦</span> Every 4 Hours on the Server</h3>
+        <ol class="pipeline-steps">
+          <li><span><strong>Fetch bookmarks</strong> &mdash; Twitter bookmarks (twikit, GraphQL API, thread reconstruction) and Readwise Reader items (API).</span></li>
+          <li><span><strong>Fetch &amp; clean</strong> &mdash; Content retrieved using multi-tier fallback (trafilatura, requests + browser headers). Markdown cleaned of nav menus, cookie banners, subscribe cruft, headings normalized.</span></li>
+          <li><span><strong>Structure</strong> &mdash; Gemini Flash produces: summary, one-line summary, sections, key claims, interest topics.</span></li>
+          <li><span><strong>Decompose</strong> &mdash; Article broken into 10&ndash;30 atomic claims, each typed as factual, procedural, evaluative, relational, or temporal.</span></li>
+          <li><span><strong>Extract entities</strong> &mdash; 3&ndash;8 entities per article: people, books, concepts, companies, events, places, technologies.</span></li>
+          <li><span><strong>Generate questions</strong> &mdash; 2&ndash;3 follow-up curiosity questions per article for the &#10022; FURTHER INQUIRY section.</span></li>
+          <li><span><strong>Normalize topics</strong> &mdash; Topics checked against canonical registry with LLM-verified merge-or-create. Automatic defragmentation when categories exceed limits.</span></li>
+          <li><span><strong>Embed &amp; index</strong> &mdash; All claims receive embeddings. Cosine similarity computed to build knowledge index: paragraph-level novelty mappings, cross-article novelty matrix, per-topic delta reports.</span></li>
+          <li><span><strong>Serve</strong> &mdash; Processed articles and knowledge index written to JSON and served via nginx on port 8083.</span></li>
+        </ol>
+
+        <h3><span class="marker">✦</span> When You Open the App</h3>
+        <ol>
+          <li>App checks manifest hash against cached version</li>
+          <li>If different: downloads new articles + knowledge index</li>
+          <li>Merges with existing state (your signals, highlights, queue all preserved)</li>
+          <li>Knowledge engine initializes, builds similarity lookup</li>
+          <li>New articles appear in feed, ranked by interest + novelty</li>
+        </ol>
+
+        <h3><span class="marker">✦</span> Content Quality</h3>
+        <p>
+          Most articles process well, especially long-form journalism, blog posts, and technical writing. Some articles are low quality (very short tweets, paywalled stubs, donation pages). The <code>clean_markdown</code> step removes navigation, cookie banners, and subscribe cruft. Gemini Flash catches most garbage but not all. Wide net with some noise is the deliberate trade-off.
+        </p>
+      </section>
+
+      <hr class="section-rule" />
+
+      <!-- Usage Patterns -->
+      <section id="patterns">
+        <h2><span class="marker">✦</span> Usage Patterns</h2>
+
+        <div class="capture-method">
+          <div class="method-name">The 30-Second Check</div>
+          <p>Open the app. Scan the feed. Swipe-dismiss anything stale. Swipe-queue anything promising. Close.</p>
         </div>
+
+        <div class="capture-method">
+          <div class="method-name">The 5-Minute Read</div>
+          <p>Tap an article. Use Guided mode &mdash; your eye goes straight to the new stuff (green-bordered paragraphs). Skim the dimmed paragraphs for context. Tap Done. Rate the topics.</p>
+        </div>
+
+        <div class="capture-method">
+          <div class="method-name">The 15-Minute Deep Read</div>
+          <p>Open a queued article in Full mode. Read it all. Highlight interesting paragraphs. Long-press an interesting entity to learn more. When done, the interest card helps you tell the system what mattered. Follow topic links or connected reading to related articles.</p>
+        </div>
+
+        <div class="capture-method">
+          <div class="method-name">The New-Only Speedrun</div>
+          <p>Switch to New Only mode. Only novel paragraphs are shown. Get the delta in 2 minutes. Great for articles in a domain you know well.</p>
+        </div>
+
+        <div class="capture-method">
+          <div class="method-name">The Voice Note</div>
+          <p>While reading, open the &hellip; menu and tap &ldquo;Voice note&rdquo;. Record a quick thought. The audio uploads, gets transcribed by Soniox, and Gemini extracts actions: research topics, tags, things to remember. The extracted actions appear as tappable chips you can act on later.</p>
+        </div>
+
+        <div class="capture-method">
+          <div class="method-name">The Research Rabbit Hole</div>
+          <p>Long-press an underlined entity &mdash; a marginalia popup shows what the pipeline knows. Tap &ldquo;Research more&rdquo; &mdash; AI chat opens with context pre-filled. Then scroll to &ldquo;&#10022; FURTHER INQUIRY&rdquo; and tap a question. Gemini search finds real articles, auto-ingests them into your pipeline. Next time you open the app, they're waiting.</p>
+        </div>
+      </section>
+
+      <hr class="section-rule" />
+
+      <!-- Non-Obvious Features -->
+      <section id="non-obvious">
+        <h2><span class="marker">✦</span> Non-Obvious Features</h2>
+        <ol>
+          <li><strong>Knowledge is automatic.</strong> Just reading an article updates your knowledge ledger. The FSRS decay handles forgetting naturally.</li>
+          <li><strong>Paragraph dimming is per-claim.</strong> A paragraph might contain 3 claims &mdash; 2 known, 1 new. The dimming reflects the aggregate, not a binary known/unknown.</li>
+          <li><strong>Swipe left = queue, swipe right = dismiss.</strong> Your thumb naturally reaches right for the common action (dismiss), left for the deliberate one (save).</li>
+          <li><strong>Topic chips after reading shape your whole feed.</strong> The +/&minus; signals on the post-read interest card have the highest weight (2.0). A single &ldquo;+&rdquo; meaningfully boosts related articles.</li>
+          <li><strong>The knowledge engine needs a knowledge index.</strong> Paragraph dimming and novelty scores only work after the pipeline generates a knowledge index with embeddings.</li>
+          <li><strong>Feed ranking is multi-factor.</strong> Interest match (40%) + freshness (25%) + discovery bonus (20%) + variety (15%), then re-ranked by curiosity score.</li>
+          <li><strong>The web clipper captures selected text.</strong> Select a passage before clicking the clipper &mdash; that selection is saved as a highlight.</li>
+          <li><strong>Scroll position is saved.</strong> Every 2 seconds while reading, your position is saved. Leave and come back to exactly where you were.</li>
+          <li><strong>Continue Reading cards have progress bars.</strong> Progress is based on time spent relative to estimated read time, capped at 95%.</li>
+          <li><strong>All interactions are logged.</strong> Every tap, swipe, scroll, and mode change is logged to daily JSONL files.</li>
+          <li><strong>Entity underlines are contextual.</strong> Only entities the pipeline flagged as noteworthy get dotted underlines. Long-pressing opens a marginalia card with synthesis &mdash; not a generic Wikipedia lookup.</li>
+          <li><strong>Voice note actions are smart.</strong> After transcription, the LLM identifies intents. Actions appear as tappable chips with status tracking, not just raw transcript text.</li>
+          <li><strong>Cross-article connections use claim similarity.</strong> The &ldquo;Also in&rdquo; annotations and &ldquo;&#10022; CONNECTED READING&rdquo; section are based on cosine similarity &ge;0.78 between claims, not just shared topics.</li>
+          <li><strong>The Activity Log shows everything.</strong> Pipeline runs, reading sessions, interest signals, research dispatches &mdash; all in a chronological timeline with filters.</li>
+          <li><strong>Related articles find connections three ways.</strong> Same topic, shared concepts (via embedding similarity), and same source. Three different lenses on &ldquo;what to read next.&rdquo;</li>
+        </ol>
+      </section>
+
+      <hr class="section-rule" />
+
+      <!-- Known Issues -->
+      <section id="issues">
+        <h2><span class="marker">✦</span> Known Issues</h2>
+        <ul class="gesture-list">
+          <li>
+            <span class="gesture-label">Low quality articles</span>
+            <span>Swipe to dismiss. The pipeline casts a wide net.</span>
+          </li>
+          <li>
+            <span class="gesture-label">Twitter cookies</span>
+            <span>Cookie auth expires periodically. SSH to server, refresh cookies.</span>
+          </li>
+          <li>
+            <span class="gesture-label">Raw markdown</span>
+            <span>The markdown renderer handles most cases but edge cases exist.</span>
+          </li>
+          <li>
+            <span class="gesture-label">No knowledge index</span>
+            <span>If no knowledge index is loaded, dimming and novelty scores don't appear. The pipeline needs to generate the index.</span>
+          </li>
+          <li>
+            <span class="gesture-label">No push notifs</span>
+            <span>Rely on habit &mdash; open the app when you have reading time.</span>
+          </li>
+          <li>
+            <span class="gesture-label">Offline limits</span>
+            <span>Works offline with cached content but won't get new articles until it can reach the server.</span>
+          </li>
+          <li>
+            <span class="gesture-label">Entity matching</span>
+            <span>Pipeline matches entity names via string matching &mdash; may miss variant spellings or abbreviations.</span>
+          </li>
+          <li>
+            <span class="gesture-label">Voice notes</span>
+            <span>Recording is local-first, but upload + transcription need connectivity. Pending uploads retry automatically.</span>
+          </li>
+        </ul>
+      </section>
+
+      <hr class="section-rule" />
+
+      <!-- Quick Reference -->
+      <section id="reference">
+        <h2><span class="marker">✦</span> Quick Reference</h2>
+
+        <h3><span class="marker">✦</span> Where Things Live</h3>
+        <dl class="kv-grid">
+          <dt>Web App</dt>
+          <dd><code>alifstian.duckdns.org:8084</code></dd>
+          <dt>Expo (native)</dt>
+          <dd><code>exp://alifstian.duckdns.org:8082</code></dd>
+          <dt>Content Server</dt>
+          <dd>Port 8083, nginx, 4-hour refresh cycle</dd>
+          <dt>Research Server</dt>
+          <dd>Port 8090</dd>
+          <dt>Server Access</dt>
+          <dd><code>ssh alif</code></dd>
+          <dt>Pipeline Cron</dt>
+          <dd><code>/etc/cron.d/petrarca-refresh</code> (every 4 hours)</dd>
+          <dt>Server Data</dt>
+          <dd><code>/opt/petrarca/data/</code></dd>
+          <dt>Voice Notes</dt>
+          <dd>Feed header &ldquo;Notes&rdquo; link, or per-article in article info</dd>
+        </dl>
+
+        <h3><span class="marker">✦</span> Keyboard Shortcuts</h3>
+        <dl class="kv-grid">
+          <dt>Cmd+Shift+S</dt>
+          <dd>Open web clipper (Chrome)</dd>
+          <dt>Enter</dt>
+          <dd>Save in clipper popup</dd>
+          <dt>Escape</dt>
+          <dd>Close clipper popup</dd>
+        </dl>
+
+        <h3><span class="marker">✦</span> The Four Tabs</h3>
+        <dl class="kv-grid">
+          <dt>Feed</dt>
+          <dd>Ranked article list, swipe gestures, topic filters, continue reading</dd>
+          <dt>Topics</dt>
+          <dd>Articles grouped by topic, delta reports, topic research</dd>
+          <dt>Queue</dt>
+          <dd>Your explicit reading list, ordered</dd>
+          <dt>Log</dt>
+          <dd>Activity timeline &mdash; reading, system, research events with filters</dd>
+        </dl>
       </section>
 
       <!-- Footer -->
       <div class="footer">
-        <p>Petrarca &mdash; named after Francesco Petrarca, pioneer of humanist reading. Built with Expo, Gemini, and a love of serif fonts.</p>
+        <p>Petrarca &mdash; named after Francesco Petrarca, pioneer of humanist reading. Built with Expo, Gemini, and a love of serif fonts. March 2026.</p>
       </div>
     </main>
   </div>
