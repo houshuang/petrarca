@@ -39,9 +39,25 @@ import requests as _requests
 import trafilatura
 from lxml import html as lxml_html
 
+from topic_normalizer import (
+    load_registry, save_registry, normalize_article_topics, to_slug,
+    normalize_entity, run_normalization_pass, registry_needs_defrag,
+    defragment_registry, REGISTRY_PATH,
+)
+
 # ---------------------------------------------------------------------------
 # Topic normalization
 # ---------------------------------------------------------------------------
+
+# Module-level registry — loaded once, updated as articles are processed
+_topic_registry: dict | None = None
+
+
+def _get_topic_registry() -> dict:
+    global _topic_registry
+    if _topic_registry is None:
+        _topic_registry = load_registry()
+    return _topic_registry
 
 
 def normalize_topic(topic) -> str | dict:
@@ -50,6 +66,17 @@ def normalize_topic(topic) -> str | dict:
         # interest_topics come as {"broad": "...", "specific": "...", "entity": "..."}
         return {k: normalize_topic(v) if isinstance(v, str) else v for k, v in topic.items()}
     return re.sub(r"\s+", " ", topic.replace("-", " ")).strip().lower()
+
+
+def normalize_interest_topics(raw_topics: list, article_title: str = "") -> list[dict]:
+    """Normalize interest_topics against the canonical registry with LLM verification."""
+    registry = _get_topic_registry()
+    try:
+        from gemini_llm import call_llm as _gemini_call_llm
+        llm_fn = _gemini_call_llm
+    except ImportError:
+        llm_fn = None
+    return normalize_article_topics(raw_topics, registry, article_title, call_llm=llm_fn)
 
 
 # ---------------------------------------------------------------------------
@@ -988,6 +1015,26 @@ def _article_id(url: str, fallback: str = "") -> str:
     return hashlib.sha256(src.encode()).hexdigest()[:12]
 
 
+def _get_topic_hint() -> str:
+    """Build a hint for the LLM with existing canonical topic categories."""
+    registry = _get_topic_registry()
+    broad_keys = sorted(registry.get("broad", {}).keys())
+    if not broad_keys:
+        return ""
+    specific_by_broad: dict[str, list[str]] = {}
+    for slug, info in registry.get("specific", {}).items():
+        parent = info.get("broad", "")
+        specific_by_broad.setdefault(parent, []).append(slug)
+    lines = ["\nPrefer these existing categories when they fit (create new ones only if none match):"]
+    for b in broad_keys[:20]:
+        specs = sorted(specific_by_broad.get(b, []))[:8]
+        if specs:
+            lines.append(f"  {b}: {', '.join(specs)}")
+        else:
+            lines.append(f"  {b}")
+    return "\n".join(lines)
+
+
 def _build_article_prompt(content: str, title: str) -> str:
     if len(content) > 12000:
         content = content[:12000] + "\n\n[... truncated ...]"
@@ -1032,7 +1079,7 @@ Return a JSON object:
   "content_type": "one of: analysis, tutorial, opinion, news, research, reference, announcement, discussion"
 }}
 
-interest_topics: hierarchical topic tags with kebab-case broad/specific categories and optional entity names.
+interest_topics: hierarchical topic tags with kebab-case broad/specific categories and optional entity names.{_get_topic_hint()}
 novelty_claims: what's genuinely new or surprising in this article. specificity is "high", "medium", or "low".
 entities: extract 3-8 notable entities (people, books, companies, concepts, places, events, technologies) mentioned in the article. Include a 1-2 sentence synthesis and all name variations used in the text.
 follow_up_questions: generate 2-3 curiosity-driven questions that a thoughtful reader might want to explore after reading this article.
@@ -1141,7 +1188,7 @@ def build_articles(candidates: list[dict], existing_articles: list[dict],
             "topics": llm.get("topics", []),
             "estimated_read_minutes": llm.get("estimated_read_minutes", max(1, best["word_count"] // 200)),
             "content_type": llm.get("content_type", "unknown"),
-            "interest_topics": [normalize_topic(t) for t in llm.get("interest_topics", [])],
+            "interest_topics": normalize_interest_topics(llm.get("interest_topics", []), llm.get("title", "")),
             "novelty_claims": llm.get("novelty_claims", []),
             "entities": llm.get("entities", []),
             "follow_up_questions": llm.get("follow_up_questions", []),
@@ -1619,35 +1666,76 @@ def _extract_claims_for_article(article: dict, index: int, total: int) -> None:
 
 
 def enrich_articles(articles: list[dict], dry_run: bool = False) -> list[dict]:
-    """Add entities + follow_up_questions to articles that don't have them."""
+    """Add entities, follow_up_questions, and interest_topics to articles that lack them."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     to_process = [a for a in articles
-                  if not a.get("entities") or not a.get("follow_up_questions")]
+                  if not a.get("entities") or not a.get("follow_up_questions") or not a.get("interest_topics")]
     if not to_process:
-        print("  All articles already have entities + follow_up_questions, skipping", file=sys.stderr)
+        print("  All articles already have entities + follow_up_questions + interest_topics, skipping", file=sys.stderr)
         return articles
 
-    print(f"  Enriching {len(to_process)} articles (skipping {len(articles) - len(to_process)} already done)", file=sys.stderr)
+    needs_entities = sum(1 for a in to_process if not a.get("entities"))
+    needs_topics = sum(1 for a in to_process if not a.get("interest_topics"))
+    print(f"  Enriching {len(to_process)} articles (needs entities: {needs_entities}, needs topics: {needs_topics})", file=sys.stderr)
 
     if dry_run:
         for i, article in enumerate(to_process):
-            print(f"  [{i+1}/{len(to_process)}] Would enrich: {article.get('title', 'Untitled')[:60]}", file=sys.stderr)
+            missing = []
+            if not article.get("entities"): missing.append("entities")
+            if not article.get("follow_up_questions"): missing.append("questions")
+            if not article.get("interest_topics"): missing.append("topics")
+            print(f"  [{i+1}/{len(to_process)}] Would enrich ({', '.join(missing)}): {article.get('title', 'Untitled')[:60]}", file=sys.stderr)
         return articles
+
+    topic_hint = _get_topic_hint()
 
     def _enrich_one(article, index, total):
         title = article.get("title", "Untitled")
         content = article.get("content_markdown", "")
         topics = article.get("topics", [])
 
+        need_entities = not article.get("entities")
+        need_questions = not article.get("follow_up_questions")
+        need_interest_topics = not article.get("interest_topics")
+
         if not content or len(content.split()) < 50:
             print(f"  [{index}/{total}] Skipping (too short): {title[:60]}", file=sys.stderr)
             article.setdefault("entities", [])
             article.setdefault("follow_up_questions", [])
+            article.setdefault("interest_topics", [])
             return
 
-        print(f"  [{index}/{total}] Enriching: {title[:60]}", file=sys.stderr)
-        prompt = f"""Analyze this article and extract two things:
+        # Build prompt requesting only the missing fields
+        fields_needed = []
+        schema_parts = []
+        instructions = []
+
+        if need_entities:
+            fields_needed.append("entities")
+            schema_parts.append("""  "entities": [
+    {{"name": "Entity Name", "type": "person|book|company|concept|event|place|technology", "synthesis": "1-2 sentence description of this entity in context of the article.", "mentions": ["Entity Name", "alternate name"]}}
+  ]""")
+            instructions.append("entities: extract 3-8 notable entities (people, books, companies, concepts, places, events, technologies) mentioned in the article. Include a 1-2 sentence synthesis and all name variations used in the text.")
+
+        if need_questions:
+            fields_needed.append("follow_up_questions")
+            schema_parts.append("""  "follow_up_questions": [
+    {{"question": "A curiosity-driven question a thoughtful reader might explore after reading this article?", "connects_to": "related topic area"}}
+  ]""")
+            instructions.append("follow_up_questions: generate 2-3 curiosity-driven questions that a thoughtful reader might want to explore after reading this article.")
+
+        if need_interest_topics:
+            fields_needed.append("interest_topics")
+            schema_parts.append("""  "interest_topics": [
+    {{"broad": "broad-category", "specific": "specific-topic", "entity": "Optional Entity Name"}}
+  ]""")
+            instructions.append(f"interest_topics: hierarchical topic tags with kebab-case broad/specific categories and optional entity names.{topic_hint}")
+
+        missing_str = ", ".join(fields_needed)
+        print(f"  [{index}/{total}] Enriching ({missing_str}): {title[:60]}", file=sys.stderr)
+
+        prompt = f"""Analyze this article and extract the following: {missing_str}
 
 Article title: {title}
 Topics: {', '.join(topics[:5])}
@@ -1655,18 +1743,12 @@ Topics: {', '.join(topics[:5])}
 Article content:
 {content[:8000]}
 
-Return a JSON object with exactly these two fields:
+Return a JSON object with these fields:
 {{
-  "entities": [
-    {{"name": "Entity Name", "type": "person|book|company|concept|event|place|technology", "synthesis": "1-2 sentence description of this entity in context of the article.", "mentions": ["Entity Name", "alternate name"]}}
-  ],
-  "follow_up_questions": [
-    {{"question": "A curiosity-driven question a thoughtful reader might explore after reading this article?", "connects_to": "related topic area"}}
-  ]
+{','.join(chr(10) + p for p in schema_parts)}
 }}
 
-entities: extract 3-8 notable entities (people, books, companies, concepts, places, events, technologies) mentioned in the article. Include a 1-2 sentence synthesis and all name variations used in the text.
-follow_up_questions: generate 2-3 curiosity-driven questions that a thoughtful reader might want to explore after reading this article.
+{chr(10).join(instructions)}
 
 Return ONLY valid JSON."""
 
@@ -1678,17 +1760,28 @@ Return ONLY valid JSON."""
                     cleaned = re.sub(r"^```(?:json)?\n?", "", cleaned)
                     cleaned = re.sub(r"\n?```$", "", cleaned)
                 parsed = json.loads(cleaned)
-                article["entities"] = parsed.get("entities", [])
-                article["follow_up_questions"] = parsed.get("follow_up_questions", [])
-                print(f"    OK: {len(article['entities'])} entities, {len(article['follow_up_questions'])} questions", file=sys.stderr)
+                if need_entities:
+                    article["entities"] = parsed.get("entities", [])
+                if need_questions:
+                    article["follow_up_questions"] = parsed.get("follow_up_questions", [])
+                if need_interest_topics:
+                    raw_topics = parsed.get("interest_topics", [])
+                    article["interest_topics"] = normalize_interest_topics(raw_topics, title)
+                counts = []
+                if need_entities: counts.append(f"{len(article.get('entities', []))} entities")
+                if need_questions: counts.append(f"{len(article.get('follow_up_questions', []))} questions")
+                if need_interest_topics: counts.append(f"{len(article.get('interest_topics', []))} topics")
+                print(f"    OK: {', '.join(counts)}", file=sys.stderr)
             except json.JSONDecodeError:
                 print(f"    JSON parse failed for enrichment", file=sys.stderr)
                 article.setdefault("entities", [])
                 article.setdefault("follow_up_questions", [])
+                article.setdefault("interest_topics", [])
         else:
             print(f"    LLM call failed for enrichment", file=sys.stderr)
             article.setdefault("entities", [])
             article.setdefault("follow_up_questions", [])
+            article.setdefault("interest_topics", [])
 
     max_workers = min(10, len(to_process))
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -1704,10 +1797,12 @@ Return ONLY valid JSON."""
                 print(f"    Error enriching {article.get('title', '')[:40]}: {e}", file=sys.stderr)
                 article.setdefault("entities", [])
                 article.setdefault("follow_up_questions", [])
+                article.setdefault("interest_topics", [])
 
     total_entities = sum(len(a.get("entities", [])) for a in articles)
     total_questions = sum(len(a.get("follow_up_questions", [])) for a in articles)
-    print(f"  Total: {total_entities} entities, {total_questions} follow-up questions across all articles", file=sys.stderr)
+    total_topics = sum(len(a.get("interest_topics", [])) for a in articles)
+    print(f"  Total: {total_entities} entities, {total_questions} follow-up questions, {total_topics} interest topics across all articles", file=sys.stderr)
     return articles
 
 
@@ -1774,11 +1869,15 @@ def main():
     parser.add_argument("--skip-claims", action="store_true",
                         help="Explicitly skip atomic claim extraction")
     parser.add_argument("--enrich", action="store_true",
-                        help="Add entities + follow-up questions to existing articles that lack them")
+                        help="Add entities, follow-up questions, and interest_topics to existing articles that lack them")
     parser.add_argument("--entities", action="store_true",
                         help="Run resourceful entity research on short tweets without URLs")
     parser.add_argument("--entity-limit", type=int, default=3,
                         help="Max entities to research per run (default: 3)")
+    parser.add_argument("--normalize-topics", action="store_true",
+                        help="Re-normalize interest_topics on all existing articles against the canonical registry")
+    parser.add_argument("--defrag-topics", action="store_true",
+                        help="Consolidate overpopulated topic categories by merging similar topics via LLM")
     args = parser.parse_args()
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -1786,6 +1885,55 @@ def main():
     # Entity research mode: find and research entity mentions in tweets
     if args.entities:
         process_entity_tweets(limit=args.entity_limit)
+        return
+
+    # Normalize topics mode: re-normalize all interest_topics against canonical registry
+    if args.normalize_topics:
+        existing = _load_json(ARTICLES_PATH) or []
+        if not existing:
+            print("ERROR: No existing articles to normalize topics for", file=sys.stderr)
+            sys.exit(1)
+        print(f"\n=== Topic Normalization ===", file=sys.stderr)
+        print(f"  Processing {len(existing)} articles against canonical registry", file=sys.stderr)
+        try:
+            from gemini_llm import call_llm as _gemini_call_llm
+            llm_fn = _gemini_call_llm
+        except ImportError:
+            print("  WARNING: gemini_llm not available, normalizing without LLM verification", file=sys.stderr)
+            llm_fn = None
+        articles = run_normalization_pass(existing, call_llm=llm_fn, dry_run=args.dry_run)
+        if not args.dry_run:
+            _save_json(articles, ARTICLES_PATH)
+            APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
+            _save_json(articles, APP_DATA_DIR / "articles.json")
+            save_registry(_get_topic_registry())
+            print(f"  Registry saved to {REGISTRY_PATH}", file=sys.stderr)
+        return
+
+    # Defrag topics mode: consolidate overpopulated categories
+    if args.defrag_topics:
+        existing = _load_json(ARTICLES_PATH) or []
+        if not existing:
+            print("ERROR: No existing articles for defrag", file=sys.stderr)
+            sys.exit(1)
+        registry = load_registry()
+        if not registry_needs_defrag(registry):
+            print("  Registry within limits, no defrag needed", file=sys.stderr)
+            return
+        print(f"\n=== Topic Defragmentation ===", file=sys.stderr)
+        try:
+            from gemini_llm import call_llm as _gemini_call_llm
+            llm_fn = _gemini_call_llm
+        except ImportError:
+            print("  ERROR: gemini_llm required for defrag", file=sys.stderr)
+            sys.exit(1)
+        merge_map = defragment_registry(registry, existing, call_llm=llm_fn, dry_run=args.dry_run)
+        if merge_map and not args.dry_run:
+            save_registry(registry)
+            _save_json(existing, ARTICLES_PATH)
+            APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
+            _save_json(existing, APP_DATA_DIR / "articles.json")
+            print(f"  Registry and articles saved", file=sys.stderr)
         return
 
     # Concepts-only mode: just extract concepts from existing articles
@@ -1939,6 +2087,10 @@ def main():
     _save_json(articles, ARTICLES_PATH)
     APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
     _save_json(articles, APP_DATA_DIR / "articles.json")
+
+    # Save topic registry if it was updated during processing
+    if _topic_registry is not None:
+        save_registry(_topic_registry)
 
     # Step 5: Extract concepts
     print(f"\n=== Step 5: Extract Concepts ===", file=sys.stderr)

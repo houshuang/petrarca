@@ -1,0 +1,162 @@
+{
+  "version": 1,
+  "max_broad": 25,
+  "max_specific_per_broad": 15,
+  "broad": {
+    "artificial-intelligence": {
+      "includes": "AI, machine learning, LLMs, neural networks, model architectures, training, inference, AI tools and coding assistants, prompt engineering",
+      "excludes": "Software that merely uses AI as a minor feature (classify under the primary domain instead)"
+    },
+    "software-engineering": {
+      "includes": "Programming, developer tools, frameworks, mobile development, React Native, distributed systems, version control, CLI tools, APIs",
+      "excludes": "AI-specific tools and models (those go under artificial-intelligence)"
+    },
+    "history": {
+      "includes": "Historical events, periods, civilizations, medieval history, ancient history, cultural transmission between civilizations",
+      "excludes": "History of a specific field (that goes under the field, e.g. education history under education)"
+    },
+    "education": {
+      "includes": "Teaching, learning, pedagogy, curriculum, universities, educational research, developer education",
+      "excludes": "Self-directed knowledge management tools (those go under knowledge-management)"
+    },
+    "linguistics": {
+      "includes": "Languages, language policy, constructed languages, language endangerment, translation, multilingualism",
+      "excludes": "Language learning apps and methods (those go under education)"
+    },
+    "literature": {
+      "includes": "Literary works, authors, literary criticism, poetry, novels, literary movements",
+      "excludes": "Technical or academic writing (those go under their subject domain)"
+    },
+    "politics": {
+      "includes": "Policy, governance, political movements, climate policy, industrial policy, geopolitics, elections",
+      "excludes": "Political philosophy without policy focus (that goes under philosophy)"
+    },
+    "knowledge-management": {
+      "includes": "PKM tools, note-taking systems, knowledge graphs, reading tools, incremental reading, spaced repetition, information organization",
+      "excludes": "General productivity without knowledge focus (that goes under productivity)"
+    },
+    "philosophy": {
+      "includes": "Philosophical traditions, ethics, epistemology, comparative philosophy, authorship theory",
+      "excludes": "Applied ethics in specific domains (classify under the domain)"
+    },
+    "culture": {
+      "includes": "Cultural analysis, cultural construction, AI and society, work culture, media criticism",
+      "excludes": "Historical cultures (those go under history)"
+    },
+    "energy": {
+      "includes": "Energy policy, renewable energy, fossil fuels, energy infrastructure, climate and energy",
+      "excludes": "Climate policy without energy focus (that goes under politics)"
+    },
+    "art-architecture": {
+      "includes": "Visual arts, architecture, design, medieval architecture, art history",
+      "excludes": "Software UI/UX design (that goes under software-engineering)"
+    }
+  },
+  "specific": {
+    "ai-coding-tools": {
+      "broad": "artificial-intelligence",
+      "includes": "AI coding assistants, code generation, AI-assisted development, Claude Code, Copilot, Cursor",
+      "excludes": "General LLM applications not focused on coding"
+    },
+    "ai-orchestration": {
+      "broad": "artificial-intelligence",
+      "includes": "Multi-agent coordination, agent frameworks, tool use, MCP, agent loops, autonomous agents",
+      "excludes": "Single-model API usage without orchestration"
+    },
+    "model-architecture": {
+      "broad": "artificial-intelligence",
+      "includes": "Model design, attention mechanisms, transformer architectures, model capabilities, benchmarks",
+      "excludes": "Using models as tools (that goes under ai-coding-tools or llm-applications)"
+    },
+    "llm-applications": {
+      "broad": "artificial-intelligence",
+      "includes": "Using LLMs for specific tasks, prompt engineering, AI assistants, chatbots, content generation",
+      "excludes": "Model architecture research (that goes under model-architecture)"
+    },
+    "mobile-development": {
+      "broad": "software-engineering",
+      "includes": "React Native, Expo, mobile frameworks, iOS/Android development",
+      "excludes": "Web-only development"
+    },
+    "distributed-systems": {
+      "broad": "software-engineering",
+      "includes": "Git, version control, worktrees, distributed architecture, microservices",
+      "excludes": "Simple local development tools"
+    },
+    "medieval-mediterranean": {
+      "broad": "history",
+      "includes": "Medieval Sicily, Norman conquest, Arabic-Latin cultural exchange, Crusades, Mediterranean trade",
+      "excludes": "Modern Mediterranean history"
+    },
+    "italian-history": {
+      "broad": "history",
+      "includes": "Italian unification, Southern Question, Renaissance, city-states, modern Italy",
+      "excludes": "Medieval Sicily specifically (that goes under medieval-mediterranean)"
+    },
+    "pedagogy": {
+      "broad": "education",
+      "includes": "Teaching methods, Socratic method, Montessori, progressive education, educational philosophy",
+      "excludes": "Educational technology and tools (those go under education-technology)"
+    },
+    "language-learning": {
+      "broad": "education",
+      "includes": "Language acquisition, Duolingo, immersion, vocabulary learning, language apps",
+      "excludes": "Linguistics research (that goes under linguistics)"
+    },
+    "reading-tools": {
+      "broad": "knowledge-management",
+      "includes": "Read-later apps, Readwise, Obsidian for reading, incremental reading tools, reading workflows",
+      "excludes": "General note-taking without reading focus"
+    },
+    "incremental-reading": {
+      "broad": "knowledge-management",
+      "includes": "SuperMemo-style progressive reading, spaced repetition for reading, knowledge extraction from texts",
+      "excludes": "General spaced repetition for flashcards (that goes under spaced-repetition)"
+    },
+    "spaced-repetition": {
+      "broad": "knowledge-management",
+      "includes": "FSRS, Anki, spaced repetition algorithms, memory scheduling",
+      "excludes": "Incremental reading specifically (that goes under incremental-reading)"
+    },
+    "knowledge-graphs": {
+      "broad": "knowledge-management",
+      "includes": "Graph-based knowledge representation, semantic networks, ontologies, linked data",
+      "excludes": "Simple tagging or folder-based organization"
+    },
+    "language-policy": {
+      "broad": "linguistics",
+      "includes": "Official language designation, language rights, multilingual policy, language planning",
+      "excludes": "Language learning methods (those go under education)"
+    },
+    "constructed-languages": {
+      "broad": "linguistics",
+      "includes": "Esperanto, conlangs, planned languages, auxiliary languages",
+      "excludes": "Natural language evolution"
+    },
+    "italian-literature": {
+      "broad": "literature",
+      "includes": "Italian authors, Pirandello, Verga, Dante, Italian literary movements, verismo",
+      "excludes": "Italian history without literary focus"
+    },
+    "european-climate-policy": {
+      "broad": "politics",
+      "includes": "EU climate regulations, green deal, carbon pricing, European environmental policy",
+      "excludes": "Energy technology without policy focus (that goes under energy)"
+    },
+    "green-industrial-policy": {
+      "broad": "politics",
+      "includes": "Industrial strategy for green transition, battery manufacturing, EV policy, green subsidies",
+      "excludes": "Pure energy technology (that goes under energy)"
+    },
+    "comparative-philosophy": {
+      "broad": "philosophy",
+      "includes": "East-West philosophy, Confucian thought, cross-cultural philosophical analysis",
+      "excludes": "Philosophy of a specific domain (classify under that domain)"
+    },
+    "medieval-architecture": {
+      "broad": "art-architecture",
+      "includes": "Romanesque, Gothic, Norman architecture, Cappella Palatina, cathedral building",
+      "excludes": "Modern architecture"
+    }
+  }
+}
