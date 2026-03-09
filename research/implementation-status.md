@@ -280,48 +280,40 @@ App (Expo SDK 54):
 32. ~~**Automatic topic defragmentation**~~ — DONE: `defragment_registry()` consolidates when limits exceeded. Phase 1: merge similar specifics per overpopulated broad. Phase 2: minimal broad merges. Phase 3: update all articles. Auto-runs as pipeline step 3c3. First run: 28→25 broad, 263→172 specific. See `research/topic-normalization-spec.md` for full spec.
 33. ~~**Backfill interest_topics**~~ — DONE: Extended `--enrich` to also generate `interest_topics`. All 185 articles now have hierarchical topics, normalized and defragmented.
 
-### Gap Analysis: Built vs. Full Spec (as of Mar 9)
+### Gap Analysis: Built vs. Full Spec (updated end of session 8)
 
-#### HIGH PRIORITY — Core Experience Gaps
+#### COMPLETED — Original Gaps Now Resolved
 
-| # | Feature | Spec Source | Gap Description |
-|---|---------|-----------|-----------------|
-| G1 | **Claim-level feedback UI** | `claims-topics-feedback-spec.md` | **Descoped after design exploration (session 7)**: 4 mockups explored (margin glyphs, inline callouts, hybrid markers, progressive reveal). Decided per-claim feedback is wrong direction — knowledge model should infer from reading behavior, not explicit "I knew this" buttons. Scroll-aware encounter tracking now handles this implicitly. "What's new" card curated to prioritize non-trivial claims. "Tell me more" research spawn still valuable, decoupled from individual claims. |
-| G2 | **LLM judge for ambiguous claims** | `novelty-system-architecture.md` | Cosine-only classification. The 0.68–0.78 range (~5% of pairs) should get LLM verification — experiment showed 25% disagreement in that range. |
-| G3 | **Incremental embedding** | pipeline | Currently re-embeds all claims every pipeline run. Should only embed new claims and append to `.npz`. |
-| G4 | **Related articles at bottom of reader** | `ux-redesign-spec.md` | Spec: 3 groups (same topic / shared concepts / same source) with "+ Queue" buttons. Not implemented. |
-| G5 | **Reader "Up next" footer** | `ux-redesign-spec.md` | After Done, should flow directly to next queued article. Currently returns to feed. |
-| G6 | **Auto-ingest from links** | `ux-redesign-spec.md` | DONE: Tap link in reader → POST `/ingest` → polls `/ingest-status` every 5s → inline badges ("processing…" / "queued ✓" / "failed"). Long-press opens in browser. Non-article URLs (images, PDFs) fall through to browser. Server returns deterministic `article_id` (sha256) + `ingest_id` for polling. |
+| # | Feature | Resolution |
+|---|---------|-----------|
+| G1 | Claim-level feedback UI | **Descoped** → behavioral inference via scroll-aware tracking + curated "What's new" card |
+| G3 | Incremental embedding | **DONE** — only embeds new claims, prunes removed, `--force` for full rebuild |
+| G4 | Related articles at reader bottom | **DONE** — 3 groups (same topic / shared concepts / same source) with "+ Queue" buttons |
+| G5 | Reader "Up next" footer | **DONE** — footer bar with Done + next queued article title, `router.replace()` flow |
+| G6 | Auto-ingest from links | **DONE** — tap link → POST `/ingest` → poll `/ingest-status` → inline badges |
+| G7 | Activity Log tab | **DONE** — 4th tab, server aggregation via `/activity/feed`, offline log queue |
+| G9 | Topic hierarchy feedback | **DONE** — hierarchical PostReadInterestCard, `recordTopicSignalAtLevel()`, entity scoring |
+| G10 | Cross-article connections | **DONE** — inline "Also in: [title]" annotations + "✦ CONNECTED READING" bottom section |
+| G12 | Novel section markers | **DONE** — 2px green left border on novel/mostly_novel paragraphs in Guided/New Only modes |
+| G13 | Micro-delights (partial) | **DONE** — ✦ pull-to-refresh ornament, claim reveal stagger (80ms), completion flash. AnimatedHighlightWrap deferred. |
 
-#### MEDIUM PRIORITY — Missing Screens & Features
+#### REMAINING GAPS
 
-| # | Feature | Spec Source | Gap Description |
-|---|---------|-----------|-----------------|
-| G7 | **Activity Log tab** | `ux-redesign-spec.md` (Screen 5) | **DONE** (session 6). 4th tab with vertical timeline, filter toggles, paged server fetch, offline log queue. Server aggregates reading sessions, pipeline events, research, interest signals via `GET /activity/feed?days=N`. |
-| G8 | **Web split panel + keyboard shortcuts** | `ux-redesign-spec.md` (Screen 6) | Spec: left pane article list + right pane reader, `j/k/d/x/q/Space/s` keyboard shortcuts. **Not built.** |
-| G9 | **Topic hierarchy feedback** | `claims-topics-feedback-spec.md` | **DONE** (session 8). PostReadInterestCard redesigned with hierarchical display: broad → specific → entity levels with tree lines, level badges, +/- buttons. `recordTopicSignalAtLevel()` signals at exactly one level without cascading. `computeInterestMatch()` traverses all levels when scoring. Smart expand: ≤2 broad categories → expanded, 3+ → collapsed. |
-| G10 | **Cross-article connections in reader** | `claims-topics-feedback-spec.md` | **DONE** (session 8). Two surfaces: (1) `InlineCrossArticleAnnotation` — "Also in: [title]" below paragraphs with cross-article connections, max 2 per paragraph. (2) `ConnectedReadingSection` — bottom section showing up to 5 connected articles with shared claim counts, read/unread status, "+ Queue" buttons. Tap queues to front (LIFO), long-press navigates. Uses ≥0.78 cosine threshold from knowledge index similarities. |
-| G11 | **Scrollbar novelty minimap** | `novelty-system-architecture.md` | Colored dots on scrollbar showing where novel content is. Not implemented. |
-| G12 | **Novel section markers** | `novelty-system-architecture.md` | Green left border (2px) on paragraphs with NEW claims. Dimming exists but no novel markers. |
-
-#### LOWER PRIORITY — Polish & Refinement
-
-| # | Feature | Spec Source | Gap Description |
-|---|---------|-----------|-----------------|
-| G13 | **Micro-delights** | `DESIGN_GUIDE.md` | Pull-to-refresh ✦ ornament, claim reveal staggered animation (80ms), long-press amber border fade + haptic, completion flash (gold along double rule), knowledge bars animate (staggered 60ms). None implemented. |
-| G14 | **Entry row sidebar** | `DESIGN_GUIDE.md` | 76px sidebar with large Cormorant numbers + DM Sans labels + depth dots. Not implemented. |
-| G15 | **Depth navigator** | `DESIGN_GUIDE.md` | Horizontal row: Summary / Claims / Sections / Full with rubric underline. Not in reader. |
-| G16 | **Novelty badges** | `DESIGN_GUIDE.md` | "Mostly new" / "72% new" / "Partly familiar" with semantic colors. Not implemented. |
-| G17 | **Dismissed articles archive** | `ux-redesign-spec.md` | Swiped-left articles should be accessible somewhere. No archive view. |
-| G18 | **Structured comparison (Elicit-style)** | `novelty-system-architecture.md` | Multi-article comparison matrix view. Not implemented. |
-| G19 | **Blindspot detection** | `novelty-system-architecture.md` | Topics with many articles but few absorbed claims → user might be saturated. Not implemented. |
-| G20 | **Contradiction detection** | experiments | Corpus too harmonious (86% compatible). Deprioritized until more diverse sources. |
-| G21 | **Book reader** | brainstorm | Section-based long-form reading. Not started. |
-| G22 | **Nomic embeddings** | experiments | Experiments validated Nomic-embed-text-v1.5 as superior (wider similarity range). Pipeline uses Gemini embedding-001 instead. Works fine but suboptimal. |
-
-#### Summary of Biggest Gaps
-
-1. **Reading flow continuity** (G4, G5) — no "Up next" footer, no related articles section. G6 (auto-ingest from links) is done. G10 (cross-article connections) is done with inline annotations + bottom section. Queue is now woven into reading via LIFO cross-article queueing.
+| # | Feature | Priority | Notes |
+|---|---------|----------|-------|
+| G2 | **LLM judge for ambiguous claims** | Medium | 0.68–0.78 cosine range gets LLM verification. Experiment validated, not integrated into pipeline. |
+| G8 | **Web split panel + keyboard shortcuts** | Medium | Desktop experience. Left pane article list + right pane reader, `j/k/d/x/q/Space/s` keys. |
+| G11 | **Scrollbar novelty minimap** | Low | Colored dots on scrollbar showing novel content locations. |
+| G13 | **AnimatedHighlightWrap** | Low | Amber long-press border animation. Deferred due to block rendering complexity. |
+| G14 | **Entry row sidebar** | Low | 76px sidebar with large Cormorant numbers + depth dots. Design polish. |
+| G15 | **Depth navigator** | Low | Summary / Claims / Sections / Full horizontal toggle in reader. |
+| G16 | **Novelty badges** | Low | "Mostly new" / "72% new" / "Partly familiar" semantic badges. |
+| G17 | **Dismissed articles archive** | Low | Archive view for swiped-left articles. |
+| G18 | **Structured comparison** | Low | Elicit-style multi-article comparison matrix. |
+| G19 | **Blindspot detection** | Low | Topics with many articles but few absorbed claims. |
+| G20 | **Contradiction detection** | Deferred | Corpus too harmonious (86% compatible). |
+| G21 | **Book reader** | Deferred | Section-based long-form reading. |
+| G22 | **Nomic embeddings** | Low | Experiments preferred Nomic over Gemini embeddings. Works fine with Gemini. |
 2. **Pipeline accuracy** (G2, G3) — LLM judge for ambiguous 0.68–0.78 cosine range, incremental embedding to avoid re-embedding all claims.
 3. **Web experience** (G8) — split panel + keyboard shortcuts for desktop use.
 
