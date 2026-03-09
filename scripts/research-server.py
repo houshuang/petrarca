@@ -13,6 +13,7 @@ Results stored in: /opt/petrarca/research-results/
 
 import email
 import email.policy
+import hashlib
 import json
 import os
 import re
@@ -20,6 +21,7 @@ import subprocess
 import tempfile
 import threading
 import time
+from datetime import datetime, timedelta, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse, urlencode, parse_qs, unquote
@@ -38,6 +40,8 @@ EMAILS_DIR = INGEST_DIR / 'emails'
 CHAT_DIR = Path(os.environ.get('CHAT_DIR', '/opt/petrarca/data/chats'))
 NOTES_DIR = Path(os.environ.get('NOTES_DIR', '/opt/petrarca/data/notes'))
 AUDIO_DIR = Path(os.environ.get('AUDIO_DIR', '/opt/petrarca/data/audio'))
+LOG_DIR = Path(os.environ.get('LOG_DIR', '/opt/petrarca/data/logs'))
+ARTICLES_PATH = Path(os.environ.get('ARTICLES_PATH', '/opt/petrarca/data/articles.json'))
 
 SONIOX_API_KEY = os.environ.get('SONIOX_API_KEY', '557c7c5a86a2f5b8fa734ddbbe179f0f21fd342c762768c9af4f4ffff8c58e1f')
 SONIOX_BASE_URL = 'https://api.soniox.com/v1'
@@ -490,13 +494,16 @@ def run_research(request_id: str, query: str, article_title: str, article_summar
     print(f'[research] {request_id} -> {result["status"]}')
 
 
-def run_ingest(url: str, title: str, content: str, selected_text: str, comment: str, source: str):
+def run_ingest(url: str, title: str, content: str, selected_text: str, comment: str, source: str, ingest_id: str | None = None):
     """Import a URL via import_url.py, optionally with pre-extracted content."""
-    ingest_id = f'ingest_{int(time.time())}_{hash(url) % 10000:04d}'
+    if not ingest_id:
+        ingest_id = f'ingest_{int(time.time())}_{hash(url) % 10000:04d}'
+    article_id = hashlib.sha256(url.encode()).hexdigest()[:12]
     log_path = INGEST_DIR / f'{ingest_id}.json'
 
     log_entry = {
         'id': ingest_id,
+        'article_id': article_id,
         'status': 'processing',
         'url': url,
         'title': title,
@@ -1249,20 +1256,25 @@ class ResearchHandler(BaseHTTPRequestHandler):
         comment = body.get('comment', '')
         source = body.get('source', 'unknown')
 
+        # Generate IDs before spawning thread so we can return them
+        ingest_id = f'ingest_{int(time.time())}_{hash(url) % 10000:04d}'
+        article_id = hashlib.sha256(url.encode()).hexdigest()[:12]
+
         thread = threading.Thread(
             target=run_ingest,
-            args=(url, title, content, selected_text, comment, source),
+            args=(url, title, content, selected_text, comment, source, ingest_id),
             daemon=True,
         )
         thread.start()
 
-        print(f'[ingest] Queued: {url[:80]} (source={source})')
+        print(f'[ingest] Queued: {url[:80]} (source={source}, id={ingest_id})')
 
-        self.send_response(202)
-        self._send_cors_headers()
-        self.send_header('Content-Type', 'application/json')
-        self.end_headers()
-        self.wfile.write(json.dumps({'status': 'queued', 'url': url}).encode())
+        self._send_json_response(202, {
+            'status': 'queued',
+            'url': url,
+            'ingest_id': ingest_id,
+            'article_id': article_id,
+        })
 
     def _handle_ingest_book(self):
         if INGEST_TOKEN:
@@ -1403,8 +1415,295 @@ class ResearchHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(json.dumps({'id': request_id, 'status': 'processing'}).encode())
 
+    def _load_articles_map(self) -> dict:
+        """Load articles.json and return {id: title} map."""
+        try:
+            articles = json.loads(ARTICLES_PATH.read_text())
+            return {a['id']: a.get('title', 'Untitled') for a in articles}
+        except (OSError, json.JSONDecodeError, KeyError):
+            return {}
+
+    def _load_log_events(self, days: int) -> list[dict]:
+        """Load interaction log events for the last N days."""
+        events = []
+        today = datetime.now(timezone.utc).date()
+        for i in range(days):
+            d = today - timedelta(days=i)
+            log_file = LOG_DIR / f'interactions_{d.isoformat()}.jsonl'
+            if not log_file.exists():
+                continue
+            try:
+                for line in log_file.read_text().splitlines():
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        events.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        continue
+            except OSError:
+                continue
+        return events
+
+    def _load_research_results(self) -> list[dict]:
+        """Load all research result files."""
+        results = []
+        if not RESULTS_DIR.exists():
+            return results
+        for f in RESULTS_DIR.glob('*.json'):
+            try:
+                results.append(json.loads(f.read_text()))
+            except (OSError, json.JSONDecodeError):
+                continue
+        return results
+
+    def _handle_activity_feed(self):
+        parsed = urlparse(self.path)
+        params = parse_qs(parsed.query)
+        days = int(params.get('days', ['1'])[0])
+
+        articles_map = self._load_articles_map()
+        raw_events = self._load_log_events(days)
+        research_results = self._load_research_results()
+
+        # Build lookup: research_id -> result
+        research_by_id = {r['id']: r for r in research_results if 'id' in r}
+
+        timeline = []
+
+        # --- Group reading sessions ---
+        # Collect reader_* events by (session_id, article_id)
+        reading_sessions = {}  # (session_id, article_id) -> list of events
+        for ev in raw_events:
+            event_name = ev.get('event', '')
+            if event_name.startswith('reader_') and ev.get('article_id'):
+                key = (ev.get('session_id', ''), ev['article_id'])
+                reading_sessions.setdefault(key, []).append(ev)
+
+        for (session_id, article_id), evts in reading_sessions.items():
+            evts.sort(key=lambda e: e.get('ts', ''))
+            anchor = next((e for e in evts if e['event'] == 'reader_open'), evts[0])
+
+            finished = any(e['event'] == 'reader_done' for e in evts)
+            highlights = sum(1 for e in evts if e['event'] == 'reader_highlight_add')
+            close_evt = next((e for e in evts if e['event'] == 'reader_close'), None)
+            time_spent_ms = close_evt.get('time_spent_ms', 0) if close_evt else 0
+            scroll_pct = 0
+            for e in evts:
+                if e['event'] == 'reader_scroll_milestone':
+                    scroll_pct = max(scroll_pct, e.get('pct', 0))
+
+            title = articles_map.get(article_id, anchor.get('title', article_id[:12]))
+            subtype = 'finished' if finished else 'in_progress'
+
+            # Build subtitle
+            parts = []
+            if time_spent_ms > 0:
+                mins = round(time_spent_ms / 60000)
+                parts.append(f'{mins} min' if mins > 0 else '<1 min')
+            if highlights:
+                parts.append(f'{highlights} highlight{"s" if highlights != 1 else ""}')
+            subtitle = ' · '.join(parts) if parts else None
+
+            prefix = 'Finished reading' if finished else 'Reading'
+            timeline.append({
+                'id': f'evt_{anchor["ts"]}_{article_id[:8]}',
+                'type': 'reading',
+                'subtype': subtype,
+                'ts': anchor.get('ts'),
+                'title': f'{prefix}: {title}',
+                'subtitle': subtitle,
+                'article_id': article_id,
+                'meta': {
+                    'time_spent_ms': time_spent_ms,
+                    'highlights': highlights,
+                    'scroll_pct': scroll_pct,
+                },
+            })
+
+        # --- Dismissals ---
+        for ev in raw_events:
+            if ev.get('event') == 'article_dismissed' and ev.get('article_id'):
+                aid = ev['article_id']
+                title = articles_map.get(aid, aid[:12])
+                reason = ev.get('reason', '')
+                timeline.append({
+                    'id': f'evt_{ev["ts"]}_{aid[:8]}',
+                    'type': 'reading',
+                    'subtype': 'dismissed',
+                    'ts': ev.get('ts'),
+                    'title': f'Dismissed: {title}',
+                    'subtitle': reason if reason else None,
+                    'article_id': aid,
+                })
+
+        # --- Interest signals ---
+        # Group interest_chip_tap events within 60s of each other for same article
+        interest_events = [e for e in raw_events if e.get('event') == 'interest_chip_tap']
+        interest_events.sort(key=lambda e: e.get('ts', ''))
+        interest_groups = []
+        for ev in interest_events:
+            ev_ts = ev.get('ts', '')
+            merged = False
+            for group in interest_groups:
+                last_ts = group[-1].get('ts', '')
+                # Check same article or within 60s
+                try:
+                    t1 = datetime.fromisoformat(last_ts.replace('Z', '+00:00'))
+                    t2 = datetime.fromisoformat(ev_ts.replace('Z', '+00:00'))
+                    if abs((t2 - t1).total_seconds()) <= 60:
+                        group.append(ev)
+                        merged = True
+                        break
+                except (ValueError, TypeError):
+                    pass
+            if not merged:
+                interest_groups.append([ev])
+
+        for group in interest_groups:
+            positive = []
+            negative = []
+            for ev in group:
+                topic = ev.get('topic', '')
+                if ev.get('positive', True):
+                    positive.append(topic)
+                else:
+                    negative.append(topic)
+
+            parts = []
+            for t in positive:
+                parts.append(f'+{t}')
+            for t in negative:
+                parts.append(f'-{t}')
+
+            timeline.append({
+                'id': f'evt_{group[0]["ts"]}_interest',
+                'type': 'interest',
+                'subtype': 'signal',
+                'ts': group[0].get('ts'),
+                'title': 'Signaled interest',
+                'subtitle': ' '.join(parts) if parts else None,
+                'topics_positive': positive,
+                'topics_negative': negative,
+            })
+
+        # --- Pipeline events ---
+        pipeline_events = [e for e in raw_events if e.get('source') == 'pipeline']
+        pipeline_events.sort(key=lambda e: e.get('ts', ''))
+        pipeline_groups = []
+        for ev in pipeline_events:
+            ev_ts = ev.get('ts', '')
+            merged = False
+            for group in pipeline_groups:
+                last_ts = group[-1].get('ts', '')
+                try:
+                    t1 = datetime.fromisoformat(last_ts.replace('Z', '+00:00'))
+                    t2 = datetime.fromisoformat(ev_ts.replace('Z', '+00:00'))
+                    if abs((t2 - t1).total_seconds()) <= 900:  # 15 min window
+                        group.append(ev)
+                        merged = True
+                        break
+                except (ValueError, TypeError):
+                    pass
+            if not merged:
+                pipeline_groups.append([ev])
+
+        for group in pipeline_groups:
+            event_names = [e.get('event', '') for e in group]
+            completed = 'pipeline_complete' in event_names
+
+            # Collect any counts from meta
+            meta = {}
+            for ev in group:
+                for k, v in ev.items():
+                    if k not in ('ts', 'event', 'source', 'session_id'):
+                        meta[k] = v
+
+            # Build subtitle from events
+            step_labels = []
+            for name in event_names:
+                label = name.replace('pipeline_', '').replace('_', ' ').title()
+                if label not in step_labels:
+                    step_labels.append(label)
+            subtitle = ' · '.join(step_labels)
+
+            subtype = 'processed' if completed else 'in_progress'
+            timeline.append({
+                'id': f'evt_{group[0]["ts"]}_pipeline',
+                'type': 'system',
+                'subtype': subtype,
+                'ts': group[0].get('ts'),
+                'title': 'Content refresh completed' if completed else 'Content refresh running',
+                'subtitle': subtitle if subtitle else None,
+                'meta': meta if meta else None,
+            })
+
+        # --- Research events ---
+        for ev in raw_events:
+            event_name = ev.get('event', '')
+            if event_name in ('research_spawned', 'topic_research_spawned'):
+                topic = ev.get('topic', '')
+                aid = ev.get('article_id')
+
+                # Try to match with a completed result
+                matched_result = None
+                for rid, res in research_by_id.items():
+                    if res.get('query') == topic or res.get('article_title') == articles_map.get(aid, ''):
+                        matched_result = res
+                        break
+
+                if event_name == 'topic_research_spawned':
+                    title_text = f'Research: {topic}'
+                else:
+                    article_title = articles_map.get(aid, '') if aid else ''
+                    title_text = f'Research: {topic}' if topic else f'Research on {article_title}'
+
+                subtype = 'dispatched'
+                subtitle = 'Pending'
+                if matched_result:
+                    if matched_result.get('status') == 'completed':
+                        subtype = 'completed'
+                        subtitle = 'Results ready'
+                    elif matched_result.get('status') == 'failed':
+                        subtype = 'completed'
+                        subtitle = 'Failed'
+
+                node = {
+                    'id': f'evt_{ev["ts"]}_research',
+                    'type': 'research',
+                    'subtype': subtype,
+                    'ts': ev.get('ts'),
+                    'title': title_text,
+                    'subtitle': subtitle,
+                }
+                if aid:
+                    node['article_id'] = aid
+                timeline.append(node)
+
+        # --- Queue actions ---
+        for ev in raw_events:
+            if ev.get('event') == 'queue_add' and ev.get('article_id'):
+                aid = ev['article_id']
+                title = articles_map.get(aid, aid[:12])
+                timeline.append({
+                    'id': f'evt_{ev["ts"]}_{aid[:8]}',
+                    'type': 'reading',
+                    'subtype': 'queued',
+                    'ts': ev.get('ts'),
+                    'title': f'Queued: {title}',
+                    'article_id': aid,
+                })
+
+        # Sort newest-first
+        timeline.sort(key=lambda e: e.get('ts', ''), reverse=True)
+
+        self._send_json_response(200, {'events': timeline})
+
     def do_GET(self):
-        if self.path == '/research/results':
+        if self.path.startswith('/activity/feed'):
+            return self._handle_activity_feed()
+
+        elif self.path == '/research/results':
             results = []
             for f in sorted(RESULTS_DIR.glob('*.json'), key=lambda p: p.stat().st_mtime, reverse=True):
                 try:
@@ -1441,6 +1740,28 @@ class ResearchHandler(BaseHTTPRequestHandler):
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps(notes).encode())
+
+        elif self.path.startswith('/ingest-status'):
+            parsed = urlparse(self.path)
+            params = parse_qs(parsed.query)
+            ingest_id = params.get('id', [None])[0]
+            if not ingest_id:
+                self._send_json_response(400, {'error': 'Missing id parameter'})
+                return
+            log_path = INGEST_DIR / f'{ingest_id}.json'
+            if not log_path.exists():
+                self._send_json_response(404, {'error': 'Ingest not found', 'id': ingest_id})
+                return
+            try:
+                data = json.loads(log_path.read_text())
+                self._send_json_response(200, {
+                    'id': data.get('id'),
+                    'status': data.get('status', 'unknown'),
+                    'article_id': data.get('article_id'),
+                    'url': data.get('url'),
+                })
+            except (json.JSONDecodeError, OSError) as e:
+                self._send_json_response(500, {'error': str(e)})
 
         elif self.path == '/health':
             self.send_response(200)

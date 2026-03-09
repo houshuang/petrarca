@@ -1,8 +1,10 @@
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const LOG_DIR_NAME = 'logs';
 const LOG_STORAGE_PREFIX = '@petrarca/log_';
 const LOG_SERVER_URL = 'http://alifstian.duckdns.org:8091/log';
+const PENDING_LOGS_KEY = '@petrarca/pending_logs';
 
 let sessionId: string | null = null;
 let writeQueue: Promise<void> = Promise.resolve();
@@ -94,6 +96,8 @@ export function startNewSession(): string {
   sessionId = generateSessionId();
   logEvent('session_start');
   flushNativeBuffer();
+  // Attempt to flush any logs that failed to send in previous sessions
+  flushPendingLogs();
   return sessionId;
 }
 
@@ -119,6 +123,40 @@ function flushNativeBuffer() {
   });
 }
 
+async function savePendingPayload(payload: string) {
+  try {
+    const existing = await AsyncStorage.getItem(PENDING_LOGS_KEY);
+    const pending: string[] = existing ? JSON.parse(existing) : [];
+    pending.push(payload);
+    await AsyncStorage.setItem(PENDING_LOGS_KEY, JSON.stringify(pending));
+  } catch {
+    // Best-effort — don't crash if storage fails
+  }
+}
+
+async function flushPendingLogs(): Promise<boolean> {
+  try {
+    const existing = await AsyncStorage.getItem(PENDING_LOGS_KEY);
+    if (!existing) return true;
+    const pending: string[] = JSON.parse(existing);
+    if (pending.length === 0) return true;
+
+    const combined = pending.join('');
+    const res = await fetch(LOG_SERVER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: combined,
+    });
+    if (res.ok) {
+      await AsyncStorage.removeItem(PENDING_LOGS_KEY);
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 function flushServerBuffer() {
   if (serverBuffer.length === 0) return;
   const payload = serverBuffer.join('');
@@ -128,8 +166,15 @@ function flushServerBuffer() {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain' },
     body: payload,
-  }).catch(() => {
-    // Server unreachable — events already saved locally, don't retry
+  }).then(async (res) => {
+    if (res.ok) {
+      // Piggyback: try flushing any pending logs on success
+      flushPendingLogs();
+    } else {
+      await savePendingPayload(payload);
+    }
+  }).catch(async () => {
+    await savePendingPayload(payload);
   });
 }
 

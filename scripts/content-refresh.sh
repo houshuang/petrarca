@@ -10,6 +10,15 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
 }
 
+pipeline_log() {
+    local event="$1"
+    local details="${2:-}"
+    local ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    local today=$(date -u +"%Y-%m-%d")
+    mkdir -p /opt/petrarca/data/logs
+    echo "{\"ts\":\"$ts\",\"event\":\"$event\",\"source\":\"pipeline\"${details:+,$details}}" >> "/opt/petrarca/data/logs/interactions_$today.jsonl"
+}
+
 log "=== Petrarca content refresh starting ==="
 log "Script dir: $SCRIPT_DIR"
 log "Project dir: $PROJECT_DIR"
@@ -33,19 +42,24 @@ if [ -f "/opt/petrarca/.env" ]; then
     set +a
 fi
 
+pipeline_log "pipeline_start"
+
 # Step 1: Fetch Twitter bookmarks
 log "Step 1: Fetching Twitter bookmarks..."
 python3 "$SCRIPT_DIR/fetch_twitter_bookmarks.py" --save --limit 50 \
+    && pipeline_log "pipeline_fetch_twitter" \
     || log "Step 1 FAILED: fetch_twitter_bookmarks.py"
 
 # Step 2: Fetch Readwise Reader
 log "Step 2: Fetching Readwise Reader..."
 python3 "$SCRIPT_DIR/fetch_readwise_reader.py" --save --incremental \
+    && pipeline_log "pipeline_fetch_readwise" \
     || log "Step 2 FAILED: fetch_readwise_reader.py"
 
 # Step 3: Build articles
 log "Step 3: Building articles..."
 python3 "$SCRIPT_DIR/build_articles.py" --limit 10 \
+    && pipeline_log "pipeline_build_articles" \
     || log "Step 3 FAILED: build_articles.py"
 
 # Step 3b: Validate and fix articles
@@ -63,9 +77,16 @@ log "Step 3c2: Researching entity mentions in tweets..."
 python3 "$SCRIPT_DIR/build_articles.py" --entities --entity-limit 3 \
     || log "Step 3c2 FAILED: entity research"
 
+# Step 3c3: Defragment topic registry if limits exceeded
+log "Step 3c3: Checking topic registry limits..."
+python3 "$SCRIPT_DIR/build_articles.py" --defrag-topics \
+    && pipeline_log "pipeline_defrag_topics" \
+    || log "Step 3c3: No defrag needed or failed"
+
 # Step 3d: Extract atomic claims for new articles
 log "Step 3d: Extracting atomic claims..."
 python3 "$SCRIPT_DIR/build_articles.py" --claims-only \
+    && pipeline_log "pipeline_extract_claims" \
     || log "Step 3d FAILED: build_articles.py --claims-only"
 
 # Step 3e: Generate claim embeddings (Gemini API)
@@ -76,6 +97,7 @@ python3 "$SCRIPT_DIR/build_claim_embeddings.py" \
 # Step 4: Build knowledge index (claim similarities, novelty matrix, delta reports)
 log "Step 4: Building knowledge index..."
 python3 "$SCRIPT_DIR/build_knowledge_index.py" \
+    && pipeline_log "pipeline_build_index" \
     || log "Step 4 FAILED: build_knowledge_index.py"
 
 # Step 5: Generate books manifest from individual book meta files
@@ -147,4 +169,5 @@ fi
 
 END_TIME=$(date +%s)
 ELAPSED=$((END_TIME - START_TIME))
+pipeline_log "pipeline_complete" "\"elapsed_seconds\":$ELAPSED"
 log "=== Content refresh complete in ${ELAPSED}s ==="

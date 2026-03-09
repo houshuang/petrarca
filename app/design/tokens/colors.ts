@@ -34,6 +34,7 @@ export const colors = {
   success: '#2a7a4a',
   warning: '#92600e',
   info: '#2a4a6a',
+  research: '#6a3a8a',
   danger: '#8b2500',
 
   // Rating

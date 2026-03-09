@@ -41,6 +41,11 @@ export default function TabsLayout() {
         tabBarAccessibilityLabel: 'Queue',
         tabBarIcon: ({ focused }) => <TabBarLabel label="Queue" focused={focused} />,
       }} />
+      <Tabs.Screen name="log" options={{
+        title: 'Log',
+        tabBarAccessibilityLabel: 'Activity Log',
+        tabBarIcon: ({ focused }) => <TabBarLabel label="Log" focused={focused} />,
+      }} />
     </Tabs>
   );
 }
