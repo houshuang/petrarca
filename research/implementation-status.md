@@ -233,17 +233,50 @@ App (Expo SDK 54):
 25. ~~**Voice notes error handling**~~ — DONE: `handleActionExecute` in `voice-notes.tsx` now catches errors instead of crashing on network failures.
 11. ~~**Production bundle optimization**~~ — Already done: `knowledge_index.json` is gitignored, not bundled.
 
-### Short-term (quality improvements)
-8. **Incremental embedding** — Only embed new claims, append to existing .npz
-9. **LLM judge for ambiguous range** — 0.68-0.78 cosine gets LLM verification
+### Gap Analysis: Built vs. Full Spec (as of Mar 9)
 
-### Medium-term (feature completion)
-12. **Micro-delights** — Pull-to-refresh ✦ ornament, claim reveal animations, completion flash
-13. **Entry row sidebar** — 76px sidebar with large numbers + depth dots
+#### HIGH PRIORITY — Core Experience Gaps
 
-### Longer-term
-14. **Contradiction detection** — Needs diverse sources
-15. **Book reader** — Section-based long-form reading
+| # | Feature | Spec Source | Gap Description |
+|---|---------|-----------|-----------------|
+| G1 | **Claim-level feedback UI** | `claims-topics-feedback-spec.md` | Only top "What's new" card exists. No per-claim "I knew this" / "Save" / "Tell me more" buttons. No margin annotations or interleaved callouts. **Biggest unresolved design problem** — user says "we need to iterate here quite a bit." |
+| G2 | **LLM judge for ambiguous claims** | `novelty-system-architecture.md` | Cosine-only classification. The 0.68–0.78 range (~5% of pairs) should get LLM verification — experiment showed 25% disagreement in that range. |
+| G3 | **Incremental embedding** | pipeline | Currently re-embeds all claims every pipeline run. Should only embed new claims and append to `.npz`. |
+| G4 | **Related articles at bottom of reader** | `ux-redesign-spec.md` | Spec: 3 groups (same topic / shared concepts / same source) with "+ Queue" buttons. Not implemented. |
+| G5 | **Reader "Up next" footer** | `ux-redesign-spec.md` | After Done, should flow directly to next queued article. Currently returns to feed. |
+| G6 | **Auto-ingest from links** | `ux-redesign-spec.md` | Tapping a link in article text should trigger background download + processing → queued with inline "processing…" / "queued" badges. Not implemented. |
+
+#### MEDIUM PRIORITY — Missing Screens & Features
+
+| # | Feature | Spec Source | Gap Description |
+|---|---------|-----------|-----------------|
+| G7 | **Activity Log tab** | `ux-redesign-spec.md` (Screen 5) | Fully spec'd: timeline with reading/system/research/interest nodes, filter toggles (All/Reading/System/Research). **Not built at all** — currently 3 tabs, spec calls for 4. |
+| G8 | **Web split panel + keyboard shortcuts** | `ux-redesign-spec.md` (Screen 6) | Spec: left pane article list + right pane reader, `j/k/d/x/q/Space/s` keyboard shortcuts. **Not built.** |
+| G9 | **Topic hierarchy feedback** | `claims-topics-feedback-spec.md` | User explicitly wants to signal interest at different specificity levels (broad → specific → entity). Current post-read card only shows flat topic chips. |
+| G10 | **Cross-article connections in reader** | `claims-topics-feedback-spec.md` | Should show "this claim also in Article B" with queue-not-navigate behavior. Knowledge index has cross-article similarity data but not surfaced in reader UI. |
+| G11 | **Scrollbar novelty minimap** | `novelty-system-architecture.md` | Colored dots on scrollbar showing where novel content is. Not implemented. |
+| G12 | **Novel section markers** | `novelty-system-architecture.md` | Green left border (2px) on paragraphs with NEW claims. Dimming exists but no novel markers. |
+
+#### LOWER PRIORITY — Polish & Refinement
+
+| # | Feature | Spec Source | Gap Description |
+|---|---------|-----------|-----------------|
+| G13 | **Micro-delights** | `DESIGN_GUIDE.md` | Pull-to-refresh ✦ ornament, claim reveal staggered animation (80ms), long-press amber border fade + haptic, completion flash (gold along double rule), knowledge bars animate (staggered 60ms). None implemented. |
+| G14 | **Entry row sidebar** | `DESIGN_GUIDE.md` | 76px sidebar with large Cormorant numbers + DM Sans labels + depth dots. Not implemented. |
+| G15 | **Depth navigator** | `DESIGN_GUIDE.md` | Horizontal row: Summary / Claims / Sections / Full with rubric underline. Not in reader. |
+| G16 | **Novelty badges** | `DESIGN_GUIDE.md` | "Mostly new" / "72% new" / "Partly familiar" with semantic colors. Not implemented. |
+| G17 | **Dismissed articles archive** | `ux-redesign-spec.md` | Swiped-left articles should be accessible somewhere. No archive view. |
+| G18 | **Structured comparison (Elicit-style)** | `novelty-system-architecture.md` | Multi-article comparison matrix view. Not implemented. |
+| G19 | **Blindspot detection** | `novelty-system-architecture.md` | Topics with many articles but few absorbed claims → user might be saturated. Not implemented. |
+| G20 | **Contradiction detection** | experiments | Corpus too harmonious (86% compatible). Deprioritized until more diverse sources. |
+| G21 | **Book reader** | brainstorm | Section-based long-form reading. Not started. |
+| G22 | **Nomic embeddings** | experiments | Experiments validated Nomic-embed-text-v1.5 as superior (wider similarity range). Pipeline uses Gemini embedding-001 instead. Works fine but suboptimal. |
+
+#### Summary of Biggest Gaps
+
+1. **Claim-level interaction system** (G1, G9, G10) — per-claim feedback, cross-article connections, hierarchical topic feedback. The most complex unresolved design problem.
+2. **Reading flow continuity** (G4, G5, G6) — no "Up next" footer, no auto-ingest from links, no related articles. Queue exists but isn't woven into the reading experience.
+3. **Activity Log tab** (G7) — fully spec'd transparency feature, not built at all.
 
 ### User Feedback Summary (from voice notes, Mar 8)
 - **Article `6e3cb28c19e1`** (NotebookLM learning compression): User wants to bookmark AND follow multiple topics (AI-assisted learning, learning strategies). Wants topic overview to surface recently-bookmarked articles prominently. Voice feedback should support actionable commands (add tags, research topics, express interest).
