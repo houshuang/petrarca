@@ -4,6 +4,53 @@
 
 ---
 
+## 2026-03-09 — Session 11: Clipper Immediate Save + Reader Actions + Feed Metadata
+
+**What**: Robustness improvements to the Chrome clipper (save survives popup close), new reader actions (disregard, report bad scrape), and feed metadata for the Latest lens.
+
+### Clipper: Immediate Save via Background Worker
+- **Problem**: If popup closes during countdown (user closes tab, clicks away), the article was lost
+- **Solution**: Fire save immediately via `chrome.runtime.sendMessage({type: "saveClip"})` to background.js on popup open. Background service worker survives popup closure.
+- **Countdown is now visual-only** — article already saved when timer starts
+- **Cancel/Escape**: sends `POST /ingest-cancel` to remove the already-saved article from articles.json (best-effort — race condition if still processing)
+- **Notes**: If user types a note and clicks save, note sent separately via `POST /ingest-note` (writes sidecar file, doesn't re-run import_url.py)
+- **Offline fallback**: If server unreachable, `storeLocally()` queues to `chrome.storage.local`
+- **PETRARCA wordmark**: Now clickable — cancels capture + opens web app in new tab
+
+### Reader: Disregard + Report Bad Scrape
+- **Disregard**: New action in ⋯ menu (below divider, muted text). Calls `dismissArticle()` with reason `reader_disregard`, shows "Disregarded" toast, navigates back after 600ms.
+- **Report bad scrape**: New action in ⋯ menu. Sends `POST /report-scrape` with article_id/url/title → stored in `/opt/petrarca/data/scrape_reports.json`. Shows "Reported" toast. Deduped by article_id.
+- **Status toast**: Reusable ink-background toast at top of reader, auto-clears after 2s.
+- **Server endpoints**: `GET /scrape-reports` lists pending reports for manual inspection/re-processing.
+
+### Feed: Ingest Metadata on Latest Lens
+- **`ingested_at` timestamp**: Both `import_url.py` and `build_articles.py` now write `ingested_at: datetime.now(UTC).isoformat()` on all new articles
+- **Latest lens shows**: relative time ("2h ago", "yesterday", "3d ago") + source label (Twitter, Readwise). Uses `ingested_at` with fallback to `date` (day-level only).
+- **`formatRelativeDate()`**: Minute/hour/day/week/month precision from ISO timestamps
+- **`formatSourceLabel()`**: Maps source types → display labels (twitter_bookmark→Twitter, readwise→Readwise, manual→hidden)
+
+### Bug Fix: Duplicate Key Warning
+- **"encountered two children with same key - ai-coding-tools"**: 35+ articles had two `interest_topics` entries with identical `specific` values (e.g., both mapped to "medieval-studies"). The `.map(t => t.specific || t.broad)` produced duplicate keys.
+- **Fix**: Wrap topic mapping in `new Set()` to deduplicate.
+
+### New Server Endpoints
+- `POST /ingest-note` — write note sidecar for an already-ingested article
+- `POST /ingest-cancel` — remove article from articles.json by URL hash (best-effort)
+- `POST /report-scrape` — add article to bad scrape queue
+- `GET /scrape-reports` — list pending scrape reports
+
+### Files Changed
+- `clipper/popup.js`, `clipper/popup.html`, `clipper/popup.css` — immediate save, wordmark link
+- `clipper/background.js` — addNote, cancelSave, storeLocally handlers
+- `app/app/(tabs)/index.tsx` — ingest metadata, deduplicated topic keys
+- `app/app/reader.tsx` — disregard, report bad scrape, status toast
+- `app/lib/chat-api.ts` — `reportBadScrape()`
+- `app/data/types.ts` — `ingested_at` field
+- `scripts/import_url.py`, `scripts/build_articles.py` — `ingested_at` timestamp
+- `scripts/research-server.py` — 4 new endpoints
+
+---
+
 ## 2026-03-09 — Session 10: Chrome Clipper Countdown + Tweet Ingestion + Cookie Auto-Sync
 
 **What**: Three features for the Chrome clipper extension and server-side tweet processing.
