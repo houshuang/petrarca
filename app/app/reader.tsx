@@ -1072,6 +1072,7 @@ export default function ReaderScreen() {
   const [showAIChat, setShowAIChat] = useState(false);
   const [showVoiceFeedback, setShowVoiceFeedback] = useState(false);
   const [activeEntity, setActiveEntity] = useState<ArticleEntity | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   // Cross-article connections
   const crossArticleConnections = useMemo(() => {
@@ -1088,6 +1089,13 @@ export default function ReaderScreen() {
   const viewportHeight = useRef(0);
   const maxScrollY = useRef(0);
   const completionFlash = useRef(new Animated.Value(0)).current;
+
+  // Auto-clear status toast
+  useEffect(() => {
+    if (!statusMessage) return;
+    const t = setTimeout(() => setStatusMessage(null), 2000);
+    return () => clearTimeout(t);
+  }, [statusMessage]);
 
   // Link ingestion state
   const [ingestStates, setIngestStates] = useState<Record<string, IngestState>>({});
@@ -1504,8 +1512,9 @@ export default function ReaderScreen() {
           <Pressable onPress={() => {
             reportBadScrape(article.id, article.source_url, article.title);
             logEvent('report_bad_scrape', { article_id: article.id });
-            setShowMenu(false);
             if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setShowMenu(false);
+            setStatusMessage('Reported');
           }} style={styles.menuAction}>
             <Text style={[styles.menuActionText, { color: colors.textMuted }]}>Report bad scrape</Text>
           </Pressable>
@@ -1560,12 +1569,20 @@ export default function ReaderScreen() {
             recordInterestSignal('swipe_dismiss', article.id);
             logEvent('reader_disregard', { article_id: article.id });
             setShowMenu(false);
-            router.back();
+            setStatusMessage('Disregarded');
+            setTimeout(() => router.back(), 600);
           }} style={styles.menuAction}>
             <Text style={[styles.menuActionText, { color: colors.textMuted }]}>Disregard</Text>
           </Pressable>
         </View>
       )}
+
+      {/* Status toast */}
+      {statusMessage ? (
+        <View style={styles.statusToast}>
+          <Text style={styles.statusToastText}>{statusMessage}</Text>
+        </View>
+      ) : null}
 
       {/* Progress bar with completion flash */}
       <View style={styles.progressBarTrack}>
@@ -1862,6 +1879,21 @@ const styles = StyleSheet.create({
     fontFamily: fonts.ui,
     fontSize: 14,
     color: colors.textBody,
+  },
+  statusToast: {
+    position: 'absolute' as const,
+    top: 60,
+    alignSelf: 'center' as const,
+    backgroundColor: colors.ink,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 4,
+    zIndex: 200,
+  },
+  statusToastText: {
+    fontFamily: fonts.ui,
+    fontSize: 13,
+    color: colors.parchment,
   },
   voiceFeedbackOverlay: {
     position: 'absolute',
