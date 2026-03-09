@@ -46,8 +46,14 @@ body {
 /* --- Header ------------------------------------------------------------ */
 
 header#header {
-  text-align: center;
   margin-bottom: 14px;
+}
+
+.header-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 10px;
 }
 
 .wordmark {
@@ -56,7 +62,24 @@ header#header {
   font-size: 18px;
   letter-spacing: 0.12em;
   color: var(--rubric);
-  margin-bottom: 10px;
+}
+
+#countdown-num {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 300;
+  color: var(--rubric);
+  line-height: 1;
+  transition: color 0.3s, opacity 0.3s;
+}
+
+#countdown-num.paused {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+#countdown-num.hidden {
+  display: none;
 }
 
 .double-rule {
@@ -67,12 +90,35 @@ header#header {
 
 .rule-thick {
   height: 2px;
-  background: var(--rule-dark);
+  background: var(--rule);
+  position: relative;
+  overflow: hidden;
 }
 
 .rule-thin {
   height: 1px;
-  background: var(--rule-dark);
+  background: var(--rule);
+  position: relative;
+  overflow: hidden;
+}
+
+.rule-timer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 100%;
+  background: var(--rubric);
+  transition: background 0.3s;
+}
+
+.rule-timer.paused {
+  background: var(--text-muted);
+}
+
+.rule-timer.gold {
+  background: #c9a84c;
+  width: 100% !important;
 }
 
 /* --- Section labels ---------------------------------------------------- */
@@ -171,26 +217,30 @@ header#header {
 
 #note-field textarea {
   width: 100%;
-  background: var(--parchment-dark);
-  border: 1px solid var(--rule);
+  background: transparent;
+  border: 1px dashed var(--rule);
   border-radius: 3px;
   color: var(--text-body);
   font-family: var(--font-reading);
   font-size: 13px;
   line-height: 1.5;
-  padding: 8px 10px;
+  padding: 6px 10px;
   resize: none;
-  transition: border-color 0.15s;
+  transition: border-color 0.2s, background 0.2s, border-style 0.2s;
 }
 
-#note-field textarea:focus {
+#note-field textarea:focus,
+#note-field textarea.active {
   outline: none;
   border-color: var(--rubric);
+  border-style: solid;
+  background: var(--parchment-dark);
 }
 
 #note-field textarea::placeholder {
   color: var(--text-muted);
   font-style: italic;
+  font-size: 12px;
 }
 
 /* --- Action row -------------------------------------------------------- */
@@ -202,19 +252,44 @@ header#header {
   margin-top: 6px;
 }
 
-button#save-btn {
+#countdown-status {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  color: var(--text-muted);
   flex: 1;
-  padding: 9px 16px;
+  text-align: center;
+}
+
+.btn-cancel {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 3px;
+  transition: color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+
+.btn-cancel:hover {
+  color: var(--rubric);
+  background: rgba(139, 37, 0, 0.04);
+}
+
+button#save-btn {
+  padding: 8px 16px;
   background: var(--rubric);
   color: var(--parchment);
   border: none;
   border-radius: 3px;
   font-family: var(--font-body);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: background 0.15s, transform 0.1s;
-  min-height: 38px;
+  min-height: 34px;
 }
 
 button#save-btn:hover {

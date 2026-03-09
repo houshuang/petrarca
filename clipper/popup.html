@@ -13,10 +13,13 @@
   <div id="app">
     <!-- Header -->
     <header id="header">
-      <div class="wordmark">PETRARCA</div>
+      <div class="header-row">
+        <div class="wordmark">PETRARCA</div>
+        <div id="countdown-num">10</div>
+      </div>
       <div class="double-rule">
-        <div class="rule-thick"></div>
-        <div class="rule-thin"></div>
+        <div class="rule-thick"><div class="rule-timer" id="timer-thick"></div></div>
+        <div class="rule-thin"><div class="rule-timer" id="timer-thin"></div></div>
       </div>
     </header>
 
@@ -39,20 +42,16 @@
         <span id="tags-list"></span>
       </div>
 
-      <div id="note-field" class="hidden">
-        <textarea id="comment" rows="2" placeholder="Add a note..."></textarea>
+      <div id="note-field">
+        <textarea id="comment" rows="1" placeholder="type to add note &amp; pause..."></textarea>
       </div>
 
       <div id="action-row">
+        <button id="cancel-btn" class="btn-cancel" title="Cancel (Esc)">&#x2715; Cancel</button>
+        <div id="countdown-status">auto-saving&#x2026;</div>
         <button id="save-btn">
-          <span id="btn-label">Save to Petrarca</span>
+          <span id="btn-label">Save</span>
           <span id="btn-check" class="hidden">Saved &#x2713;</span>
-        </button>
-        <button id="note-toggle" class="icon-btn" title="Add note">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-            <path d="M2 11.5V14h2.5L12.1 6.4 9.6 3.9 2 11.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" fill="none"/>
-            <path d="M9.6 3.9l2.5 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-          </svg>
         </button>
         <button id="settings-toggle" class="icon-btn" title="Settings">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none">

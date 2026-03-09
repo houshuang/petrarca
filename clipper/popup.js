@@ -1,9 +1,10 @@
-// Petrarca Clipper — Popup script (Annotated Folio edition)
+// Petrarca Clipper — Popup script with auto-save countdown
 
 (function () {
   "use strict";
 
   const DEFAULT_SERVER = "http://alifstian.duckdns.org:8090";
+  const COUNTDOWN_MS = 10000;
 
   // DOM refs
   const pageTitle = document.getElementById("page-title");
@@ -12,13 +13,16 @@
   const selectedTextEl = document.getElementById("selected-text");
   const topicTags = document.getElementById("topic-tags");
   const tagsList = document.getElementById("tags-list");
-  const noteField = document.getElementById("note-field");
   const commentEl = document.getElementById("comment");
   const saveBtn = document.getElementById("save-btn");
   const btnLabel = document.getElementById("btn-label");
   const btnCheck = document.getElementById("btn-check");
   const statusEl = document.getElementById("status");
-  const noteToggle = document.getElementById("note-toggle");
+  const cancelBtn = document.getElementById("cancel-btn");
+  const countdownStatus = document.getElementById("countdown-status");
+  const countdownNum = document.getElementById("countdown-num");
+  const timerThick = document.getElementById("timer-thick");
+  const timerThin = document.getElementById("timer-thin");
   const settingsToggle = document.getElementById("settings-toggle");
   const settingsBack = document.getElementById("settings-back");
   const clipView = document.getElementById("clip-view");
@@ -31,7 +35,97 @@
   let pageData = null;
   let saving = false;
 
-  // --- Init ----------------------------------------------------------------
+  // --- Countdown state ---------------------------------------------------
+
+  let state = "counting"; // 'counting' | 'paused' | 'saving' | 'saved'
+  let timerStart = null;
+  let elapsedBeforePause = 0;
+  let rafId = null;
+
+  function startCountdown() {
+    state = "counting";
+    timerStart = performance.now();
+    tick();
+  }
+
+  function tick() {
+    const now = performance.now();
+    const totalElapsed = elapsedBeforePause + (now - timerStart);
+    const remaining = Math.max(0, COUNTDOWN_MS - totalElapsed);
+    const progress = remaining / COUNTDOWN_MS;
+
+    // Update timer bars
+    const pct = (progress * 100).toFixed(1) + "%";
+    timerThick.style.width = pct;
+    timerThin.style.width = pct;
+
+    // Update number
+    const secs = Math.ceil(remaining / 1000);
+    countdownNum.textContent = secs;
+
+    if (remaining <= 0) {
+      doSave();
+      return;
+    }
+
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function pauseCountdown() {
+    if (state !== "counting") return;
+    state = "paused";
+    elapsedBeforePause += performance.now() - timerStart;
+    cancelAnimationFrame(rafId);
+
+    // Visual: freeze timer in muted color
+    timerThick.classList.add("paused");
+    timerThin.classList.add("paused");
+    countdownNum.classList.add("paused");
+
+    // Update status text
+    countdownStatus.textContent = "paused";
+    btnLabel.textContent = "Save with Note";
+  }
+
+  function showSavedState() {
+    state = "saved";
+    cancelAnimationFrame(rafId);
+
+    // Gold completion flash on double rule
+    timerThick.classList.remove("paused");
+    timerThin.classList.remove("paused");
+    timerThick.classList.add("gold");
+    timerThin.classList.add("gold");
+
+    countdownNum.classList.add("hidden");
+    countdownStatus.textContent = "";
+
+    saveBtn.classList.add("success");
+    btnLabel.classList.add("hidden");
+    btnCheck.classList.remove("hidden");
+    cancelBtn.classList.add("hidden");
+  }
+
+  // --- Pause triggers: typing in note field ------------------------------
+
+  commentEl.addEventListener("input", () => {
+    pauseCountdown();
+    commentEl.classList.add("active");
+  });
+
+  commentEl.addEventListener("focus", () => {
+    commentEl.classList.add("active");
+    // Only pause if they actually type (handled by input event)
+  });
+
+  // --- Cancel ------------------------------------------------------------
+
+  cancelBtn.addEventListener("click", () => {
+    cancelAnimationFrame(rafId);
+    window.close();
+  });
+
+  // --- Init --------------------------------------------------------------
 
   init();
 
@@ -61,6 +155,7 @@
                 content: "",
                 selectedText: "",
               };
+              startCountdown();
               return;
             }
             if (response) {
@@ -82,29 +177,19 @@
                 topicTags.classList.remove("hidden");
               }
             }
+            startCountdown();
           }
         );
       }
     } catch (err) {
       pageTitle.textContent = "Could not read page";
+      startCountdown();
     }
 
-    // Clear badge when popup is opened
     chrome.runtime.sendMessage({ type: "clearBadge" });
   }
 
-  // --- Note toggle ---------------------------------------------------------
-
-  noteToggle.addEventListener("click", () => {
-    const isHidden = noteField.classList.contains("hidden");
-    noteField.classList.toggle("hidden", !isHidden);
-    noteToggle.classList.toggle("active", isHidden);
-    if (isHidden) {
-      commentEl.focus();
-    }
-  });
-
-  // --- Keyboard shortcuts --------------------------------------------------
+  // --- Keyboard shortcuts ------------------------------------------------
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -114,23 +199,20 @@
         saveSettingsBtn.click();
         return;
       }
-      if (document.activeElement === commentEl) {
-        e.preventDefault();
-        doSave();
-        return;
-      }
       e.preventDefault();
       doSave();
     }
 
     if (e.key === "Escape") {
+      cancelAnimationFrame(rafId);
       window.close();
     }
   });
 
-  // --- Settings ------------------------------------------------------------
+  // --- Settings ----------------------------------------------------------
 
   settingsToggle.addEventListener("click", () => {
+    pauseCountdown();
     clipView.classList.add("hidden");
     settingsView.classList.remove("hidden");
   });
@@ -153,13 +235,15 @@
     setTimeout(() => settingsStatus.classList.add("hidden"), 2000);
   });
 
-  // --- Save ----------------------------------------------------------------
+  // --- Save --------------------------------------------------------------
 
   saveBtn.addEventListener("click", doSave);
 
   async function doSave() {
     if (!pageData || saving) return;
     saving = true;
+    state = "saving";
+    cancelAnimationFrame(rafId);
 
     const settings = await loadSettings();
     const serverUrl = (settings.serverUrl || DEFAULT_SERVER).replace(
@@ -179,6 +263,7 @@
 
     saveBtn.disabled = true;
     btnLabel.textContent = "Saving\u2026";
+    countdownStatus.textContent = "";
     statusEl.classList.add("hidden");
 
     try {
@@ -194,11 +279,8 @@
       });
 
       if (response.ok) {
-        saveBtn.classList.add("success");
-        btnLabel.classList.add("hidden");
-        btnCheck.classList.remove("hidden");
-
-        setTimeout(() => window.close(), 1500);
+        showSavedState();
+        setTimeout(() => window.close(), 1200);
       } else {
         const text = await response.text();
         showStatus(
@@ -209,7 +291,6 @@
         resetSaveBtn();
       }
     } catch (err) {
-      // Store locally as fallback
       try {
         await storeLocally(payload);
         showStatus(
@@ -217,10 +298,8 @@
           "Server unavailable \u2014 saved locally",
           "info"
         );
-        saveBtn.classList.add("success");
-        btnLabel.classList.add("hidden");
-        btnCheck.classList.remove("hidden");
-        setTimeout(() => window.close(), 2000);
+        showSavedState();
+        setTimeout(() => window.close(), 1800);
       } catch (storageErr) {
         showStatus(statusEl, `Failed: ${err.message}`, "error");
         resetSaveBtn();
@@ -230,7 +309,7 @@
 
   function resetSaveBtn() {
     saveBtn.disabled = false;
-    btnLabel.textContent = "Save to Petrarca";
+    btnLabel.textContent = state === "paused" ? "Save with Note" : "Save";
     btnLabel.classList.remove("hidden");
     btnCheck.classList.add("hidden");
     saving = false;
@@ -246,7 +325,7 @@
     await chrome.storage.local.set({ petrarca_queue: queue });
   }
 
-  // --- Helpers -------------------------------------------------------------
+  // --- Helpers -----------------------------------------------------------
 
   async function loadSettings() {
     return new Promise((resolve) => {
