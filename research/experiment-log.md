@@ -4,6 +4,34 @@
 
 ---
 
+## 2026-03-09 — Session 7: Claim feedback design exploration + behavioral encounter tracking
+
+**What**: Explored claim-level feedback UI via 4 design mockups, then pivoted to behavioral inference approach. Implemented scroll-aware encounter tracking and curated "What's new" card.
+
+### Design Exploration (G1)
+- Generated 4 mockups via design-explorer: Margin Glyphs, Inline Callouts, Hybrid Overview+Markers, Progressive Reveal
+- "Hybrid: Overview + Inline Markers" got thumbs up (colored left-margin bars, tap to reveal claim panel)
+- **Key decision**: User decided per-claim feedback is wrong direction. Knowledge model should infer from reading behavior (scroll depth, time, highlights), not explicit "I knew this" buttons. G1 descoped.
+- "Tell me more" / research spawn remains valuable as a separate feature
+
+### Data Analysis
+- Inspected claim_type distribution: 60% factual (514), 17% procedural (148), 11% evaluative (96), 6% causal (53), 2% comparative/experiential/predictive
+- Many "factual" claims are trivial (e.g., "project claims to be made by one person") — not useful to surface in UI
+- All 858 claims have source_paragraphs (avg 1.1 per claim) — good for paragraph-level tracking
+
+### Implementation
+- **`knowledge-engine.ts`**: Added `markArticleReadUpTo(articleId, maxParagraphIndex, engagement)` — only marks claims in paragraphs up to estimated scroll depth. Added `getArticleParagraphCount()`. Added `claim_type` to ClaimClassification output.
+- **`reader.tsx`**: Track `maxScrollY` (furthest scroll position). On reader close, estimate paragraph read up to from `(maxScrollY + viewportHeight) / contentHeight`. Call `markArticleReadUpTo` with 'skim' (≤60s) or 'read' (>60s). "Done" button still marks ALL claims.
+- **"What's new" card**: Prioritize non-factual claim types, cap at 3 items (was 5).
+- **`types.ts`**: Added `claim_type: string` to `ClaimClassification` interface.
+
+### Conclusions
+- Behavioral signals (scroll depth, time, highlights) are the right approach for knowledge modeling — not explicit per-claim UI
+- Claim type filtering significantly improves "What's new" card quality (causal > evaluative > comparative >> factual)
+- The encounter tracking linear approximation (scroll % → paragraph %) is imperfect (header takes space) but much better than previous all-or-nothing approach
+
+---
+
 ## 2026-03-09 — Session 6: Deployment, data migration, server hardening
 
 **What**: Deployed all session 4+5 code, ran entity enrichment on full corpus, polished server robustness.

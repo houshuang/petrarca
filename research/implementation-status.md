@@ -1,14 +1,14 @@
 # Knowledge System Implementation Status
 
-**Date**: March 8, 2026 (last updated, late evening — session 5)
-**Status**: Full corpus deployed with knowledge system, reader interactions, voice notes, AI chat, research agents, entity deep-dive, follow-up research, voice note browser + action extraction
-**Latest commits**: Session 5 parallel agent implementation (entity deep-dive, follow-up prompts, voice notes browser, action extraction)
+**Date**: March 9, 2026 (last updated — session 8)
+**Status**: Full corpus deployed with knowledge system, reader interactions, voice notes, AI chat, research agents, entity deep-dive, follow-up research, voice note browser + action extraction, activity log tab, scroll-aware encounter tracking, curated novelty card, **hierarchical topic feedback**, **cross-article connections**, **LLM-verified topic normalization**, **automatic defragmentation**
+**Latest commits**: Session 8 — hierarchical topic interest card (G9), cross-article connections in reader (G10), canonical topic registry + LLM-verified normalization + automatic defragmentation pipeline
 
 ---
 
 ## What Was Built
 
-On March 8, 2026, the full knowledge-aware reading system was implemented end-to-end based on the design in `research/novelty-system-architecture.md` and validated by 11 experiments documented in `research/experiment-results-report.md`. Subsequently, the full 182-article corpus was restored with claims, embeddings, and knowledge index, and a cost auditing system was added. In session 4, the LLM infrastructure was migrated from litellm to the native `google.genai` SDK (fixing output truncation with newer Gemini models), topic research was rewritten from `claude -p` to Gemini search grounding (reducing latency from 60-120s to ~2.5s), and write contention was fixed with file locking. In session 5, four features were implemented via parallel agents: entity deep-dive (long-press entities in reader), follow-up research prompts (end-of-article questions), voice note browser (new screen), and voice note action extraction (LLM intent extraction from transcripts).
+On March 8, 2026, the full knowledge-aware reading system was implemented end-to-end based on the design in `research/novelty-system-architecture.md` and validated by 11 experiments documented in `research/experiment-results-report.md`. Subsequently, the full 182-article corpus was restored with claims, embeddings, and knowledge index, and a cost auditing system was added. In session 4, the LLM infrastructure was migrated from litellm to the native `google.genai` SDK (fixing output truncation with newer Gemini models), topic research was rewritten from `claude -p` to Gemini search grounding (reducing latency from 60-120s to ~2.5s), and write contention was fixed with file locking. In session 5, four features were implemented via parallel agents: entity deep-dive (long-press entities in reader), follow-up research prompts (end-of-article questions), voice note browser (new screen), and voice note action extraction (LLM intent extraction from transcripts). In session 6, the Activity Log tab (G7) was implemented: a 4th tab showing a vertical timeline of reading sessions, system/pipeline events, research dispatches, and interest signals. The logger was enhanced with an AsyncStorage-backed offline queue for reliable event delivery, and the pipeline now writes structured JSONL events to the interaction log for server-side aggregation via `GET /activity/feed?days=N` on the research server.
 
 ### Architecture Overview
 
@@ -47,7 +47,7 @@ App (Expo SDK 54):
 | `app/data/bookmarks.ts` | Article bookmarking with AsyncStorage persistence. Toggle, query, list bookmarked IDs. |
 | `app/components/AskAI.tsx` | Bottom-sheet AI chat modal. Conversation threading, Gemini Flash via `/chat` server endpoint. Article context (title, summary, claims, topics, truncated text) passed as context. |
 | `app/components/VoiceFeedback.tsx` | Compact voice note recording bar. Records audio via expo-av, uploads to server `/note` endpoint for async Soniox transcription. Auto-closes on send. |
-| `app/lib/chat-api.ts` | API client for research server: `askAI()`, `uploadVoiceNote()`, `spawnTopicResearch()`, `fetchNotes()`. |
+| `app/lib/chat-api.ts` | API client for research server: `askAI()`, `uploadVoiceNote()`, `spawnTopicResearch()`, `fetchNotes()`, `ingestUrl()`, `getIngestStatus()`. |
 | `app/public/guide/index.html` | HTML user guide (Annotated Folio styled). Covers all 5 capture flows, 3 tabs, reader modes, knowledge system, usage patterns. Linked from Feed header. |
 | `research/user-guide.md` | Markdown source for user guide. Describes all implemented features accurately. |
 | `scripts/gemini_llm.py` | Shared Gemini LLM wrapper (google.genai SDK). Three functions: `call_llm()`, `call_chat()`, `call_with_search()`. Default model: `gemini-3.1-flash-lite-preview` (via `PETRARCA_LLM_MODEL` env var). Replaces all litellm usage. |
@@ -55,12 +55,47 @@ App (Expo SDK 54):
 | `app/components/VoiceNoteCard.tsx` | Reusable voice note card component. Shows timestamp, duration badge, transcript (3-line max), article link, action chips with type-colored borders. |
 | `app/lib/voice-notes-api.ts` | Voice notes API module. `fetchAllNotes()`, `fetchArticleNotes()`, `executeNoteAction()`. TypeScript interfaces for `VoiceNote` and `NoteAction`. |
 
+#### New Files (Session 6: Activity Log)
+
+| File | Description |
+|------|-------------|
+| `app/app/(tabs)/log.tsx` | Activity Log tab — vertical timeline with reading/system/research/interest nodes. Filter toggles (All/Reading/System/Research). Paged fetch: loads last day first, then 7 days in background. Colored dots per event type, ✦ markers for interest signals, day separators. |
+
+#### New Files (Session 8: Topic Hierarchy + Cross-Article + Normalization)
+
+| File | Description |
+|------|-------------|
+| `scripts/topic_registry.json` | Canonical topic registry — 12 broad categories, 21 specific topics, each with include/exclude descriptions for LLM disambiguation. Hard limits: `max_broad: 25`, `max_specific_per_broad: 15`. Inspired by Otak's `tree_balance.py` approach but avoids its unbounded growth. |
+| `scripts/topic_normalizer.py` | Topic normalization + defragmentation. `normalize_article_topics()` validates against registry via LLM merge-or-create. `defragment_registry()` consolidates overpopulated categories. `registry_needs_defrag()` checks if limits exceeded. |
+
+#### Modified Files (Session 8: Topic Hierarchy + Cross-Article + Normalization)
+
+| File | Changes |
+|------|---------|
+| `app/app/reader.tsx` | Redesigned `PostReadInterestCard` with hierarchical topic display: `TopicGroup` interface, `groupTopicsByBroad()`, `TopicLevelRow` with tree lines + level badges (broad/topic/entity), smart expand (≤2 broad → expanded). Added `ConnectedReadingSection` (bottom section: shared claim counts, read status, queue buttons). Added `InlineCrossArticleAnnotation` (inline "Also in: [title]" below paragraphs). ~400 lines added. |
+| `app/data/interest-model.ts` | Added `recordTopicSignalAtLevel()` — signals at exactly one hierarchy level without cascading. Updated `computeInterestMatch()` to include entity-level scores via `Math.max(specificScore, broadScore * 0.7, entityScore)`. |
+| `app/data/queue.ts` | Added `addToQueueFront()` — LIFO queue insertion for cross-article connections (user wants "next article I see would be this one"). |
+| `app/data/knowledge-engine.ts` | Added `CrossArticleConnection` interface and two new functions: `getCrossArticleConnections()` (groups similar claims by article, max 5 results), `getParagraphConnections()` (maps paragraph indices to connected articles via claim-to-paragraph mapping from knowledge index). |
+| `app/data/store.ts` | Added export wrappers: `recordTopicInterestSignalAtLevel()`, `getCrossArticleConnections()`, `getParagraphConnections()`. |
+| `scripts/build_articles.py` | Integrated topic normalizer: loads registry once, normalizes each article's `interest_topics` via `normalize_interest_topics()`. Added `_get_topic_hint()` — injects existing categories into LLM extraction prompt. Added `--normalize-topics` for batch re-normalization, `--defrag-topics` for automatic defragmentation. Extended `--enrich` to also backfill `interest_topics`. |
+| `scripts/content-refresh.sh` | Added step 3c3: automatic topic defragmentation check after article processing. |
+
+#### Modified Files (Session 6: Activity Log)
+
+| File | Changes |
+|------|---------|
+| `app/data/logger.ts` | Added AsyncStorage-backed offline queue (`savePendingPayload`, `flushPendingLogs`). Failed server sends are persisted and retried on session start + piggybacked on successful flushes. |
+| `app/app/(tabs)/_layout.tsx` | Added 4th "Log" tab to tab bar. |
+| `app/design/tokens/colors.ts` | Added `research: '#6a3a8a'` color token for research event dots. |
+| `scripts/research-server.py` | Added `GET /activity/feed?days=N` endpoint. Aggregates interaction logs, pipeline events, and research results into grouped timeline nodes (reading sessions, interest signals within 60s, pipeline runs within 15min). |
+| `scripts/content-refresh.sh` | Added `pipeline_log()` function writing structured JSONL to interaction log dir. Logs pipeline_start, each major step, and pipeline_complete with elapsed time. |
+
 #### Modified Files (Session 4+5: LLM migration + four features)
 
 | File | Changes |
 |------|---------|
 | `scripts/build_articles.py` | Migrated from litellm to `gemini_llm.call_llm()`. Added `_locked_append_article()` with `fcntl.flock` for write contention safety. Extended prompt schema with `entities[]` and `follow_up_questions[]`. Fixed `normalize_topic()` to handle dict inputs. |
-| `scripts/research-server.py` | Migrated chat from litellm to `gemini_llm.call_chat()`. Rewrote topic research from `claude -p` to `gemini_llm.call_with_search()` (Gemini search grounding). Added `extract_note_actions()` for LLM intent extraction from transcripts. Added `POST /notes/{note_id}/execute-action` endpoint. |
+| `scripts/research-server.py` | Migrated chat from litellm to `gemini_llm.call_chat()`. Rewrote topic research from `claude -p` to `gemini_llm.call_with_search()` (Gemini search grounding). Added `extract_note_actions()` for LLM intent extraction from transcripts. Added `POST /notes/{note_id}/execute-action` endpoint. `/ingest` now returns `ingest_id` + deterministic `article_id`. Added `GET /ingest-status?id=` for polling. |
 | `scripts/import_url.py` | Added import of `_locked_append_article` from `build_articles` for concurrent write safety. |
 | `app/data/types.ts` | Added `ArticleEntity` interface (7 entity types), `FollowUpQuestion` interface, extended `Article` with `entities?` and `follow_up_questions?`. |
 | `app/app/reader.tsx` | Added `EntityHighlightText` (dotted underline on entity mentions, long-press popup), `EntityPopup` (inline marginalia card with entity info + "Research more"), `FollowUpSection` ("✦ FURTHER INQUIRY" section after article with tappable research questions). ~320 lines added. |
@@ -89,8 +124,8 @@ App (Expo SDK 54):
 | `app/app/reader.tsx` | 3 reading modes (Full/Guided/New Only), paragraph dimming via `blockDimming` map, collapsible familiar sections (`CollapsedBar` component), "What's new for you" claims card, `ReadingModeToggle` component, `buildParagraphToBlockMap()` for mapping pipeline paragraph indices to markdown block indices. Calls `markArticleEncountered()` on Done. |
 | `app/app/(tabs)/index.tsx` | Curiosity-zone re-ranking (with 0.05 threshold for stability), topic filter chips (horizontal ScrollView), swipe-right-to-queue, novelty hints ("N new claims"), `ContinueReadingCard` component (limited to 2 most recent). Interaction logging for swipe-dismiss and swipe-queue. |
 | `app/app/(tabs)/_layout.tsx` | 3-tab layout: Feed / Topics / Queue. Text-only labels (EB Garamond), rubric dot active indicator. |
-| `app/data/logger.ts` | Dual-write logging: local (localStorage/filesystem) + server buffer (batched POST to port 8091 every 5s). |
-| `scripts/content-refresh.sh` | Full 6-step pipeline: fetch sources → build articles → validate → extract entities → extract claims → embed claims → build knowledge index → copy to nginx. |
+| `app/data/logger.ts` | Dual-write logging: local (localStorage/filesystem) + server buffer (batched POST to port 8091 every 5s). AsyncStorage-backed offline queue retries failed sends on session start. |
+| `scripts/content-refresh.sh` | Full 6-step pipeline: fetch sources → build articles → validate → extract entities → extract claims → embed claims → build knowledge index → copy to nginx. Writes structured JSONL pipeline events to interaction log for activity feed. |
 
 ### Data Generated
 
@@ -233,27 +268,39 @@ App (Expo SDK 54):
 25. ~~**Voice notes error handling**~~ — DONE: `handleActionExecute` in `voice-notes.tsx` now catches errors instead of crashing on network failures.
 11. ~~**Production bundle optimization**~~ — Already done: `knowledge_index.json` is gitignored, not bundled.
 
+### Completed (Session 7)
+26. ~~**Scroll-aware encounter tracking**~~ — DONE: `markArticleReadUpTo()` only marks claims in paragraphs the user scrolled past. Estimates furthest paragraph from `(maxScrollY + viewportHeight) / contentHeight`. Engagement: 'read' (>60s) or 'skim' (≤60s). "Done" button still marks all claims.
+27. ~~**Curated "What's new" card**~~ — DONE: Prioritizes non-factual claim types (causal, evaluative, comparative, procedural) over plain factual. Capped at 3 items. Added `claim_type` to `ClaimClassification`.
+28. ~~**G1 descoped**~~ — Per-claim feedback UI explored via 4 design mockups. Decided knowledge model should infer from behavioral signals, not explicit per-claim buttons.
+
+### Completed (Session 8)
+29. ~~**Hierarchical topic feedback (G9)**~~ — DONE: PostReadInterestCard redesigned with hierarchical display (broad → specific → entity). `recordTopicSignalAtLevel()` for level-specific signaling without cascade. Smart expand logic.
+30. ~~**Cross-article connections (G10)**~~ — DONE: Inline "Also in: [title]" annotations below paragraphs + "✦ CONNECTED READING" bottom section with queue-first behavior (LIFO via `addToQueueFront()`). Max 2 annotations per paragraph, max 5 connected articles.
+31. ~~**LLM-verified topic normalization**~~ — DONE: Canonical topic registry (`topic_registry.json`) with include/exclude descriptions. `topic_normalizer.py` validates new topics against registry via LLM merge-or-create decisions. Build pipeline injects existing categories into extraction prompt for consistency from the start. Lessons from Otak's `tree_balance.py` applied: include/exclude descriptions work, but avoid unbounded tree growth.
+32. ~~**Automatic topic defragmentation**~~ — DONE: `defragment_registry()` consolidates when limits exceeded. Phase 1: merge similar specifics per overpopulated broad. Phase 2: minimal broad merges. Phase 3: update all articles. Auto-runs as pipeline step 3c3. First run: 28→25 broad, 263→172 specific. See `research/topic-normalization-spec.md` for full spec.
+33. ~~**Backfill interest_topics**~~ — DONE: Extended `--enrich` to also generate `interest_topics`. All 185 articles now have hierarchical topics, normalized and defragmented.
+
 ### Gap Analysis: Built vs. Full Spec (as of Mar 9)
 
 #### HIGH PRIORITY — Core Experience Gaps
 
 | # | Feature | Spec Source | Gap Description |
 |---|---------|-----------|-----------------|
-| G1 | **Claim-level feedback UI** | `claims-topics-feedback-spec.md` | Only top "What's new" card exists. No per-claim "I knew this" / "Save" / "Tell me more" buttons. No margin annotations or interleaved callouts. **Biggest unresolved design problem** — user says "we need to iterate here quite a bit." |
+| G1 | **Claim-level feedback UI** | `claims-topics-feedback-spec.md` | **Descoped after design exploration (session 7)**: 4 mockups explored (margin glyphs, inline callouts, hybrid markers, progressive reveal). Decided per-claim feedback is wrong direction — knowledge model should infer from reading behavior, not explicit "I knew this" buttons. Scroll-aware encounter tracking now handles this implicitly. "What's new" card curated to prioritize non-trivial claims. "Tell me more" research spawn still valuable, decoupled from individual claims. |
 | G2 | **LLM judge for ambiguous claims** | `novelty-system-architecture.md` | Cosine-only classification. The 0.68–0.78 range (~5% of pairs) should get LLM verification — experiment showed 25% disagreement in that range. |
 | G3 | **Incremental embedding** | pipeline | Currently re-embeds all claims every pipeline run. Should only embed new claims and append to `.npz`. |
 | G4 | **Related articles at bottom of reader** | `ux-redesign-spec.md` | Spec: 3 groups (same topic / shared concepts / same source) with "+ Queue" buttons. Not implemented. |
 | G5 | **Reader "Up next" footer** | `ux-redesign-spec.md` | After Done, should flow directly to next queued article. Currently returns to feed. |
-| G6 | **Auto-ingest from links** | `ux-redesign-spec.md` | Tapping a link in article text should trigger background download + processing → queued with inline "processing…" / "queued" badges. Not implemented. |
+| G6 | **Auto-ingest from links** | `ux-redesign-spec.md` | DONE: Tap link in reader → POST `/ingest` → polls `/ingest-status` every 5s → inline badges ("processing…" / "queued ✓" / "failed"). Long-press opens in browser. Non-article URLs (images, PDFs) fall through to browser. Server returns deterministic `article_id` (sha256) + `ingest_id` for polling. |
 
 #### MEDIUM PRIORITY — Missing Screens & Features
 
 | # | Feature | Spec Source | Gap Description |
 |---|---------|-----------|-----------------|
-| G7 | **Activity Log tab** | `ux-redesign-spec.md` (Screen 5) | Fully spec'd: timeline with reading/system/research/interest nodes, filter toggles (All/Reading/System/Research). **Not built at all** — currently 3 tabs, spec calls for 4. |
+| G7 | **Activity Log tab** | `ux-redesign-spec.md` (Screen 5) | **DONE** (session 6). 4th tab with vertical timeline, filter toggles, paged server fetch, offline log queue. Server aggregates reading sessions, pipeline events, research, interest signals via `GET /activity/feed?days=N`. |
 | G8 | **Web split panel + keyboard shortcuts** | `ux-redesign-spec.md` (Screen 6) | Spec: left pane article list + right pane reader, `j/k/d/x/q/Space/s` keyboard shortcuts. **Not built.** |
-| G9 | **Topic hierarchy feedback** | `claims-topics-feedback-spec.md` | User explicitly wants to signal interest at different specificity levels (broad → specific → entity). Current post-read card only shows flat topic chips. |
-| G10 | **Cross-article connections in reader** | `claims-topics-feedback-spec.md` | Should show "this claim also in Article B" with queue-not-navigate behavior. Knowledge index has cross-article similarity data but not surfaced in reader UI. |
+| G9 | **Topic hierarchy feedback** | `claims-topics-feedback-spec.md` | **DONE** (session 8). PostReadInterestCard redesigned with hierarchical display: broad → specific → entity levels with tree lines, level badges, +/- buttons. `recordTopicSignalAtLevel()` signals at exactly one level without cascading. `computeInterestMatch()` traverses all levels when scoring. Smart expand: ≤2 broad categories → expanded, 3+ → collapsed. |
+| G10 | **Cross-article connections in reader** | `claims-topics-feedback-spec.md` | **DONE** (session 8). Two surfaces: (1) `InlineCrossArticleAnnotation` — "Also in: [title]" below paragraphs with cross-article connections, max 2 per paragraph. (2) `ConnectedReadingSection` — bottom section showing up to 5 connected articles with shared claim counts, read/unread status, "+ Queue" buttons. Tap queues to front (LIFO), long-press navigates. Uses ≥0.78 cosine threshold from knowledge index similarities. |
 | G11 | **Scrollbar novelty minimap** | `novelty-system-architecture.md` | Colored dots on scrollbar showing where novel content is. Not implemented. |
 | G12 | **Novel section markers** | `novelty-system-architecture.md` | Green left border (2px) on paragraphs with NEW claims. Dimming exists but no novel markers. |
 
@@ -274,9 +321,9 @@ App (Expo SDK 54):
 
 #### Summary of Biggest Gaps
 
-1. **Claim-level interaction system** (G1, G9, G10) — per-claim feedback, cross-article connections, hierarchical topic feedback. The most complex unresolved design problem.
-2. **Reading flow continuity** (G4, G5, G6) — no "Up next" footer, no auto-ingest from links, no related articles. Queue exists but isn't woven into the reading experience.
-3. **Activity Log tab** (G7) — fully spec'd transparency feature, not built at all.
+1. **Reading flow continuity** (G4, G5) — no "Up next" footer, no related articles section. G6 (auto-ingest from links) is done. G10 (cross-article connections) is done with inline annotations + bottom section. Queue is now woven into reading via LIFO cross-article queueing.
+2. **Pipeline accuracy** (G2, G3) — LLM judge for ambiguous 0.68–0.78 cosine range, incremental embedding to avoid re-embedding all claims.
+3. **Web experience** (G8) — split panel + keyboard shortcuts for desktop use.
 
 ### User Feedback Summary (from voice notes, Mar 8)
 - **Article `6e3cb28c19e1`** (NotebookLM learning compression): User wants to bookmark AND follow multiple topics (AI-assisted learning, learning strategies). Wants topic overview to surface recently-bookmarked articles prominently. Voice feedback should support actionable commands (add tags, research topics, express interest).
@@ -297,6 +344,7 @@ App (Expo SDK 54):
 | `research/knowledge-diff-interfaces.md` | HCI research on adaptive presentation (dimming, stretchtext) |
 | `research/knowledge-tracing-for-reading.md` | FSRS/BKT adaptation for reading knowledge |
 | `research/knowledge-deduplication.md` | Embedding + dedup architecture |
+| `research/topic-normalization-spec.md` | Topic normalization & defragmentation spec — registry design, LLM merge-or-create, defrag algorithm, Otak lessons |
 | `research/user-guide.md` | User-facing guide (markdown source) — also at `app/public/guide/index.html` (HTML) |
 
 ## Key Scripts
@@ -314,4 +362,6 @@ App (Expo SDK 54):
 | `scripts/log_server.py` | Interaction log collector (port 8091, systemd `petrarca-log`) |
 | `scripts/deploy_knowledge_index.sh` | Deploy to nginx + update manifest |
 | `scripts/content-refresh.sh` | Full cron pipeline (fetch → extract → claims → embed → index → deploy) |
+| `scripts/topic_normalizer.py` | Topic normalization + defragmentation. Normalize, defrag, enforce limits |
+| `scripts/topic_registry.json` | Canonical topic registry — 25 broad, 172 specific topics with include/exclude descriptions. Auto-updated by normalizer, consolidated by defrag |
 | `scripts/experiment_*.py` | 11 experiment scripts (see experiment-results-report.md) |
