@@ -6,24 +6,35 @@ import {
 } from 'react-native';
 import AskAI from '../components/AskAI';
 import VoiceFeedback from '../components/VoiceFeedback';
-import { spawnTopicResearch } from '../lib/chat-api';
+import { spawnTopicResearch, ingestUrl, getIngestStatus } from '../lib/chat-api';
+import { addToQueue, addToQueueFront } from '../data/queue';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { getArticleById, getReadingState, updateReadingState, getHighlightBlockIndices, addHighlight, removeHighlight, markArticleRead, recordInterestSignal } from '../data/store';
+import { getArticleById, getArticles, getReadingState, updateReadingState, getHighlightBlockIndices, addHighlight, removeHighlight, markArticleRead, recordInterestSignal, recordTopicInterestSignalAtLevel, getCrossArticleConnections, getParagraphConnections } from '../data/store';
 import { Article, ArticleEntity, FollowUpQuestion, InterestTopic } from '../data/types';
+import type { CrossArticleConnection } from '../data/knowledge-engine';
 import * as Haptics from 'expo-haptics';
 import { logEvent } from '../data/logger';
 import { isSectionValid, parseInlineMarkdown, splitMarkdownBlocks, parseMarkdownBlock } from '../lib/markdown-utils';
 import { getDisplayTitle } from '../lib/display-utils';
 import { toggleBookmark, isBookmarked } from '../data/bookmarks';
+import RelatedArticles from '../components/RelatedArticles';
 import { colors, fonts, type, spacing, layout } from '../design/tokens';
 import {
   computeParagraphDimming, classifyArticleClaims,
-  markArticleEncountered, isKnowledgeReady, getArticleNovelty
+  markArticleEncountered, markArticleReadUpTo, getArticleParagraphCount,
+  isKnowledgeReady, getArticleNovelty
 } from '../data/knowledge-engine';
 
 const SCROLL_POSITION_SAVE_INTERVAL_MS = 2000;
 
 // --- Types ---
+
+type IngestStatus = 'processing' | 'queued' | 'failed';
+interface IngestState {
+  status: IngestStatus;
+  ingestId: string;
+  articleId: string;
+}
 
 type ReadingMode = 'full' | 'guided' | 'new_only';
 
@@ -40,6 +51,7 @@ interface ClaimClassification {
   classification: 'NEW' | 'KNOWN' | 'EXTENDS';
   similarity_score: number;
   source_paragraphs: number[];
+  claim_type: string;
 }
 
 interface ArticleNovelty {
@@ -73,39 +85,176 @@ function buildParagraphToBlockMap(content: string): Map<number, number[]> {
   return map;
 }
 
-// --- Post-Read Interest Card ---
+// --- Post-Read Interest Card (Hierarchical) ---
 
-function PostReadInterestCard({ topics, onChipSignal, onClose }: {
+interface TopicGroup {
+  broad: string;
+  specifics: Array<{ specific: string; entities: string[] }>;
+}
+
+function groupTopicsByBroad(topics: InterestTopic[]): TopicGroup[] {
+  const map = new Map<string, Map<string, string[]>>();
+  for (const t of topics) {
+    if (!map.has(t.broad)) map.set(t.broad, new Map());
+    const specificMap = map.get(t.broad)!;
+    if (!specificMap.has(t.specific)) specificMap.set(t.specific, []);
+    if (t.entity) {
+      const entities = specificMap.get(t.specific)!;
+      if (!entities.includes(t.entity)) entities.push(t.entity);
+    }
+  }
+  return Array.from(map.entries()).map(([broad, specificMap]) => ({
+    broad,
+    specifics: Array.from(specificMap.entries()).map(([specific, entities]) => ({ specific, entities })),
+  }));
+}
+
+function formatTopicLabel(slug: string): string {
+  return slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function TopicLevelRow({ label, level, indent, onSignal }: {
+  label: string;
+  level: 'broad' | 'specific' | 'entity';
+  indent: number;
+  onSignal: (positive: boolean) => void;
+}) {
+  return (
+    <View style={[interestStyles.chipRow, { paddingLeft: indent }]}>
+      <Pressable
+        style={interestStyles.chipMinus}
+        onPress={() => onSignal(false)}
+        hitSlop={8}
+      >
+        <Text style={interestStyles.chipButtonText}>−</Text>
+      </Pressable>
+      <View style={interestStyles.chipLabel}>
+        {indent > 0 && <Text style={interestStyles.treeLine}>└ </Text>}
+        <Text style={[
+          interestStyles.chipText,
+          level === 'entity' && interestStyles.chipTextEntity,
+        ]} numberOfLines={1}>
+          {level === 'entity' ? label : formatTopicLabel(label)}
+        </Text>
+        <Text style={interestStyles.levelBadge}>
+          {level === 'broad' ? 'broad' : level === 'specific' ? 'topic' : 'entity'}
+        </Text>
+      </View>
+      <Pressable
+        style={interestStyles.chipPlus}
+        onPress={() => onSignal(true)}
+        hitSlop={8}
+      >
+        <Text style={interestStyles.chipButtonText}>+</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function PostReadInterestCard({ topics, onLevelSignal, onClose }: {
   topics: InterestTopic[];
-  onChipSignal: (topic: InterestTopic, positive: boolean) => void;
+  onLevelSignal: (topicKey: string, level: 'broad' | 'specific' | 'entity', positive: boolean, parent?: string) => void;
   onClose: () => void;
 }) {
+  const groups = useMemo(() => groupTopicsByBroad(topics), [topics]);
+  const uniqueBroadCount = groups.length;
+  const [expanded, setExpanded] = useState(uniqueBroadCount <= 2);
+
+  if (!expanded) {
+    // Collapsed: show leaf-level chips only (entity if present, else specific)
+    const leafTopics = topics.reduce<Array<{ key: string; label: string; level: 'specific' | 'entity'; parent: string }>>((acc, t) => {
+      if (t.entity && !acc.some(a => a.key === t.entity!.toLowerCase().replace(/\s+/g, '-'))) {
+        acc.push({ key: t.entity.toLowerCase().replace(/\s+/g, '-'), label: t.entity, level: 'entity', parent: t.specific });
+      } else if (!t.entity && !acc.some(a => a.key === t.specific)) {
+        acc.push({ key: t.specific, label: formatTopicLabel(t.specific), level: 'specific', parent: t.broad });
+      }
+      return acc;
+    }, []);
+
+    return (
+      <View style={styles.interestCardOverlay}>
+        <View style={styles.interestCard}>
+          <Text style={styles.interestCardTitle}>{'✦ TOPICS IN THIS ARTICLE'}</Text>
+          <Text style={styles.interestCardSubtitle}>Tap + or − to shape your feed</Text>
+          <View style={interestStyles.chips}>
+            {leafTopics.slice(0, 4).map((t) => (
+              <TopicLevelRow
+                key={t.key}
+                label={t.label}
+                level={t.level}
+                indent={0}
+                onSignal={(positive) => onLevelSignal(t.key, t.level, positive, t.parent)}
+              />
+            ))}
+          </View>
+          <Pressable
+            style={interestStyles.expandButton}
+            onPress={() => {
+              setExpanded(true);
+              logEvent('interest_card_expand');
+            }}
+          >
+            <Text style={interestStyles.expandText}>Show topic hierarchy ▾</Text>
+          </Pressable>
+          <Pressable style={styles.interestCloseButton} onPress={onClose}>
+            <Text style={styles.interestCloseText}>Close</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  // Expanded: show full hierarchy
   return (
     <View style={styles.interestCardOverlay}>
       <View style={styles.interestCard}>
-        <Text style={styles.interestCardTitle}>Topics in this article</Text>
-        <Text style={styles.interestCardSubtitle}>Tap + or - to shape your feed</Text>
-        <View style={styles.interestChips}>
-          {topics.map((t, i) => (
-            <View key={i} style={styles.interestChipRow}>
-              <Pressable
-                style={styles.interestChipMinus}
-                onPress={() => onChipSignal(t, false)}
-              >
-                <Text style={styles.interestChipButtonText}>-</Text>
-              </Pressable>
-              <View style={styles.interestChipLabel}>
-                <Text style={styles.interestChipText}>{t.entity || t.specific}</Text>
-              </View>
-              <Pressable
-                style={styles.interestChipPlus}
-                onPress={() => onChipSignal(t, true)}
-              >
-                <Text style={styles.interestChipButtonText}>+</Text>
-              </Pressable>
+        <Text style={styles.interestCardTitle}>{'✦ TOPICS IN THIS ARTICLE'}</Text>
+        <Text style={styles.interestCardSubtitle}>Signal interest at any level of specificity</Text>
+        <View style={interestStyles.chips}>
+          {groups.map((group) => (
+            <View key={group.broad}>
+              <TopicLevelRow
+                label={group.broad}
+                level="broad"
+                indent={0}
+                onSignal={(positive) => onLevelSignal(group.broad, 'broad', positive)}
+              />
+              {group.specifics.map((sp) => (
+                <View key={sp.specific}>
+                  <TopicLevelRow
+                    label={sp.specific}
+                    level="specific"
+                    indent={20}
+                    onSignal={(positive) => onLevelSignal(sp.specific, 'specific', positive, group.broad)}
+                  />
+                  {sp.entities.map((ent) => {
+                    const entityKey = ent.toLowerCase().replace(/\s+/g, '-');
+                    return (
+                      <TopicLevelRow
+                        key={entityKey}
+                        label={ent}
+                        level="entity"
+                        indent={40}
+                        onSignal={(positive) => onLevelSignal(entityKey, 'entity', positive, sp.specific)}
+                      />
+                    );
+                  })}
+                </View>
+              ))}
             </View>
           ))}
         </View>
+        {uniqueBroadCount > 2 && (
+          <Pressable
+            style={interestStyles.expandButton}
+            onPress={() => {
+              setExpanded(false);
+              logEvent('interest_card_collapse');
+            }}
+          >
+            <Text style={interestStyles.expandText}>Collapse ▴</Text>
+          </Pressable>
+        )}
         <Pressable style={styles.interestCloseButton} onPress={onClose}>
           <Text style={styles.interestCloseText}>Close</Text>
         </Pressable>
@@ -163,24 +312,63 @@ function ReadingModeToggle({ mode, onModeChange }: {
 
 // --- Inline markdown rendering ---
 
-function renderInlineMarkdown(text: string): (string | React.ReactElement)[] {
+interface LinkHandler {
+  ingestStates: Record<string, IngestState>;
+  onIngest: (url: string) => void;
+}
+
+function isIngestableUrl(url: string): boolean {
+  if (!url.startsWith('http://') && !url.startsWith('https://')) return false;
+  // Skip obvious non-article URLs
+  const lower = url.toLowerCase();
+  if (/\.(png|jpg|jpeg|gif|svg|webp|pdf|mp3|mp4|zip|tar|gz)(\?|$)/.test(lower)) return false;
+  return true;
+}
+
+function renderInlineMarkdown(
+  text: string,
+  linkHandler?: LinkHandler,
+): (string | React.ReactElement)[] {
   const segments = parseInlineMarkdown(text);
   return segments.map((seg, i) => {
     switch (seg.type) {
-      case 'link':
+      case 'link': {
+        const canIngest = linkHandler && isIngestableUrl(seg.url);
+        const ingestState = canIngest ? linkHandler.ingestStates[seg.url] : undefined;
+
         return (
-          <Text
-            key={`link-${i}`}
-            style={styles.markdownLink}
-            onPress={() => {
-              logEvent('reader_link_tap', { url: seg.url, link_text: seg.text?.slice(0, 80) });
-              Linking.openURL(seg.url);
-            }}
-            {...(Platform.OS === 'web' ? { accessibilityRole: 'link', href: seg.url, hrefAttrs: { target: '_blank', rel: 'noopener noreferrer' } } as any : {})}
-          >
-            {seg.text}
+          <Text key={`link-${i}`}>
+            <Text
+              style={styles.markdownLink}
+              onPress={() => {
+                if (canIngest && !ingestState) {
+                  logEvent('reader_link_ingest', { url: seg.url, link_text: seg.text?.slice(0, 80) });
+                  linkHandler.onIngest(seg.url);
+                } else {
+                  logEvent('reader_link_tap', { url: seg.url, link_text: seg.text?.slice(0, 80) });
+                  Linking.openURL(seg.url);
+                }
+              }}
+              onLongPress={() => {
+                logEvent('reader_link_open', { url: seg.url });
+                Linking.openURL(seg.url);
+              }}
+              {...(Platform.OS === 'web' ? { accessibilityRole: 'link', href: seg.url, hrefAttrs: { target: '_blank', rel: 'noopener noreferrer' } } as any : {})}
+            >
+              {seg.text}
+            </Text>
+            {ingestState?.status === 'processing' && (
+              <Text style={styles.ingestBadgeProcessing}>{' processing…'}</Text>
+            )}
+            {ingestState?.status === 'queued' && (
+              <Text style={styles.ingestBadgeQueued}>{' queued ✓'}</Text>
+            )}
+            {ingestState?.status === 'failed' && (
+              <Text style={styles.ingestBadgeFailed}>{' failed'}</Text>
+            )}
           </Text>
         );
+      }
       case 'bold':
         return <Text key={`bold-${i}`} style={styles.markdownBold}>{seg.text}</Text>;
       case 'italic':
@@ -360,9 +548,165 @@ function FollowUpSection({
   );
 }
 
+// --- Connected Reading Section ---
+
+function ConnectedReadingSection({
+  connections,
+  articleId,
+}: {
+  connections: CrossArticleConnection[];
+  articleId: string;
+}) {
+  const [queuedIds, setQueuedIds] = useState<Set<string>>(new Set());
+  const router = useRouter();
+  const allArticles = getArticles();
+
+  if (!connections || connections.length === 0) return null;
+
+  const handleQueue = async (connArticleId: string) => {
+    await addToQueueFront(connArticleId);
+    setQueuedIds(prev => new Set(prev).add(connArticleId));
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    logEvent('cross_article_queue', {
+      source_article_id: articleId,
+      target_article_id: connArticleId,
+    });
+  };
+
+  const handleNavigate = (connArticleId: string) => {
+    logEvent('cross_article_navigate', {
+      source_article_id: articleId,
+      target_article_id: connArticleId,
+    });
+    router.push({ pathname: '/reader', params: { id: connArticleId } });
+  };
+
+  return (
+    <View style={connectedStyles.container}>
+      <Text style={connectedStyles.sectionTitle}>{'\u2726 CONNECTED READING'}</Text>
+      {connections.map((conn) => {
+        const targetArticle = allArticles.find(a => a.id === conn.articleId);
+        if (!targetArticle) return null;
+        const title = getDisplayTitle(targetArticle);
+        const readingState = getReadingState(conn.articleId);
+        const isRead = readingState.status === 'read';
+        const isAlreadyQueued = queuedIds.has(conn.articleId);
+
+        return (
+          <Pressable
+            key={conn.articleId}
+            style={[connectedStyles.card, isRead && connectedStyles.cardRead]}
+            onLongPress={() => handleNavigate(conn.articleId)}
+          >
+            <Text
+              style={[connectedStyles.cardTitle, isRead && connectedStyles.cardTitleRead]}
+              numberOfLines={2}
+            >
+              {title}
+            </Text>
+            <View style={connectedStyles.cardMeta}>
+              <Text style={connectedStyles.cardClaimCount}>
+                {conn.sharedClaimCount} shared {conn.sharedClaimCount === 1 ? 'claim' : 'claims'}
+              </Text>
+              {isRead ? (
+                <Text style={connectedStyles.cardReadLabel}>
+                  {'read ' + formatTimeAgo(readingState.completed_at || readingState.last_read_at)}
+                </Text>
+              ) : isAlreadyQueued ? (
+                <Text style={connectedStyles.cardQueuedLabel}>{'✓ Queued'}</Text>
+              ) : (
+                <Pressable
+                  style={connectedStyles.queueButton}
+                  onPress={() => handleQueue(conn.articleId)}
+                  hitSlop={8}
+                >
+                  <Text style={connectedStyles.queueButtonText}>+ Queue</Text>
+                </Pressable>
+              )}
+            </View>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+function formatTimeAgo(timestamp: number): string {
+  if (!timestamp) return '';
+  const days = Math.floor((Date.now() - timestamp) / (1000 * 60 * 60 * 24));
+  if (days === 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 7) return `${days} days ago`;
+  if (days < 30) return `${Math.floor(days / 7)} weeks ago`;
+  return `${Math.floor(days / 30)} months ago`;
+}
+
+// --- Inline Cross-Article Annotation ---
+
+function InlineCrossArticleAnnotation({
+  articleId: connArticleId,
+  sourceArticleId,
+}: {
+  articleId: string;
+  sourceArticleId: string;
+}) {
+  const [queued, setQueued] = useState(false);
+  const router = useRouter();
+  const allArticles = getArticles();
+  const targetArticle = allArticles.find(a => a.id === connArticleId);
+
+  if (!targetArticle) return null;
+
+  const title = getDisplayTitle(targetArticle);
+  const readingState = getReadingState(connArticleId);
+  const isRead = readingState.status === 'read';
+
+  return (
+    <View style={connectedStyles.inlineAnnotation}>
+      <Pressable
+        onPress={async () => {
+          if (!isRead && !queued) {
+            await addToQueueFront(connArticleId);
+            setQueued(true);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            logEvent('inline_cross_article_queue', {
+              source_article_id: sourceArticleId,
+              target_article_id: connArticleId,
+            });
+          }
+        }}
+        onLongPress={() => {
+          logEvent('inline_cross_article_navigate', {
+            source_article_id: sourceArticleId,
+            target_article_id: connArticleId,
+          });
+          router.push({ pathname: '/reader', params: { id: connArticleId } });
+        }}
+      >
+        <Text style={connectedStyles.inlineAnnotationText}>
+          <Text style={connectedStyles.inlineAnnotationPrefix}>Also in: </Text>
+          <Text style={[
+            connectedStyles.inlineAnnotationTitle,
+            isRead && connectedStyles.inlineAnnotationTitleRead,
+          ]}>
+            {title}
+          </Text>
+          {isRead ? (
+            <Text style={connectedStyles.inlineAnnotationRead}>{' (read)'}</Text>
+          ) : queued ? (
+            <Text style={connectedStyles.inlineAnnotationQueued}>{' ✓ queued'}</Text>
+          ) : (
+            <Text style={connectedStyles.inlineAnnotationQueue}>{' · tap to queue'}</Text>
+          )}
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
 // --- Markdown renderer ---
 
-function MarkdownText({ content, highlightedBlocks, onBlockLongPress, blockDimming, readingMode = 'full', entities, onEntityLongPress }: {
+function MarkdownText({ content, highlightedBlocks, onBlockLongPress, blockDimming, readingMode = 'full', entities, onEntityLongPress, linkHandler, paragraphConnections, sourceArticleId }: {
   content: string;
   highlightedBlocks?: Set<number>;
   onBlockLongPress?: (blockIndex: number, text: string) => void;
@@ -370,6 +714,9 @@ function MarkdownText({ content, highlightedBlocks, onBlockLongPress, blockDimmi
   readingMode?: ReadingMode;
   entities?: ArticleEntity[];
   onEntityLongPress?: (entity: ArticleEntity) => void;
+  linkHandler?: LinkHandler;
+  paragraphConnections?: Map<number, Array<{ articleId: string; claimText: string }>> | null;
+  sourceArticleId?: string;
 }) {
   const [expandedCollapsedRanges, setExpandedCollapsedRanges] = useState(new Set<number>());
 
@@ -432,7 +779,7 @@ function MarkdownText({ content, highlightedBlocks, onBlockLongPress, blockDimmi
               block.level === 2 && { fontSize: 19 },
               (block.level ?? 3) >= 3 && { fontSize: 17 },
             ]}>
-              {renderInlineMarkdown(block.content)}
+              {renderInlineMarkdown(block.content, linkHandler)}
             </Text>
           </View>
         );
@@ -450,7 +797,7 @@ function MarkdownText({ content, highlightedBlocks, onBlockLongPress, blockDimmi
             {(block.items || []).map((item, j) => (
               <View key={j} style={styles.markdownListItem}>
                 <Text style={styles.markdownBullet}>{'·'}</Text>
-                <Text style={styles.markdownText}>{renderInlineMarkdown(item)}</Text>
+                <Text style={styles.markdownText}>{renderInlineMarkdown(item, linkHandler)}</Text>
               </View>
             ))}
           </Pressable>
@@ -466,7 +813,7 @@ function MarkdownText({ content, highlightedBlocks, onBlockLongPress, blockDimmi
             {(block.items || []).map((item, j) => (
               <View key={j} style={styles.markdownListItem}>
                 <Text style={styles.markdownOrderedBullet}>{j + 1}.</Text>
-                <Text style={styles.markdownText}>{renderInlineMarkdown(item)}</Text>
+                <Text style={styles.markdownText}>{renderInlineMarkdown(item, linkHandler)}</Text>
               </View>
             ))}
           </Pressable>
@@ -486,7 +833,7 @@ function MarkdownText({ content, highlightedBlocks, onBlockLongPress, blockDimmi
             onLongPress={onBlockLongPress ? () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onBlockLongPress(i, raw); } : undefined}
             style={[styles.markdownBlockquote, isHighlighted && styles.paragraphHighlight, opacityStyle]}
           >
-            <Text style={styles.markdownBlockquoteText}>{renderInlineMarkdown(block.content)}</Text>
+            <Text style={styles.markdownBlockquoteText}>{renderInlineMarkdown(block.content, linkHandler)}</Text>
           </Pressable>
         );
 
@@ -497,7 +844,7 @@ function MarkdownText({ content, highlightedBlocks, onBlockLongPress, blockDimmi
               <View style={styles.tableRow}>
                 {block.headers.map((h, hi) => (
                   <View key={hi} style={[styles.tableCell, styles.tableHeaderCell]}>
-                    <Text style={styles.tableHeaderText}>{renderInlineMarkdown(h)}</Text>
+                    <Text style={styles.tableHeaderText}>{renderInlineMarkdown(h, linkHandler)}</Text>
                   </View>
                 ))}
               </View>
@@ -506,7 +853,7 @@ function MarkdownText({ content, highlightedBlocks, onBlockLongPress, blockDimmi
               <View key={ri} style={[styles.tableRow, ri % 2 === 1 && styles.tableRowAlt]}>
                 {row.map((cell, ci) => (
                   <View key={ci} style={styles.tableCell}>
-                    <Text style={styles.tableCellText}>{renderInlineMarkdown(cell)}</Text>
+                    <Text style={styles.tableCellText}>{renderInlineMarkdown(cell, linkHandler)}</Text>
                   </View>
                 ))}
               </View>
@@ -515,21 +862,34 @@ function MarkdownText({ content, highlightedBlocks, onBlockLongPress, blockDimmi
         );
 
       default: {
-        const inlineContent = renderInlineMarkdown(block.content);
+        const inlineContent = renderInlineMarkdown(block.content, linkHandler);
+        const blockConnections = paragraphConnections?.get(i);
+        // Deduplicate connections per article (show max 1 annotation per article per paragraph)
+        const uniqueConnections = blockConnections
+          ? Array.from(new Map(blockConnections.map(c => [c.articleId, c])).values()).slice(0, 2)
+          : [];
         return (
-          <Pressable
-            key={i}
-            onLongPress={onBlockLongPress ? () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onBlockLongPress(i, block.content); } : undefined}
-            style={[isHighlighted ? styles.paragraphHighlight : undefined, opacityStyle]}
-          >
-            <Text style={styles.markdownText}>
-              {entities && entities.length > 0 && onEntityLongPress ? (
-                <EntityHighlightText entities={entities} onEntityLongPress={onEntityLongPress}>
-                  {inlineContent}
-                </EntityHighlightText>
-              ) : inlineContent}
-            </Text>
-          </Pressable>
+          <View key={i}>
+            <Pressable
+              onLongPress={onBlockLongPress ? () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onBlockLongPress(i, block.content); } : undefined}
+              style={[isHighlighted ? styles.paragraphHighlight : undefined, opacityStyle]}
+            >
+              <Text style={styles.markdownText}>
+                {entities && entities.length > 0 && onEntityLongPress ? (
+                  <EntityHighlightText entities={entities} onEntityLongPress={onEntityLongPress}>
+                    {inlineContent}
+                  </EntityHighlightText>
+                ) : inlineContent}
+              </Text>
+            </Pressable>
+            {uniqueConnections.map(conn => (
+              <InlineCrossArticleAnnotation
+                key={conn.articleId}
+                articleId={conn.articleId}
+                sourceArticleId={sourceArticleId || ''}
+              />
+            ))}
+          </View>
         );
       }
     }
@@ -623,8 +983,82 @@ export default function ReaderScreen() {
   const [showAIChat, setShowAIChat] = useState(false);
   const [showVoiceFeedback, setShowVoiceFeedback] = useState(false);
   const [activeEntity, setActiveEntity] = useState<ArticleEntity | null>(null);
+
+  // Cross-article connections
+  const crossArticleConnections = useMemo(() => {
+    if (!article) return [];
+    return getCrossArticleConnections(article.id);
+  }, [article]);
+
+  const paragraphConnections = useMemo(() => {
+    if (!article) return null;
+    return getParagraphConnections(article.id);
+  }, [article]);
+
   const contentHeight = useRef(0);
   const viewportHeight = useRef(0);
+  const maxScrollY = useRef(0);
+
+  // Link ingestion state
+  const [ingestStates, setIngestStates] = useState<Record<string, IngestState>>({});
+  const pollTimers = useRef<Record<string, ReturnType<typeof setInterval>>>({});
+
+  const handleLinkIngest = useCallback(async (url: string) => {
+    if (ingestStates[url]) return; // Already ingesting
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    try {
+      const result = await ingestUrl(url, 'reader_link');
+      setIngestStates(prev => ({
+        ...prev,
+        [url]: { status: 'processing', ingestId: result.ingest_id, articleId: result.article_id },
+      }));
+
+      // Poll for completion
+      const timer = setInterval(async () => {
+        try {
+          const status = await getIngestStatus(result.ingest_id);
+          if (status.status === 'completed') {
+            clearInterval(timer);
+            delete pollTimers.current[url];
+            setIngestStates(prev => ({
+              ...prev,
+              [url]: { ...prev[url], status: 'queued' },
+            }));
+            await addToQueue(result.article_id);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          } else if (status.status === 'failed') {
+            clearInterval(timer);
+            delete pollTimers.current[url];
+            setIngestStates(prev => ({
+              ...prev,
+              [url]: { ...prev[url], status: 'failed' },
+            }));
+          }
+        } catch {
+          // Poll errors are transient, keep trying
+        }
+      }, 5000);
+      pollTimers.current[url] = timer;
+    } catch {
+      setIngestStates(prev => ({
+        ...prev,
+        [url]: { status: 'failed', ingestId: '', articleId: '' },
+      }));
+    }
+  }, [ingestStates]);
+
+  // Clean up polling timers on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(pollTimers.current).forEach(clearInterval);
+    };
+  }, []);
+
+  const linkHandler = useMemo<LinkHandler>(() => ({
+    ingestStates,
+    onIngest: handleLinkIngest,
+  }), [ingestStates, handleLinkIngest]);
 
   // Knowledge engine data
   const paragraphDimming = useMemo(() => {
@@ -694,6 +1128,19 @@ export default function ReaderScreen() {
         last_read_at: Date.now(),
         scroll_position_y: lastScrollY.current,
       });
+
+      // Mark claims as encountered based on how far the user actually scrolled
+      if (isKnowledgeReady() && contentHeight.current > 0) {
+        const totalParas = getArticleParagraphCount(article.id);
+        if (totalParas > 0) {
+          const readUpToY = maxScrollY.current + viewportHeight.current;
+          const readFraction = Math.min(1, readUpToY / contentHeight.current);
+          const maxPara = Math.floor(readFraction * totalParas);
+          const engagement = elapsed > 60000 ? 'read' : 'skim';
+          markArticleReadUpTo(article.id, maxPara, engagement);
+        }
+      }
+
       logEvent('reader_close', { article_id: article.id, time_spent_ms: elapsed });
     };
   }, []);
@@ -717,6 +1164,7 @@ export default function ReaderScreen() {
     }
 
     lastScrollY.current = scrollY;
+    if (scrollY > maxScrollY.current) maxScrollY.current = scrollY;
     contentHeight.current = contentSize.height;
     viewportHeight.current = layoutMeasurement.height;
 
@@ -782,7 +1230,7 @@ export default function ReaderScreen() {
     setActiveEntity(null);
   }, [article, activeEntity]);
 
-  // Done handler
+  // Done handler — user explicitly finished, so mark ALL claims
   const handleDone = useCallback(() => {
     if (!article) return;
     markArticleRead(article.id);
@@ -800,11 +1248,11 @@ export default function ReaderScreen() {
     }
   }, [article, router]);
 
-  const handleChipSignal = useCallback((topic: InterestTopic, positive: boolean) => {
+  const handleLevelSignal = useCallback((topicKey: string, level: 'broad' | 'specific' | 'entity', positive: boolean, parent?: string) => {
     if (!article) return;
     const action = positive ? 'interest_chip_positive' : 'interest_chip_negative';
-    recordInterestSignal(action, article.id);
-    logEvent('interest_chip_tap', { article_id: article.id, topic: topic.specific, positive });
+    recordTopicInterestSignalAtLevel(action, topicKey, level, parent);
+    logEvent('interest_chip_tap', { article_id: article.id, topic: topicKey, level, positive });
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, [article]);
 
@@ -980,32 +1428,36 @@ export default function ReaderScreen() {
           <Text style={styles.metaText}>{article.estimated_read_minutes} min</Text>
         </View>
 
-        {/* "What's new for you" card — knowledge-aware version */}
-        {claimClassifications ? (
-          <View style={styles.noveltyCard}>
-            <Text style={styles.noveltyTitle}>{'✦ What\u2019s new for you'}</Text>
-            {articleNovelty && (
-              <View style={styles.noveltyStats}>
-                <Text style={styles.noveltyStatText}>
-                  {articleNovelty.new_claims} new · {articleNovelty.extends_claims} extend · {articleNovelty.known_claims} familiar
-                </Text>
-              </View>
-            )}
-            {claimClassifications
-              .filter((c: ClaimClassification) => c.classification === 'NEW')
-              .slice(0, 5)
-              .map((c: ClaimClassification, i: number) => (
+        {/* "What's new for you" card — knowledge-aware, prioritizing interesting claims */}
+        {claimClassifications ? (() => {
+          const newClaims = claimClassifications.filter((c: ClaimClassification) => c.classification === 'NEW');
+          // Prioritize non-factual claims (causal, evaluative, comparative, etc.)
+          const interesting = newClaims.filter((c: ClaimClassification) => c.claim_type !== 'factual');
+          const fallback = newClaims.filter((c: ClaimClassification) => c.claim_type === 'factual');
+          const displayClaims = [...interesting, ...fallback].slice(0, 3);
+          if (displayClaims.length === 0 && newClaims.length === 0) return null;
+          return (
+            <View style={styles.noveltyCard}>
+              <Text style={styles.noveltyTitle}>{'✦ What\u2019s new for you'}</Text>
+              {articleNovelty && (
+                <View style={styles.noveltyStats}>
+                  <Text style={styles.noveltyStatText}>
+                    {articleNovelty.new_claims} new · {articleNovelty.extends_claims} extend · {articleNovelty.known_claims} familiar
+                  </Text>
+                </View>
+              )}
+              {displayClaims.map((c: ClaimClassification, i: number) => (
                 <View key={i} style={styles.noveltyItem}>
                   <View style={styles.noveltyDot} />
                   <Text style={styles.noveltyText}>{c.text}</Text>
                 </View>
-              ))
-            }
-          </View>
-        ) : article.novelty_claims && article.novelty_claims.length > 0 ? (
+              ))}
+            </View>
+          );
+        })() : article.novelty_claims && article.novelty_claims.length > 0 ? (
           <View style={styles.noveltyCard}>
             <Text style={styles.noveltyTitle}>{'✦ What\u2019s new'}</Text>
-            {article.novelty_claims.map((nc, i) => (
+            {article.novelty_claims.slice(0, 3).map((nc, i) => (
               <View key={i} style={styles.noveltyItem}>
                 <View style={styles.noveltyDot} />
                 <Text style={styles.noveltyText}>{nc.claim}</Text>
@@ -1031,6 +1483,9 @@ export default function ReaderScreen() {
           readingMode={readingMode}
           entities={article.entities}
           onEntityLongPress={handleEntityLongPress}
+          linkHandler={linkHandler}
+          paragraphConnections={paragraphConnections}
+          sourceArticleId={article.id}
         />
 
         {/* Inline entity popup */}
@@ -1046,6 +1501,12 @@ export default function ReaderScreen() {
           />
         )}
 
+        {/* Connected reading */}
+        <ConnectedReadingSection
+          connections={crossArticleConnections}
+          articleId={article.id}
+        />
+
         {/* Follow-up research prompts */}
         <FollowUpSection
           questions={article.follow_up_questions || []}
@@ -1053,6 +1514,9 @@ export default function ReaderScreen() {
           articleId={article.id}
           articleSummary={article.one_line_summary}
         />
+
+        {/* Related articles */}
+        <RelatedArticles article={article} />
 
         {/* Bottom spacer for Done button */}
         <View style={{ height: 100 }} />
@@ -1068,8 +1532,8 @@ export default function ReaderScreen() {
       {/* Post-Read Interest Card */}
       {showInterestCard && article.interest_topics && (
         <PostReadInterestCard
-          topics={article.interest_topics.slice(0, 4)}
-          onChipSignal={handleChipSignal}
+          topics={article.interest_topics}
+          onLevelSignal={handleLevelSignal}
           onClose={handleInterestClose}
         />
       )}
@@ -1413,6 +1877,24 @@ const styles = StyleSheet.create({
     color: colors.rubric,
     textDecorationLine: 'underline' as const,
   },
+  ingestBadgeProcessing: {
+    fontFamily: fonts.ui,
+    fontSize: 8,
+    color: colors.textMuted,
+    letterSpacing: 0.3,
+  },
+  ingestBadgeQueued: {
+    fontFamily: fonts.ui,
+    fontSize: 8,
+    color: colors.claimNew,
+    letterSpacing: 0.3,
+  },
+  ingestBadgeFailed: {
+    fontFamily: fonts.ui,
+    fontSize: 8,
+    color: colors.rubric,
+    letterSpacing: 0.3,
+  },
   markdownBold: {
     fontFamily: fonts.readingMedium,
     ...(Platform.OS === 'web' ? { fontWeight: '600' as const } : {}),
@@ -1731,5 +2213,192 @@ const followUpStyles = StyleSheet.create({
     fontFamily: fonts.ui,
     fontSize: 11,
     color: colors.claimNew,
+  },
+});
+
+// --- Hierarchical Interest Card Styles ---
+
+const interestStyles = StyleSheet.create({
+  chips: {
+    gap: 6,
+    marginBottom: 16,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minHeight: 40,
+  },
+  chipMinus: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(180, 60, 60, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  chipPlus: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(60, 120, 60, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  chipButtonText: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 16,
+    color: colors.ink,
+    ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}),
+  },
+  chipLabel: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.parchmentDark,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 6,
+    gap: 6,
+  },
+  treeLine: {
+    fontFamily: fonts.ui,
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  chipText: {
+    fontFamily: fonts.ui,
+    fontSize: 13,
+    color: colors.textPrimary,
+    flex: 1,
+  },
+  chipTextEntity: {
+    fontFamily: fonts.bodyItalic,
+    ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}),
+  },
+  levelBadge: {
+    fontFamily: fonts.ui,
+    fontSize: 9,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  expandButton: {
+    alignSelf: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  expandText: {
+    fontFamily: fonts.ui,
+    fontSize: 11,
+    color: colors.textSecondary,
+  },
+});
+
+// --- Connected Reading Styles ---
+
+const connectedStyles = StyleSheet.create({
+  container: {
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  sectionTitle: {
+    ...type.sectionHead,
+    color: colors.rubric,
+    marginBottom: 12,
+  },
+  card: {
+    borderLeftWidth: 2,
+    borderLeftColor: colors.rule,
+    paddingLeft: 14,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  cardRead: {
+    opacity: 0.6,
+  },
+  cardTitle: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 14,
+    lineHeight: 19,
+    color: colors.textPrimary,
+    marginBottom: 4,
+    ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}),
+  },
+  cardTitleRead: {
+    color: colors.textSecondary,
+  },
+  cardMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  cardClaimCount: {
+    fontFamily: fonts.ui,
+    fontSize: 10,
+    color: colors.textMuted,
+    flex: 1,
+  },
+  cardReadLabel: {
+    fontFamily: fonts.ui,
+    fontSize: 10,
+    color: colors.textMuted,
+  },
+  cardQueuedLabel: {
+    fontFamily: fonts.ui,
+    fontSize: 10,
+    color: colors.claimNew,
+  },
+  queueButton: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.rubric,
+    minHeight: 28,
+    justifyContent: 'center',
+  },
+  queueButtonText: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 10,
+    color: colors.rubric,
+    ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}),
+  },
+  // Inline annotations
+  inlineAnnotation: {
+    paddingLeft: 16,
+    paddingVertical: 4,
+    marginTop: -4,
+    marginBottom: 4,
+  },
+  inlineAnnotationText: {
+    fontFamily: fonts.ui,
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  inlineAnnotationPrefix: {
+    color: colors.textMuted,
+  },
+  inlineAnnotationTitle: {
+    color: colors.rubric,
+    fontFamily: fonts.bodyItalic,
+    fontSize: 11,
+    ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}),
+  },
+  inlineAnnotationTitleRead: {
+    color: colors.textSecondary,
+  },
+  inlineAnnotationRead: {
+    color: colors.textMuted,
+    fontSize: 10,
+  },
+  inlineAnnotationQueued: {
+    color: colors.claimNew,
+    fontSize: 10,
+  },
+  inlineAnnotationQueue: {
+    color: colors.textMuted,
+    fontSize: 10,
   },
 });
