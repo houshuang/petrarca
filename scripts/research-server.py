@@ -11,6 +11,7 @@ Port: 8090
 Results stored in: /opt/petrarca/research-results/
 """
 
+import asyncio
 import email
 import email.policy
 import hashlib
@@ -18,6 +19,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -45,6 +47,9 @@ ARTICLES_PATH = Path(os.environ.get('ARTICLES_PATH', '/opt/petrarca/data/article
 
 SONIOX_API_KEY = os.environ.get('SONIOX_API_KEY', '557c7c5a86a2f5b8fa734ddbbe179f0f21fd342c762768c9af4f4ffff8c58e1f')
 SONIOX_BASE_URL = 'https://api.soniox.com/v1'
+
+TWIKIT_COOKIES_DIR = Path.home() / '.config' / 'twikit'
+TWIKIT_COOKIES_PATH = TWIKIT_COOKIES_DIR / 'cookies.json'
 
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 INGEST_DIR.mkdir(parents=True, exist_ok=True)
@@ -493,6 +498,159 @@ def run_research(request_id: str, query: str, article_title: str, article_summar
     result_path.write_text(json.dumps(result, indent=2))
     print(f'[research] {request_id} -> {result["status"]}')
 
+
+# ---------------------------------------------------------------------------
+# Twitter/X tweet ingestion via twikit
+# ---------------------------------------------------------------------------
+
+_TWEET_URL_RE = re.compile(r'https?://(?:twitter\.com|x\.com)/(\w+)/status/(\d+)')
+
+def _is_tweet_url(url: str) -> bool:
+    return bool(_TWEET_URL_RE.match(url))
+
+def _extract_tweet_id(url: str) -> str | None:
+    m = re.search(r'/status/(\d+)', url)
+    return m.group(1) if m else None
+
+
+async def _fetch_tweet_via_twikit(tweet_id: str) -> dict | None:
+    """Fetch a single tweet by ID, reconstruct thread if applicable."""
+    # Lazy imports — twikit may not be available in all environments
+    sys.path.insert(0, str(SCRIPTS_DIR))
+    from twikit import Client, Unauthorized
+    from fetch_twitter_bookmarks import tweet_to_dict, reconstruct_thread
+
+    if not TWIKIT_COOKIES_PATH.exists():
+        print('[tweet] No twikit cookies found', flush=True)
+        return None
+
+    client = Client('en-US')
+    client.load_cookies(str(TWIKIT_COOKIES_PATH))
+
+    try:
+        tweet = await client.get_tweet_by_id(tweet_id)
+    except Unauthorized:
+        print('[tweet] Cookies expired — cannot fetch tweet', flush=True)
+        return None
+    except Exception as e:
+        print(f'[tweet] Failed to fetch tweet {tweet_id}: {e}', flush=True)
+        return None
+
+    if not tweet:
+        return None
+
+    tweet_dict = tweet_to_dict(tweet)
+
+    # Reconstruct thread if this is a reply
+    if tweet_dict.get('in_reply_to_tweet_id'):
+        try:
+            thread_texts = await reconstruct_thread(client, tweet_dict)
+            if len(thread_texts) > 1:
+                tweet_dict['thread_texts'] = thread_texts
+                tweet_dict['thread_full_text'] = '\n\n---\n\n'.join(thread_texts)
+                print(f'[tweet] Reconstructed thread: {len(thread_texts)} tweets', flush=True)
+        except Exception as e:
+            print(f'[tweet] Thread reconstruction failed: {e}', flush=True)
+
+    return tweet_dict
+
+
+def _extract_urls_from_tweet(tweet_dict: dict) -> list[str]:
+    """Extract article-worthy URLs from a tweet, resolving t.co shortlinks."""
+    sys.path.insert(0, str(SCRIPTS_DIR))
+    from build_articles import _collect_urls_from_bookmark
+    return _collect_urls_from_bookmark(tweet_dict)
+
+
+def run_ingest_tweet(url: str, comment: str, ingest_id: str):
+    """Fetch a tweet via twikit and ingest through the normal pipeline."""
+    tweet_id = _extract_tweet_id(url)
+    article_id = hashlib.sha256(url.encode()).hexdigest()[:12]
+    log_path = INGEST_DIR / f'{ingest_id}.json'
+
+    log_entry = {
+        'id': ingest_id,
+        'article_id': article_id,
+        'status': 'processing',
+        'url': url,
+        'source': 'twitter_clip',
+        'requested_at': int(time.time() * 1000),
+    }
+    log_path.write_text(json.dumps(log_entry, indent=2))
+
+    if not tweet_id:
+        log_entry['status'] = 'failed'
+        log_entry['error'] = 'Could not extract tweet ID from URL'
+        log_path.write_text(json.dumps(log_entry, indent=2))
+        return
+
+    # Fetch tweet (async → sync bridge)
+    try:
+        tweet_dict = asyncio.run(_fetch_tweet_via_twikit(tweet_id))
+    except Exception as e:
+        print(f'[tweet] twikit fetch error: {e}', flush=True)
+        tweet_dict = None
+
+    if not tweet_dict:
+        # Fallback: try normal URL ingest (will likely fail for twitter.com but worth trying)
+        print(f'[tweet] Falling back to normal URL ingest for {url[:60]}', flush=True)
+        run_ingest(url, '', '', '', comment, 'twitter_clip', ingest_id)
+        return
+
+    author = tweet_dict.get('author_username', '')
+    thread_text = tweet_dict.get('thread_full_text', tweet_dict.get('text', ''))
+
+    # Try to extract article URLs from the tweet
+    try:
+        article_urls = _extract_urls_from_tweet(tweet_dict)
+    except Exception as e:
+        print(f'[tweet] URL extraction failed: {e}', flush=True)
+        article_urls = []
+
+    if article_urls:
+        # Ingest the linked article, with tweet context
+        target_url = article_urls[0]
+        tweet_context = f'Shared by @{author}: {tweet_dict["text"][:500]}'
+        combined_comment = f'{tweet_context}\n\n{comment}' if comment else tweet_context
+        print(f'[tweet] Found linked article: {target_url[:80]}', flush=True)
+        run_ingest(target_url, '', '', '', combined_comment, 'twitter_clip', ingest_id)
+    else:
+        # Use tweet text/thread as article content
+        title = f'Thread by @{author}' if tweet_dict.get('thread_full_text') else f'Tweet by @{author}'
+        content = f'# {title}\n\n{thread_text}'
+        print(f'[tweet] Using tweet text as content ({len(thread_text.split())} words)', flush=True)
+        run_ingest(url, title, content, '', comment, 'twitter_clip', ingest_id)
+
+
+async def _check_twikit_cookies() -> dict:
+    """Check if twikit cookies are valid. Returns status dict."""
+    if not TWIKIT_COOKIES_PATH.exists():
+        return {'valid': False, 'error': 'No cookies file found'}
+
+    try:
+        cookies_mtime = TWIKIT_COOKIES_PATH.stat().st_mtime
+        age_days = (time.time() - cookies_mtime) / 86400
+    except Exception:
+        age_days = -1
+
+    sys.path.insert(0, str(SCRIPTS_DIR))
+    from twikit import Client, Unauthorized
+
+    client = Client('en-US')
+    client.load_cookies(str(TWIKIT_COOKIES_PATH))
+
+    try:
+        await client.get_bookmarks(count=1)
+        return {'valid': True, 'age_days': round(age_days, 1)}
+    except Unauthorized:
+        return {'valid': False, 'error': 'Cookies expired', 'age_days': round(age_days, 1)}
+    except Exception as e:
+        return {'valid': False, 'error': str(e), 'age_days': round(age_days, 1)}
+
+
+# ---------------------------------------------------------------------------
+# Standard URL ingestion
+# ---------------------------------------------------------------------------
 
 def run_ingest(url: str, title: str, content: str, selected_text: str, comment: str, source: str, ingest_id: str | None = None):
     """Import a URL via import_url.py, optionally with pre-extracted content."""
@@ -1262,14 +1420,23 @@ class ResearchHandler(BaseHTTPRequestHandler):
         ingest_id = f'ingest_{int(time.time())}_{hash(url) % 10000:04d}'
         article_id = hashlib.sha256(url.encode()).hexdigest()[:12]
 
-        thread = threading.Thread(
-            target=run_ingest,
-            args=(url, title, content, selected_text, comment, source, ingest_id),
-            daemon=True,
-        )
-        thread.start()
-
-        print(f'[ingest] Queued: {url[:80]} (source={source}, id={ingest_id})')
+        # Route tweet URLs through twikit for full metadata + thread reconstruction
+        if _is_tweet_url(url):
+            thread = threading.Thread(
+                target=run_ingest_tweet,
+                args=(url, comment, ingest_id),
+                daemon=True,
+            )
+            thread.start()
+            print(f'[ingest] Tweet detected, fetching via twikit: {url[:80]} (id={ingest_id})')
+        else:
+            thread = threading.Thread(
+                target=run_ingest,
+                args=(url, title, content, selected_text, comment, source, ingest_id),
+                daemon=True,
+            )
+            thread.start()
+            print(f'[ingest] Queued: {url[:80]} (source={source}, id={ingest_id})')
 
         self._send_json_response(202, {
             'status': 'queued',
@@ -1311,6 +1478,41 @@ class ResearchHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(json.dumps({'id': request_id, 'status': 'processing', 'path': book_path}).encode())
 
+    def _handle_twitter_cookies(self):
+        """Update twikit cookies via API. Expects {auth_token, ct0}."""
+        if INGEST_TOKEN:
+            token = self.headers.get('X-Petrarca-Token', '')
+            if token != INGEST_TOKEN:
+                self._send_json_response(401, {'error': 'Invalid auth token'})
+                return
+
+        body = self._read_json_body()
+        if body is None:
+            return
+
+        auth_token = body.get('auth_token', '').strip()
+        ct0 = body.get('ct0', '').strip()
+
+        if not auth_token or not ct0:
+            self._send_json_response(400, {'error': 'Both auth_token and ct0 are required'})
+            return
+
+        TWIKIT_COOKIES_DIR.mkdir(parents=True, exist_ok=True)
+        cookies = {'auth_token': auth_token, 'ct0': ct0}
+
+        # twikit's save_cookies format is a dict of cookie dicts
+        # but the simplest approach: use twikit Client to set and save
+        try:
+            sys.path.insert(0, str(SCRIPTS_DIR))
+            from twikit import Client
+            client = Client('en-US')
+            client.set_cookies(cookies)
+            client.save_cookies(str(TWIKIT_COOKIES_PATH))
+            print(f'[twitter] Cookies updated via API', flush=True)
+            self._send_json_response(200, {'status': 'ok', 'message': 'Cookies saved'})
+        except Exception as e:
+            self._send_json_response(500, {'error': f'Failed to save cookies: {e}'})
+
     def do_POST(self):
         if self.path == '/chat':
             return self._handle_chat()
@@ -1324,6 +1526,8 @@ class ResearchHandler(BaseHTTPRequestHandler):
             return self._handle_ingest_email()
         if self.path == '/ingest-book':
             return self._handle_ingest_book()
+        if self.path == '/twitter/cookies':
+            return self._handle_twitter_cookies()
 
         if self.path == '/research/explore-batch':
             return self._handle_explore_batch()
@@ -1764,6 +1968,13 @@ class ResearchHandler(BaseHTTPRequestHandler):
                 })
             except (json.JSONDecodeError, OSError) as e:
                 self._send_json_response(500, {'error': str(e)})
+
+        elif self.path == '/twitter/status':
+            try:
+                result = asyncio.run(_check_twikit_cookies())
+            except Exception as e:
+                result = {'valid': False, 'error': f'Check failed: {e}'}
+            self._send_json_response(200, result)
 
         elif self.path == '/health':
             self.send_response(200)
