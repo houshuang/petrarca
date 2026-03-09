@@ -126,7 +126,7 @@ App (Expo SDK 54):
 | Component | Status | Notes |
 |-----------|--------|-------|
 | nginx content server (:8083) | ✅ Working | Serves articles.json, knowledge_index.json, manifest.json |
-| Static web app (:8084) | ✅ Deployed | Rebuilt Mar 8 with bookmarks, AI chat, voice notes, research agents, guide |
+| Static web app (:8084) | ✅ Deployed | Rebuilt Mar 9 with entity deep-dive, follow-up prompts, voice notes browser, action extraction |
 | Expo native (:8082) | ✅ Running | systemd `petrarca-expo` |
 | Log server (:8091) | ✅ Running | systemd `petrarca-log`, collects app interaction logs |
 | articles.json | ✅ 182 articles | Full corpus with atomic claims, entities, follow-up questions |
@@ -228,14 +228,14 @@ App (Expo SDK 54):
 
 ### Completed (Session 6)
 22. ~~**Re-run pipeline for entities/questions**~~ — DONE: Added `--enrich` flag to `build_articles.py`. All 182 articles now have entities (1,062 total) and follow-up questions (499 total).
-
-### Immediate (next session)
-23. **Resourceful bookmark pipeline enhancement** — When a tweet mentions a book/product/article without linking, pipeline should web-search, gather info, synthesize a small article.
+23. ~~**Resourceful bookmark pipeline enhancement**~~ — DONE: `research_entity()` now uses Gemini search grounding (`call_with_search()`) for real Google-grounded results instead of plain LLM synthesis.
+24. ~~**Server robustness**~~ — DONE: Added `_read_json_body()` / `_send_json_response()` helpers to research server. All 8 POST endpoints now return clean 400 errors on malformed JSON instead of crashing. File read errors in `execute-action` also handled.
+25. ~~**Voice notes error handling**~~ — DONE: `handleActionExecute` in `voice-notes.tsx` now catches errors instead of crashing on network failures.
+11. ~~**Production bundle optimization**~~ — Already done: `knowledge_index.json` is gitignored, not bundled.
 
 ### Short-term (quality improvements)
 8. **Incremental embedding** — Only embed new claims, append to existing .npz
 9. **LLM judge for ambiguous range** — 0.68-0.78 cosine gets LLM verification
-11. **Production bundle optimization** — Remove bundled `knowledge_index.json` from JS bundle
 
 ### Medium-term (feature completion)
 12. **Micro-delights** — Pull-to-refresh ✦ ornament, claim reveal animations, completion flash
@@ -273,6 +273,7 @@ App (Expo SDK 54):
 | `scripts/gemini_llm.py` | Shared Gemini LLM wrapper (google.genai SDK). `call_llm()`, `call_chat()`, `call_with_search()`. Model: `gemini-3.1-flash-lite-preview` |
 | `scripts/build_articles.py --claims` | Extract atomic claims, entities, and follow-up questions (Gemini 3.1 Flash-Lite, 10 parallel workers) |
 | `scripts/build_articles.py --claims-only` | Extract claims/entities/questions for articles that don't have them yet |
+| `scripts/build_articles.py --enrich` | Backfill entities + follow-up questions for existing articles (10 parallel workers) |
 | `scripts/build_claim_embeddings.py` | Generate Gemini embeddings for all claims (batch 100) |
 | `scripts/build_knowledge_index.py` | Build knowledge_index.json from embeddings (parallel delta reports) |
 | `scripts/build_knowledge_index.py --skip-delta` | Build without LLM delta reports (faster) |

@@ -4,6 +4,29 @@
 
 ---
 
+## 2026-03-09 — Session 6: Deployment, data migration, server hardening
+
+**What**: Deployed all session 4+5 code, ran entity enrichment on full corpus, polished server robustness.
+
+### Deployment
+- Committed session 4+5 changes (45 files, +3750/-432 lines)
+- Deployed scripts (gemini_llm.py, build_articles.py, research-server.py, import_url.py) to server
+- Rebuilt and deployed web app (Expo SDK 54 web export → `/opt/petrarca/web/`)
+- Installed `google-genai` SDK in server venv, restarted research server
+- Verified end-to-end: research server health, nginx content serving, manifest hash updated
+
+### Data Migration
+- Added `--enrich` flag to `build_articles.py` — targeted LLM extraction of entities + follow-up questions for existing articles
+- Enriched all 182 articles: **1,062 entities** and **499 follow-up questions** (10 parallel workers, ~2 min)
+- Data live via nginx immediately (serves from `/opt/petrarca/data/` directly)
+
+### Polish
+- Upgraded `research_entity()` from `call_llm()` to `call_with_search()` — entity research now uses Gemini search grounding for real Google-grounded results
+- Added `_read_json_body()` / `_send_json_response()` helpers to research server — all 8 POST endpoints now return clean 400 errors on malformed JSON instead of crashing the server (-46 lines of boilerplate)
+- Fixed unhandled promise rejection in `voice-notes.tsx` `handleActionExecute`
+
+---
+
 ## 2026-03-08 — Session 4+5: LLM migration + four parallel features
 
 **What**: Major infrastructure overhaul (litellm → google.genai) + four features implemented via parallel agent worktrees.
