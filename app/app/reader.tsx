@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Linking,
   NativeSyntheticEvent, NativeScrollEvent,
-  Platform, Clipboard,
+  Platform, Clipboard, Animated,
 } from 'react-native';
 import AskAI from '../components/AskAI';
 import VoiceFeedback from '../components/VoiceFeedback';
@@ -84,6 +84,42 @@ function buildParagraphToBlockMap(content: string): Map<number, number[]> {
     if (blockIndices.length > 0) map.set(pi, blockIndices);
   }
   return map;
+}
+
+// --- Animated Claim Item (stagger reveal) ---
+
+function AnimatedClaimItem({ text, index }: { text: string; index: number }) {
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const delay = index * 80;
+    const timer = setTimeout(() => {
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }, delay);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <Animated.View style={[
+      styles.noveltyItem,
+      {
+        opacity: anim,
+        transform: [{
+          translateY: anim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [12, 0],
+          }),
+        }],
+      },
+    ]}>
+      <View style={styles.noveltyDot} />
+      <Text style={styles.noveltyText}>{text}</Text>
+    </Animated.View>
+  );
 }
 
 // --- Post-Read Interest Card (Hierarchical) ---
@@ -1003,6 +1039,7 @@ export default function ReaderScreen() {
   const contentHeight = useRef(0);
   const viewportHeight = useRef(0);
   const maxScrollY = useRef(0);
+  const completionFlash = useRef(new Animated.Value(0)).current;
 
   // Link ingestion state
   const [ingestStates, setIngestStates] = useState<Record<string, IngestState>>({});
@@ -1251,14 +1288,21 @@ export default function ReaderScreen() {
     recordInterestSignal('tap_done', article.id);
     logEvent('reader_done', { article_id: article.id });
 
-    // Show interest card if article has interest_topics
-    const topics = article.interest_topics || [];
-    if (topics.length > 0) {
-      setShowInterestCard(true);
-      logEvent('interest_card_shown', { article_id: article.id, topic_count: topics.length });
-    } else {
-      router.back();
-    }
+    // Play completion flash, then proceed
+    completionFlash.setValue(0);
+    Animated.timing(completionFlash, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start(() => {
+      const topics = article.interest_topics || [];
+      if (topics.length > 0) {
+        setShowInterestCard(true);
+        logEvent('interest_card_shown', { article_id: article.id, topic_count: topics.length });
+      } else {
+        router.back();
+      }
+    });
   }, [article, router]);
 
   // Up next handler — navigate to next queued article
@@ -1430,9 +1474,24 @@ export default function ReaderScreen() {
         </View>
       )}
 
-      {/* Progress bar */}
+      {/* Progress bar with completion flash */}
       <View style={styles.progressBarTrack}>
         <View style={[styles.progressBarFill, { width: `${scrollProgress}%` as any }]} />
+        <Animated.View style={[
+          styles.completionFlash,
+          {
+            opacity: completionFlash.interpolate({
+              inputRange: [0, 0.15, 0.85, 1],
+              outputRange: [0, 0.9, 0.9, 0],
+            }),
+            transform: [{
+              translateX: completionFlash.interpolate({
+                inputRange: [0, 1],
+                outputRange: [-400, 400],
+              }),
+            }],
+          },
+        ]} />
       </View>
 
       {/* Main scrollable content */}
@@ -1471,10 +1530,7 @@ export default function ReaderScreen() {
                 </View>
               )}
               {displayClaims.map((c: ClaimClassification, i: number) => (
-                <View key={i} style={styles.noveltyItem}>
-                  <View style={styles.noveltyDot} />
-                  <Text style={styles.noveltyText}>{c.text}</Text>
-                </View>
+                <AnimatedClaimItem key={i} text={c.text} index={i} />
               ))}
             </View>
           );
@@ -1482,10 +1538,7 @@ export default function ReaderScreen() {
           <View style={styles.noveltyCard}>
             <Text style={styles.noveltyTitle}>{'✦ What\u2019s new'}</Text>
             {article.novelty_claims.slice(0, 3).map((nc, i) => (
-              <View key={i} style={styles.noveltyItem}>
-                <View style={styles.noveltyDot} />
-                <Text style={styles.noveltyText}>{nc.claim}</Text>
-              </View>
+              <AnimatedClaimItem key={i} text={nc.claim} index={i} />
             ))}
           </View>
         ) : null}
@@ -1725,10 +1778,19 @@ const styles = StyleSheet.create({
   progressBarTrack: {
     height: 2,
     backgroundColor: colors.rule,
+    overflow: 'hidden' as const,
   },
   progressBarFill: {
     height: 2,
     backgroundColor: colors.rubric,
+  },
+  completionFlash: {
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
+    width: 120,
+    height: 2,
+    backgroundColor: '#c9a84c',
   },
 
   // Scroll

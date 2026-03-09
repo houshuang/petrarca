@@ -3,7 +3,7 @@ import type { ClaimClassification, ParagraphDimming, ArticleNovelty, DeltaReport
 import { logEvent } from './logger';
 import { loadSignals, saveSignals, loadReadingStates, saveReadingStates, loadHighlights, saveHighlights } from './persistence';
 import { checkForUpdates, downloadContent, loadCachedContent } from './content-sync';
-import { loadInterestProfile, scoreArticle, recordSignal, recordTopicSignal as _recordTopicSignal, getTotalSignalCount } from './interest-model';
+import { loadInterestProfile, scoreArticle, recordSignal, recordTopicSignal as _recordTopicSignal, recordTopicSignalAtLevel as _recordTopicSignalAtLevel, getTotalSignalCount } from './interest-model';
 import type { SignalAction } from './interest-model';
 import {
   initKnowledgeEngine,
@@ -12,7 +12,10 @@ import {
   computeParagraphDimming as _computeParagraphDimming,
   markArticleEncountered as _markArticleEncountered,
   getDeltaReports as _getDeltaReports,
+  getCrossArticleConnections as _getCrossArticleConnections,
+  getParagraphConnections as _getParagraphConnections,
 } from './knowledge-engine';
+import type { CrossArticleConnection } from './knowledge-engine';
 import { loadQueue } from './queue';
 import { loadBookmarks } from './bookmarks';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -133,6 +136,31 @@ export async function initStore(): Promise<void> {
 
 export function isInitialized(): boolean {
   return initialized;
+}
+
+export async function refreshContent(): Promise<boolean> {
+  try {
+    const hasUpdates = await checkForUpdates();
+    if (hasUpdates) {
+      const fresh = await downloadContent();
+      if (fresh) {
+        articles = fresh.articles;
+        articles.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        if (fresh.knowledgeIndex) {
+          await initKnowledgeEngine(fresh.knowledgeIndex);
+        }
+        logEvent('content_pull_refresh', {
+          article_count: fresh.articles.length,
+          knowledge_index_updated: !!fresh.knowledgeIndex,
+        });
+        return true;
+      }
+    }
+    return false;
+  } catch (e) {
+    logEvent('content_pull_refresh_error', { error: String(e) });
+    return false;
+  }
 }
 
 // --- Article access ---
@@ -292,6 +320,15 @@ export function recordTopicInterestSignal(action: SignalAction, topic: import('.
   _recordTopicSignal(action, topic);
 }
 
+export function recordTopicInterestSignalAtLevel(
+  action: SignalAction,
+  topicKey: string,
+  level: 'broad' | 'specific' | 'entity',
+  parent?: string,
+) {
+  _recordTopicSignalAtLevel(action, topicKey, level, parent);
+}
+
 // --- Knowledge engine ---
 
 export function getArticleNovelty(articleId: string): ArticleNovelty {
@@ -312,6 +349,14 @@ export function markArticleEncountered(articleId: string, engagement: 'skim' | '
 
 export function getDeltaReports(): Record<string, DeltaReport> {
   return _getDeltaReports();
+}
+
+export function getCrossArticleConnections(articleId: string): CrossArticleConnection[] {
+  return _getCrossArticleConnections(articleId);
+}
+
+export function getParagraphConnections(articleId: string): Map<number, Array<{ articleId: string; claimText: string }>> {
+  return _getParagraphConnections(articleId);
 }
 
 // --- Stats (simplified) ---

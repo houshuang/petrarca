@@ -1,13 +1,13 @@
-import { useState, useRef, useCallback, useMemo } from 'react';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, Pressable, Animated,
-  Platform, ViewStyle, ScrollView, Linking,
+  Platform, ViewStyle, ScrollView, Linking, RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import {
   getRankedFeedArticles, getReadingState, dismissArticle,
-  getReadArticles, getArticles, recordInterestSignal,
+  getReadArticles, getArticles, recordInterestSignal, refreshContent,
 } from '../../data/store';
 import { Article } from '../../data/types';
 import { logEvent } from '../../data/logger';
@@ -202,6 +202,34 @@ export default function FeedScreen() {
   const router = useRouter();
   const [, forceUpdate] = useState(0);
   const [activeTopic, setActiveTopic] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const spinAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (refreshing) {
+      spinAnim.setValue(0);
+      Animated.loop(
+        Animated.timing(spinAnim, {
+          toValue: 1,
+          duration: 1200,
+          useNativeDriver: true,
+        }),
+      ).start();
+    } else {
+      spinAnim.stopAnimation();
+    }
+  }, [refreshing]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    logEvent('feed_pull_refresh');
+    try {
+      await refreshContent();
+    } finally {
+      setRefreshing(false);
+      forceUpdate(n => n + 1);
+    }
+  }, []);
 
   const feedArticles = useMemo(() => {
     const base = getRankedFeedArticles();
@@ -356,6 +384,32 @@ export default function FeedScreen() {
       <FlatList
         data={allItems}
         keyExtractor={(item, index) => item.article?.id || `section-${item.type}-${index}`}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor="transparent"
+            colors={['transparent']}
+            style={{ backgroundColor: 'transparent' }}
+          />
+        }
+        ListHeaderComponent={refreshing ? (
+          <View style={styles.refreshOrnament}>
+            <Animated.Text style={[
+              styles.refreshStar,
+              {
+                transform: [{
+                  rotate: spinAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ['0deg', '360deg'],
+                  }),
+                }],
+              },
+            ]}>
+              {'\u2726'}
+            </Animated.Text>
+          </View>
+        ) : null}
         onViewableItemsChanged={useCallback(({ viewableItems }: any) => {
           const articleIds = viewableItems
             .filter((v: any) => v.item?.article?.id)
@@ -493,6 +547,17 @@ const styles = StyleSheet.create({
   },
   filterChipTextActive: {
     color: colors.parchment,
+  },
+
+  // Pull-to-refresh ornament
+  refreshOrnament: {
+    alignItems: 'center' as const,
+    paddingVertical: 12,
+  },
+  refreshStar: {
+    fontFamily: fonts.display,
+    fontSize: 22,
+    color: colors.rubric,
   },
 
   // Continue reading section
