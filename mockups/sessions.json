@@ -1,0 +1,209 @@
+[
+  {
+    "id": 1,
+    "created": "2026-03-07T20:34:06.480Z",
+    "mockups": [
+      "mockup-1",
+      "mockup-2",
+      "mockup-3",
+      "mockup-4",
+      "mockup-5",
+      "mockup-6",
+      "mockup-7",
+      "mockup-8",
+      "mockup-9",
+      "mockup-10"
+    ]
+  },
+  {
+    "id": 2,
+    "created": "2026-03-07T20:47:47.435Z",
+    "mockups": [
+      "mockup-11",
+      "mockup-12",
+      "mockup-13",
+      "mockup-14",
+      "mockup-15"
+    ]
+  },
+  {
+    "id": 3,
+    "created": "2026-03-07T22:04:28.513Z",
+    "mockups": [
+      "delta-report",
+      "knowledge-diff-reader",
+      "delta-report-v1-linear",
+      "delta-report-v2-newspaper",
+      "delta-report-v3-cards",
+      "delta-report-v4-timeline",
+      "delta-report-v5-conversation"
+    ]
+  },
+  {
+    "id": 4,
+    "created": "2026-03-07T22:55:59.003Z",
+    "mockups": [
+      "reader-v1-margins",
+      "reader-v2-dimming",
+      "reader-v3-split",
+      "reader-v4-progressive",
+      "reader-v5-minimap"
+    ]
+  },
+  {
+    "id": 5,
+    "created": "2026-03-07T23:12:07.967Z",
+    "mockups": [
+      "feed-v1-editorial",
+      "feed-v2-knowledge",
+      "feed-v3-clusters",
+      "feed-v4-triage",
+      "feed-v5-magazine",
+      "feed-v6-briefing",
+      "reader-new-v1-manuscript",
+      "reader-new-v2-progressive",
+      "reader-new-v3-claimfirst",
+      "reader-new-v4-dimming",
+      "reader-new-v5-hybrid",
+      "topic-v1-delta",
+      "topic-v2-dialectic",
+      "topic-v3-matrix",
+      "topic-v4-knowledge-map",
+      "topic-v5-timeline"
+    ]
+  },
+  {
+    "id": 6,
+    "created": "2026-03-07T23:20:08.350Z",
+    "mockups": [
+      "mockup-1",
+      "reader-v1-margins",
+      "mockup-2",
+      "reader-v2-dimming",
+      "mockup-3",
+      "mockup-4",
+      "reader-v3-split",
+      "mockup-5",
+      "mockup-6",
+      "reader-v4-progressive",
+      "mockup-7",
+      "mockup-8",
+      "reader-v5-minimap",
+      "mockup-9",
+      "mockup-10",
+      "delta-report-v1-linear",
+      "delta-report-v2-newspaper",
+      "delta-report-v3-cards",
+      "delta-report-v4-timeline",
+      "delta-report-v5-conversation",
+      "feed-v1-editorial",
+      "feed-v2-knowledge",
+      "feed-v3-clusters",
+      "feed-v4-triage",
+      "feed-v5-magazine",
+      "feed-v6-briefing",
+      "reader-new-v1-manuscript",
+      "reader-new-v2-progressive",
+      "reader-new-v3-claimfirst",
+      "reader-new-v4-dimming",
+      "reader-new-v5-hybrid",
+      "topic-v1-delta",
+      "topic-v2-dialectic",
+      "topic-v3-matrix",
+      "topic-v4-knowledge-map",
+      "topic-v5-timeline"
+    ]
+  },
+  {
+    "id": 7,
+    "created": "2026-03-08T09:19:43.558Z",
+    "mockups": [
+      "mockup-1",
+      "reader-v1-margins",
+      "mockup-2",
+      "reader-v2-dimming",
+      "mockup-3",
+      "mockup-4",
+      "reader-v3-split",
+      "mockup-5",
+      "mockup-6",
+      "reader-v4-progressive",
+      "mockup-7",
+      "mockup-8",
+      "reader-v5-minimap",
+      "mockup-9",
+      "mockup-10",
+      "delta-report-v1-linear",
+      "delta-report-v2-newspaper",
+      "delta-report-v3-cards",
+      "delta-report-v4-timeline",
+      "delta-report-v5-conversation",
+      "feed-v1-editorial",
+      "feed-v2-knowledge",
+      "feed-v3-clusters",
+      "feed-v4-triage",
+      "feed-v5-magazine",
+      "feed-v6-briefing",
+      "reader-new-v1-manuscript",
+      "reader-new-v2-progressive",
+      "reader-new-v3-claimfirst",
+      "reader-new-v4-dimming",
+      "reader-new-v5-hybrid",
+      "topic-v1-delta",
+      "topic-v2-dialectic",
+      "topic-v3-matrix",
+      "topic-v4-knowledge-map",
+      "topic-v5-timeline"
+    ]
+  },
+  {
+    "id": 8,
+    "created": "2026-03-08T17:47:36.731Z",
+    "mockups": [
+      "feed-iter-clustered-editorial",
+      "feed-iter-magazine-knowledge",
+      "reader-iter-manuscript-light",
+      "reader-iter-stretchtext",
+      "topic-iter-delta-dialectic",
+      "topic-iter-matrix-timeline"
+    ]
+  },
+  {
+    "id": 9,
+    "created": "2026-03-08T17:50:39.128Z",
+    "mockups": [
+      "entity-deepdive"
+    ]
+  },
+  {
+    "id": 10,
+    "created": "2026-03-08T17:51:05.057Z",
+    "mockups": [
+      "research-prompts"
+    ]
+  },
+  {
+    "id": 11,
+    "created": "2026-03-08T17:51:45.607Z",
+    "mockups": [
+      "voice-note-browser"
+    ]
+  },
+  {
+    "id": 12,
+    "created": "2026-03-08T17:52:19.853Z",
+    "mockups": [
+      "voice-note-actions"
+    ]
+  },
+  {
+    "id": 13,
+    "created": "2026-03-09T05:58:15.121Z",
+    "mockups": [
+      "mockup-margin-glyphs",
+      "mockup-inline-callouts",
+      "mockup-hybrid-overview-markers",
+      "mockup-progressive-reveal"
+    ]
+  }
+]

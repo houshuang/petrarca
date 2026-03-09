@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <!-- Petrarca Monogram: P with Renaissance long-s (ſ) ligature -->
+  <!-- Inspired by Aldine Press printer's marks -->
+  <defs>
+    <style>
+      .mark { fill: #8b2500; }
+    </style>
+  </defs>
+  <!-- P letterform with integrated ſ stroke -->
+  <text x="22" y="96" font-family="'Cormorant Garamond', 'Georgia', serif" font-weight="600" font-size="96" class="mark" letter-spacing="-0.06em">P</text>
+  <!-- Subtle long-s descender integrated as a decorative tail -->
+  <path d="M 72 38 C 82 36, 90 42, 90 52 C 90 62, 82 68, 72 66" stroke="#8b2500" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+  <path d="M 72 66 C 66 64, 62 68, 62 76 C 62 84, 66 90, 58 96" stroke="#8b2500" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.7"/>
+</svg>

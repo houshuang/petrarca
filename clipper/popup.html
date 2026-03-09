@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=360">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Crimson+Pro:ital,wght@0,400;0,500;1,400&family=DM+Sans:wght@400;500&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="popup.css">
+  <title>Petrarca Clipper</title>
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header id="header">
+      <div class="wordmark">PETRARCA</div>
+      <div class="double-rule">
+        <div class="rule-thick"></div>
+        <div class="rule-thin"></div>
+      </div>
+    </header>
+
+    <!-- Main clip view -->
+    <div id="clip-view">
+      <div class="section-label">&#x2726; ARTICLE</div>
+
+      <div id="page-info">
+        <div id="page-title">Loading...</div>
+        <div id="page-url" class="truncate"></div>
+      </div>
+
+      <div id="selection-box" class="hidden">
+        <div class="section-label">&#x2726; SELECTED TEXT</div>
+        <div id="selected-text"></div>
+      </div>
+
+      <div id="topic-tags" class="hidden">
+        <span class="tag-label">Topics:</span>
+        <span id="tags-list"></span>
+      </div>
+
+      <div id="note-field" class="hidden">
+        <textarea id="comment" rows="2" placeholder="Add a note..."></textarea>
+      </div>
+
+      <div id="action-row">
+        <button id="save-btn">
+          <span id="btn-label">Save to Petrarca</span>
+          <span id="btn-check" class="hidden">Saved &#x2713;</span>
+        </button>
+        <button id="note-toggle" class="icon-btn" title="Add note">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <path d="M2 11.5V14h2.5L12.1 6.4 9.6 3.9 2 11.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" fill="none"/>
+            <path d="M9.6 3.9l2.5 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <button id="settings-toggle" class="icon-btn" title="Settings">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <path d="M6.5 1L6.2 2.6C5.7 2.8 5.3 3 4.9 3.3L3.4 2.7L1.9 5.3L3.1 6.3C3 6.5 3 6.8 3 7C3 7.2 3 7.5 3.1 7.7L1.9 8.7L3.4 11.3L4.9 10.7C5.3 11 5.7 11.2 6.2 11.4L6.5 13H9.5L9.8 11.4C10.3 11.2 10.7 11 11.1 10.7L12.6 11.3L14.1 8.7L12.9 7.7C13 7.5 13 7.2 13 7C13 6.8 13 6.5 12.9 6.3L14.1 5.3L12.6 2.7L11.1 3.3C10.7 3 10.3 2.8 9.8 2.6L9.5 1H6.5Z" stroke="currentColor" stroke-width="1.2" fill="none"/>
+            <circle cx="8" cy="7" r="2" stroke="currentColor" stroke-width="1.2" fill="none"/>
+          </svg>
+        </button>
+      </div>
+
+      <div id="status" class="hidden"></div>
+    </div>
+
+    <!-- Settings view -->
+    <div id="settings-view" class="hidden">
+      <div id="settings-header">
+        <div class="section-label">&#x2726; SETTINGS</div>
+        <button id="settings-back" class="icon-btn" title="Back">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <path d="M12 8H4M4 8L8 4M4 8L8 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="field">
+        <label for="server-url">Server URL</label>
+        <input type="url" id="server-url" placeholder="http://alifstian.duckdns.org:8083">
+      </div>
+      <div class="field">
+        <label for="auth-token">Auth token</label>
+        <input type="password" id="auth-token" placeholder="Shared secret">
+      </div>
+      <button id="save-settings-btn" class="btn-secondary">Save settings</button>
+      <div id="settings-status" class="hidden"></div>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

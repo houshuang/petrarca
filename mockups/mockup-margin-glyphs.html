@@ -1,0 +1,277 @@
+<section class="mockup-section" data-mockup-id="mockup-margin-glyphs" data-label="Margin Glyphs">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        parchment: '#f7f4ec',
+        parchmentDark: '#f0ece2',
+        ink: '#2a2420',
+        rubric: '#8b2500',
+        textPrimary: '#1a1a18',
+        textBody: '#333333',
+        textSecondary: '#6a6458',
+        textMuted: '#b0a898',
+        rule: '#e4dfd4',
+        claimNew: '#2a7a4a',
+        claimKnown: '#d0ccc0',
+        claimExtends: '#92600e',
+      }
+    }
+  }
+}
+</script>
+<style>
+  .phone-frame {
+    width: 375px;
+    margin: 40px auto;
+    background: #f7f4ec;
+    border-radius: 40px;
+    border: 8px solid #2a2420;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+    position: relative;
+  }
+  .phone-notch {
+    width: 120px; height: 28px; background: #2a2420;
+    border-radius: 0 0 16px 16px; margin: 0 auto;
+  }
+  .phone-content {
+    height: 780px;
+    overflow-y: auto;
+    padding: 0 16px 24px 16px;
+    scrollbar-width: none;
+  }
+  .phone-content::-webkit-scrollbar { display: none; }
+
+  .double-rule {
+    border-top: 2px solid #2a2420;
+    padding-top: 5px;
+    border-bottom: 1px solid #2a2420;
+    margin-bottom: 16px;
+  }
+
+  body { font-family: 'Crimson Pro', Georgia, serif; color: #333; }
+
+  .para-with-claims {
+    position: relative;
+    padding-right: 28px;
+  }
+
+  .claim-rail {
+    position: absolute;
+    right: 6px;
+    top: 4px;
+    bottom: 4px;
+    width: 2px;
+    background: #e4dfd4;
+    border-radius: 1px;
+  }
+
+  .claim-dot {
+    position: absolute;
+    right: 0;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .claim-dot:hover { transform: scale(1.3); }
+  .claim-dot.new { background: #2a7a4a; }
+  .claim-dot.known { background: #d0ccc0; }
+  .claim-dot.extends { background: #92600e; }
+  .claim-dot.reviewed {
+    background: transparent;
+    border: 2px solid #2a7a4a;
+  }
+  .claim-dot.reviewed::after {
+    content: '✓';
+    font-size: 8px;
+    color: #2a7a4a;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 700;
+  }
+
+  .claim-popup {
+    position: absolute;
+    right: 28px;
+    width: 260px;
+    background: #f7f4ec;
+    border: 1px solid #e4dfd4;
+    border-left: 3px solid #2a7a4a;
+    padding: 12px 14px;
+    box-shadow: 0 4px 16px rgba(42, 36, 32, 0.12);
+    z-index: 10;
+    animation: popup-in 0.2s ease-out;
+  }
+  @keyframes popup-in {
+    from { opacity: 0; transform: translateX(8px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .claim-popup-text {
+    font-family: 'Crimson Pro', serif;
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: #333;
+    margin-bottom: 10px;
+  }
+  .claim-popup-type {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #2a7a4a;
+    margin-bottom: 4px;
+    font-weight: 500;
+  }
+  .claim-popup-actions {
+    display: flex;
+    gap: 0;
+    border-top: 1px solid #e4dfd4;
+    padding-top: 8px;
+  }
+  .claim-popup-action {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    color: #6a6458;
+    padding: 6px 10px;
+    cursor: pointer;
+    border-radius: 3px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    transition: background 0.15s;
+  }
+  .claim-popup-action:hover {
+    background: rgba(139, 37, 0, 0.04);
+    color: #8b2500;
+  }
+
+  .dimmed { opacity: 0.55; }
+</style>
+
+<div class="phone-frame">
+  <div class="phone-notch"></div>
+  <div class="phone-content">
+
+    <!-- Back nav -->
+    <div style="display: flex; align-items: center; gap: 8px; padding: 12px 0 8px;">
+      <span style="font-family: 'DM Sans', sans-serif; font-size: 13px; color: #8b2500; cursor: pointer;">← Back</span>
+    </div>
+
+    <!-- Article Header -->
+    <h1 style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 24px; font-weight: 600; color: #2a2420; line-height: 1.2; margin: 0 0 8px;">
+      The Medici Bank and the Rise of Modern Finance
+    </h1>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
+      <span style="font-family: 'DM Sans', sans-serif; font-size: 11px; color: #b0a898;">Raymond de Roover</span>
+      <span style="font-family: 'DM Sans', sans-serif; font-size: 11px; color: #b0a898;">jstor.org</span>
+      <span style="font-family: 'DM Sans', sans-serif; font-size: 11px; color: #b0a898;">Jan 2026</span>
+      <span style="font-family: 'DM Sans', sans-serif; font-size: 11px; color: #b0a898;">12 min</span>
+    </div>
+
+    <!-- Compact novelty summary -->
+    <div style="background: #f0ece2; border-left: 3px solid #8b2500; padding: 10px 14px; margin-bottom: 16px;">
+      <span style="font-family: 'EB Garamond', serif; font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: #8b2500; font-weight: 500;">✦ WHAT'S NEW FOR YOU</span>
+      <div style="font-family: 'DM Sans', sans-serif; font-size: 11px; color: #6a6458; margin-top: 4px; letter-spacing: 0.3px;">
+        5 new · 1 extends · 2 familiar
+      </div>
+    </div>
+
+    <!-- Double Rule -->
+    <div class="double-rule"></div>
+
+    <!-- Paragraph 1 — has 2 NEW claims -->
+    <div class="para-with-claims" style="margin-bottom: 16px;">
+      <p style="font-size: 16px; line-height: 1.7; margin: 0;">
+        The Medici Bank, founded in 1397 by Giovanni di Bicci de' Medici, was far more than a Florentine financial institution. It was a multinational enterprise that pioneered techniques still fundamental to modern banking. At its peak under Cosimo de' Medici, the bank operated branches in Rome, Venice, Naples, Milan, Bruges, London, and Avignon — making it the largest banking network in 15th-century Europe.
+      </p>
+      <div class="claim-rail"></div>
+      <div class="claim-dot new" style="top: 20px;" title="NEW: Founded 1397"></div>
+      <div class="claim-dot new" style="top: 60px;" title="NEW: Largest network">
+        <!-- This one has the popup open -->
+      </div>
+
+      <!-- Popup for second dot -->
+      <div class="claim-popup" style="top: 44px;">
+        <div class="claim-popup-type">New to you</div>
+        <div class="claim-popup-text">
+          The Medici Bank operated branches across seven major European cities simultaneously, making it the largest banking network of the 15th century.
+        </div>
+        <div class="claim-popup-actions">
+          <div class="claim-popup-action">✓ I knew this</div>
+          <div class="claim-popup-action" style="color: #8b2500;">★ Save</div>
+          <div class="claim-popup-action">→ Tell me more</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Paragraph 2 — KNOWN, dimmed -->
+    <div class="para-with-claims dimmed" style="margin-bottom: 16px;">
+      <p style="font-size: 16px; line-height: 1.7; margin: 0;">
+        The bank's success rested on its use of the bill of exchange — a written order to pay a specified amount at a future date in a different location. While not invented by the Medici, they refined this instrument into a sophisticated tool for international trade, allowing merchants to transfer funds across borders without physically moving gold or silver.
+      </p>
+      <div class="claim-rail"></div>
+      <div class="claim-dot known" style="top: 24px;"></div>
+      <div class="claim-dot reviewed" style="top: 64px;"></div>
+    </div>
+
+    <!-- Paragraph 3 — has 1 NEW, 1 EXTENDS -->
+    <div class="para-with-claims" style="margin-bottom: 16px;">
+      <p style="font-size: 16px; line-height: 1.7; margin: 0;">
+        Perhaps the most revolutionary innovation was the banco di deposito system. Unlike earlier moneylenders who simply charged interest (prohibited by Church law as usury), the Medici developed complex partnership structures. Each branch was a legally separate entity with its own capital and profit-sharing arrangements — anticipating the modern concept of a holding company by nearly four centuries.
+      </p>
+      <div class="claim-rail"></div>
+      <div class="claim-dot new" style="top: 16px;"></div>
+      <div class="claim-dot extends" style="top: 72px;"></div>
+    </div>
+
+    <!-- Paragraph 4 — no claims, normal -->
+    <div style="margin-bottom: 16px;">
+      <p style="font-size: 16px; line-height: 1.7; margin: 0;">
+        The relationship between banking and political power in Renaissance Florence was deeply intertwined. The Medici used their financial resources to cultivate patronage networks, fund artistic commissions, and ultimately control the Florentine republic through a complex web of debts, favors, and strategic alliances.
+      </p>
+    </div>
+
+    <!-- Paragraph 5 — has 1 NEW claim -->
+    <div class="para-with-claims" style="margin-bottom: 16px;">
+      <p style="font-size: 16px; line-height: 1.7; margin: 0;">
+        The bank's decline began under Lorenzo the Magnificent, who was more interested in politics and art than in careful financial management. Critical errors in lending — particularly unsecured loans to European monarchs — exposed the bank to catastrophic defaults. By 1494, two years after Lorenzo's death, the bank had collapsed entirely.
+      </p>
+      <div class="claim-rail"></div>
+      <div class="claim-dot new" style="top: 50px;"></div>
+    </div>
+
+    <!-- Paragraph 6 — KNOWN, dimmed -->
+    <div class="para-with-claims dimmed" style="margin-bottom: 16px;">
+      <p style="font-size: 16px; line-height: 1.7; margin: 0;">
+        The techniques pioneered by the Medici — double-entry bookkeeping, branch banking, letters of credit, and holding company structures — survived the bank itself and became the foundation of modern finance. When the first joint-stock companies emerged in the 17th century, they built directly on innovations first tested in 15th-century Florence.
+      </p>
+      <div class="claim-rail"></div>
+      <div class="claim-dot known" style="top: 30px;"></div>
+    </div>
+
+    <div style="height: 40px;"></div>
+  </div>
+</div>
+
+<!-- Approach label -->
+<div style="text-align: center; margin: 24px auto 40px; max-width: 375px;">
+  <div style="font-family: 'EB Garamond', serif; font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: #8b2500; margin-bottom: 8px;">✦ APPROACH</div>
+  <div style="font-family: 'Cormorant Garamond', serif; font-size: 20px; color: #2a2420; font-weight: 600; margin-bottom: 8px;">Margin Glyphs</div>
+  <div style="font-family: 'Crimson Pro', serif; font-size: 14px; color: #6a6458; line-height: 1.6; max-width: 340px; margin: 0 auto;">
+    Colored dots on a subtle rail in the right margin. Tap a dot to see the claim text and take action. Minimal flow interruption — like marginalia in a scholar's notebook.
+  </div>
+  <div style="margin-top: 16px; display: flex; gap: 16px; justify-content: center; font-family: 'DM Sans', sans-serif; font-size: 11px; color: #b0a898;">
+    <span><span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #2a7a4a; vertical-align: middle;"></span> New</span>
+    <span><span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #92600e; vertical-align: middle;"></span> Extends</span>
+    <span><span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #d0ccc0; vertical-align: middle;"></span> Known</span>
+    <span><span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: transparent; border: 2px solid #2a7a4a; vertical-align: middle;"></span> Reviewed</span>
+  </div>
+</div>
+</section>

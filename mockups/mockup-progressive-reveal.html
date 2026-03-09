@@ -1,0 +1,310 @@
+<section class="mockup-section" data-mockup-id="mockup-progressive-reveal" data-label="Progressive Reveal">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        parchment: '#f7f4ec',
+        parchmentDark: '#f0ece2',
+        ink: '#2a2420',
+        rubric: '#8b2500',
+        textBody: '#333333',
+        textSecondary: '#6a6458',
+        textMuted: '#b0a898',
+        rule: '#e4dfd4',
+        claimNew: '#2a7a4a',
+        claimKnown: '#d0ccc0',
+        claimExtends: '#92600e',
+      }
+    }
+  }
+}
+</script>
+<style>
+  .phone-frame {
+    width: 375px;
+    margin: 40px auto;
+    background: #f7f4ec;
+    border-radius: 40px;
+    border: 8px solid #2a2420;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+    position: relative;
+  }
+  .phone-notch {
+    width: 120px; height: 28px; background: #2a2420;
+    border-radius: 0 0 16px 16px; margin: 0 auto;
+  }
+  .phone-content {
+    height: 780px;
+    overflow-y: auto;
+    padding: 0 16px 24px 16px;
+    scrollbar-width: none;
+    position: relative;
+  }
+  .phone-content::-webkit-scrollbar { display: none; }
+
+  .double-rule {
+    border-top: 2px solid #2a2420;
+    padding-top: 5px;
+    border-bottom: 1px solid #2a2420;
+    margin-bottom: 16px;
+  }
+
+  body { font-family: 'Crimson Pro', Georgia, serif; color: #333; }
+
+  .dimmed { opacity: 0.55; }
+
+  .claim-trigger {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    color: #b0a898;
+    padding: 4px 0 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 44px;
+    transition: color 0.15s;
+  }
+  .claim-trigger:hover { color: #8b2500; }
+  .claim-trigger .count-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .claim-trigger .dot {
+    width: 5px; height: 5px; border-radius: 50%;
+  }
+
+  /* Expanded claims */
+  .expanded-claims {
+    padding: 0 0 12px;
+    animation: claims-expand 0.3s ease-out;
+  }
+  @keyframes claims-expand {
+    from { opacity: 0; max-height: 0; }
+    to { opacity: 1; max-height: 500px; }
+  }
+
+  .expanded-claim {
+    border-left: 2px solid #e4dfd4;
+    padding: 6px 0 6px 12px;
+    margin-bottom: 6px;
+    animation: claim-slide 0.25s ease-out;
+    animation-fill-mode: both;
+  }
+  .expanded-claim:nth-child(1) { animation-delay: 0ms; }
+  .expanded-claim:nth-child(2) { animation-delay: 80ms; }
+  .expanded-claim:nth-child(3) { animation-delay: 160ms; }
+
+  .expanded-claim.new { border-left-color: #2a7a4a; }
+  .expanded-claim.known { border-left-color: #d0ccc0; }
+  .expanded-claim.extends { border-left-color: #92600e; }
+
+  @keyframes claim-slide {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .exp-claim-type {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-weight: 500;
+    margin-bottom: 2px;
+  }
+  .exp-claim-text {
+    font-family: 'Crimson Pro', serif;
+    font-size: 13.5px;
+    line-height: 1.45;
+    color: #333;
+    margin-bottom: 4px;
+  }
+  .exp-claim-actions {
+    display: flex;
+    gap: 2px;
+  }
+  .exp-claim-action {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    color: #6a6458;
+    padding: 6px 8px;
+    cursor: pointer;
+    border-radius: 3px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    transition: all 0.15s;
+  }
+  .exp-claim-action:hover {
+    background: rgba(139, 37, 0, 0.04);
+    color: #8b2500;
+  }
+
+  /* Floating summary pill */
+  .summary-pill {
+    position: sticky;
+    bottom: 12px;
+    margin: 0 auto;
+    width: fit-content;
+    background: #2a2420;
+    color: #f7f4ec;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 12px rgba(42, 36, 32, 0.2);
+    z-index: 5;
+    cursor: pointer;
+  }
+  .pill-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+  }
+
+  /* Collapse trigger when claims are open */
+  .claim-collapse {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    color: #b0a898;
+    padding: 2px 0 8px;
+    cursor: pointer;
+    text-align: center;
+  }
+</style>
+
+<div class="phone-frame">
+  <div class="phone-notch"></div>
+  <div class="phone-content">
+
+    <!-- Back nav -->
+    <div style="display: flex; align-items: center; gap: 8px; padding: 12px 0 8px;">
+      <span style="font-family: 'DM Sans', sans-serif; font-size: 13px; color: #8b2500; cursor: pointer;">← Back</span>
+    </div>
+
+    <!-- Article Header -->
+    <h1 style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 24px; font-weight: 600; color: #2a2420; line-height: 1.2; margin: 0 0 8px;">
+      The Medici Bank and the Rise of Modern Finance
+    </h1>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
+      <span style="font-family: 'DM Sans', sans-serif; font-size: 11px; color: #b0a898;">Raymond de Roover</span>
+      <span style="font-family: 'DM Sans', sans-serif; font-size: 11px; color: #b0a898;">jstor.org</span>
+      <span style="font-family: 'DM Sans', sans-serif; font-size: 11px; color: #b0a898;">Jan 2026</span>
+      <span style="font-family: 'DM Sans', sans-serif; font-size: 11px; color: #b0a898;">12 min</span>
+    </div>
+
+    <!-- Double Rule -->
+    <div class="double-rule"></div>
+
+    <!-- Paragraph 1 — has 2 NEW claims, collapsed trigger shown -->
+    <p style="font-size: 16px; line-height: 1.7; margin: 0;">
+      The Medici Bank, founded in 1397 by Giovanni di Bicci de' Medici, was far more than a Florentine financial institution. It was a multinational enterprise that pioneered techniques still fundamental to modern banking. At its peak under Cosimo de' Medici, the bank operated branches in Rome, Venice, Naples, Milan, Bruges, London, and Avignon — making it the largest banking network in 15th-century Europe.
+    </p>
+    <div class="claim-trigger">
+      <span class="count-badge">
+        <span class="dot" style="background: #2a7a4a;"></span>
+        <span class="dot" style="background: #2a7a4a;"></span>
+      </span>
+      2 claims
+    </div>
+
+    <!-- Paragraph 2 — KNOWN, dimmed -->
+    <div class="dimmed">
+      <p style="font-size: 16px; line-height: 1.7; margin: 0;">
+        The bank's success rested on its use of the bill of exchange — a written order to pay a specified amount at a future date in a different location. While not invented by the Medici, they refined this instrument into a sophisticated tool for international trade, allowing merchants to transfer funds across borders without physically moving gold or silver.
+      </p>
+      <div class="claim-trigger" style="opacity: 0.7;">
+        <span class="count-badge">
+          <span class="dot" style="background: #d0ccc0;"></span>
+        </span>
+        1 claim · familiar
+      </div>
+    </div>
+
+    <!-- Paragraph 3 — has claims, THIS ONE IS EXPANDED -->
+    <p style="font-size: 16px; line-height: 1.7; margin: 0;">
+      Perhaps the most revolutionary innovation was the banco di deposito system. Unlike earlier moneylenders who simply charged interest (prohibited by Church law as usury), the Medici developed complex partnership structures. Each branch was a legally separate entity with its own capital and profit-sharing arrangements — anticipating the modern concept of a holding company by nearly four centuries.
+    </p>
+
+    <!-- Expanded claims for paragraph 3 -->
+    <div class="expanded-claims">
+      <div class="expanded-claim new">
+        <div class="exp-claim-type" style="color: #2a7a4a;">NEW TO YOU</div>
+        <div class="exp-claim-text">Each Medici Bank branch was a legally separate entity with independent capital — a structure that anticipated modern holding companies by 400 years.</div>
+        <div class="exp-claim-actions">
+          <div class="exp-claim-action">✓ I knew this</div>
+          <div class="exp-claim-action" style="color: #8b2500;">★ Save</div>
+          <div class="exp-claim-action">→ Tell me more</div>
+        </div>
+      </div>
+
+      <div class="expanded-claim extends">
+        <div class="exp-claim-type" style="color: #92600e;">EXTENDS WHAT YOU KNOW</div>
+        <div class="exp-claim-text">The Medici used partnership structures specifically to circumvent the Church's prohibition on usury.</div>
+        <div class="exp-claim-actions">
+          <div class="exp-claim-action">✓ I knew this</div>
+          <div class="exp-claim-action" style="color: #8b2500;">★ Save</div>
+          <div class="exp-claim-action">→ Tell me more</div>
+        </div>
+      </div>
+
+      <div class="claim-collapse">▲ Collapse</div>
+    </div>
+
+    <!-- Paragraph 4 — no claims -->
+    <p style="font-size: 16px; line-height: 1.7; margin: 0 0 16px;">
+      The relationship between banking and political power in Renaissance Florence was deeply intertwined. The Medici used their financial resources to cultivate patronage networks, fund artistic commissions, and ultimately control the Florentine republic through a complex web of debts, favors, and strategic alliances.
+    </p>
+
+    <!-- Paragraph 5 — has 1 NEW claim, collapsed -->
+    <p style="font-size: 16px; line-height: 1.7; margin: 0;">
+      The bank's decline began under Lorenzo the Magnificent, who was more interested in politics and art than in careful financial management. Critical errors in lending — particularly unsecured loans to European monarchs — exposed the bank to catastrophic defaults. By 1494, two years after Lorenzo's death, the bank had collapsed entirely.
+    </p>
+    <div class="claim-trigger">
+      <span class="count-badge">
+        <span class="dot" style="background: #2a7a4a;"></span>
+      </span>
+      1 claim
+    </div>
+
+    <!-- Paragraph 6 — KNOWN, dimmed -->
+    <div class="dimmed">
+      <p style="font-size: 16px; line-height: 1.7; margin: 0;">
+        The techniques pioneered by the Medici — double-entry bookkeeping, branch banking, letters of credit, and holding company structures — survived the bank itself and became the foundation of modern finance. When the first joint-stock companies emerged in the 17th century, they built directly on innovations first tested in 15th-century Florence.
+      </p>
+      <div class="claim-trigger" style="opacity: 0.7;">
+        <span class="count-badge">
+          <span class="dot" style="background: #d0ccc0;"></span>
+        </span>
+        1 claim · familiar
+      </div>
+    </div>
+
+    <!-- Floating summary pill -->
+    <div class="summary-pill">
+      <span class="pill-dot" style="background: #2a7a4a;"></span>
+      8 claims · 5 new
+      <span style="color: #b0a898; margin-left: 4px;">↓ Next</span>
+    </div>
+
+    <div style="height: 40px;"></div>
+  </div>
+</div>
+
+<!-- Approach label -->
+<div style="text-align: center; margin: 24px auto 40px; max-width: 375px;">
+  <div style="font-family: 'EB Garamond', serif; font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: #8b2500; margin-bottom: 8px;">✦ APPROACH</div>
+  <div style="font-family: 'Cormorant Garamond', serif; font-size: 20px; color: #2a2420; font-weight: 600; margin-bottom: 8px;">Progressive Reveal</div>
+  <div style="font-family: 'Crimson Pro', serif; font-size: 14px; color: #6a6458; line-height: 1.6; max-width: 340px; margin: 0 auto;">
+    Claims hidden by default — reading flow is uninterrupted. Subtle "2 claims" links after paragraphs expand to show claim cards with staggered animation. A floating pill tracks total claims and lets you jump to the next one.
+  </div>
+  <div style="margin-top: 16px; display: flex; gap: 16px; justify-content: center; font-family: 'DM Sans', sans-serif; font-size: 11px; color: #b0a898;">
+    <span>Collapsed: <span style="color: #2a7a4a;">●●</span> 2 claims</span>
+    <span style="margin-left: 8px;">Expanded: claim cards with actions</span>
+  </div>
+</div>
+</section>

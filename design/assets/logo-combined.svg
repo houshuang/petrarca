@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 140" width="400" height="140">
+  <defs>
+    <style>
+      .rubric { fill: #8b2500; }
+      .ink { fill: #2a2420; }
+    </style>
+  </defs>
+
+  <!-- Double rule ornament -->
+  <rect x="40" y="8" width="320" height="2" class="ink"/>
+  <rect x="40" y="14" width="320" height="1" class="ink" opacity="0.4"/>
+
+  <!-- Monogram mark -->
+  <text x="155" y="88" font-family="'Cormorant Garamond', 'Georgia', serif" font-weight="600" font-size="72" class="rubric" text-anchor="middle" letter-spacing="-0.04em">P</text>
+
+  <!-- Decorative ſ tail -->
+  <path d="M 180 48 C 188 46, 194 50, 194 58 C 194 66, 188 70, 180 68" stroke="#8b2500" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M 180 68 C 176 66, 173 70, 173 76 C 173 82, 176 86, 170 90" stroke="#8b2500" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.6"/>
+
+  <!-- Wordmark -->
+  <text x="200" y="118" font-family="'Cormorant Garamond', 'Georgia', serif" font-weight="600" font-size="22" class="ink" text-anchor="middle" letter-spacing="0.18em">PETRARCA</text>
+
+  <!-- Bottom double rule -->
+  <rect x="40" y="128" width="320" height="1" class="ink" opacity="0.4"/>
+  <rect x="40" y="133" width="320" height="2" class="ink"/>
+</svg>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <rect width="128" height="128" rx="16" fill="#f7f4ec"/>
+  <!-- Simplified P glyph in rubric red -->
+  <path d="M40 20 L40 108" stroke="#8b2500" stroke-width="12" stroke-linecap="round" fill="none"/>
+  <path d="M40 20 C40 20 92 16 92 44 C92 72 40 68 40 68" stroke="#8b2500" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Double rule ornament -->
+  <line x1="32" y1="114" x2="96" y2="114" stroke="#2a2420" stroke-width="2.5"/>
+  <line x1="32" y1="120" x2="96" y2="120" stroke="#2a2420" stroke-width="1"/>
+</svg>
