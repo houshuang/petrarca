@@ -3,7 +3,8 @@
   "name": "Petrarca Clipper",
   "version": "2.0",
   "description": "Save articles and highlights to Petrarca — your Renaissance reading companion",
-  "permissions": ["activeTab", "storage"],
+  "permissions": ["activeTab", "storage", "cookies"],
+  "host_permissions": ["*://*.x.com/*", "*://*.twitter.com/*"],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
