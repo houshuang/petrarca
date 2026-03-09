@@ -44,6 +44,7 @@ NOTES_DIR = Path(os.environ.get('NOTES_DIR', '/opt/petrarca/data/notes'))
 AUDIO_DIR = Path(os.environ.get('AUDIO_DIR', '/opt/petrarca/data/audio'))
 LOG_DIR = Path(os.environ.get('LOG_DIR', '/opt/petrarca/data/logs'))
 ARTICLES_PATH = Path(os.environ.get('ARTICLES_PATH', '/opt/petrarca/data/articles.json'))
+SCRAPE_REPORTS_PATH = Path(os.environ.get('SCRAPE_REPORTS_PATH', '/opt/petrarca/data/scrape_reports.json'))
 
 SONIOX_API_KEY = os.environ.get('SONIOX_API_KEY', '557c7c5a86a2f5b8fa734ddbbe179f0f21fd342c762768c9af4f4ffff8c58e1f')
 SONIOX_BASE_URL = 'https://api.soniox.com/v1'
@@ -1514,6 +1515,39 @@ class ResearchHandler(BaseHTTPRequestHandler):
             'article_id': article_id,
         })
 
+    def _handle_report_scrape(self):
+        body = self._read_json_body()
+        if body is None:
+            return
+
+        article_id = body.get('article_id', '')
+        url = body.get('url', '')
+        title = body.get('title', '')
+        if not article_id:
+            self._send_json_response(400, {'error': 'Missing article_id'})
+            return
+
+        try:
+            reports = json.loads(SCRAPE_REPORTS_PATH.read_text()) if SCRAPE_REPORTS_PATH.exists() else []
+        except (json.JSONDecodeError, OSError):
+            reports = []
+
+        # Skip if already reported
+        if any(r['article_id'] == article_id for r in reports):
+            self._send_json_response(200, {'status': 'already_reported'})
+            return
+
+        reports.append({
+            'article_id': article_id,
+            'url': url,
+            'title': title,
+            'reported_at': datetime.now(timezone.utc).isoformat(),
+            'status': 'pending',
+        })
+        SCRAPE_REPORTS_PATH.write_text(json.dumps(reports, indent=2))
+        print(f'[scrape-report] Reported {article_id}: {title[:60]}', flush=True)
+        self._send_json_response(200, {'status': 'reported'})
+
     def _handle_ingest_book(self):
         if INGEST_TOKEN:
             token = self.headers.get('X-Petrarca-Token', '')
@@ -1601,6 +1635,8 @@ class ResearchHandler(BaseHTTPRequestHandler):
             return self._handle_ingest_note()
         if self.path == '/ingest-cancel':
             return self._handle_ingest_cancel()
+        if self.path == '/report-scrape':
+            return self._handle_report_scrape()
 
         if self.path == '/research/explore-batch':
             return self._handle_explore_batch()
@@ -2048,6 +2084,15 @@ class ResearchHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 result = {'valid': False, 'error': f'Check failed: {e}'}
             self._send_json_response(200, result)
+
+        elif self.path == '/scrape-reports':
+            try:
+                reports = json.loads(SCRAPE_REPORTS_PATH.read_text()) if SCRAPE_REPORTS_PATH.exists() else []
+                # Only show pending reports
+                pending = [r for r in reports if r.get('status', 'pending') == 'pending']
+                self._send_json_response(200, pending)
+            except (json.JSONDecodeError, OSError):
+                self._send_json_response(200, [])
 
         elif self.path == '/health':
             self.send_response(200)

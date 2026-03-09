@@ -6,10 +6,10 @@ import {
 } from 'react-native';
 import AskAI from '../components/AskAI';
 import VoiceFeedback from '../components/VoiceFeedback';
-import { spawnTopicResearch, ingestUrl, getIngestStatus } from '../lib/chat-api';
+import { spawnTopicResearch, ingestUrl, getIngestStatus, reportBadScrape } from '../lib/chat-api';
 import { addToQueue, addToQueueFront } from '../data/queue';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { getArticleById, getArticles, getReadingState, updateReadingState, getHighlightBlockIndices, addHighlight, removeHighlight, markArticleRead, recordInterestSignal, recordTopicInterestSignalAtLevel, getCrossArticleConnections, getParagraphConnections } from '../data/store';
+import { getArticleById, getArticles, getReadingState, updateReadingState, getHighlightBlockIndices, addHighlight, removeHighlight, markArticleRead, recordInterestSignal, recordTopicInterestSignalAtLevel, getCrossArticleConnections, getParagraphConnections, dismissArticle } from '../data/store';
 import { Article, ArticleEntity, FollowUpQuestion, InterestTopic } from '../data/types';
 import type { CrossArticleConnection } from '../data/knowledge-engine';
 import * as Haptics from 'expo-haptics';
@@ -1500,6 +1500,16 @@ export default function ReaderScreen() {
             <Text style={styles.menuActionText}>Open source →</Text>
           </Pressable>
 
+          {/* Report bad scrape */}
+          <Pressable onPress={() => {
+            reportBadScrape(article.id, article.source_url, article.title);
+            logEvent('report_bad_scrape', { article_id: article.id });
+            setShowMenu(false);
+            if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }} style={styles.menuAction}>
+            <Text style={[styles.menuActionText, { color: colors.textMuted }]}>Report bad scrape</Text>
+          </Pressable>
+
           {/* Ask AI */}
           <Pressable onPress={() => {
             setShowMenu(false);
@@ -1540,6 +1550,20 @@ export default function ReaderScreen() {
               </Text>
             </Pressable>
           ) : null}
+
+          {/* Divider before destructive action */}
+          <View style={styles.menuDivider} />
+
+          {/* Disregard */}
+          <Pressable onPress={() => {
+            dismissArticle(article.id, 'reader_disregard');
+            recordInterestSignal('swipe_dismiss', article.id);
+            logEvent('reader_disregard', { article_id: article.id });
+            setShowMenu(false);
+            router.back();
+          }} style={styles.menuAction}>
+            <Text style={[styles.menuActionText, { color: colors.textMuted }]}>Disregard</Text>
+          </Pressable>
         </View>
       )}
 

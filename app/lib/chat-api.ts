@@ -131,3 +131,11 @@ export async function fetchNotes(articleId?: string): Promise<VoiceNote[]> {
   if (!resp.ok) return [];
   return resp.json();
 }
+
+export async function reportBadScrape(articleId: string, url: string, title: string): Promise<void> {
+  await fetch(`${RESEARCH_BASE}/report-scrape`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ article_id: articleId, url, title }),
+  });
+}
