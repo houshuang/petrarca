@@ -74,6 +74,45 @@ export async function spawnTopicResearch(
   return resp.json();
 }
 
+// --- Article ingestion from links ---
+
+export interface IngestResponse {
+  status: string;
+  url: string;
+  ingest_id: string;
+  article_id: string;
+}
+
+export interface IngestStatus {
+  id: string;
+  status: 'processing' | 'completed' | 'failed' | 'unknown';
+  article_id?: string;
+  url?: string;
+}
+
+export async function ingestUrl(url: string, source: string = 'reader_link'): Promise<IngestResponse> {
+  const resp = await fetch(`${RESEARCH_BASE}/ingest`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url, source }),
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`Ingest failed (${resp.status}): ${text}`);
+  }
+  return resp.json();
+}
+
+export async function getIngestStatus(ingestId: string): Promise<IngestStatus> {
+  const resp = await fetch(`${RESEARCH_BASE}/ingest-status?id=${encodeURIComponent(ingestId)}`);
+  if (!resp.ok) {
+    return { id: ingestId, status: 'unknown' };
+  }
+  return resp.json();
+}
+
+// --- Voice notes ---
+
 export interface VoiceNote {
   id: string;
   article_id: string;

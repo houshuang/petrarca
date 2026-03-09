@@ -147,6 +147,20 @@ export function recordTopicSignal(action: SignalAction, topic: InterestTopic): v
   saveInterestProfile();
 }
 
+export function recordTopicSignalAtLevel(
+  action: SignalAction,
+  topicKey: string,
+  level: 'broad' | 'specific' | 'entity',
+  parent?: string,
+): void {
+  const config = SIGNAL_WEIGHTS[action];
+  const entry = ensureTopic(topicKey, level, parent);
+  applySignal(entry, config.positive, config.weight);
+
+  logEvent('topic_signal_at_level', { action, topic: topicKey, level });
+  saveInterestProfile();
+}
+
 function applySignal(entry: TopicInterest, positive: boolean, weight: number): void {
   if (positive) {
     entry.positive_signals += weight;
@@ -218,7 +232,12 @@ function computeInterestMatch(article: Article): number {
   const scores = topics.map(t => {
     const specificScore = profile.topics[t.specific]?.interest_score ?? 0.5;
     const broadScore = profile.topics[t.broad]?.interest_score ?? 0.5;
-    return Math.max(specificScore, broadScore * 0.7);
+    let entityScore = 0.5;
+    if (t.entity) {
+      const entityKey = t.entity.toLowerCase().replace(/\s+/g, '-');
+      entityScore = profile.topics[entityKey]?.interest_score ?? 0.5;
+    }
+    return Math.max(specificScore, broadScore * 0.7, entityScore);
   });
   return Math.max(...scores);
 }

@@ -34,6 +34,14 @@ export async function addToQueue(articleId: string): Promise<void> {
   logEvent('queue_add', { article_id: articleId });
 }
 
+export async function addToQueueFront(articleId: string): Promise<void> {
+  if (!loaded) await loadQueue();
+  queuedIds = queuedIds.filter(id => id !== articleId);
+  queuedIds.unshift(articleId);
+  await saveQueue();
+  logEvent('queue_add_front', { article_id: articleId });
+}
+
 export async function removeFromQueue(articleId: string): Promise<void> {
   if (!loaded) await loadQueue();
   queuedIds = queuedIds.filter(id => id !== articleId);

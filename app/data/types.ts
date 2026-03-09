@@ -323,6 +323,7 @@ export interface ClaimClassification {
   classification: NoveltyClassification;
   similarity_score: number;
   source_paragraphs: number[];
+  claim_type: string;
 }
 
 export interface ParagraphDimming {

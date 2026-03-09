@@ -133,6 +133,7 @@ export function classifyArticleClaims(articleId: string): ClaimClassification[] 
       classification,
       similarity_score: highestScore,
       source_paragraphs: claim.source_paragraphs,
+      claim_type: claim.claim_type,
     });
   }
 
@@ -279,6 +280,78 @@ export function markArticleEncountered(
   saveLedger();
 }
 
+export function markArticleReadUpTo(
+  articleId: string,
+  maxParagraphIndex: number,
+  engagement: 'skim' | 'read',
+): void {
+  if (!knowledgeIndex) return;
+
+  const claimIds = knowledgeIndex.article_claims[articleId];
+  if (!claimIds) return;
+
+  const stabilityMap = { skim: STABILITY_SKIM, read: STABILITY_READ };
+  const stability = stabilityMap[engagement];
+  const now = Date.now();
+
+  let readCount = 0;
+  let skippedCount = 0;
+
+  for (const claimId of claimIds) {
+    const claim = knowledgeIndex.claims[claimId];
+    if (!claim) continue;
+
+    const inViewedRange = claim.source_paragraphs.some(p => p <= maxParagraphIndex);
+    if (!inViewedRange) {
+      skippedCount++;
+      continue;
+    }
+
+    readCount++;
+    const existing = knowledgeLedger[claimId];
+    if (existing) {
+      existing.stability_days = Math.min(existing.stability_days * REINFORCEMENT_FACTOR, 365);
+      if (engagement === 'read') {
+        existing.engagement = engagement;
+      }
+    } else {
+      knowledgeLedger[claimId] = {
+        claim_id: claimId,
+        first_seen_at: now,
+        article_id: articleId,
+        engagement,
+        stability_days: stability,
+      };
+    }
+  }
+
+  logEvent('knowledge_article_read_up_to', {
+    article_id: articleId,
+    engagement,
+    max_paragraph: maxParagraphIndex,
+    claims_read: readCount,
+    claims_skipped: skippedCount,
+  });
+
+  saveLedger();
+}
+
+export function getArticleParagraphCount(articleId: string): number {
+  if (!knowledgeIndex) return 0;
+  const claimIds = knowledgeIndex.article_claims[articleId];
+  if (!claimIds) return 0;
+
+  let maxPara = 0;
+  for (const claimId of claimIds) {
+    const claim = knowledgeIndex.claims[claimId];
+    if (!claim) continue;
+    for (const p of claim.source_paragraphs) {
+      if (p > maxPara) maxPara = p;
+    }
+  }
+  return maxPara + 1;
+}
+
 export function markClaimHighlighted(claimId: string): void {
   const existing = knowledgeLedger[claimId];
   if (existing) {
@@ -296,6 +369,96 @@ export function markClaimHighlighted(claimId: string): void {
 
   logEvent('knowledge_claim_highlighted', { claim_id: claimId });
   saveLedger();
+}
+
+// --- Cross-Article Connections ---
+
+export interface CrossArticleConnection {
+  articleId: string;
+  sharedClaimCount: number;
+  maxSimilarity: number;
+  claimPairs: Array<{
+    localClaimId: string;
+    remoteClaimId: string;
+    localText: string;
+    remoteText: string;
+    score: number;
+    localParagraphs: number[];
+  }>;
+}
+
+export function getCrossArticleConnections(
+  articleId: string,
+  threshold: number = 0.78,
+  maxResults: number = 5,
+): CrossArticleConnection[] {
+  if (!knowledgeIndex) return [];
+
+  const claimIds = knowledgeIndex.article_claims[articleId];
+  if (!claimIds) return [];
+
+  const connectionMap = new Map<string, CrossArticleConnection>();
+
+  for (const claimId of claimIds) {
+    const similars = similarityLookup.get(claimId) || [];
+    for (const { target, score } of similars) {
+      if (score < threshold) continue;
+
+      const targetClaim = knowledgeIndex.claims[target];
+      if (!targetClaim || targetClaim.article_id === articleId) continue;
+
+      const targetArticleId = targetClaim.article_id;
+
+      if (!connectionMap.has(targetArticleId)) {
+        connectionMap.set(targetArticleId, {
+          articleId: targetArticleId,
+          sharedClaimCount: 0,
+          maxSimilarity: 0,
+          claimPairs: [],
+        });
+      }
+
+      const conn = connectionMap.get(targetArticleId)!;
+      conn.sharedClaimCount++;
+      conn.maxSimilarity = Math.max(conn.maxSimilarity, score);
+
+      const localClaim = knowledgeIndex.claims[claimId];
+      conn.claimPairs.push({
+        localClaimId: claimId,
+        remoteClaimId: target,
+        localText: localClaim?.text || '',
+        remoteText: targetClaim.text,
+        score,
+        localParagraphs: localClaim?.source_paragraphs || [],
+      });
+    }
+  }
+
+  return Array.from(connectionMap.values())
+    .sort((a, b) => b.sharedClaimCount - a.sharedClaimCount)
+    .slice(0, maxResults);
+}
+
+export function getParagraphConnections(
+  articleId: string,
+  threshold: number = 0.78,
+): Map<number, Array<{ articleId: string; claimText: string }>> {
+  const connections = getCrossArticleConnections(articleId, threshold, 10);
+  const paragraphMap = new Map<number, Array<{ articleId: string; claimText: string }>>();
+
+  for (const conn of connections) {
+    for (const pair of conn.claimPairs) {
+      for (const paraIdx of pair.localParagraphs) {
+        if (!paragraphMap.has(paraIdx)) paragraphMap.set(paraIdx, []);
+        const existing = paragraphMap.get(paraIdx)!;
+        if (!existing.some(e => e.articleId === conn.articleId)) {
+          existing.push({ articleId: conn.articleId, claimText: pair.remoteText });
+        }
+      }
+    }
+  }
+
+  return paragraphMap;
 }
 
 // --- Delta Reports ---
