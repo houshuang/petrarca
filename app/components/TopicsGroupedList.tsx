@@ -47,7 +47,6 @@ function TopicGroup({ topic, articles }: { topic: string; articles: Article[] })
       <Text style={styles.groupHeader}>
         <Text style={{ color: colors.rubric }}>{'\u2726'} </Text>
         {displayTopic(topic)}
-        <Text style={styles.groupCount}>  {articles.length}</Text>
       </Text>
       <View style={styles.groupArticles}>
         {articles.slice(0, visibleCount).map(article => (

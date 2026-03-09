@@ -2,17 +2,20 @@ import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { colors, fonts, type, layout } from '../design/tokens';
 import { logEvent } from '../data/logger';
-import { getTopRecommendedArticle, recordInterestSignal } from '../data/store';
+import { getRankedFeedArticles, recordInterestSignal } from '../data/store';
 import { getDisplayTitle } from '../lib/display-utils';
 import { isKnowledgeReady, getArticleNovelty } from '../data/knowledge-engine';
 
 interface RecommendedSectionProps {
   onSeeAll: () => void;
+  excludeArticleId?: string;
 }
 
-export default function RecommendedSection({ onSeeAll }: RecommendedSectionProps) {
+export default function RecommendedSection({ onSeeAll, excludeArticleId }: RecommendedSectionProps) {
   const router = useRouter();
-  const article = getTopRecommendedArticle();
+  // Pick the top-ranked article that isn't already shown in Up Next
+  const ranked = getRankedFeedArticles();
+  const article = ranked.find(a => a.id !== excludeArticleId) || ranked[0] || null;
 
   if (!article) return null;
 

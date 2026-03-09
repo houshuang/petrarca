@@ -46,9 +46,7 @@ export default function TopicPillsSection({ onTopicPress, onSeeAll }: TopicPills
             >
               {displayTopic(topic)}
             </Text>
-            <Text style={[styles.pillCount, index === 0 && styles.pillCountPrimary]}>
-              {articles.length}
-            </Text>
+            {/* No article counts — "this is a river, not a todo list" */}
           </Pressable>
         ))}
       </ScrollView>
@@ -105,13 +103,5 @@ const styles = StyleSheet.create({
   },
   pillLabelPrimary: {
     color: colors.parchment,
-  },
-  pillCount: {
-    fontFamily: fonts.ui,
-    fontSize: 10,
-    color: colors.textMuted,
-  },
-  pillCountPrimary: {
-    color: 'rgba(247, 244, 236, 0.5)',
   },
 });

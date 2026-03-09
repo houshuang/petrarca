@@ -8,7 +8,8 @@ import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler'
 import {
   getArticlesByLens, getReadingState, dismissArticle,
   getReadArticles, recordInterestSignal, refreshContent,
-  bumpFeedVersion, getFeedVersion,
+  bumpFeedVersion, getFeedVersion, getInProgressArticles,
+  getTopRecommendedArticle, getArticleById,
 } from '../../data/store';
 import type { FeedLens } from '../../data/store';
 import { Article } from '../../data/types';
@@ -16,7 +17,7 @@ import { logEvent } from '../../data/logger';
 import { getDisplayTitle, displayTopic } from '../../lib/display-utils';
 import { colors, fonts, type, layout } from '../../design/tokens';
 import { isKnowledgeReady, getArticleNovelty } from '../../data/knowledge-engine';
-import { addToQueue } from '../../data/queue';
+import { addToQueue, getNextQueued } from '../../data/queue';
 import UpNextSection from '../../components/UpNextSection';
 import RecommendedSection from '../../components/RecommendedSection';
 import TopicPillsSection from '../../components/TopicPillsSection';
@@ -261,8 +262,18 @@ export default function FeedScreen() {
     forceUpdate(n => n + 1);
   }, []);
 
+  // Compute the Up Next article ID so Recommended can skip it
+  const upNextArticleId = useMemo(() => {
+    const inProgress = getInProgressArticles();
+    if (inProgress[0]) return inProgress[0].id;
+    const nextQueuedId = getNextQueued();
+    if (nextQueuedId) return nextQueuedId;
+    const top = getTopRecommendedArticle();
+    return top?.id;
+  }, [feedVersion]);
+
   const renderHeader = useCallback(() => (
-    <View>
+    <View style={Platform.OS === 'web' ? styles.webContainer : undefined}>
       {refreshing && (
         <View style={styles.refreshOrnament}>
           <Animated.Text style={[
@@ -281,11 +292,11 @@ export default function FeedScreen() {
         </View>
       )}
       <UpNextSection onDrawerOpen={() => setDrawerOpen(true)} />
-      <RecommendedSection onSeeAll={handleSeeAllBest} />
+      <RecommendedSection onSeeAll={handleSeeAllBest} excludeArticleId={upNextArticleId} />
       <TopicPillsSection onTopicPress={handleTopicPress} onSeeAll={handleSeeAllTopics} />
       <DoubleRule />
     </View>
-  ), [refreshing, spinAnim, handleSeeAllBest, handleTopicPress, handleSeeAllTopics]);
+  ), [refreshing, spinAnim, handleSeeAllBest, handleTopicPress, handleSeeAllTopics, upNextArticleId]);
 
   const renderItem = useCallback(({ item }: { item: ListItem }) => {
     switch (item.type) {
@@ -386,9 +397,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.parchment,
   },
+  webContainer: {
+    maxWidth: layout.contentMaxWidth,
+    width: '100%',
+    alignSelf: 'center',
+  },
 
   listContent: {
     paddingBottom: 40,
+    ...(Platform.OS === 'web' ? { maxWidth: layout.contentMaxWidth, width: '100%', alignSelf: 'center' as const } : {}),
   },
   listPadding: {
     paddingHorizontal: layout.screenPadding,

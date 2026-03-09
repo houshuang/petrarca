@@ -124,6 +124,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.3)',
     justifyContent: 'flex-end',
+    alignItems: 'center',
   },
   sheet: {
     backgroundColor: colors.ink,
@@ -131,6 +132,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 16,
     paddingHorizontal: 20,
     paddingBottom: 36,
+    width: '100%',
+    maxWidth: 600,
   },
 
   handleWrap: {
