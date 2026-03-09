@@ -188,11 +188,16 @@ The reader header has two action elements alongside the title:
 
 ### Entity Deep-Dive
 
-The pipeline extracts 3-8 entities per article — people, books, concepts, companies, events, places, technologies. In the reader, entity mentions appear with **dotted underlines**.
+The pipeline extracts 3-8 entities per article — people, books, concepts, companies, events, places, technologies. In the reader, entity mentions appear with **dotted underlines**. If the entity was also a hyperlink in the original article, the underline is rubric-colored.
 
-**What to do**: Long-press an underlined entity name.
+**What to do**: Tap an underlined entity name.
 
-**What happens**: A marginalia popup appears alongside the text with a synthesis of what the pipeline knows about that entity — a compact description drawn from the article context. At the bottom is a "Research more" button that opens the AI chat with the entity name pre-filled as a question, so you can dive deeper without losing your place.
+**What happens**: A marginalia popup appears alongside the text with a synthesis of what the pipeline knows about that entity — a compact description drawn from the article context. If the entity was also a link in the original article, the URL appears in the popup as a tappable link, and the popup offers smart actions:
+
+- **"Save article"** — appears for article-like URLs (blog posts, announcements). Auto-ingests the linked page into your feed.
+- **"Research more"** — always available. Spawns background research via Gemini search grounding, passing the URL as context. Better than raw page scraping for product pages, landing pages, and other thin content.
+
+This means entity mentions always win over plain links. If "SWE-bench" is both a link to `swebench.com` and a pipeline-extracted concept, tapping it shows you the entity synthesis with the URL as context — not a raw redirect.
 
 ### Follow-Up Research Prompts
 
@@ -406,7 +411,7 @@ Understanding this helps you understand timing and quality.
 
 10. **All interactions are logged.** Every tap, swipe, scroll, and mode change is logged to daily JSONL files via `logEvent()`. Logs live at `{documentDirectory}/logs/interactions_YYYY-MM-DD.jsonl`.
 
-11. **Entity underlines are contextual.** Only entities that the pipeline flagged as noteworthy get dotted underlines. Long-pressing opens a marginalia card with synthesis from the pipeline — not a generic Wikipedia lookup.
+11. **Entity underlines absorb links.** If text is both an entity and a hyperlink, the entity popup wins — you see the synthesis plus the URL, not a raw redirect. Article-like URLs get a "Save article" button; product pages get "Research more" with the URL as context. The dotted underline turns rubric-colored when the entity has a URL.
 
 12. **Voice note actions are smart.** After transcription, the LLM identifies intents: "research X", "tag this article as Y", "remember Z". Actions appear as tappable chips with status tracking, not just raw transcript text.
 

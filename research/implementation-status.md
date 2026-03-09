@@ -286,6 +286,11 @@ App (Expo SDK 54):
 32. ~~**Automatic topic defragmentation**~~ — DONE: `defragment_registry()` consolidates when limits exceeded. Phase 1: merge similar specifics per overpopulated broad. Phase 2: minimal broad merges. Phase 3: update all articles. Auto-runs as pipeline step 3c3. First run: 28→25 broad, 263→172 specific. See `research/topic-normalization-spec.md` for full spec.
 33. ~~**Backfill interest_topics**~~ — DONE: Extended `--enrich` to also generate `interest_topics`. All 185 articles now have hierarchical topics, normalized and defragmented.
 
+### Completed (Session 9)
+34. ~~**Entity-link merge**~~ — DONE: When text is both a markdown link and a pipeline entity, the entity popup wins. URL is passed as context: shown in popup, used for smart actions. Article-like URLs (containing `/blog/`, `/article/`, `/introducing/`) get "Save article" (auto-ingest). All others get "Research more" with URL as context for Gemini search grounding. Linked entity mentions get rubric-colored dotted underline.
+35. ~~**Ingest auth fix**~~ — DONE: Reader-originated ingests (`source: reader_link`) skip auth token check on `/ingest` endpoint. Previously all ingests required `X-Petrarca-Token`, causing 401 failures from the app.
+36. ~~**Entity tap (not just long-press)**~~ — DONE: Entity mentions respond to `onPress` instead of `onLongPress` for better discoverability.
+
 ### Gap Analysis: Built vs. Full Spec (updated end of session 8)
 
 #### COMPLETED — Original Gaps Now Resolved
