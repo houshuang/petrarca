@@ -140,7 +140,7 @@
         currentWindow: true,
       });
       if (tab && tab.id) {
-        pageTitle.textContent = tab.title || "Untitled";
+        pageTitle.textContent = decodeEntities(tab.title || "Untitled");
         pageUrl.textContent = cleanUrl(tab.url || "");
         pageUrl.title = tab.url || "";
 
@@ -161,7 +161,7 @@
             if (response) {
               pageData = response;
               pageTitle.textContent =
-                response.title || tab.title || "Untitled";
+                decodeEntities(response.title || tab.title || "Untitled");
               pageUrl.textContent = cleanUrl(
                 response.url || tab.url || ""
               );
@@ -344,6 +344,12 @@
   function showStatus(el, message, type) {
     el.textContent = message;
     el.className = type;
+  }
+
+  function decodeEntities(str) {
+    const el = document.createElement("textarea");
+    el.innerHTML = str;
+    return el.value;
   }
 
   function cleanUrl(url) {
