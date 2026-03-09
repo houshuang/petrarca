@@ -1,8 +1,8 @@
 # Knowledge System Implementation Status
 
-**Date**: March 9, 2026 (last updated — session 9)
-**Status**: Full corpus deployed with knowledge system, reader interactions, voice notes, AI chat, research agents, entity deep-dive, follow-up research, voice note browser + action extraction, activity log tab, scroll-aware encounter tracking, curated novelty card, hierarchical topic feedback, cross-article connections, LLM-verified topic normalization, automatic defragmentation, **unified single-screen feed with lens tabs**, **dynamic reranking**, **✦ drawer navigation**
-**Latest commits**: Session 9 — unified feed redesign: replaced 4-tab layout with single screen + lens tabs (Latest/Best/Topics/Quick) + ✦ drawer. 7 new components, blended interest+curiosity ranking, dynamic reranking on reader return.
+**Date**: March 9, 2026 (last updated — session 10)
+**Status**: Full corpus deployed with knowledge system, reader interactions, voice notes, AI chat, research agents, entity deep-dive, follow-up research, voice note browser + action extraction, activity log tab, scroll-aware encounter tracking, curated novelty card, hierarchical topic feedback, cross-article connections, LLM-verified topic normalization, automatic defragmentation, **unified single-screen feed with lens tabs**, **dynamic reranking**, **✦ drawer navigation**, **clipper auto-save countdown**, **tweet URL ingestion via twikit**, **auto-sync Twitter cookies**
+**Latest commits**: Session 10 — Chrome clipper: 10s auto-save countdown (double rule timer), tweet URL ingestion via twikit (thread reconstruction + linked article extraction), automatic Twitter cookie sync from browser to server.
 
 ---
 
@@ -73,6 +73,17 @@ App (Expo SDK 54):
 | `app/components/TopicsGroupedList.tsx` | Articles grouped by topic with tree-line indentation. Expand/collapse (shows 3, "+N more" to expand). Optional `topicFilter` prop. Logs `topic_group_article_tap`. |
 | `app/components/PetrarcaDrawer.tsx` | Bottom sheet (ink background). Quick actions: Triage, Voice Note. Nav items: Voice Notes, Activity Log, Reading Progress, Queue. Logs `drawer_open/close`, `drawer_item_tap`. |
 | `research/feed-redesign-plan.md` | Comprehensive plan: 3 rounds of mockup feedback, approved architecture, screen layout, 5-phase implementation order, component specs. |
+
+#### Modified Files (Session 10: Clipper + Tweet Ingestion)
+
+| File | Changes |
+|------|---------|
+| `clipper/popup.html` | Header gets countdown number + timer overlays on double rule. Note field always visible (dashed placeholder). Note toggle button removed. Cancel button added. |
+| `clipper/popup.css` | Timer overlay animation (rubric drains to gray), countdown number (Cormorant 22px), dashed→solid note field transition on focus, Cancel button, gold completion flash (#c9a84c). |
+| `clipper/popup.js` | Complete rewrite of save flow. 10s countdown via `requestAnimationFrame` (smooth pause/resume). States: counting → paused (on typing) → saving → saved. Auto-save at 0, Cancel button + Esc. |
+| `clipper/manifest.json` | Added `cookies` permission + `host_permissions` for `*.x.com` and `*.twitter.com`. |
+| `clipper/background.js` | Added `maybeSyncTwitterCookies()`: extracts `auth_token` + `ct0` via `chrome.cookies.get()` on X.com visits, POSTs to `/twitter/cookies`. Throttled to 4h via `chrome.storage.local` timestamp. `tabs.onUpdated` listener triggers on page load complete. |
+| `scripts/research-server.py` | Added tweet URL detection (`_is_tweet_url`), `run_ingest_tweet()` (twikit fetch → thread reconstruction → URL extraction → normal pipeline), `_fetch_tweet_via_twikit()` (async), `_check_twikit_cookies()`. New endpoints: `GET /twitter/status`, `POST /twitter/cookies`. `/ingest` now routes tweet URLs through twikit. |
 
 #### Modified Files (Session 9: Unified Feed Redesign)
 
@@ -204,7 +215,7 @@ App (Expo SDK 54):
 | GEMINI_KEY | ✅ Configured | In `/opt/petrarca/.env` (used by `gemini_llm.py`, also `GEMINI_API_KEY` alias) |
 | Voice notes storage | ✅ Working | `/opt/petrarca/data/notes/` (JSON) + `/opt/petrarca/data/audio/` (m4a) |
 | Chat conversations | ✅ Working | `/opt/petrarca/data/chats/` (JSON, per conversation_id) |
-| Research server endpoints | ✅ Updated | `/chat`, `/note`, `/research/topic`, `/notes`, `/notes/{id}/execute-action`, `/research`, `/research/results` on port 8090 |
+| Research server endpoints | ✅ Updated | `/chat`, `/note`, `/research/topic`, `/notes`, `/notes/{id}/execute-action`, `/research`, `/research/results`, `/twitter/status`, `/twitter/cookies` on port 8090 |
 
 ### SSH Access
 - Use `ssh alif` (configured in `~/.ssh/config` → `root@46.225.75.29` via `~/.ssh/hetzner_ed25519`)
@@ -225,6 +236,7 @@ App (Expo SDK 54):
 5. ~~**Server has only 47 articles**~~ — **RESOLVED**: Full 171-article corpus restored with 2,954 atomic claims, embeddings, and knowledge index.
 6. ~~**Duplicate topic variants**~~ — **RESOLVED**: Added client-side topic normalization in `app/lib/display-utils.ts` (`normalizeTopic()` + `displayTopic()`). Used across feed filter chips, topic tags, and Topics tab grouping. Reduced 67→58 topic groups.
 7. ~~**google.generativeai deprecation warning**~~ — **RESOLVED**: Migrated all LLM calls to `google.genai` SDK via shared `gemini_llm.py` wrapper. litellm fully removed.
+11. ~~**Twitter cookies expire**~~ — **RESOLVED**: Chrome extension auto-syncs cookies to server on X.com visits (4h throttle). Also available via `POST /twitter/cookies` API and `GET /twitter/status` health check.
 
 ### Logic Issues
 
@@ -314,6 +326,12 @@ App (Expo SDK 54):
 34. ~~**Entity-link merge**~~ — DONE: When text is both a markdown link and a pipeline entity, the entity popup wins. URL is passed as context: shown in popup, used for smart actions. Article-like URLs (containing `/blog/`, `/article/`, `/introducing/`) get "Save article" (auto-ingest). All others get "Research more" with URL as context for Gemini search grounding. Linked entity mentions get rubric-colored dotted underline.
 35. ~~**Ingest auth fix**~~ — DONE: Reader-originated ingests (`source: reader_link`) skip auth token check on `/ingest` endpoint. Previously all ingests required `X-Petrarca-Token`, causing 401 failures from the app.
 36. ~~**Entity tap (not just long-press)**~~ — DONE: Entity mentions respond to `onPress` instead of `onLongPress` for better discoverability.
+
+### Completed (Session 10)
+37. ~~**Clipper auto-save countdown**~~ — DONE: Chrome clipper popup auto-saves after 10 seconds (fire-and-forget via Cmd+Shift+S). Signature double rule acts as countdown timer (rubric drains to gray). Typing in note field pauses countdown. Visible Cancel button + Esc. Gold completion flash (#c9a84c) on save. requestAnimationFrame for smooth 60fps timer.
+38. ~~**Tweet URL ingestion via twikit**~~ — DONE: `/ingest` endpoint detects twitter.com/x.com URLs and routes through twikit instead of generic URL import. Fetches full tweet metadata, reconstructs threads (same-author reply chains), extracts + resolves t.co links. If tweet has URLs → ingests linked article with tweet context. If no URLs → uses tweet/thread text as article content. Falls back to normal import if twikit fails.
+39. ~~**Auto-sync Twitter cookies**~~ — DONE: Chrome extension silently extracts `auth_token` + `ct0` cookies when user visits X.com and pushes to server via `POST /twitter/cookies`. Throttled to once per 4 hours. Eliminates manual SSH cookie refresh. New manifest permissions: `cookies` + `host_permissions` for x.com/twitter.com.
+40. ~~**Cookie health endpoints**~~ — DONE: `GET /twitter/status` checks cookie validity + age. `POST /twitter/cookies` accepts `{auth_token, ct0}` for remote cookie refresh.
 
 ### Gap Analysis: Built vs. Full Spec (updated end of session 8)
 

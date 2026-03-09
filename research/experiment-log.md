@@ -4,6 +4,39 @@
 
 ---
 
+## 2026-03-09 — Session 10: Chrome Clipper Countdown + Tweet Ingestion + Cookie Auto-Sync
+
+**What**: Three features for the Chrome clipper extension and server-side tweet processing.
+
+### Clipper Auto-Save Countdown
+- **Design exploration**: 2 rounds of mockups (5 each) via design-explorer
+- Round 1: Circular ring, progress bar, typography-first, pulsing button, marginalia — all too large
+- Round 2 (refined): Big number minimal, bar under rule, inline countdown button, compact margin, **double rule as timer** (selected)
+- **Variant #5 chosen**: The signature double rule IS the countdown timer. Rubric color drains to gray over 10s. Countdown number (Cormorant 22px) in header top-right.
+- **States**: counting (10s, auto-save) → paused (typing triggers) → saving → saved (gold flash + auto-close)
+- **Implementation**: `requestAnimationFrame` for smooth 60fps timer (not CSS animation — need precise pause). Note field always visible with dashed border placeholder. Visible Cancel button (Esc unreliable in Chrome popups).
+- **Removed**: Note toggle button (note field always shown), centered header (now flex row with countdown number)
+
+### Tweet URL Ingestion via Twikit
+- **Problem**: Clipping a twitter.com/x.com page via the clipper went through generic URL import, which fails on Twitter's hostile DOM
+- **Solution**: `/ingest` endpoint detects tweet URLs → routes to `run_ingest_tweet()` → twikit `get_tweet_by_id()` → thread reconstruction → extract linked article URLs → ingest through normal pipeline
+- **Three paths**: (1) Tweet has URLs → resolve t.co, ingest linked article, tweet text as context note. (2) No URLs → tweet/thread text becomes article content. (3) Twikit fails → fallback to normal URL import.
+- **Reuses**: `tweet_to_dict()`, `reconstruct_thread()` from `fetch_twitter_bookmarks.py`, `_collect_urls_from_bookmark()` from `build_articles.py`
+
+### Twitter Cookie Auto-Sync
+- **Problem**: twikit cookies expire, requiring manual SSH to refresh
+- **Solution**: Chrome extension extracts `auth_token` + `ct0` via `chrome.cookies.get()` API whenever user visits X.com. POSTs to `POST /twitter/cookies` endpoint. Throttled to 4h via `chrome.storage.local` timestamp.
+- **Also added**: `GET /twitter/status` health check (validates cookies, returns age)
+- **Key insight**: `chrome.cookies` API can read HttpOnly cookies (which page JS cannot), making the extension the ideal place for this
+
+### Files Changed
+- `clipper/popup.html`, `clipper/popup.css`, `clipper/popup.js` — countdown UI
+- `clipper/manifest.json` — added `cookies` + `host_permissions`
+- `clipper/background.js` — cookie auto-sync on X.com visits
+- `scripts/research-server.py` — tweet ingestion, cookie endpoints
+
+---
+
 ## 2026-03-09 — Session 9: Feed & Navigation Redesign (Design + Implementation)
 
 **What**: Major UX redesign — 3 rounds of mockups (15 total), user interview, full implementation of unified single-screen architecture replacing the 4-tab layout. Complete rebuild of feed, navigation, and ranking system.
