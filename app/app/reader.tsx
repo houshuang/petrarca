@@ -362,14 +362,31 @@ function isIngestableUrl(url: string): boolean {
   return true;
 }
 
+/** Extract a map of lowercased link text → URL from markdown text */
+function extractLinkUrls(text: string): Map<string, string> {
+  const map = new Map<string, string>();
+  const re = /\[([^\]]+)\]\(([^)]+)\)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    map.set(m[1].toLowerCase(), m[2]);
+  }
+  return map;
+}
+
 function renderInlineMarkdown(
   text: string,
   linkHandler?: LinkHandler,
+  entityNames?: Set<string>,
 ): (string | React.ReactElement)[] {
   const segments = parseInlineMarkdown(text);
   return segments.map((seg, i) => {
     switch (seg.type) {
       case 'link': {
+        // If this link text matches an entity, render as plain text so EntityHighlightText can handle it
+        if (entityNames && entityNames.has(seg.text.toLowerCase())) {
+          return seg.text;
+        }
+
         const canIngest = linkHandler && isIngestableUrl(seg.url);
         const ingestState = canIngest ? linkHandler.ingestStates[seg.url] : undefined;
 
@@ -442,11 +459,13 @@ function CollapsedBar({ blockCount, onExpand }: {
 function EntityHighlightText({
   children,
   entities,
-  onEntityLongPress,
+  onEntityPress,
+  linkUrls,
 }: {
   children: (string | React.ReactElement)[];
   entities: ArticleEntity[];
-  onEntityLongPress: (entity: ArticleEntity) => void;
+  onEntityPress: (entity: ArticleEntity, url?: string) => void;
+  linkUrls?: Map<string, string>;
 }) {
   if (!entities || entities.length === 0) return <>{children}</>;
 
@@ -473,13 +492,14 @@ function EntityHighlightText({
         return parts.map((part, pi) => {
           const entity = mentionMap.get(part.toLowerCase());
           if (entity) {
+            const url = linkUrls?.get(part.toLowerCase());
             return (
               <Text
                 key={`ent-${ci}-${pi}`}
-                style={entityStyles.entityMention}
+                style={[entityStyles.entityMention, url && entityStyles.entityMentionLinked]}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  onEntityLongPress(entity);
+                  onEntityPress(entity, url);
                 }}
               >
                 {part}
@@ -498,24 +518,47 @@ function EntityHighlightText({
 function EntityPopup({
   entity,
   articleTitle,
+  url,
   onResearch,
+  onIngest,
   onDismiss,
 }: {
   entity: ArticleEntity;
   articleTitle: string;
+  url?: string;
   onResearch: () => void;
+  onIngest?: () => void;
   onDismiss: () => void;
 }) {
+  // Product pages, landing pages, company sites → research is better than raw ingest
+  const isArticleLike = url ? /\/(blog|article|post|news|index|introducing|announce)/i.test(url) || /\.(md|html)(\?|$)/i.test(url) : false;
+
   return (
     <View style={entityStyles.popupContainer}>
       <Text style={entityStyles.popupType}>{entity.type.toUpperCase()}</Text>
       <Text style={entityStyles.popupName}>{entity.name}</Text>
       <Text style={entityStyles.popupSynthesis}>{entity.synthesis}</Text>
+      {url && (
+        <Pressable onPress={() => { logEvent('entity_open_url', { entity: entity.name, url }); Linking.openURL(url); }}>
+          <Text style={entityStyles.popupUrl} numberOfLines={1}>{url.replace(/^https?:\/\/(www\.)?/, '')}</Text>
+        </Pressable>
+      )}
       <View style={entityStyles.popupActions}>
+        {url && isArticleLike && onIngest && (
+          <Pressable
+            style={entityStyles.popupAction}
+            onPress={() => {
+              logEvent('entity_ingest_tap', { entity: entity.name, url, article_title: articleTitle });
+              onIngest();
+            }}
+          >
+            <Text style={entityStyles.popupActionResearch}>{'Save article \u2913'}</Text>
+          </Pressable>
+        )}
         <Pressable
           style={entityStyles.popupAction}
           onPress={() => {
-            logEvent('entity_research_tap', { entity: entity.name, article_title: articleTitle });
+            logEvent('entity_research_tap', { entity: entity.name, url, article_title: articleTitle });
             onResearch();
           }}
         >
@@ -750,7 +793,7 @@ function MarkdownText({ content, highlightedBlocks, onBlockLongPress, blockDimmi
   blockDimming?: Map<number, { opacity: number; novelty: string }> | null;
   readingMode?: ReadingMode;
   entities?: ArticleEntity[];
-  onEntityLongPress?: (entity: ArticleEntity) => void;
+  onEntityLongPress?: (entity: ArticleEntity, url?: string) => void;
   linkHandler?: LinkHandler;
   paragraphConnections?: Map<number, Array<{ articleId: string; claimText: string }>> | null;
   sourceArticleId?: string;
@@ -903,7 +946,12 @@ function MarkdownText({ content, highlightedBlocks, onBlockLongPress, blockDimmi
         );
 
       default: {
-        const inlineContent = renderInlineMarkdown(block.content, linkHandler);
+        // Build entity name set so renderInlineMarkdown can yield linked entities as plain text
+        const entityNameSet = entities && entities.length > 0
+          ? new Set(entities.flatMap(e => e.mentions.map(m => m.toLowerCase())))
+          : undefined;
+        const blockLinkUrls = entityNameSet ? extractLinkUrls(block.content) : undefined;
+        const inlineContent = renderInlineMarkdown(block.content, linkHandler, entityNameSet);
         const blockConnections = paragraphConnections?.get(i);
         // Deduplicate connections per article (show max 1 annotation per article per paragraph)
         const uniqueConnections = blockConnections
@@ -917,7 +965,7 @@ function MarkdownText({ content, highlightedBlocks, onBlockLongPress, blockDimmi
             >
               <Text style={styles.markdownText}>
                 {entities && entities.length > 0 && onEntityLongPress ? (
-                  <EntityHighlightText entities={entities} onEntityLongPress={onEntityLongPress}>
+                  <EntityHighlightText entities={entities} onEntityPress={onEntityLongPress} linkUrls={blockLinkUrls}>
                     {inlineContent}
                   </EntityHighlightText>
                 ) : inlineContent}
@@ -1258,27 +1306,48 @@ export default function ReaderScreen() {
     }
   }, [article]);
 
-  // Entity long-press handler
-  const handleEntityLongPress = useCallback((entity: ArticleEntity) => {
+  // Entity tap handler
+  const [activeEntityUrl, setActiveEntityUrl] = useState<string | undefined>();
+
+  const handleEntityLongPress = useCallback((entity: ArticleEntity, url?: string) => {
     setActiveEntity(entity);
-    logEvent('entity_popup_open', { article_id: article?.id, entity: entity.name, entity_type: entity.type });
+    setActiveEntityUrl(url);
+    logEvent('entity_popup_open', { article_id: article?.id, entity: entity.name, entity_type: entity.type, url });
   }, [article]);
+
+  const handleEntityIngest = useCallback(async () => {
+    if (!activeEntityUrl) return;
+    try {
+      const result = await ingestUrl(activeEntityUrl, 'reader_link');
+      await addToQueue(result.article_id);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      logEvent('entity_ingest_launched', { article_id: article?.id, entity: activeEntity?.name, url: activeEntityUrl });
+    } catch (e) {
+      logEvent('entity_ingest_error', { url: activeEntityUrl, error: String(e) });
+    }
+    setActiveEntity(null);
+    setActiveEntityUrl(undefined);
+  }, [article, activeEntity, activeEntityUrl]);
 
   const handleEntityResearch = useCallback(async () => {
     if (!article || !activeEntity) return;
+    const context = activeEntityUrl
+      ? `Entity: ${activeEntity.name} (${activeEntity.type})\n${activeEntity.synthesis}\nURL: ${activeEntityUrl}\nFrom article: ${article.title}`
+      : `Entity: ${activeEntity.name} (${activeEntity.type})\n${activeEntity.synthesis}\nFrom article: ${article.title}`;
     try {
       await spawnTopicResearch(
         activeEntity.name,
-        `Entity: ${activeEntity.name} (${activeEntity.type})\n${activeEntity.synthesis}\nFrom article: ${article.title}`,
+        context,
         [article.title],
       );
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      logEvent('entity_research_launched', { article_id: article.id, entity: activeEntity.name });
+      logEvent('entity_research_launched', { article_id: article.id, entity: activeEntity.name, url: activeEntityUrl });
     } catch (e) {
       logEvent('entity_research_error', { article_id: article.id, entity: activeEntity.name, error: String(e) });
     }
     setActiveEntity(null);
-  }, [article, activeEntity]);
+    setActiveEntityUrl(undefined);
+  }, [article, activeEntity, activeEntityUrl]);
 
   // Done handler — user explicitly finished, so mark ALL claims
   const handleDone = useCallback(() => {
@@ -1570,10 +1639,13 @@ export default function ReaderScreen() {
           <EntityPopup
             entity={activeEntity}
             articleTitle={article.title}
+            url={activeEntityUrl}
             onResearch={handleEntityResearch}
+            onIngest={activeEntityUrl ? handleEntityIngest : undefined}
             onDismiss={() => {
               logEvent('entity_popup_dismiss', { article_id: article.id, entity: activeEntity.name });
               setActiveEntity(null);
+              setActiveEntityUrl(undefined);
             }}
           />
         )}
@@ -2246,6 +2318,9 @@ const entityStyles = StyleSheet.create({
     textDecorationStyle: 'dotted',
     textDecorationColor: colors.textMuted,
   },
+  entityMentionLinked: {
+    textDecorationColor: colors.rubric,
+  },
   popupContainer: {
     backgroundColor: colors.parchmentDark,
     borderLeftWidth: 3,
@@ -2276,9 +2351,17 @@ const entityStyles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: 10,
   },
+  popupUrl: {
+    fontFamily: fonts.ui,
+    fontSize: 11,
+    color: colors.rubric,
+    marginBottom: 10,
+    textDecorationLine: 'underline',
+  },
   popupActions: {
     flexDirection: 'row',
     gap: 16,
+    flexWrap: 'wrap',
   },
   popupAction: {
     paddingVertical: 4,
