@@ -31,9 +31,13 @@
   const authTokenInput = document.getElementById("auth-token");
   const saveSettingsBtn = document.getElementById("save-settings-btn");
   const settingsStatus = document.getElementById("settings-status");
+  const openAppBtn = document.getElementById("open-app");
+
+  const APP_URL = "http://alifstian.duckdns.org:8084";
 
   let pageData = null;
   let saving = false;
+  let immediateSaveFired = false;
 
   // --- Countdown state ---------------------------------------------------
 
@@ -45,7 +49,25 @@
   function startCountdown() {
     state = "counting";
     timerStart = performance.now();
+    fireImmediateSave();
     tick();
+  }
+
+  function fireImmediateSave() {
+    if (immediateSaveFired || !pageData) return;
+    immediateSaveFired = true;
+
+    // Save immediately via background service worker (survives popup close)
+    chrome.runtime.sendMessage({
+      type: "saveClip",
+      payload: {
+        url: pageData.url,
+        title: pageData.title,
+        content: pageData.content || "",
+        selected_text: pageData.selectedText || "",
+        source: "clipper",
+      },
+    });
   }
 
   function tick() {
@@ -118,10 +140,32 @@
     // Only pause if they actually type (handled by input event)
   });
 
+  // --- Open app (cancel capture) -----------------------------------------
+
+  openAppBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    cancelAnimationFrame(rafId);
+    if (pageData && immediateSaveFired) {
+      chrome.runtime.sendMessage({
+        type: "cancelSave",
+        payload: { url: pageData.url },
+      });
+    }
+    chrome.tabs.create({ url: APP_URL });
+    window.close();
+  });
+
   // --- Cancel ------------------------------------------------------------
 
   cancelBtn.addEventListener("click", () => {
     cancelAnimationFrame(rafId);
+    // Tell background to cancel/remove the already-saved article
+    if (pageData && immediateSaveFired) {
+      chrome.runtime.sendMessage({
+        type: "cancelSave",
+        payload: { url: pageData.url },
+      });
+    }
     window.close();
   });
 
@@ -205,6 +249,12 @@
 
     if (e.key === "Escape") {
       cancelAnimationFrame(rafId);
+      if (pageData && immediateSaveFired) {
+        chrome.runtime.sendMessage({
+          type: "cancelSave",
+          payload: { url: pageData.url },
+        });
+      }
       window.close();
     }
   });
@@ -245,74 +295,26 @@
     state = "saving";
     cancelAnimationFrame(rafId);
 
-    const settings = await loadSettings();
-    const serverUrl = (settings.serverUrl || DEFAULT_SERVER).replace(
-      /\/+$/,
-      ""
-    );
-    const authToken = settings.authToken || "";
+    // Ensure the immediate save was fired (in case of race)
+    fireImmediateSave();
 
-    const payload = {
-      url: pageData.url,
-      title: pageData.title,
-      content: pageData.content || "",
-      selected_text: pageData.selectedText || "",
-      comment: commentEl.value.trim(),
-      source: "clipper",
-    };
+    const comment = commentEl.value.trim();
 
-    saveBtn.disabled = true;
-    btnLabel.textContent = "Saving\u2026";
-    countdownStatus.textContent = "";
-    statusEl.classList.add("hidden");
-
-    try {
-      const headers = { "Content-Type": "application/json" };
-      if (authToken) {
-        headers["X-Petrarca-Token"] = authToken;
-      }
-
-      const response = await fetch(`${serverUrl}/ingest`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(payload),
+    // If user typed a note, send it via background service worker
+    if (comment) {
+      chrome.runtime.sendMessage({
+        type: "addNote",
+        payload: {
+          url: pageData.url,
+          title: pageData.title,
+          comment: comment,
+          source: "clipper",
+        },
       });
-
-      if (response.ok) {
-        showSavedState();
-        setTimeout(() => window.close(), 1200);
-      } else {
-        const text = await response.text();
-        showStatus(
-          statusEl,
-          `Error ${response.status}: ${text.slice(0, 100)}`,
-          "error"
-        );
-        resetSaveBtn();
-      }
-    } catch (err) {
-      try {
-        await storeLocally(payload);
-        showStatus(
-          statusEl,
-          "Server unavailable \u2014 saved locally",
-          "info"
-        );
-        showSavedState();
-        setTimeout(() => window.close(), 1800);
-      } catch (storageErr) {
-        showStatus(statusEl, `Failed: ${err.message}`, "error");
-        resetSaveBtn();
-      }
     }
-  }
 
-  function resetSaveBtn() {
-    saveBtn.disabled = false;
-    btnLabel.textContent = state === "paused" ? "Save with Note" : "Save";
-    btnLabel.classList.remove("hidden");
-    btnCheck.classList.add("hidden");
-    saving = false;
+    showSavedState();
+    setTimeout(() => window.close(), 1200);
   }
 
   async function storeLocally(payload) {

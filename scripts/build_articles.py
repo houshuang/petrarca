@@ -1193,6 +1193,7 @@ def build_articles(candidates: list[dict], existing_articles: list[dict],
             "entities": llm.get("entities", []),
             "follow_up_questions": llm.get("follow_up_questions", []),
             "word_count": best["word_count"],
+            "ingested_at": datetime.now(timezone.utc).isoformat(),
             "sources": [source],
         }
 

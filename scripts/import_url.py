@@ -173,6 +173,7 @@ def _build_article_obj(
         "content_type": llm.get("content_type", "unknown"),
         "word_count": fetched["word_count"],
         "sources": [{"type": source_tag}],
+        "ingested_at": datetime.now(timezone.utc).isoformat(),
     }
 
     if exploration_tag:

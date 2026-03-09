@@ -1445,6 +1445,75 @@ class ResearchHandler(BaseHTTPRequestHandler):
             'article_id': article_id,
         })
 
+    def _handle_ingest_note(self):
+        """Add a note/comment to an already-ingested article (sidecar file)."""
+        if INGEST_TOKEN:
+            token = self.headers.get('X-Petrarca-Token', '')
+            if token != INGEST_TOKEN:
+                self._send_json_response(401, {'error': 'Invalid or missing auth token'})
+                return
+
+        body = self._read_json_body()
+        if body is None:
+            return
+
+        url = body.get('url', '').strip()
+        comment = body.get('comment', '').strip()
+        if not url or not comment:
+            self._send_json_response(400, {'error': 'Missing url or comment'})
+            return
+
+        sidecar = {
+            'url': url,
+            'title': body.get('title', ''),
+            'source': body.get('source', 'clipper'),
+            'created_at': int(time.time() * 1000),
+            'notes': [{'text': comment, 'source': body.get('source', 'clipper')}],
+        }
+        sidecar_id = f'note_{int(time.time())}_{hash(url) % 10000:04d}'
+        sidecar_path = INGEST_DIR / f'{sidecar_id}_sidecar.json'
+        sidecar_path.write_text(json.dumps(sidecar, indent=2))
+        print(f'[ingest-note] Saved note for {url[:60]}', flush=True)
+        self._send_json_response(200, {'status': 'ok', 'sidecar_id': sidecar_id})
+
+    def _handle_ingest_cancel(self):
+        """Remove a recently-ingested article by URL (best-effort)."""
+        if INGEST_TOKEN:
+            token = self.headers.get('X-Petrarca-Token', '')
+            if token != INGEST_TOKEN:
+                self._send_json_response(401, {'error': 'Invalid or missing auth token'})
+                return
+
+        body = self._read_json_body()
+        if body is None:
+            return
+
+        url = body.get('url', '').strip()
+        if not url:
+            self._send_json_response(400, {'error': 'Missing url'})
+            return
+
+        article_id = hashlib.sha256(url.encode()).hexdigest()[:12]
+        removed = False
+
+        try:
+            articles = json.loads(ARTICLES_PATH.read_text())
+            before = len(articles)
+            articles = [a for a in articles if a.get('id') != article_id]
+            if len(articles) < before:
+                ARTICLES_PATH.write_text(json.dumps(articles, indent=2))
+                removed = True
+                print(f'[ingest-cancel] Removed {article_id} ({url[:60]})', flush=True)
+            else:
+                print(f'[ingest-cancel] Article {article_id} not found (may still be processing)', flush=True)
+        except (json.JSONDecodeError, OSError) as e:
+            print(f'[ingest-cancel] Error: {e}', flush=True)
+
+        self._send_json_response(200, {
+            'status': 'removed' if removed else 'not_found',
+            'article_id': article_id,
+        })
+
     def _handle_ingest_book(self):
         if INGEST_TOKEN:
             token = self.headers.get('X-Petrarca-Token', '')
@@ -1528,6 +1597,10 @@ class ResearchHandler(BaseHTTPRequestHandler):
             return self._handle_ingest_book()
         if self.path == '/twitter/cookies':
             return self._handle_twitter_cookies()
+        if self.path == '/ingest-note':
+            return self._handle_ingest_note()
+        if self.path == '/ingest-cancel':
+            return self._handle_ingest_cancel()
 
         if self.path == '/research/explore-batch':
             return self._handle_explore_batch()

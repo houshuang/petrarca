@@ -9,8 +9,37 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "saveClip") {
     handleSave(message.payload)
       .then((result) => sendResponse(result))
-      .catch((err) => sendResponse({ ok: false, error: err.message }));
-    return true; // keep channel open for async
+      .catch(async (err) => {
+        // Offline fallback: queue locally
+        try {
+          await storeLocally(message.payload);
+          console.log("[petrarca] Server unavailable, saved locally");
+          sendResponse({ ok: true, queued: true });
+        } catch (storageErr) {
+          sendResponse({ ok: false, error: err.message });
+        }
+      });
+    return true;
+  }
+
+  if (message.type === "addNote") {
+    handleAddNote(message.payload)
+      .then((result) => sendResponse(result))
+      .catch((err) => {
+        console.log(`[petrarca] addNote failed: ${err.message}`);
+        sendResponse({ ok: false, error: err.message });
+      });
+    return true;
+  }
+
+  if (message.type === "cancelSave") {
+    handleCancelSave(message.payload)
+      .then((result) => sendResponse(result))
+      .catch((err) => {
+        console.log(`[petrarca] cancelSave failed: ${err.message}`);
+        sendResponse({ ok: false, error: err.message });
+      });
+    return true;
   }
 
   if (message.type === "setBadge") {
@@ -47,6 +76,64 @@ async function handleSave(payload) {
   }
 
   return { ok: true };
+}
+
+async function handleAddNote(payload) {
+  const settings = await loadSettings();
+  const serverUrl = (settings.serverUrl || SERVER_DEFAULT).replace(/\/+$/, "");
+  const authToken = settings.authToken || "";
+
+  const headers = { "Content-Type": "application/json" };
+  if (authToken) {
+    headers["X-Petrarca-Token"] = authToken;
+  }
+
+  const response = await fetch(`${serverUrl}/ingest-note`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`${response.status}: ${text.slice(0, 200)}`);
+  }
+
+  return { ok: true };
+}
+
+async function handleCancelSave(payload) {
+  const settings = await loadSettings();
+  const serverUrl = (settings.serverUrl || SERVER_DEFAULT).replace(/\/+$/, "");
+  const authToken = settings.authToken || "";
+
+  const headers = { "Content-Type": "application/json" };
+  if (authToken) {
+    headers["X-Petrarca-Token"] = authToken;
+  }
+
+  const response = await fetch(`${serverUrl}/ingest-cancel`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`${response.status}: ${text.slice(0, 200)}`);
+  }
+
+  return { ok: true };
+}
+
+async function storeLocally(payload) {
+  const result = await chrome.storage.local.get(["petrarca_queue"]);
+  const queue = result.petrarca_queue || [];
+  queue.push({
+    ...payload,
+    queued_at: new Date().toISOString(),
+  });
+  await chrome.storage.local.set({ petrarca_queue: queue });
 }
 
 function loadSettings() {

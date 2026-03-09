@@ -37,6 +37,7 @@ export interface Article {
   novelty_claims?: NoveltyClaim[];
   entities?: ArticleEntity[];
   follow_up_questions?: FollowUpQuestion[];
+  ingested_at?: string;
 }
 
 export interface ArticleSection {

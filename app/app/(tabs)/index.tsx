@@ -28,11 +28,40 @@ import PetrarcaDrawer from '../../components/PetrarcaDrawer';
 
 // --- Article Card ---
 
-function ArticleCard({ article, onDismiss, onQueue, compact }: {
+function formatRelativeDate(isoOrDate: string): string {
+  const date = new Date(isoOrDate.includes('T') ? isoOrDate : isoOrDate + 'T00:00:00');
+  const now = Date.now();
+  const diffMs = now - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 60) return `${Math.max(1, diffMins)}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays === 1) return 'yesterday';
+  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+  return `${Math.floor(diffDays / 30)}mo ago`;
+}
+
+function formatSourceLabel(sources: Article['sources']): string | null {
+  const type = sources?.[0]?.type;
+  if (!type || type === 'manual') return null;
+  const labels: Record<string, string> = {
+    twitter_bookmark: 'Twitter',
+    readwise: 'Readwise',
+    rss: 'RSS',
+    exploration: 'Explored',
+    research_recommendation: 'Research',
+  };
+  return labels[type] || null;
+}
+
+function ArticleCard({ article, onDismiss, onQueue, compact, showIngestInfo }: {
   article: Article;
   onDismiss: () => void;
   onQueue: () => void;
   compact?: boolean;
+  showIngestInfo?: boolean;
 }) {
   const router = useRouter();
   const state = getReadingState(article.id);
@@ -135,6 +164,8 @@ function ArticleCard({ article, onDismiss, onQueue, compact }: {
             {novelty && novelty.new_claims > 0
               ? ` · ${novelty.new_claims} new`
               : ''}
+            {showIngestInfo && (article.ingested_at || article.date) ? ` · ${formatRelativeDate(article.ingested_at || article.date)}` : ''}
+            {showIngestInfo && formatSourceLabel(article.sources) ? ` · ${formatSourceLabel(article.sources)}` : ''}
           </Text>
           <View style={styles.topicTags}>
             {fallbackTopics.map(t => (
@@ -318,6 +349,7 @@ export default function FeedScreen() {
               onDismiss={handleDismiss}
               onQueue={handleQueue}
               compact={activeLens === 'latest'}
+              showIngestInfo={activeLens === 'latest'}
             />
           </View>
         );
