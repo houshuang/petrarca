@@ -4,6 +4,26 @@
 
 ---
 
+## 2026-03-10 — Session 15b: Universal Feedback Capture with Screenshots + Server Upload
+
+**What**: Upgraded the floating ✦ feedback button from local-only text/voice to a full feedback pipeline with automatic screenshots, server upload, and rich context detection.
+
+### Implementation
+
+**Client-side**:
+- `FeedbackCapture.tsx` — captures screenshot via `react-native-view-shot` (`captureScreen`) BEFORE opening the modal overlay. Shows screenshot thumbnail with Remove option. Text input + voice recording + context display.
+- `feedback-context.ts` — NEW module-level context store. `setFeedbackContext()` merges partial updates from any screen. Feed sets screen/lens on focus; reader sets article ID/title/reading mode/scroll progress.
+- `chat-api.ts` — `uploadFeedback()` sends multipart FormData. On web: converts data URI screenshots to Blob before appending (standard FormData API doesn't support RN's `{ uri, type, name }` pattern). Falls back to local AsyncStorage on upload failure.
+- `react-native-view-shot@4.0.3` added as dependency.
+
+**Server-side** (`research-server.py`):
+- `POST /feedback` endpoint — parses multipart/form-data via `cgi.FieldStorage`. Saves screenshot PNG + audio m4a + JSON metadata to `/opt/petrarca/data/feedback/`. Binary-safe file writing (handles both bytes and str from cgi module). Background thread transcribes audio via Soniox and updates metadata JSON.
+
+### Verified
+- End-to-end test via agent-browser: open feed → click ✦ → fill text → Send → server saves screenshot (213KB PNG) + text + context JSON with `screen: "feed", activeLens: "best"`.
+
+---
+
 ## 2026-03-10 — Session 15: LLM Judge for Ambiguous Claims (G2)
 
 **What**: Integrated the LLM judge from Experiment 2 into the production pipeline. Claim pairs in the 0.68–0.78 cosine range now get verified by Gemini Flash before classification.

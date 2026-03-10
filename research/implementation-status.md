@@ -1,8 +1,8 @@
 # Knowledge System Implementation Status
 
-**Date**: March 10, 2026 (last updated — session 15: LLM judge for ambiguous claims)
-**Status**: Full corpus deployed with knowledge system, reader interactions, voice notes, AI chat, research agents, entity deep-dive, follow-up research, voice note browser + action extraction, activity log tab, scroll-aware encounter tracking, curated novelty card, hierarchical topic feedback, cross-article connections, LLM-verified topic normalization, automatic defragmentation, **unified single-screen feed with lens tabs**, **dynamic reranking**, **✦ drawer navigation**, **clipper auto-save countdown**, **tweet URL ingestion via twikit**, **auto-sync Twitter cookies**, **clipper immediate save via background worker**, **reader disregard + report bad scrape**, **feed ingest metadata**, **floating feedback capture**, **expanded follow-up questions**, **queue auto-advance**, **hybrid topic signals**, **desktop web: 2-column feed grid**, **desktop web: 3-column reader with margin annotations**, **keyboard navigation with multi-key sequences**, **hover actions (archive + dismiss)**, **XML-first article extraction (paragraph merging fix)**, **mobile feed overlap fix**, **reader arrow-key scroll fix**, **LLM judge for ambiguous claims (G2)**
-**Latest commits**: Session 15 — LLM judge integrated into pipeline: `judge_ambiguous_pairs()` verifies claim pairs in 0.68–0.78 cosine range via Gemini Flash. Verdicts stored in `knowledge_index.json`, client-side engine consults them. First run: 57% of 200 judged pairs reclassified (104 UNRELATED, 1 ENTAILS). Also updated scrape triage docs (G14 mostly resolved by session 14 fixes).
+**Date**: March 10, 2026 (last updated — session 15b: feedback capture with screenshots + server upload)
+**Status**: Full corpus deployed with knowledge system, reader interactions, voice notes, AI chat, research agents, entity deep-dive, follow-up research, voice note browser + action extraction, activity log tab, scroll-aware encounter tracking, curated novelty card, hierarchical topic feedback, cross-article connections, LLM-verified topic normalization, automatic defragmentation, **unified single-screen feed with lens tabs**, **dynamic reranking**, **✦ drawer navigation**, **clipper auto-save countdown**, **tweet URL ingestion via twikit**, **auto-sync Twitter cookies**, **clipper immediate save via background worker**, **reader disregard + report bad scrape**, **feed ingest metadata**, **floating feedback capture with screenshots + server upload**, **expanded follow-up questions**, **queue auto-advance**, **hybrid topic signals**, **desktop web: 2-column feed grid**, **desktop web: 3-column reader with margin annotations**, **keyboard navigation with multi-key sequences**, **hover actions (archive + dismiss)**, **XML-first article extraction (paragraph merging fix)**, **mobile feed overlap fix**, **reader arrow-key scroll fix**, **LLM judge for ambiguous claims (G2)**
+**Latest commits**: Session 15b — Feedback capture upgraded: screenshot via react-native-view-shot (captureScreen before modal opens), server upload via POST /feedback (multipart FormData), web data-URI→Blob fix, context propagation (feedback-context.ts), Soniox audio transcription in background thread. Also: LLM judge for ambiguous claims (G2).
 
 ---
 
@@ -100,7 +100,8 @@ App (Expo SDK 54):
 
 | File | Description |
 |------|-------------|
-| `app/components/FeedbackCapture.tsx` | Floating ✦ feedback button (bottom-right). Tap opens voice/text overlay with auto-detected context (screen, article ID). Long-press hides (persisted). Saves to `@petrarca/feedback_items`. Events: `feedback_capture_start/complete/dismiss`. |
+| `app/components/FeedbackCapture.tsx` | Floating ✦ feedback button (bottom-right). Tap captures screenshot (react-native-view-shot) + opens voice/text overlay with auto-detected context (screen, article, lens, reading state). Uploads screenshot (PNG) + audio (m4a) + text + context JSON to `POST /feedback`. Falls back to local AsyncStorage. Long-press hides (persisted). Events: `feedback_capture_start/complete/dismiss`. |
+| `app/lib/feedback-context.ts` | Module-level feedback context store. `setFeedbackContext()` merges partial updates, `getFeedbackContext()` returns snapshot. Screens call `setFeedbackContext()` on mount/state change to propagate current screen, article ID/title, active lens, reading mode, scroll progress. |
 
 #### Modified Files (Session 11b: Feedback Capture + More Questions + Auto-Advance + Topic Signals)
 
@@ -109,11 +110,11 @@ App (Expo SDK 54):
 | `app/app/_layout.tsx` | Added `FeedbackCapture` component (global floating button). |
 | `app/app/(tabs)/index.tsx` | Redesigned topic interest signals: `isTopicNew()` function, `KnownTopicDot` component (tap-to-cycle), new topics get left-bordered +/− rows, known topics get compact dot-list. Removed old `TopicLevelRow` and chip styles. Added `getInterestProfile` import. |
 | `app/app/reader.tsx` | "More questions" button in FURTHER INQUIRY with pulsing ✦ animation. Queue auto-advance: `advanceOrGoBack()` replaces `router.back()`, "UP NEXT" toast with escape button. Topic signal redesign matching index.tsx changes. |
-| `app/lib/chat-api.ts` | Added `generateMoreQuestions()` — calls `POST /generate-questions` with article context + existing questions. |
+| `app/lib/chat-api.ts` | Added `generateMoreQuestions()`, `uploadFeedback()` (multipart FormData with web data-URI→Blob conversion for screenshots). |
 | `app/components/KeyboardHintBar.tsx` | Modified (minor). |
 | `app/components/LensTabs.tsx` | Modified (minor). |
 | `scripts/build_articles.py` | Extraction prompt generates 4 follow-up questions (was 2-3), with broader/more divergent framing. |
-| `scripts/research-server.py` | New `POST /generate-questions` endpoint — generates 3 additional follow-up questions given article context + already-shown questions. |
+| `scripts/research-server.py` | New `POST /generate-questions` endpoint. New `POST /feedback` endpoint — accepts multipart/form-data (screenshot PNG, audio m4a, text, context JSON), saves to `/opt/petrarca/data/feedback/`, background Soniox transcription for audio. |
 
 #### Modified Files (Session 11: Clipper Immediate Save + Reader Actions + Feed Metadata)
 
