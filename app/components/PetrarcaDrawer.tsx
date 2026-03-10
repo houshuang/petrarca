@@ -84,9 +84,14 @@ export default function PetrarcaDrawer({ visible, onClose }: PetrarcaDrawerProps
             onPress={() => navigate('activity_log', '/log')}
           />
           <NavItem
-            title="Reading Progress"
-            subtitle={`${readCount} articles read`}
-            onPress={() => navigate('reading_progress', '/log')}
+            title="Your Landscape"
+            subtitle={`${readCount} articles · topics & connections`}
+            onPress={() => navigate('landscape', '/landscape')}
+          />
+          <NavItem
+            title="Reading Trails"
+            subtitle="Follow threads of ideas"
+            onPress={() => navigate('trails', '/trails')}
           />
           <NavItem
             title="Queue"

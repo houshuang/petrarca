@@ -3,10 +3,13 @@ import { Stack } from 'expo-router';
 import { View, Text, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Font from 'expo-font';
+import * as SplashScreen from 'expo-splash-screen';
 import { initStore } from '../data/store';
 import { startNewSession } from '../data/logger';
 import { colors } from '../design/tokens/colors';
 import FeedbackCapture from '../components/FeedbackCapture';
+
+SplashScreen.preventAutoHideAsync();
 
 const fontAssets = {
   'CormorantGaramond': require('../assets/fonts/CormorantGaramond-Regular.ttf'),
@@ -38,6 +41,7 @@ export default function RootLayout() {
         Font.loadAsync(fontAssets),
       ]);
       setReady(true);
+      await SplashScreen.hideAsync();
     })();
   }, []);
 
@@ -56,6 +60,8 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="reader" />
         <Stack.Screen name="voice-notes" />
+        <Stack.Screen name="landscape" />
+        <Stack.Screen name="trails" />
         <Stack.Screen name="+not-found" />
       </Stack>
       <FeedbackCapture />

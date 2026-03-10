@@ -26,6 +26,7 @@ import DoubleRule from '../../components/DoubleRule';
 import LensTabs from '../../components/LensTabs';
 import TopicsGroupedList from '../../components/TopicsGroupedList';
 import PetrarcaDrawer from '../../components/PetrarcaDrawer';
+import ReadingDeskHeader from '../../components/ReadingDeskHeader';
 import KeyboardHintBar from '../../components/KeyboardHintBar';
 import { useKeyboardShortcuts, type ShortcutMap } from '../../hooks/useKeyboardShortcuts';
 
@@ -524,6 +525,7 @@ export default function FeedScreen() {
           </Animated.Text>
         </View>
       )}
+      <ReadingDeskHeader onDrawerOpen={() => setDrawerOpen(true)} />
       <UpNextSection onDrawerOpen={() => setDrawerOpen(true)} isFocused={focusedIndex === -1} />
       <View nativeID={recommendedArticle ? `article-${recommendedArticle.id}` : undefined}>
         <RecommendedSection onSeeAll={handleSeeAllBest} excludeArticleId={upNextArticleId} />
@@ -644,7 +646,7 @@ export default function FeedScreen() {
     if (activeLens === 'topics') {
       items.push({ type: 'topics-grouped', topicFilter });
     } else {
-      const articles = getArticlesByLens(activeLens, topicFilter);
+      const articles = getArticlesByLens(activeLens, topicFilter).filter(a => !heroArticleIds.has(a.id));
       for (const a of articles) {
         items.push({ type: 'article', article: a });
       }
@@ -657,10 +659,10 @@ export default function FeedScreen() {
       }
     }
     return items;
-  }, [activeLens, topicFilter, feedVersion]);
+  }, [activeLens, topicFilter, feedVersion, heroArticleIds]);
 
   const mobileHeader = useCallback(() => (
-    <View>
+    <View style={styles.mobileHeader}>
       {refreshing && (
         <View style={styles.refreshOrnament}>
           <Animated.Text style={[styles.refreshStar, {
@@ -670,6 +672,7 @@ export default function FeedScreen() {
           </Animated.Text>
         </View>
       )}
+      <ReadingDeskHeader onDrawerOpen={() => setDrawerOpen(true)} />
       <UpNextSection onDrawerOpen={() => setDrawerOpen(true)} isFocused={false} />
       <RecommendedSection onSeeAll={handleSeeAllBest} excludeArticleId={upNextArticleId} />
       <TopicPillsSection onTopicPress={handleTopicPress} onSeeAll={handleSeeAllTopics} />
@@ -827,11 +830,17 @@ const styles = StyleSheet.create({
     color: colors.rubric,
   },
 
+  mobileHeader: {
+    backgroundColor: colors.parchment,
+    zIndex: 1,
+  },
+
   // Article card
   card: {
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.rule,
+    backgroundColor: colors.parchment,
   },
   cardRead: {
     opacity: 0.5,
