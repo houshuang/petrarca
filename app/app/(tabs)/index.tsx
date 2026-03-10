@@ -240,8 +240,6 @@ function ArticleCard({ article, onDismiss, onQueue, compact, showIngestInfo, isF
 // --- Feed Screen ---
 
 type ListItem =
-  | { type: 'header' }
-  | { type: 'lens-tabs' }
   | { type: 'topics-grouped'; topicFilter?: string }
   | { type: 'article'; article: Article }
   | { type: 'separator' }
@@ -328,35 +326,10 @@ export default function FeedScreen() {
 
   const feedVersion = getFeedVersion();
 
-  // Build the list data based on active lens
-  const listData = useMemo((): ListItem[] => {
-    const items: ListItem[] = [];
-
-    // Header (UpNext, Recommended, TopicPills, DoubleRule) is first
-    items.push({ type: 'header' });
-
-    // Lens tabs are second (will be sticky via stickyHeaderIndices={[1]})
-    items.push({ type: 'lens-tabs' });
-
-    if (activeLens === 'topics') {
-      items.push({ type: 'topics-grouped', topicFilter });
-    } else {
-      const articles = getArticlesByLens(activeLens, topicFilter);
-      for (const a of articles) {
-        items.push({ type: 'article', article: a });
-      }
-
-      // Read articles at the bottom
-      const readArticles = getReadArticles();
-      if (readArticles.length > 0) {
-        items.push({ type: 'separator' });
-        for (const a of readArticles) {
-          items.push({ type: 'read', article: a });
-        }
-      }
-    }
-
-    return items;
+  // Article list for mobile keyboard navigation
+  const mobileArticleList = useMemo(() => {
+    if (activeLens === 'topics') return [];
+    return getArticlesByLens(activeLens, topicFilter);
   }, [activeLens, topicFilter, feedVersion]);
 
   const handleDismiss = useCallback(() => {
@@ -369,10 +342,10 @@ export default function FeedScreen() {
     forceUpdate(n => n + 1);
   }, []);
 
-  // Get article items for keyboard navigation
+  // Article items for mobile keyboard navigation
   const articleItems = useMemo(() =>
-    listData.filter((item): item is Extract<ListItem, { type: 'article' }> => item.type === 'article'),
-    [listData]
+    mobileArticleList.map(article => ({ type: 'article' as const, article })),
+    [mobileArticleList]
   );
 
   // Compute the Up Next article ID (needed by keyboard shortcuts + Recommended exclusion)
@@ -435,7 +408,7 @@ export default function FeedScreen() {
         el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     } else {
-      try { flatListRef.current?.scrollToIndex({ index: index + 2, viewPosition: 0.3, animated: true }); } catch {}
+      try { flatListRef.current?.scrollToIndex({ index, viewPosition: 0.3, animated: true }); } catch {}
     }
   }, [allNavArticles, articleItems]);
 
@@ -553,62 +526,6 @@ export default function FeedScreen() {
     </View>
   ), [refreshing, spinAnim, handleSeeAllBest, handleTopicPress, handleSeeAllTopics, upNextArticleId, focusedIndex]);
 
-  const renderItem = useCallback(({ item }: { item: ListItem }) => {
-    switch (item.type) {
-      case 'header':
-        return renderHeader();
-      case 'lens-tabs':
-        return (
-          <LensTabs activeLens={activeLens} onLensChange={handleLensChange} />
-        );
-      case 'topics-grouped':
-        return (
-          <View style={styles.listPadding}>
-            <TopicsGroupedList topicFilter={item.topicFilter} />
-          </View>
-        );
-      case 'article':
-        return (
-          <View style={styles.listPadding}>
-            <ArticleCard
-              article={item.article}
-              onDismiss={handleDismiss}
-              onQueue={handleQueue}
-              compact={activeLens === 'latest'}
-              showIngestInfo={activeLens === 'latest'}
-              isFocused={item.article.id === focusedArticleId}
-              lens={activeLens}
-            />
-          </View>
-        );
-      case 'separator':
-        return (
-          <View style={[styles.readSeparator, styles.listPadding]}>
-            <View style={styles.readSeparatorLine} />
-            <Text style={styles.readSeparatorText}>Read</Text>
-            <View style={styles.readSeparatorLine} />
-          </View>
-        );
-      case 'read':
-        return (
-          <View style={styles.listPadding}>
-            <ArticleCard
-              article={item.article}
-              onDismiss={handleDismiss}
-              onQueue={handleQueue}
-              compact
-            />
-          </View>
-        );
-      default:
-        return null;
-    }
-  }, [activeLens, handleLensChange, handleDismiss, handleQueue, focusedArticleId, renderHeader]);
-
-  const keyExtractor = useCallback((item: ListItem, index: number) => {
-    if (item.type === 'article' || item.type === 'read') return item.article.id;
-    return `${item.type}-${index}`;
-  }, []);
 
   const webReadArticles = useMemo(() => {
     if (activeLens === 'topics') return [];
@@ -710,15 +627,109 @@ export default function FeedScreen() {
     );
   }
 
-  // --- Mobile layout (FlatList, unchanged) ---
+  // --- Mobile layout ---
+  // LensTabs rendered outside FlatList to avoid stickyHeaderIndices layout bugs.
+  // It's absolutely positioned and shown once user scrolls past the header.
+  const [showStickyTabs, setShowStickyTabs] = useState(false);
+
+  const mobileListData = useMemo((): ListItem[] => {
+    const items: ListItem[] = [];
+    if (activeLens === 'topics') {
+      items.push({ type: 'topics-grouped', topicFilter });
+    } else {
+      const articles = getArticlesByLens(activeLens, topicFilter);
+      for (const a of articles) {
+        items.push({ type: 'article', article: a });
+      }
+      const readArticles = getReadArticles();
+      if (readArticles.length > 0) {
+        items.push({ type: 'separator' });
+        for (const a of readArticles) {
+          items.push({ type: 'read', article: a });
+        }
+      }
+    }
+    return items;
+  }, [activeLens, topicFilter, feedVersion]);
+
+  const mobileHeader = useCallback(() => (
+    <View>
+      {refreshing && (
+        <View style={styles.refreshOrnament}>
+          <Animated.Text style={[styles.refreshStar, {
+            transform: [{ rotate: spinAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }],
+          }]}>
+            {'\u2726'}
+          </Animated.Text>
+        </View>
+      )}
+      <UpNextSection onDrawerOpen={() => setDrawerOpen(true)} isFocused={false} />
+      <RecommendedSection onSeeAll={handleSeeAllBest} excludeArticleId={upNextArticleId} />
+      <TopicPillsSection onTopicPress={handleTopicPress} onSeeAll={handleSeeAllTopics} />
+      <DoubleRule />
+      <LensTabs activeLens={activeLens} onLensChange={handleLensChange} />
+    </View>
+  ), [refreshing, spinAnim, handleSeeAllBest, handleTopicPress, handleSeeAllTopics, upNextArticleId, activeLens, handleLensChange]);
+
+  const mobileRenderItem = useCallback(({ item }: { item: ListItem }) => {
+    switch (item.type) {
+      case 'topics-grouped':
+        return (
+          <View style={styles.listPadding}>
+            <TopicsGroupedList topicFilter={item.topicFilter} />
+          </View>
+        );
+      case 'article':
+        return (
+          <View style={styles.listPadding}>
+            <ArticleCard
+              article={item.article}
+              onDismiss={handleDismiss}
+              onQueue={handleQueue}
+              compact={activeLens === 'latest'}
+              showIngestInfo={activeLens === 'latest'}
+              isFocused={item.article.id === focusedArticleId}
+              lens={activeLens}
+            />
+          </View>
+        );
+      case 'separator':
+        return (
+          <View style={[styles.readSeparator, styles.listPadding]}>
+            <View style={styles.readSeparatorLine} />
+            <Text style={styles.readSeparatorText}>Read</Text>
+            <View style={styles.readSeparatorLine} />
+          </View>
+        );
+      case 'read':
+        return (
+          <View style={styles.listPadding}>
+            <ArticleCard
+              article={item.article}
+              onDismiss={handleDismiss}
+              onQueue={handleQueue}
+              compact
+            />
+          </View>
+        );
+      default:
+        return null;
+    }
+  }, [activeLens, handleDismiss, handleQueue, focusedArticleId]);
+
+  const mobileKeyExtractor = useCallback((item: ListItem, index: number) => {
+    if (item.type === 'article' || item.type === 'read') return item.article.id;
+    return `${item.type}-${index}`;
+  }, []);
+
   return (
     <GestureHandlerRootView style={styles.container}>
       <FlatList
         ref={flatListRef}
-        data={listData}
-        keyExtractor={keyExtractor}
-        stickyHeaderIndices={[1]}
-        renderItem={renderItem}
+        data={mobileListData}
+        keyExtractor={mobileKeyExtractor}
+        ListHeaderComponent={mobileHeader}
+        renderItem={mobileRenderItem}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -734,6 +745,11 @@ export default function FeedScreen() {
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         removeClippedSubviews={false}
+        onScroll={(e) => {
+          const y = e.nativeEvent.contentOffset.y;
+          setShowStickyTabs(y > 300);
+        }}
+        scrollEventThrottle={32}
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>No articles yet</Text>
@@ -741,6 +757,12 @@ export default function FeedScreen() {
           </View>
         }
       />
+
+      {showStickyTabs && (
+        <View style={styles.mobileStickyTabs}>
+          <LensTabs activeLens={activeLens} onLensChange={handleLensChange} />
+        </View>
+      )}
 
       <KeyboardHintBar shortcuts={feedShortcuts} />
       <PetrarcaDrawer visible={drawerOpen} onClose={() => setDrawerOpen(false)} />
@@ -757,6 +779,16 @@ const styles = StyleSheet.create({
     maxWidth: layout.webFeedMaxWidth,
     width: '100%',
     alignSelf: 'center' as const,
+  },
+  mobileStickyTabs: {
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    backgroundColor: colors.parchment,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.rule,
   },
   webScrollContainer: {
     flex: 1,
