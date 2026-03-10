@@ -4,6 +4,62 @@
 
 ---
 
+## 2026-03-10 — Session 14: Parsing Fix + Mobile Feed Overlap + Platform Separation
+
+**What**: Fixed the two biggest quality issues — 43% of articles had merged paragraphs making highlighting impossible, and mobile feed items overlapped during scroll. Also separated mobile/web rendering paths more cleanly.
+
+### Article Parsing: Paragraph Merging Fix
+
+**Problem**: 82 prose paragraphs across 107 articles exceeded 200 words — paragraphs that should have been separate were merged into single blocks. This made it impossible to highlight just one thought in the reader. The user had reported 4 articles via the "Report bad scrape" feature.
+
+**Root cause discovered**: Trafilatura's XML output preserves correct `<p>` boundaries (e.g., 149 `<p>` tags for a Wikipedia article), but its built-in markdown serializer merges paragraphs at inline link boundaries. The paragraph structure was **known** but **lost** during format conversion.
+
+**Three-part fix**:
+1. **XML-first extraction** (`_xml_to_markdown()` in `build_articles.py`): New function parses trafilatura's XML output and converts to markdown preserving `<p>`, `<head>`, `<quote>`, `<list>`, `<code>` boundaries. Handles `<ref>` (links) and `<hi>` (bold/italic) inline elements. Falls back to old markdown extraction if XML fails or yields too little text.
+2. **Long paragraph splitting** (`_split_long_paragraphs()` in `build_articles.py`): Post-processing step in `clean_markdown()` that splits prose paragraphs exceeding 200 words at sentence boundaries. Regex supports Latin, Greek (`\u0386-\u03ab`), and Cyrillic (`\u0400-\u042f`) capitals. Skips headings, lists, code blocks, blockquotes, and tables.
+3. **Tweet paragraph normalization**: Single `\n` → `\n\n` for non-threaded tweets in both `run_ingest_tweet()` (clipper path) and `fetch_all_candidates()` (bookmark processing path). Thread reconstruction already used `\n\n---\n\n` between tweets.
+
+**Results**: Long prose paragraphs reduced from 82 → 7 (remaining 7 are all in a junk email inbox digest article). Cleaned all 250 existing articles via `clean_existing_articles.py`. Updated manifest hash so app picks up changes.
+
+**Also fixed**: `fetch_method` field now persisted in article JSON (was always "unknown"). `clean_existing_articles.py` auto-detects server vs local path. Long paragraph count included in quality audit.
+
+### Mobile Feed Overlap Fix
+
+**Problem**: On mobile, FlatList items overlapped each other during and after scrolling. All sections rendered at the same Y position — a longstanding bug.
+
+**Root cause**: `ListHeaderComponent` + `stickyHeaderIndices={[0]}` with variable-height header content. FlatList's internal layout engine miscalculates content offsets when the header component has variable height (progress bars, claim previews, different article states). Contributing: inline `onViewableItemsChanged` callback created new references on each render, causing FlatList to reinitialize viewability tracking.
+
+**Fix**: Moved header from `ListHeaderComponent` into the data array as `data[0]`, rendered by `renderItem`. Updated `stickyHeaderIndices` from `[0]` to `[1]` for lens tabs. Stabilized `onViewableItemsChanged` and `viewabilityConfig` via `useRef`. Added `removeClippedSubviews={false}`.
+
+**Architecture principle established**: Don't use `stickyHeaderIndices` with variable-height FlatList items. Separate rendering per platform, share business logic.
+
+### Reader Web Fixes
+
+- **Arrow-key scroll**: Fixed `body { overflow: hidden }` (set by React Native Web) by overriding to `auto` on reader mount, restoring on unmount. Also inject `div:focus, body:focus { outline: none }` to suppress click highlights.
+- **Top bar**: Changed `top: 2` → `top: 0` + `paddingTop: 4` to prevent title text peeking above sticky bar.
+
+### Scrape Report Triage
+
+4 user-reported bad scrapes found in `/opt/petrarca/data/scrape_reports.json`:
+1. `df64c81e` — Claude Code docs (JS-heavy site, navigation fragments)
+2. `285b8ae5` — Coworking for Punks (Substack, long markdown list merged)
+3. `adff8371` — Grep Is Dead (tweet as single 10K-char paragraph) → **fixed by tweet normalization**
+4. `450e9396` — AI Free My Time (newsletter redirect URL, cruft not fully stripped)
+
+### Files Changed
+- `scripts/build_articles.py` — `_xml_to_markdown()`, `_split_long_paragraphs()`, XML-first extraction tiers, tweet text normalization, `fetch_method` persistence
+- `scripts/clean_existing_articles.py` — Server/local path auto-detection, long paragraph counting
+- `scripts/research-server.py` — Tweet paragraph normalization in `run_ingest_tweet()`
+- `app/app/(tabs)/index.tsx` — Header moved into data array, stickyHeaderIndices fix, stable refs
+- `app/app/reader.tsx` — Arrow-key scroll fix, top bar positioning
+
+### Commits
+- `6cdda58` — Desktop web layouts, airy reader redesign, feedback features (sessions 11b-13)
+- `4f44647` — Fix paragraph merging in article extraction pipeline
+- `dfad332` — Fix mobile feed overlap: move header into FlatList data array
+
+---
+
 ## 2026-03-09 — Session 11b: Feedback Capture + More Questions + Queue Auto-Advance + Topic Signal Redesign
 
 **What**: Four UX features: floating feedback button, expanded follow-up research questions, automatic queue advancement, and redesigned topic interest signals.

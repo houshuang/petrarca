@@ -1,8 +1,8 @@
 # Knowledge System Implementation Status
 
-**Date**: March 9, 2026 (last updated — session 12: desktop web)
-**Status**: Full corpus deployed with knowledge system, reader interactions, voice notes, AI chat, research agents, entity deep-dive, follow-up research, voice note browser + action extraction, activity log tab, scroll-aware encounter tracking, curated novelty card, hierarchical topic feedback, cross-article connections, LLM-verified topic normalization, automatic defragmentation, **unified single-screen feed with lens tabs**, **dynamic reranking**, **✦ drawer navigation**, **clipper auto-save countdown**, **tweet URL ingestion via twikit**, **auto-sync Twitter cookies**, **clipper immediate save via background worker**, **reader disregard + report bad scrape**, **feed ingest metadata**, **floating feedback capture**, **expanded follow-up questions**, **queue auto-advance**, **hybrid topic signals**, **desktop web: 2-column feed grid**, **desktop web: 3-column reader with margin annotations**, **keyboard navigation with multi-key sequences**, **hover actions (archive + dismiss)**
-**Latest commits**: Session 12 — Desktop web layouts: 2-column feed grid (1100px), 3-column reader with left margin (metadata, actions, full shortcuts) and right margin (up next, connected reading, follow-up questions). Reader uses browser-native scroll on web (fixes scroll bug). Feed: hover ✓/✕ buttons, hero articles excluded from grid, Up Next auto-focused. Top bar: prev/next article navigation. Multi-key shortcut support (gi = go to index). Keyboard hint bar uses webFeedMaxWidth.
+**Date**: March 10, 2026 (last updated — session 14: parsing fix + mobile feed overlap)
+**Status**: Full corpus deployed with knowledge system, reader interactions, voice notes, AI chat, research agents, entity deep-dive, follow-up research, voice note browser + action extraction, activity log tab, scroll-aware encounter tracking, curated novelty card, hierarchical topic feedback, cross-article connections, LLM-verified topic normalization, automatic defragmentation, **unified single-screen feed with lens tabs**, **dynamic reranking**, **✦ drawer navigation**, **clipper auto-save countdown**, **tweet URL ingestion via twikit**, **auto-sync Twitter cookies**, **clipper immediate save via background worker**, **reader disregard + report bad scrape**, **feed ingest metadata**, **floating feedback capture**, **expanded follow-up questions**, **queue auto-advance**, **hybrid topic signals**, **desktop web: 2-column feed grid**, **desktop web: 3-column reader with margin annotations**, **keyboard navigation with multi-key sequences**, **hover actions (archive + dismiss)**, **XML-first article extraction (paragraph merging fix)**, **mobile feed overlap fix**, **reader arrow-key scroll fix**
+**Latest commits**: Session 14 — Article parsing: XML-first extraction preserves paragraph boundaries (82→7 long prose paragraphs), sentence-boundary splitting for >200w blocks, tweet text `\n`→`\n\n` normalization. Mobile: header moved from ListHeaderComponent into data array fixing FlatList overlap. Reader: arrow-key scroll fix (body overflow override), top bar positioning. fetch_method persisted in article JSON.
 
 ---
 
@@ -73,6 +73,16 @@ App (Expo SDK 54):
 | `app/components/TopicsGroupedList.tsx` | Articles grouped by topic with tree-line indentation. Expand/collapse (shows 3, "+N more" to expand). Optional `topicFilter` prop. Logs `topic_group_article_tap`. |
 | `app/components/PetrarcaDrawer.tsx` | Bottom sheet (ink background). Quick actions: Triage, Voice Note. Nav items: Voice Notes, Activity Log, Reading Progress, Queue. Logs `drawer_open/close`, `drawer_item_tap`. |
 | `research/feed-redesign-plan.md` | Comprehensive plan: 3 rounds of mockup feedback, approved architecture, screen layout, 5-phase implementation order, component specs. |
+
+#### Modified Files (Session 14: Parsing Fix + Mobile Feed Overlap)
+
+| File | Changes |
+|------|---------|
+| `scripts/build_articles.py` | XML-first extraction: `_xml_to_markdown()` converts trafilatura XML preserving `<p>` boundaries with link/bold/italic handling. `_split_long_paragraphs()` splits prose >200w at sentence boundaries (Latin/Greek/Cyrillic). Tweet text `\n`→`\n\n` normalization in bookmark processing. `fetch_method` now persisted in article JSON. `from xml.etree import ElementTree` added. |
+| `scripts/clean_existing_articles.py` | Auto-detects server (`/opt/petrarca/data/`) vs local path. `count_issues()` now reports `long_paragraphs` count. |
+| `scripts/research-server.py` | Tweet paragraph normalization in `run_ingest_tweet()`: single `\n` → `\n\n` for non-threaded tweets. |
+| `app/app/(tabs)/index.tsx` | Mobile feed overlap fix: header moved from `ListHeaderComponent` into data array as `data[0]`, `stickyHeaderIndices` [0]→[1], `onViewableItemsChanged`/`viewabilityConfig` stabilized via `useRef`, `removeClippedSubviews={false}`, `scrollToIndex` offset +1→+2. |
+| `app/app/reader.tsx` | Arrow-key scroll fix: override `body { overflow: auto }` on mount (React Native Web sets `hidden`). Inject `outline: none` on `div:focus, body:focus`. Top bar: `top: 0` + `paddingTop: 4`. |
 
 #### Modified Files (Session 12: Desktop Web Layouts)
 
