@@ -155,27 +155,17 @@ def extract_cross_article_pairs(similarity: np.ndarray, claims: list[dict],
     return pairs
 
 
-def verify_ambiguous_pairs(pairs: list[dict], claims: list[dict]) -> int:
-    """Use LLM to reclassify pairs in the ambiguous similarity zone (0.68-0.78).
+def judge_ambiguous_pairs(pairs: list[dict], claims: list[dict]) -> tuple[dict[str, str], int]:
+    """Use LLM to classify pairs in the ambiguous similarity zone (0.68-0.78).
 
-    Pairs in this range often have cosine overestimating true similarity.
-    The LLM judge classifies each as KNOWN/EXTENDS/NEW, and pairs reclassified
-    as NEW get their classification field updated + score set below threshold.
-
-    Returns the number of reclassified pairs.
+    Returns (llm_verdicts dict, number of pairs that changed classification).
+    The verdicts dict maps "claimA_id::claimB_id" to one of ENTAILS/EXTENDS/UNRELATED.
     """
-    import litellm
     from concurrent.futures import ThreadPoolExecutor, as_completed
+    from gemini_llm import call_llm
 
-    gemini_key = os.environ.get("GEMINI_KEY") or os.environ.get("GEMINI_API_KEY")
-    if not gemini_key:
-        log("  No GEMINI_KEY found, skipping LLM judge")
-        return 0
-
-    # Build claim lookup
     claim_lookup = {c["id"]: c for c in claims}
 
-    # Select ambiguous pairs
     ambiguous = [
         p for p in pairs
         if JUDGE_AMBIGUOUS_LOW <= p["score"] < JUDGE_AMBIGUOUS_HIGH
@@ -183,9 +173,8 @@ def verify_ambiguous_pairs(pairs: list[dict], claims: list[dict]) -> int:
 
     if not ambiguous:
         log("  No ambiguous pairs to judge")
-        return 0
+        return {}, 0
 
-    # Prioritize pairs closest to the boundary (0.72-0.78 range first)
     priority = [p for p in ambiguous if p["score"] >= JUDGE_PRIORITY_LOW]
     rest = [p for p in ambiguous if p["score"] < JUDGE_PRIORITY_LOW]
     ordered = priority + rest
@@ -193,50 +182,33 @@ def verify_ambiguous_pairs(pairs: list[dict], claims: list[dict]) -> int:
 
     log(f"  {len(ambiguous)} ambiguous pairs (0.68-0.78), judging {len(to_judge)} (cap {JUDGE_MAX_PAIRS})")
 
-    reclassified = 0
+    verdicts: dict[str, str] = {}
+    changed = 0
 
-    def _judge_pair(pair: dict, index: int) -> tuple[dict, str]:
-        claim_a = claim_lookup.get(pair["a"], {})
-        claim_b = claim_lookup.get(pair["b"], {})
-        text_a = claim_a.get("normalized_text", pair["a"])
-        text_b = claim_b.get("normalized_text", pair["b"])
+    def _judge_pair(pair: dict, index: int) -> tuple[str, str, str]:
+        text_a = claim_lookup.get(pair["a"], {}).get("normalized_text", pair["a"])
+        text_b = claim_lookup.get(pair["b"], {}).get("normalized_text", pair["b"])
 
         prompt = (
             "Given these two claims, classify their relationship:\n"
-            "(a) KNOWN — they say the SAME thing (semantically equivalent)\n"
+            "(a) ENTAILS — they say the SAME thing (semantically equivalent)\n"
             "(b) EXTENDS — one extends, refines, or adds detail to the other\n"
-            "(c) NEW — they are genuinely DIFFERENT claims about different things\n\n"
+            "(c) UNRELATED — they are genuinely DIFFERENT claims about different things\n\n"
             f"Claim A: {text_a}\n"
             f"Claim B: {text_b}\n\n"
-            "Respond with ONLY one word: KNOWN, EXTENDS, or NEW."
+            "Respond with ONLY one word: ENTAILS, EXTENDS, or UNRELATED."
         )
 
-        try:
-            response = litellm.completion(
-                model="gemini/gemini-2.0-flash",
-                messages=[{"role": "user", "content": prompt}],
-                api_key=gemini_key,
-                temperature=0.0,
-                max_tokens=10,
-            )
-            try:
-                from llm_audit import audit_llm_call
-                audit_llm_call(response, script="build_knowledge_index.py", purpose="llm_judge")
-            except Exception:
-                pass
-            answer = response.choices[0].message.content.strip().upper()
-            # Normalize: accept partial matches
-            if "KNOWN" in answer:
-                return pair, "KNOWN"
+        answer = call_llm(prompt, max_tokens=10)
+        if answer:
+            answer = answer.upper()
+            if "ENTAILS" in answer:
+                return pair["a"], pair["b"], "ENTAILS"
+            elif "UNRELATED" in answer:
+                return pair["a"], pair["b"], "UNRELATED"
             elif "EXTENDS" in answer:
-                return pair, "EXTENDS"
-            elif "NEW" in answer:
-                return pair, "NEW"
-            else:
-                return pair, "EXTENDS"  # default to current classification
-        except Exception as e:
-            log(f"    LLM judge error for pair {index}: {e}")
-            return pair, "EXTENDS"
+                return pair["a"], pair["b"], "EXTENDS"
+        return pair["a"], pair["b"], "EXTENDS"
 
     with ThreadPoolExecutor(max_workers=10) as executor:
         futures = {
@@ -246,24 +218,15 @@ def verify_ambiguous_pairs(pairs: list[dict], claims: list[dict]) -> int:
         completed = 0
         for future in as_completed(futures):
             completed += 1
-            pair, verdict = future.result()
-            pair["judge_verdict"] = verdict
-            if verdict == "KNOWN":
-                # Promote to KNOWN: bump score above threshold
-                pair["original_score"] = pair["score"]
-                pair["score"] = THRESHOLD_KNOWN
-                reclassified += 1
-            elif verdict == "NEW":
-                # Demote to NEW: drop score below EXTENDS threshold
-                pair["original_score"] = pair["score"]
-                pair["score"] = round(JUDGE_AMBIGUOUS_LOW - 0.01, 3)
-                reclassified += 1
-            # EXTENDS: leave as-is (already in EXTENDS range)
-
+            claim_a, claim_b, verdict = future.result()
+            key = f"{claim_a}::{claim_b}"
+            verdicts[key] = verdict
+            if verdict in ("ENTAILS", "UNRELATED"):
+                changed += 1
             if completed % 50 == 0 or completed == len(futures):
                 log(f"  [{completed}/{len(futures)}] pairs judged")
 
-    return reclassified
+    return verdicts, changed
 
 
 def build_article_claims_map(articles: list[dict], claims: list[dict]) -> dict[str, list[str]]:
@@ -664,15 +627,17 @@ def main():
     log(f"  {len(pairs)} cross-article pairs found")
 
     # 2b. LLM judge for ambiguous pairs (optional)
-    judge_reclassified = 0
+    llm_verdicts = {}
+    judge_changed = 0
     if args.skip_judge:
         log("Skipping LLM judge (--skip-judge)")
     else:
         log("Running LLM judge on ambiguous pairs (0.68-0.78)...")
-        judge_reclassified = verify_ambiguous_pairs(pairs, claims)
-        log(f"  {judge_reclassified} pairs reclassified by judge")
-        # Re-sort after score adjustments
-        pairs.sort(key=lambda p: p["score"], reverse=True)
+        llm_verdicts, judge_changed = judge_ambiguous_pairs(pairs, claims)
+        entails_count = sum(1 for v in llm_verdicts.values() if v == "ENTAILS")
+        unrelated_count = sum(1 for v in llm_verdicts.values() if v == "UNRELATED")
+        log(f"  LLM judge: {len(llm_verdicts)} pairs verified, {judge_changed} changed classification "
+            f"({entails_count} ENTAILS, {unrelated_count} UNRELATED)")
 
     # 3. Build paragraph mapping
     log("Building paragraph mappings...")
@@ -727,12 +692,14 @@ def main():
             "total_similarity_pairs": len(pairs),
             "total_topics": len(all_topics),
             "delta_report_count": len(delta_reports),
-            "judge_reclassified": judge_reclassified,
+            "judge_pairs_verified": len(llm_verdicts),
+            "judge_changed": judge_changed,
         },
         "claims": claims_dict,
         "article_claims": article_claims,
         "paragraph_map": paragraph_map,
         "similarities": pairs,
+        "llm_verdicts": llm_verdicts,
         "article_novelty_matrix": novelty_matrix,
         "delta_reports": delta_reports,
     }
@@ -753,7 +720,7 @@ def main():
     print(f"  Claims:    {output['stats']['total_claims']}")
     print(f"  Topics:    {output['stats']['total_topics']}")
     print(f"  Sim pairs: {output['stats']['total_similarity_pairs']} (>= 0.68)")
-    print(f"  Judge:     {output['stats']['judge_reclassified']} pairs reclassified")
+    print(f"  Judge:     {output['stats']['judge_pairs_verified']} verified, {output['stats']['judge_changed']} changed")
     print(f"  Delta rpts:{output['stats']['delta_report_count']}")
     print(f"  File size: {file_size:,} bytes ({file_size / 1024:.1f} KB)")
     print()

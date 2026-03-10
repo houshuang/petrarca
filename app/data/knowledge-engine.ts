@@ -83,6 +83,15 @@ export function getKnowledgeIndex(): KnowledgeIndex | null {
   return knowledgeIndex;
 }
 
+// --- LLM Verdict Lookup ---
+
+function getLlmVerdict(claimA: string, claimB: string): 'ENTAILS' | 'EXTENDS' | 'UNRELATED' | null {
+  if (!knowledgeIndex?.llm_verdicts) return null;
+  return knowledgeIndex.llm_verdicts[`${claimA}::${claimB}`]
+    ?? knowledgeIndex.llm_verdicts[`${claimB}::${claimA}`]
+    ?? null;
+}
+
 // --- Claim Classification ---
 
 export function classifyArticleClaims(articleId: string): ClaimClassification[] {
@@ -114,7 +123,14 @@ export function classifyArticleClaims(articleId: string): ClaimClassification[] 
       if (score >= KNOWN_THRESHOLD) {
         classification = 'KNOWN';
       } else if (score >= EXTENDS_THRESHOLD) {
-        classification = 'EXTENDS';
+        const verdict = getLlmVerdict(claimId, target);
+        if (verdict === 'UNRELATED') {
+          classification = 'NEW';
+        } else if (verdict === 'ENTAILS') {
+          classification = 'KNOWN';
+        } else {
+          classification = 'EXTENDS';
+        }
       }
     }
 
