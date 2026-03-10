@@ -602,6 +602,10 @@ def run_ingest_tweet(url: str, comment: str, ingest_id: str):
 
     author = tweet_dict.get('author_username', '')
     thread_text = tweet_dict.get('thread_full_text', tweet_dict.get('text', ''))
+    # Normalize single newlines to paragraph breaks for non-thread tweets
+    # (raw tweet text uses \n for visual breaks, but markdown needs \n\n)
+    if not tweet_dict.get('thread_full_text') and '\n\n' not in thread_text:
+        thread_text = '\n\n'.join(line for line in thread_text.split('\n') if line.strip())
 
     # Try to extract article URLs from the tweet
     try:

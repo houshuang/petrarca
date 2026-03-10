@@ -40,6 +40,7 @@ from urllib.parse import urlparse
 import requests as _requests
 import trafilatura
 from lxml import html as lxml_html
+from xml.etree import ElementTree
 
 from server_log import log_server_event
 from topic_normalizer import (
@@ -612,6 +613,128 @@ def _extract_text_lxml(html_str: str) -> str:
     return "\n\n".join(p for p in paragraphs if len(p) > 20)
 
 
+def _xml_to_markdown(xml_str: str) -> str:
+    """Convert trafilatura XML to markdown with proper paragraph breaks.
+
+    Trafilatura's built-in markdown serializer merges paragraphs at link
+    boundaries and sometimes joins separate <p> blocks. The XML output
+    preserves the original paragraph structure, so we convert it ourselves.
+    """
+    try:
+        root = ElementTree.fromstring(xml_str)
+    except ElementTree.ParseError:
+        return ""
+
+    def _elem_text(elem) -> str:
+        """Get full text content including children, with links as markdown."""
+        parts = []
+        if elem.text:
+            parts.append(elem.text)
+        for child in elem:
+            if child.tag == "ref" and child.get("target"):
+                link_text = "".join(child.itertext()).strip()
+                if link_text:
+                    parts.append(f"[{link_text}]({child.get('target')})")
+                else:
+                    parts.append(child.get("target"))
+            elif child.tag == "hi":
+                hi_text = "".join(child.itertext()).strip()
+                rend = child.get("rend", "")
+                if "#b" in rend or "bold" in rend:
+                    parts.append(f"**{hi_text}**")
+                elif "#i" in rend or "italic" in rend:
+                    parts.append(f"*{hi_text}*")
+                else:
+                    parts.append(hi_text)
+            else:
+                parts.append("".join(child.itertext()))
+            if child.tail:
+                parts.append(child.tail)
+        return "".join(parts).strip()
+
+    blocks = []
+    for main in root.iter("main"):
+        for elem in main:
+            tag = elem.tag
+
+            if tag == "head":
+                rend = elem.get("rend", "h2")
+                level = int(rend[1]) if rend.startswith("h") and len(rend) > 1 and rend[1:].isdigit() else 2
+                text = _elem_text(elem)
+                if text:
+                    blocks.append("#" * level + " " + text)
+
+            elif tag == "p":
+                text = _elem_text(elem)
+                if text and len(text) > 10:
+                    blocks.append(text)
+
+            elif tag == "quote":
+                text = _elem_text(elem)
+                if text:
+                    # Prefix each line with >
+                    lines = text.split("\n")
+                    blocks.append("\n".join("> " + l for l in lines))
+
+            elif tag == "list":
+                items = []
+                for item in elem.findall("item"):
+                    text = _elem_text(item)
+                    if text:
+                        items.append("- " + text)
+                if items:
+                    blocks.append("\n".join(items))
+
+            elif tag == "code":
+                text = "".join(elem.itertext()).strip()
+                if text:
+                    blocks.append("```\n" + text + "\n```")
+
+    return "\n\n".join(blocks)
+
+
+def _split_long_paragraphs(text: str, max_words: int = 200) -> str:
+    """Split paragraphs that exceed max_words at sentence boundaries.
+
+    Some articles have genuinely long paragraphs that should be multiple.
+    This splits them at the most balanced sentence boundary.
+    """
+    blocks = text.split("\n\n")
+    result = []
+    for block in blocks:
+        words = block.split()
+        # Skip headings, lists, code, blockquotes
+        if (block.startswith("#") or block.startswith("- ") or
+            block.startswith("* ") or block.startswith("> ") or
+            block.startswith("```") or block.startswith("|")):
+            result.append(block)
+            continue
+        if len(words) <= max_words:
+            result.append(block)
+            continue
+        # Split at sentence boundaries (. followed by uppercase letter or quote)
+        # Use \p{Lu} equivalent via Unicode range to handle Greek, Cyrillic, etc.
+        sentences = re.split(r'(?<=[.!?;·])\s+(?=[A-Z\u00c0-\u024f\u0386-\u03ab\u0400-\u042f\u4e00-\u9fff"\u201c])', block)
+        if len(sentences) <= 1:
+            result.append(block)
+            continue
+        # Group sentences into paragraphs of roughly max_words
+        current = []
+        current_wc = 0
+        for sent in sentences:
+            swc = len(sent.split())
+            if current_wc + swc > max_words and current:
+                result.append(" ".join(current))
+                current = [sent]
+                current_wc = swc
+            else:
+                current.append(sent)
+                current_wc += swc
+        if current:
+            result.append(" ".join(current))
+    return "\n\n".join(result)
+
+
 def fetch_article(url: str) -> dict | None:
     """3-tier article extraction. Returns dict with title, text (markdown), author, etc."""
     downloaded = None
@@ -619,27 +742,47 @@ def fetch_article(url: str) -> dict | None:
     meta = None
     fetch_method = None
 
-    # Tier 1: trafilatura native
+    # Tier 1: trafilatura XML → custom markdown (best paragraph preservation)
     try:
         downloaded = trafilatura.fetch_url(url)
     except Exception:
         pass
     if downloaded:
-        text = trafilatura.extract(downloaded, output_format="markdown", include_links=True)
         meta = trafilatura.extract_metadata(downloaded)
-        if text:
-            fetch_method = "trafilatura"
+        try:
+            xml_str = trafilatura.extract(downloaded, output_format="xml", include_links=True)
+            if xml_str:
+                text = _xml_to_markdown(xml_str)
+                if text and len(text.split()) >= 50:
+                    fetch_method = "trafilatura+xml"
+        except Exception:
+            pass
+        # Fallback to trafilatura markdown if XML conversion produced too little
+        if not text or len(text.split()) < 50:
+            text = trafilatura.extract(downloaded, output_format="markdown", include_links=True)
+            if text:
+                fetch_method = "trafilatura"
 
     # Tier 2: requests + trafilatura with favor_recall
     if not text:
         try:
             html_str = _fetch_html_requests(url)
-            text = trafilatura.extract(html_str, output_format="markdown",
-                                       include_links=True, favor_recall=True)
             meta = trafilatura.extract_metadata(html_str)
-            if text:
-                fetch_method = "requests+trafilatura"
-                downloaded = html_str
+            try:
+                xml_str = trafilatura.extract(html_str, output_format="xml",
+                                               include_links=True, favor_recall=True)
+                if xml_str:
+                    text = _xml_to_markdown(xml_str)
+                    if text and len(text.split()) >= 50:
+                        fetch_method = "requests+trafilatura+xml"
+            except Exception:
+                pass
+            if not text or len(text.split()) < 50:
+                text = trafilatura.extract(html_str, output_format="markdown",
+                                           include_links=True, favor_recall=True)
+                if text:
+                    fetch_method = "requests+trafilatura"
+                    downloaded = html_str
         except Exception:
             pass
 
@@ -704,11 +847,15 @@ def fetch_all_candidates(candidates: list[dict], existing_urls: set[str]) -> lis
             tweet_words = len(bm.get("text", "").split())
             if not cand_copy["_fetched_articles"] and tweet_words > 100:
                 print(f"  [{i+1}/{len(candidates)}] Long tweet ({tweet_words} words) -> article: @{bm.get('author_username', '?')}", file=sys.stderr)
+                # Use thread text if available; normalize single newlines to paragraphs
+                tweet_text = bm.get("thread_full_text", bm["text"])
+                if "\n\n" not in tweet_text:
+                    tweet_text = "\n\n".join(line for line in tweet_text.split("\n") if line.strip())
                 cand_copy["_fetched_articles"].append({
                     "title": f"Thread by @{bm['author_username']}",
                     "author": bm.get("author_name", bm.get("author_username", "")),
                     "date": cand.get("_date", ""),
-                    "text": bm["text"],
+                    "text": tweet_text,
                     "word_count": tweet_words,
                     "source_url": bm.get("url", ""),
                     "hostname": "twitter.com",
@@ -995,6 +1142,9 @@ def clean_markdown(text: str) -> str:
     # Collapse multiple blank lines
     text = re.sub(r'\n{3,}', '\n\n', text)
 
+    # Split long paragraphs at sentence boundaries
+    text = _split_long_paragraphs(text, max_words=200)
+
     return text.strip()
 
 
@@ -1196,6 +1346,7 @@ def build_articles(candidates: list[dict], existing_articles: list[dict],
             "entities": llm.get("entities", []),
             "follow_up_questions": llm.get("follow_up_questions", []),
             "word_count": best["word_count"],
+            "fetch_method": best.get("fetch_method", "unknown"),
             "ingested_at": datetime.now(timezone.utc).isoformat(),
             "sources": [source],
         }

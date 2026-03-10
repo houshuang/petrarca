@@ -19,8 +19,10 @@ sys.path.insert(0, str(Path(__file__).parent))
 from build_articles import clean_markdown, _is_bibliography_section
 
 SCRIPT_DIR = Path(__file__).parent
-APP_DATA_DIR = SCRIPT_DIR.parent / "app" / "data"
-ARTICLES_PATH = APP_DATA_DIR / "articles.json"
+# Server: /opt/petrarca/data/articles.json; local: ../app/data/articles.json
+_SERVER_PATH = Path("/opt/petrarca/data/articles.json")
+_LOCAL_PATH = SCRIPT_DIR.parent / "app" / "data" / "articles.json"
+ARTICLES_PATH = _SERVER_PATH if _SERVER_PATH.exists() else _LOCAL_PATH
 
 
 def is_bibliography_article(article: dict) -> bool:
@@ -39,11 +41,20 @@ def is_bibliography_article(article: dict) -> bool:
 
 def count_issues(text: str) -> dict:
     """Count various quality issues in markdown text."""
+    paras = [p.strip() for p in text.split("\n\n") if p.strip()]
+    long_prose = 0
+    for p in paras:
+        if (p.startswith("#") or p.startswith("- ") or p.startswith("* ") or
+            p.startswith("> ") or p.startswith("```") or p.startswith("|")):
+            continue
+        if len(p.split()) > 200:
+            long_prose += 1
     return {
         "run_together_links": len(re.findall(r'\)\[', text)),
         "edit_links": len(re.findall(r'\[edit\]', text, re.IGNORECASE)),
         "citation_markers": len(re.findall(r'\[\d{1,3}\]', text)),
         "empty_links": len(re.findall(r'\[\s*\]\([^)]+\)', text)),
+        "long_paragraphs": long_prose,
     }
 
 
