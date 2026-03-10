@@ -16,6 +16,7 @@ import { Article } from '../../data/types';
 import { logEvent } from '../../data/logger';
 import { getDisplayTitle, displayTopic } from '../../lib/display-utils';
 import { colors, fonts, type, layout } from '../../design/tokens';
+import { setFeedbackContext } from '../../lib/feedback-context';
 import { isKnowledgeReady, getArticleNovelty } from '../../data/knowledge-engine';
 import { addToQueue, getNextQueued } from '../../data/queue';
 import UpNextSection from '../../components/UpNextSection';
@@ -274,8 +275,14 @@ export default function FeedScreen() {
     useCallback(() => {
       bumpFeedVersion();
       forceUpdate(n => n + 1);
+      setFeedbackContext({ screen: 'feed', articleId: undefined, articleTitle: undefined, scrollProgress: undefined, readingMode: undefined });
     }, [])
   );
+
+  // Update feedback context when lens changes
+  useEffect(() => {
+    setFeedbackContext({ activeLens: activeLens });
+  }, [activeLens]);
 
   useEffect(() => {
     if (refreshing) {

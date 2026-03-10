@@ -45,6 +45,7 @@ AUDIO_DIR = Path(os.environ.get('AUDIO_DIR', '/opt/petrarca/data/audio'))
 LOG_DIR = Path(os.environ.get('LOG_DIR', '/opt/petrarca/data/logs'))
 ARTICLES_PATH = Path(os.environ.get('ARTICLES_PATH', '/opt/petrarca/data/articles.json'))
 SCRAPE_REPORTS_PATH = Path(os.environ.get('SCRAPE_REPORTS_PATH', '/opt/petrarca/data/scrape_reports.json'))
+FEEDBACK_DIR = Path(os.environ.get('FEEDBACK_DIR', '/opt/petrarca/data/feedback'))
 
 from server_log import log_server_event
 
@@ -60,6 +61,7 @@ EMAILS_DIR.mkdir(parents=True, exist_ok=True)
 CHAT_DIR.mkdir(parents=True, exist_ok=True)
 NOTES_DIR.mkdir(parents=True, exist_ok=True)
 AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ---------------------------------------------------------------------------
@@ -1645,6 +1647,91 @@ class ResearchHandler(BaseHTTPRequestHandler):
         print(f'[scrape-report] Reported {article_id}: {title[:60]}', flush=True)
         self._send_json_response(200, {'status': 'reported'})
 
+    def _handle_feedback(self):
+        """Receive feedback with optional screenshot, audio, text, and context."""
+        import cgi
+        content_type = self.headers.get('Content-Type', '')
+
+        if 'multipart/form-data' not in content_type:
+            self._send_json_response(400, {'error': 'Expected multipart/form-data'})
+            return
+
+        environ = {
+            'REQUEST_METHOD': 'POST',
+            'CONTENT_TYPE': content_type,
+            'CONTENT_LENGTH': self.headers.get('Content-Length', '0'),
+        }
+        form = cgi.FieldStorage(fp=self.rfile, headers=self.headers, environ=environ)
+
+        context_raw = form.getvalue('context', '')
+        if not context_raw:
+            self._send_json_response(400, {'error': 'Missing required field: context'})
+            return
+
+        try:
+            context = json.loads(context_raw) if isinstance(context_raw, str) else context_raw
+        except json.JSONDecodeError:
+            self._send_json_response(400, {'error': 'Invalid JSON in context field'})
+            return
+
+        text = form.getvalue('text', '')
+        ts = datetime.now(timezone.utc)
+        feedback_id = f'feedback_{ts.strftime("%Y%m%d_%H%M%S")}'
+
+        saved_files = {}
+
+        # Save screenshot if present
+        if 'screenshot' in form and form['screenshot'].file:
+            screenshot_path = FEEDBACK_DIR / f'{feedback_id}_screenshot.png'
+            data = form['screenshot'].file.read()
+            screenshot_path.write_bytes(data if isinstance(data, bytes) else data.encode('latin-1'))
+            saved_files['screenshot'] = screenshot_path.name
+            print(f'[feedback] Saved screenshot: {screenshot_path.name}', flush=True)
+
+        # Save audio if present
+        audio_path = None
+        if 'audio' in form and form['audio'].file:
+            audio_path = FEEDBACK_DIR / f'{feedback_id}_audio.m4a'
+            data = form['audio'].file.read()
+            audio_path.write_bytes(data if isinstance(data, bytes) else data.encode('latin-1'))
+            saved_files['audio'] = audio_path.name
+            print(f'[feedback] Saved audio: {audio_path.name}', flush=True)
+
+        # Build metadata
+        metadata = {
+            'id': feedback_id,
+            'timestamp': ts.isoformat(),
+            'context': context,
+            'text': text if isinstance(text, str) else '',
+            'files': saved_files,
+        }
+
+        # Transcribe audio in background if present
+        if audio_path:
+            def _transcribe_and_update():
+                try:
+                    transcript = transcribe_on_server(audio_path)
+                    metadata['transcript'] = transcript
+                    print(f'[feedback] {feedback_id} transcribed: {transcript[:80]}...', flush=True)
+                except Exception as e:
+                    metadata['transcript_error'] = str(e)
+                    print(f'[feedback] {feedback_id} transcription failed: {e}', flush=True)
+                finally:
+                    meta_path = FEEDBACK_DIR / f'{feedback_id}.json'
+                    meta_path.write_text(json.dumps(metadata, indent=2))
+
+            thread = threading.Thread(target=_transcribe_and_update, daemon=True)
+            thread.start()
+        else:
+            # No audio — save metadata immediately
+            meta_path = FEEDBACK_DIR / f'{feedback_id}.json'
+            meta_path.write_text(json.dumps(metadata, indent=2))
+
+        print(f'[feedback] Received {feedback_id} (text={bool(text)}, audio={bool(audio_path)}, screenshot={"screenshot" in saved_files})', flush=True)
+        log_server_event('feedback_received', feedback_id=feedback_id)
+
+        self._send_json_response(200, {'status': 'saved', 'id': feedback_id})
+
     def _handle_ingest_book(self):
         if INGEST_TOKEN:
             token = self.headers.get('X-Petrarca-Token', '')
@@ -1736,6 +1823,8 @@ class ResearchHandler(BaseHTTPRequestHandler):
             return self._handle_ingest_cancel()
         if self.path == '/report-scrape':
             return self._handle_report_scrape()
+        if self.path == '/feedback':
+            return self._handle_feedback()
 
         if self.path == '/research/explore-batch':
             return self._handle_explore_batch()

@@ -24,6 +24,7 @@ import RelatedArticles from '../components/RelatedArticles';
 import KeyboardHintBar from '../components/KeyboardHintBar';
 import { useKeyboardShortcuts, type ShortcutMap } from '../hooks/useKeyboardShortcuts';
 import { colors, fonts, type, spacing, layout } from '../design/tokens';
+import { setFeedbackContext } from '../lib/feedback-context';
 import {
   computeParagraphDimming, classifyArticleClaims,
   markArticleEncountered, markArticleReadUpTo, getArticleParagraphCount,
@@ -1432,6 +1433,9 @@ export default function ReaderScreen() {
   const [showInterestCard, setShowInterestCard] = useState(false);
   const [readingMode, setReadingMode] = useState<ReadingMode>('full');
   const [scrollProgress, setScrollProgress] = useState(0);
+
+  // Sync feedback context with reading state
+  useEffect(() => { setFeedbackContext({ readingMode, scrollProgress: Math.round(scrollProgress) }); }, [readingMode, scrollProgress]);
   const [bookmarked, setBookmarked] = useState(() => article ? isBookmarked(article.id) : false);
   const [showMenu, setShowMenu] = useState(false);
   const [showAIChat, setShowAIChat] = useState(false);
@@ -1657,6 +1661,7 @@ export default function ReaderScreen() {
       updateReadingState(article.id, { status: 'reading', last_read_at: Date.now() });
     }
     logEvent('reader_open', { article_id: article.id, title: article.title });
+    setFeedbackContext({ screen: 'reader', articleId: article.id, articleTitle: getDisplayTitle(article), activeLens: feedLens });
 
     // Restore scroll position + ensure arrow-key scrolling works on web
     const savedY = state.scroll_position_y || 0;

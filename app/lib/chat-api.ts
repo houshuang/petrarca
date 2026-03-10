@@ -56,6 +56,46 @@ export async function uploadVoiceNote(
   return resp.json();
 }
 
+export async function uploadFeedback(opts: {
+  screenshotUri?: string | null;
+  audioUri?: string | null;
+  text?: string | null;
+  context: Record<string, any>;
+}): Promise<{ status: string; id: string }> {
+  const formData = new FormData();
+  if (opts.screenshotUri) {
+    if (Platform.OS === 'web' && opts.screenshotUri.startsWith('data:')) {
+      const resp = await fetch(opts.screenshotUri);
+      const blob = await resp.blob();
+      formData.append('screenshot', blob, 'screenshot.png');
+    } else {
+      formData.append('screenshot', {
+        uri: opts.screenshotUri,
+        type: 'image/png',
+        name: 'screenshot.png',
+      } as any);
+    }
+  }
+  if (opts.audioUri) {
+    formData.append('audio', {
+      uri: opts.audioUri,
+      type: 'audio/m4a',
+      name: 'feedback.m4a',
+    } as any);
+  }
+  if (opts.text) {
+    formData.append('text', opts.text);
+  }
+  formData.append('context', JSON.stringify(opts.context));
+
+  const resp = await fetch(`${RESEARCH_BASE}/feedback`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!resp.ok) throw new Error(`Feedback upload failed: ${resp.status}`);
+  return resp.json();
+}
+
 export async function spawnTopicResearch(
   topic: string,
   context: string,
