@@ -1,12 +1,12 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, Pressable, Animated,
-  Platform, ViewStyle, RefreshControl,
+  Platform, ViewStyle, RefreshControl, ScrollView,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import {
-  getArticlesByLens, getReadingState, dismissArticle,
+  getArticlesByLens, getReadingState, dismissArticle, markArticleRead,
   getReadArticles, recordInterestSignal, refreshContent,
   bumpFeedVersion, getFeedVersion, getInProgressArticles,
   getTopRecommendedArticle, getArticleById,
@@ -70,6 +70,7 @@ function ArticleCard({ article, onDismiss, onQueue, compact, showIngestInfo, isF
   const router = useRouter();
   const state = getReadingState(article.id);
   const isRead = state.status === 'read';
+  const [hovered, setHovered] = useState(false);
 
   const novelty = isKnowledgeReady() ? getArticleNovelty(article.id) : null;
   const bestClaim = !compact
@@ -116,12 +117,109 @@ function ArticleCard({ article, onDismiss, onQueue, compact, showIngestInfo, isF
     onQueue();
   };
 
+  const handleDismissCard = () => {
+    dismissArticle(article.id, 'hover_dismiss');
+    recordInterestSignal('swipe_dismiss', article.id);
+    logEvent('feed_hover_dismiss', { article_id: article.id });
+    onDismiss();
+  };
+
+  const handleArchiveCard = () => {
+    markArticleRead(article.id);
+    logEvent('feed_hover_archive', { article_id: article.id });
+    onDismiss();
+  };
+
   const topics = [...new Set(
     (article.interest_topics || [])
       .slice(0, 2)
       .map(t => t.specific || t.broad)
   )];
   const fallbackTopics = topics.length > 0 ? topics : [...new Set(article.topics.slice(0, 2))];
+
+  const isWeb = Platform.OS === 'web';
+
+  const cardContent = (
+    <Pressable
+      style={({ pressed }: any) => [
+        styles.card,
+        isRead && styles.cardRead,
+        isFocused && styles.cardFocused,
+        isWeb && hovered && !isFocused && styles.cardHovered,
+        pressed && { opacity: 0.9 },
+      ] as ViewStyle[]}
+      onPress={() => {
+        logEvent('feed_article_tap', { article_id: article.id });
+        recordInterestSignal('open_article', article.id);
+        router.push({ pathname: '/reader', params: { id: article.id, lens: lens || 'best' } });
+      }}
+      {...(isWeb ? {
+        onMouseEnter: () => setHovered(true),
+        onMouseLeave: () => setHovered(false),
+      } as any : {})}
+    >
+      {isWeb && hovered && (
+        <View style={styles.hoverActions}>
+          <Pressable
+            style={styles.hoverActionBtn}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleArchiveCard();
+            }}
+            {...{ onMouseEnter: () => setHovered(true) } as any}
+          >
+            <Text style={styles.hoverActionText}>{'✓'}</Text>
+          </Pressable>
+          <Pressable
+            style={styles.hoverActionBtn}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleDismissCard();
+            }}
+            {...{ onMouseEnter: () => setHovered(true) } as any}
+          >
+            <Text style={styles.hoverActionText}>{'✕'}</Text>
+          </Pressable>
+        </View>
+      )}
+      <Text style={[styles.cardTitle, isRead && styles.cardTitleRead]} numberOfLines={compact ? 1 : 2}>
+        {getDisplayTitle(article)}
+      </Text>
+      {!compact && article.one_line_summary ? (
+        <Text style={[styles.cardSummary, isRead && styles.cardSummaryRead]} numberOfLines={2}>
+          {article.one_line_summary}
+        </Text>
+      ) : null}
+
+      {bestClaim && !isRead ? (
+        <View style={styles.claimPreview}>
+          <Text style={styles.claimPreviewText} numberOfLines={2}>
+            {bestClaim.claim}
+          </Text>
+        </View>
+      ) : null}
+
+      <View style={styles.cardFooter}>
+        <Text style={styles.cardMeta}>
+          {article.hostname}
+          {` · ${article.estimated_read_minutes} min`}
+          {novelty && novelty.new_claims > 0
+            ? ` · ${novelty.new_claims} new`
+            : ''}
+          {showIngestInfo && (article.ingested_at || article.date) ? ` · ${formatRelativeDate(article.ingested_at || article.date)}` : ''}
+          {showIngestInfo && formatSourceLabel(article.sources) ? ` · ${formatSourceLabel(article.sources)}` : ''}
+        </Text>
+        <View style={styles.topicTags}>
+          {fallbackTopics.map(t => (
+            <Text key={t} style={styles.topicTagText}>{displayTopic(t)}</Text>
+          ))}
+        </View>
+      </View>
+    </Pressable>
+  );
+
+  // On web, skip the Swipeable wrapper (not useful for desktop)
+  if (isWeb) return cardContent;
 
   return (
     <Swipeable
@@ -134,53 +232,7 @@ function ArticleCard({ article, onDismiss, onQueue, compact, showIngestInfo, isF
       overshootRight={false}
       overshootLeft={false}
     >
-      <Pressable
-        style={({ pressed }: any) => [
-          styles.card,
-          isRead && styles.cardRead,
-          isFocused && styles.cardFocused,
-          pressed && { opacity: 0.9 },
-        ] as ViewStyle[]}
-        onPress={() => {
-          logEvent('feed_article_tap', { article_id: article.id });
-          recordInterestSignal('open_article', article.id);
-          router.push({ pathname: '/reader', params: { id: article.id, lens: lens || 'best' } });
-        }}
-      >
-        <Text style={[styles.cardTitle, isRead && styles.cardTitleRead]} numberOfLines={compact ? 1 : 2}>
-          {getDisplayTitle(article)}
-        </Text>
-        {!compact && article.one_line_summary ? (
-          <Text style={[styles.cardSummary, isRead && styles.cardSummaryRead]} numberOfLines={2}>
-            {article.one_line_summary}
-          </Text>
-        ) : null}
-
-        {bestClaim && !isRead ? (
-          <View style={styles.claimPreview}>
-            <Text style={styles.claimPreviewText} numberOfLines={2}>
-              {bestClaim.claim}
-            </Text>
-          </View>
-        ) : null}
-
-        <View style={styles.cardFooter}>
-          <Text style={styles.cardMeta}>
-            {article.hostname}
-            {` · ${article.estimated_read_minutes} min`}
-            {novelty && novelty.new_claims > 0
-              ? ` · ${novelty.new_claims} new`
-              : ''}
-            {showIngestInfo && (article.ingested_at || article.date) ? ` · ${formatRelativeDate(article.ingested_at || article.date)}` : ''}
-            {showIngestInfo && formatSourceLabel(article.sources) ? ` · ${formatSourceLabel(article.sources)}` : ''}
-          </Text>
-          <View style={styles.topicTags}>
-            {fallbackTopics.map(t => (
-              <Text key={t} style={styles.topicTagText}>{displayTopic(t)}</Text>
-            ))}
-          </View>
-        </View>
-      </Pressable>
+      {cardContent}
     </Swipeable>
   );
 }
@@ -201,7 +253,8 @@ export default function FeedScreen() {
   const [topicFilter, setTopicFilter] = useState<string | undefined>(undefined);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [focusedIndex, setFocusedIndex] = useState(-1);
+  // -1 = Up Next focused (web default), >= 0 = article grid, -2 = nothing focused (mobile default)
+  const [focusedIndex, setFocusedIndex] = useState(Platform.OS === 'web' ? -1 : -2);
   const spinAnim = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef<FlatList>(null);
 
@@ -307,31 +360,106 @@ export default function FeedScreen() {
     [listData]
   );
 
+  // Compute the Up Next article ID (needed by keyboard shortcuts + Recommended exclusion)
+  const upNextArticleId = useMemo(() => {
+    const inProgress = getInProgressArticles();
+    if (inProgress[0]) return inProgress[0].id;
+    const nextQueuedId = getNextQueued();
+    if (nextQueuedId) return nextQueuedId;
+    const top = getTopRecommendedArticle();
+    return top?.id;
+  }, [feedVersion]);
+
+  // The recommended article (top ranked excluding Up Next)
+  const recommendedArticle = useMemo(() => {
+    const ranked = getArticlesByLens('best');
+    return ranked.find(a => a.id !== upNextArticleId) || null;
+  }, [upNextArticleId, feedVersion]);
+
+  // IDs to exclude from the article grid (shown in hero sections)
+  const heroArticleIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (upNextArticleId) ids.add(upNextArticleId);
+    if (recommendedArticle) ids.add(recommendedArticle.id);
+    return ids;
+  }, [upNextArticleId, recommendedArticle]);
+
+  // Web grid articles (exclude hero articles shown in Up Next / Recommended)
+  const webArticles = useMemo(() => {
+    if (activeLens === 'topics') return [];
+    return getArticlesByLens(activeLens, topicFilter).filter(a => !heroArticleIds.has(a.id));
+  }, [activeLens, topicFilter, feedVersion, heroArticleIds]);
+
+  // All navigable articles on web: recommended first, then grid articles
+  const allNavArticles = useMemo(() => {
+    const list: Article[] = [];
+    if (recommendedArticle) list.push(recommendedArticle);
+    list.push(...webArticles);
+    return list;
+  }, [recommendedArticle, webArticles]);
+
   const getFocusedArticle = useCallback(() => {
-    if (focusedIndex < 0 || focusedIndex >= articleItems.length) return null;
-    return articleItems[focusedIndex].article;
-  }, [focusedIndex, articleItems]);
+    const items = Platform.OS === 'web' ? allNavArticles : articleItems.map(i => i.article);
+    if (focusedIndex < 0 || focusedIndex >= items.length) return null;
+    return items[focusedIndex];
+  }, [focusedIndex, articleItems, allNavArticles]);
 
   // Reset focused index on lens change
-  useEffect(() => { setFocusedIndex(-1); }, [activeLens]);
+  useEffect(() => { setFocusedIndex(Platform.OS === 'web' ? -1 : -2); }, [activeLens]);
 
   const focusedArticleId = focusedIndex >= 0 && focusedIndex < articleItems.length
     ? articleItems[focusedIndex].article.id
     : null;
 
+  // Scroll to focused article — uses DOM on web, FlatList on mobile
+  const scrollToArticle = useCallback((index: number) => {
+    if (Platform.OS === 'web') {
+      const article = allNavArticles[index];
+      if (article) {
+        const el = document.getElementById(`article-${article.id}`);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    } else {
+      try { flatListRef.current?.scrollToIndex({ index: index + 1, viewPosition: 0.3, animated: true }); } catch {}
+    }
+  }, [allNavArticles, articleItems]);
+
   // Keyboard shortcuts (web only)
   const feedShortcuts = useMemo((): ShortcutMap => ({
     j: { handler: () => setFocusedIndex(i => {
-      const next = Math.min(i + 1, articleItems.length - 1);
-      try { flatListRef.current?.scrollToIndex({ index: next + 1, viewPosition: 0.3, animated: true }); } catch {}
+      // From Up Next (-1), go to first article (0)
+      if (i < 0) {
+        scrollToArticle(0);
+        return 0;
+      }
+      const maxIdx = (Platform.OS === 'web' ? allNavArticles.length : articleItems.length) - 1;
+      const next = Math.min(i + 1, maxIdx);
+      scrollToArticle(next);
       return next;
     }), label: 'next' },
     k: { handler: () => setFocusedIndex(i => {
-      const prev = Math.max(i - 1, 0);
-      try { flatListRef.current?.scrollToIndex({ index: prev + 1, viewPosition: 0.3, animated: true }); } catch {}
+      // From first article (0), go back to Up Next (-1)
+      if (i <= 0) {
+        if (Platform.OS === 'web') {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        return -1;
+      }
+      const prev = i - 1;
+      scrollToArticle(prev);
       return prev;
     }), label: 'prev' },
     Enter: { handler: () => {
+      // If Up Next is focused (-1), open the up next article
+      if (focusedIndex === -1 && upNextArticleId) {
+        const upNextArticle = getArticleById(upNextArticleId);
+        if (upNextArticle) {
+          logEvent('up_next_tap', { article_id: upNextArticle.id, via: 'keyboard' });
+          recordInterestSignal('open_article', upNextArticle.id);
+          router.push({ pathname: '/reader', params: { id: upNextArticle.id } });
+          return;
+        }
+      }
       const a = getFocusedArticle();
       if (a) {
         logEvent('feed_article_tap', { article_id: a.id, via: 'keyboard' });
@@ -340,6 +468,15 @@ export default function FeedScreen() {
       }
     }, label: 'open' },
     o: { handler: () => {
+      if (focusedIndex === -1 && upNextArticleId) {
+        const upNextArticle = getArticleById(upNextArticleId);
+        if (upNextArticle) {
+          logEvent('up_next_tap', { article_id: upNextArticle.id, via: 'keyboard' });
+          recordInterestSignal('open_article', upNextArticle.id);
+          router.push({ pathname: '/reader', params: { id: upNextArticle.id } });
+          return;
+        }
+      }
       const a = getFocusedArticle();
       if (a) {
         logEvent('feed_article_tap', { article_id: a.id, via: 'keyboard' });
@@ -364,23 +501,17 @@ export default function FeedScreen() {
     '3': { handler: () => handleLensChange('topics'), label: 'Topics' },
     '4': { handler: () => handleLensChange('quick'), label: 'Quick' },
     r: { handler: () => { if (!refreshing) handleRefresh(); }, label: 'refresh' },
+    gi: { handler: () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      setFocusedIndex(-1);
+    }, label: 'go to index' },
     '?': { handler: () => {}, label: 'shortcuts' },
-  }), [articleItems, getFocusedArticle, activeLens, refreshing, handleLensChange, handleDismiss, handleQueue, handleRefresh, router]);
+  }), [articleItems, allNavArticles, getFocusedArticle, activeLens, refreshing, handleLensChange, handleDismiss, handleQueue, handleRefresh, router, scrollToArticle, upNextArticleId]);
 
   useKeyboardShortcuts(feedShortcuts, !drawerOpen);
 
-  // Compute the Up Next article ID so Recommended can skip it
-  const upNextArticleId = useMemo(() => {
-    const inProgress = getInProgressArticles();
-    if (inProgress[0]) return inProgress[0].id;
-    const nextQueuedId = getNextQueued();
-    if (nextQueuedId) return nextQueuedId;
-    const top = getTopRecommendedArticle();
-    return top?.id;
-  }, [feedVersion]);
-
   const renderHeader = useCallback(() => (
-    <View style={Platform.OS === 'web' ? styles.webContainer : undefined}>
+    <View style={Platform.OS === 'web' ? styles.webFeedContainer : undefined}>
       {refreshing && (
         <View style={styles.refreshOrnament}>
           <Animated.Text style={[
@@ -398,12 +529,14 @@ export default function FeedScreen() {
           </Animated.Text>
         </View>
       )}
-      <UpNextSection onDrawerOpen={() => setDrawerOpen(true)} />
-      <RecommendedSection onSeeAll={handleSeeAllBest} excludeArticleId={upNextArticleId} />
+      <UpNextSection onDrawerOpen={() => setDrawerOpen(true)} isFocused={focusedIndex === -1} />
+      <View nativeID={recommendedArticle ? `article-${recommendedArticle.id}` : undefined}>
+        <RecommendedSection onSeeAll={handleSeeAllBest} excludeArticleId={upNextArticleId} />
+      </View>
       <TopicPillsSection onTopicPress={handleTopicPress} onSeeAll={handleSeeAllTopics} />
       <DoubleRule />
     </View>
-  ), [refreshing, spinAnim, handleSeeAllBest, handleTopicPress, handleSeeAllTopics, upNextArticleId]);
+  ), [refreshing, spinAnim, handleSeeAllBest, handleTopicPress, handleSeeAllTopics, upNextArticleId, focusedIndex]);
 
   const renderItem = useCallback(({ item }: { item: ListItem }) => {
     switch (item.type) {
@@ -460,6 +593,107 @@ export default function FeedScreen() {
     return `${item.type}-${index}`;
   }, []);
 
+  const webReadArticles = useMemo(() => {
+    if (activeLens === 'topics') return [];
+    return getReadArticles();
+  }, [activeLens, feedVersion]);
+
+  // Effective focused article ID for highlighting
+  const effectiveFocusedArticleId = focusedIndex >= 0 && focusedIndex < (Platform.OS === 'web' ? allNavArticles.length : articleItems.length)
+    ? (Platform.OS === 'web' ? allNavArticles[focusedIndex]?.id : articleItems[focusedIndex]?.article.id)
+    : null;
+
+  // --- Web layout ---
+  if (Platform.OS === 'web') {
+    const webGridStyle = {
+      display: 'grid' as any,
+      gridTemplateColumns: '1fr 1fr' as any,
+      gap: '0px 32px' as any,
+      paddingLeft: 32,
+      paddingRight: 32,
+    } as any;
+
+    const webStickyTabsStyle = {
+      position: 'sticky' as any,
+      top: 0,
+      zIndex: 10,
+      backgroundColor: colors.parchment,
+    } as any;
+
+    return (
+      <GestureHandlerRootView style={styles.container}>
+        <ScrollView
+          style={styles.webScrollContainer}
+          contentContainerStyle={styles.webScrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {renderHeader()}
+
+          <View style={webStickyTabsStyle}>
+            <LensTabs activeLens={activeLens} onLensChange={handleLensChange} />
+          </View>
+
+          <View style={styles.webFeedContainer}>
+            {activeLens === 'topics' ? (
+              <View style={styles.webContentPadding}>
+                <TopicsGroupedList topicFilter={topicFilter} />
+              </View>
+            ) : webArticles.length === 0 ? (
+              <View style={styles.empty}>
+                <Text style={styles.emptyTitle}>No articles yet</Text>
+                <Text style={styles.emptySubtitle}>Content will appear here once synced</Text>
+              </View>
+            ) : (
+              <>
+                <View style={webGridStyle}>
+                  {webArticles.map(article => (
+                    <View key={article.id} nativeID={`article-${article.id}`}>
+                      <ArticleCard
+                        article={article}
+                        onDismiss={handleDismiss}
+                        onQueue={handleQueue}
+                        compact={activeLens === 'latest'}
+                        showIngestInfo={activeLens === 'latest'}
+                        isFocused={article.id === effectiveFocusedArticleId}
+                        lens={activeLens}
+                      />
+                    </View>
+                  ))}
+                </View>
+
+                {webReadArticles.length > 0 && (
+                  <>
+                    <View style={[styles.readSeparator, styles.webContentPadding]}>
+                      <View style={styles.readSeparatorLine} />
+                      <Text style={styles.readSeparatorText}>Read</Text>
+                      <View style={styles.readSeparatorLine} />
+                    </View>
+                    <View style={webGridStyle}>
+                      {webReadArticles.map(article => (
+                        <View key={article.id}>
+                          <ArticleCard
+                            article={article}
+                            onDismiss={handleDismiss}
+                            onQueue={handleQueue}
+                            compact
+                          />
+                        </View>
+                      ))}
+                    </View>
+                  </>
+                )}
+              </>
+            )}
+          </View>
+        </ScrollView>
+
+        <KeyboardHintBar shortcuts={feedShortcuts} />
+        <PetrarcaDrawer visible={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      </GestureHandlerRootView>
+    );
+  }
+
+  // --- Mobile layout (FlatList, unchanged) ---
   return (
     <GestureHandlerRootView style={styles.container}>
       <FlatList
@@ -487,6 +721,7 @@ export default function FeedScreen() {
           }
         }, [])}
         viewabilityConfig={{ itemVisiblePercentThreshold: 50, minimumViewTime: 1000 }}
+        extraData={focusedArticleId}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
@@ -508,10 +743,20 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.parchment,
   },
-  webContainer: {
-    maxWidth: layout.contentMaxWidth,
+  webFeedContainer: {
+    maxWidth: layout.webFeedMaxWidth,
     width: '100%',
-    alignSelf: 'center',
+    alignSelf: 'center' as const,
+  },
+  webScrollContainer: {
+    flex: 1,
+    backgroundColor: colors.parchment,
+  },
+  webScrollContent: {
+    paddingBottom: 40,
+  },
+  webContentPadding: {
+    paddingHorizontal: 32,
   },
 
   listContent: {
@@ -547,6 +792,32 @@ const styles = StyleSheet.create({
     borderLeftColor: colors.rubric,
     paddingLeft: 12,
     backgroundColor: 'rgba(139,37,0,0.03)',
+  },
+  cardHovered: {
+    backgroundColor: 'rgba(139,37,0,0.02)',
+  },
+  hoverActions: {
+    position: 'absolute' as const,
+    top: 8,
+    right: 0,
+    flexDirection: 'row' as const,
+    gap: 4,
+    zIndex: 5,
+  },
+  hoverActionBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: colors.rule,
+    backgroundColor: colors.parchment,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  hoverActionText: {
+    fontFamily: fonts.ui,
+    fontSize: 12,
+    color: colors.textMuted,
   },
   cardTitle: {
     ...type.entryTitle,

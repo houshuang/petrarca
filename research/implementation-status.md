@@ -1,8 +1,8 @@
 # Knowledge System Implementation Status
 
-**Date**: March 9, 2026 (last updated — session 11)
-**Status**: Full corpus deployed with knowledge system, reader interactions, voice notes, AI chat, research agents, entity deep-dive, follow-up research, voice note browser + action extraction, activity log tab, scroll-aware encounter tracking, curated novelty card, hierarchical topic feedback, cross-article connections, LLM-verified topic normalization, automatic defragmentation, **unified single-screen feed with lens tabs**, **dynamic reranking**, **✦ drawer navigation**, **clipper auto-save countdown**, **tweet URL ingestion via twikit**, **auto-sync Twitter cookies**, **clipper immediate save via background worker**, **reader disregard + report bad scrape**, **feed ingest metadata**
-**Latest commits**: Session 11 — Clipper: immediate save via background service worker (survives popup close), cancel/note via separate endpoints, PETRARCA wordmark opens app. Reader: Disregard action + Report bad scrape queue. Feed: Latest lens shows relative ingest time + source. Pipeline: `ingested_at` ISO timestamp on all new articles.
+**Date**: March 9, 2026 (last updated — session 12: desktop web)
+**Status**: Full corpus deployed with knowledge system, reader interactions, voice notes, AI chat, research agents, entity deep-dive, follow-up research, voice note browser + action extraction, activity log tab, scroll-aware encounter tracking, curated novelty card, hierarchical topic feedback, cross-article connections, LLM-verified topic normalization, automatic defragmentation, **unified single-screen feed with lens tabs**, **dynamic reranking**, **✦ drawer navigation**, **clipper auto-save countdown**, **tweet URL ingestion via twikit**, **auto-sync Twitter cookies**, **clipper immediate save via background worker**, **reader disregard + report bad scrape**, **feed ingest metadata**, **floating feedback capture**, **expanded follow-up questions**, **queue auto-advance**, **hybrid topic signals**, **desktop web: 2-column feed grid**, **desktop web: 3-column reader with margin annotations**, **keyboard navigation with multi-key sequences**, **hover actions (archive + dismiss)**
+**Latest commits**: Session 12 — Desktop web layouts: 2-column feed grid (1100px), 3-column reader with left margin (metadata, actions, full shortcuts) and right margin (up next, connected reading, follow-up questions). Reader uses browser-native scroll on web (fixes scroll bug). Feed: hover ✓/✕ buttons, hero articles excluded from grid, Up Next auto-focused. Top bar: prev/next article navigation. Multi-key shortcut support (gi = go to index). Keyboard hint bar uses webFeedMaxWidth.
 
 ---
 
@@ -73,6 +73,37 @@ App (Expo SDK 54):
 | `app/components/TopicsGroupedList.tsx` | Articles grouped by topic with tree-line indentation. Expand/collapse (shows 3, "+N more" to expand). Optional `topicFilter` prop. Logs `topic_group_article_tap`. |
 | `app/components/PetrarcaDrawer.tsx` | Bottom sheet (ink background). Quick actions: Triage, Voice Note. Nav items: Voice Notes, Activity Log, Reading Progress, Queue. Logs `drawer_open/close`, `drawer_item_tap`. |
 | `research/feed-redesign-plan.md` | Comprehensive plan: 3 rounds of mockup feedback, approved architecture, screen layout, 5-phase implementation order, component specs. |
+
+#### Modified Files (Session 12: Desktop Web Layouts)
+
+| File | Changes |
+|------|---------|
+| `app/app/(tabs)/index.tsx` | Web layout: ScrollView replaces FlatList, CSS Grid 2-column article grid (1100px max), hover ✓ (archive) and ✕ (dismiss) buttons on cards, Up Next auto-focused on web (focusedIndex=-1), hero articles (Up Next + Recommended) excluded from grid, `gi` multi-key shortcut, `webArticles`/`effectiveFocusedArticleId` for filtered keyboard nav. |
+| `app/app/reader.tsx` | Web: browser-native scroll (View replaces ScrollView in center column), `window.scroll` listener for progress tracking. 3-column CSS Grid: left margin (metadata, novelty, mode toggle, actions, full shortcut list), right margin (up next, connected, follow-up, related). Top bar: prev/next article links. `gi` shortcut. Container removes `flex:1` on web. |
+| `app/hooks/useKeyboardShortcuts.ts` | Multi-key sequence support: buffers prefix key for 500ms, matches 2-char sequences (e.g. "gi"). Falls back to standalone handler if no second key. |
+| `app/components/UpNextSection.tsx` | Added `isFocused` prop with rubric left border + subtle background visual indicator. |
+| `app/components/LensTabs.tsx` | Changed maxWidth from `contentMaxWidth` to `webFeedMaxWidth` (1100px). |
+| `app/components/KeyboardHintBar.tsx` | Changed inner maxWidth from 680 to 1100px. |
+| `app/design/tokens/spacing.ts` | Added web layout tokens: `webFeedMaxWidth` (1100), `webReaderMaxWidth` (1120), `webReaderLeftMargin` (190), `webReaderRightMargin` (210), `sidebarNavWidth` (220), `contentMaxWidth` (960). |
+
+#### New Files (Session 11b: Feedback Capture + More Questions + Auto-Advance + Topic Signals)
+
+| File | Description |
+|------|-------------|
+| `app/components/FeedbackCapture.tsx` | Floating ✦ feedback button (bottom-right). Tap opens voice/text overlay with auto-detected context (screen, article ID). Long-press hides (persisted). Saves to `@petrarca/feedback_items`. Events: `feedback_capture_start/complete/dismiss`. |
+
+#### Modified Files (Session 11b: Feedback Capture + More Questions + Auto-Advance + Topic Signals)
+
+| File | Changes |
+|------|---------|
+| `app/app/_layout.tsx` | Added `FeedbackCapture` component (global floating button). |
+| `app/app/(tabs)/index.tsx` | Redesigned topic interest signals: `isTopicNew()` function, `KnownTopicDot` component (tap-to-cycle), new topics get left-bordered +/− rows, known topics get compact dot-list. Removed old `TopicLevelRow` and chip styles. Added `getInterestProfile` import. |
+| `app/app/reader.tsx` | "More questions" button in FURTHER INQUIRY with pulsing ✦ animation. Queue auto-advance: `advanceOrGoBack()` replaces `router.back()`, "UP NEXT" toast with escape button. Topic signal redesign matching index.tsx changes. |
+| `app/lib/chat-api.ts` | Added `generateMoreQuestions()` — calls `POST /generate-questions` with article context + existing questions. |
+| `app/components/KeyboardHintBar.tsx` | Modified (minor). |
+| `app/components/LensTabs.tsx` | Modified (minor). |
+| `scripts/build_articles.py` | Extraction prompt generates 4 follow-up questions (was 2-3), with broader/more divergent framing. |
+| `scripts/research-server.py` | New `POST /generate-questions` endpoint — generates 3 additional follow-up questions given article context + already-shown questions. |
 
 #### Modified Files (Session 11: Clipper Immediate Save + Reader Actions + Feed Metadata)
 
@@ -218,7 +249,7 @@ App (Expo SDK 54):
 | Component | Status | Notes |
 |-----------|--------|-------|
 | nginx content server (:8083) | ✅ Working | Serves articles.json, knowledge_index.json, manifest.json |
-| Static web app (:8084) | ✅ Deployed | Session 11: clipper immediate save, reader disregard/report, feed ingest metadata |
+| Static web app (:8084) | ✅ Deployed | Session 11b: feedback capture, more questions, queue auto-advance, hybrid topic signals |
 | Expo native (:8082) | ✅ Running | systemd `petrarca-expo` |
 | Log server (:8091) | ✅ Running | systemd `petrarca-log`, collects app interaction logs |
 | articles.json | ✅ 182 articles | Full corpus with atomic claims, entities, follow-up questions |
@@ -231,7 +262,7 @@ App (Expo SDK 54):
 | GEMINI_KEY | ✅ Configured | In `/opt/petrarca/.env` (used by `gemini_llm.py`, also `GEMINI_API_KEY` alias) |
 | Voice notes storage | ✅ Working | `/opt/petrarca/data/notes/` (JSON) + `/opt/petrarca/data/audio/` (m4a) |
 | Chat conversations | ✅ Working | `/opt/petrarca/data/chats/` (JSON, per conversation_id) |
-| Research server endpoints | ✅ Updated | `/chat`, `/note`, `/research/topic`, `/notes`, `/notes/{id}/execute-action`, `/research`, `/research/results`, `/twitter/status`, `/twitter/cookies`, `/ingest-note`, `/ingest-cancel`, `/report-scrape`, `/scrape-reports` on port 8090 |
+| Research server endpoints | ✅ Updated | `/chat`, `/note`, `/research/topic`, `/notes`, `/notes/{id}/execute-action`, `/research`, `/research/results`, `/twitter/status`, `/twitter/cookies`, `/ingest-note`, `/ingest-cancel`, `/report-scrape`, `/scrape-reports`, `/generate-questions` on port 8090 |
 | Scrape reports queue | ✅ Working | `/opt/petrarca/data/scrape_reports.json` — user-reported bad scrapes, `GET /scrape-reports` lists pending. **Review periodically** to identify scraping failure patterns and strengthen the pipeline (e.g. site-specific extractors, better fallback logic). |
 
 ### SSH Access
@@ -343,6 +374,12 @@ App (Expo SDK 54):
 34. ~~**Entity-link merge**~~ — DONE: When text is both a markdown link and a pipeline entity, the entity popup wins. URL is passed as context: shown in popup, used for smart actions. Article-like URLs (containing `/blog/`, `/article/`, `/introducing/`) get "Save article" (auto-ingest). All others get "Research more" with URL as context for Gemini search grounding. Linked entity mentions get rubric-colored dotted underline.
 35. ~~**Ingest auth fix**~~ — DONE: Reader-originated ingests (`source: reader_link`) skip auth token check on `/ingest` endpoint. Previously all ingests required `X-Petrarca-Token`, causing 401 failures from the app.
 36. ~~**Entity tap (not just long-press)**~~ — DONE: Entity mentions respond to `onPress` instead of `onLongPress` for better discoverability.
+
+### Completed (Session 11b)
+47. ~~**Floating feedback capture**~~ — DONE: `FeedbackCapture.tsx` — floating ✦ button on every screen. Tap opens voice/text overlay with auto-detected context (screen, article ID). Long-press hides (persisted to AsyncStorage). Saves locally to `@petrarca/feedback_items`. TODO: screenshot capture, server upload.
+48. ~~**Expanded follow-up questions**~~ — DONE: Pipeline now generates 4 questions per article (was 2-3) with broader framing. "More questions" button in FURTHER INQUIRY section generates 3 more via `POST /generate-questions` (avoids duplicates). Pulsing ✦ animation while loading.
+49. ~~**Queue auto-advance**~~ — DONE: After finishing article + closing interest card, auto-navigates to next queued article via `router.replace()`. "UP NEXT: {title}" toast with "← Feed" escape button. `advanceOrGoBack()` replaces all `router.back()` calls.
+50. ~~**Hybrid topic interest signals**~~ — DONE: Replaced binary +/- chips with hybrid minimal design. Single signal model: interested/neutral/less. New topics (zero signals, ≤1 articles) get prominent left-bordered +/− rows. Known topics get compact flowing dot-list with tap-to-cycle `KnownTopicDot`.
 
 ### Completed (Session 11)
 41. ~~**Clipper immediate save**~~ — DONE: Save fires immediately via background service worker on popup open (survives popup close). Cancel/Escape sends `POST /ingest-cancel` to undo. Notes sent separately via `POST /ingest-note`. Offline fallback queues to `chrome.storage.local`.

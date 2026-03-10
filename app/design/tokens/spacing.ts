@@ -44,4 +44,12 @@ export const layout = {
   sidebarNavWidth: 220,
   /** Max content width for screens (desktop web) */
   contentMaxWidth: 960,
+  /** Wide max width for feed grid (desktop web) */
+  webFeedMaxWidth: 1100,
+  /** Wide max width for reader with margins (desktop web) */
+  webReaderMaxWidth: 1160,
+  /** Reader left margin width (desktop web) */
+  webReaderLeftMargin: 220,
+  /** Reader right margin width (desktop web) */
+  webReaderRightMargin: 240,
 } as const;

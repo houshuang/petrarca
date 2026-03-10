@@ -18,6 +18,8 @@ Usage:
     python3 scripts/build_articles.py --from articles          # skip to LLM step
     python3 scripts/build_articles.py --dry-run                # skip LLM calls
     python3 scripts/build_articles.py --limit 50               # max articles to process
+
+Note: logs per-article events to /opt/petrarca/data/logs/ for activity feed.
     python3 scripts/build_articles.py --claims                 # include atomic claim extraction
     python3 scripts/build_articles.py --claims-only            # only run claim extraction on existing articles
     python3 scripts/build_articles.py --skip-claims            # explicitly skip claim extraction
@@ -39,6 +41,7 @@ import requests as _requests
 import trafilatura
 from lxml import html as lxml_html
 
+from server_log import log_server_event
 from topic_normalizer import (
     load_registry, save_registry, normalize_article_topics, to_slug,
     normalize_entity, run_normalization_pass, registry_needs_defrag,
@@ -1082,7 +1085,7 @@ Return a JSON object:
 interest_topics: hierarchical topic tags with kebab-case broad/specific categories and optional entity names.{_get_topic_hint()}
 novelty_claims: what's genuinely new or surprising in this article. specificity is "high", "medium", or "low".
 entities: extract 3-8 notable entities (people, books, companies, concepts, places, events, technologies) mentioned in the article. Include a 1-2 sentence synthesis and all name variations used in the text.
-follow_up_questions: generate 2-3 curiosity-driven questions that a thoughtful reader might want to explore after reading this article.
+follow_up_questions: generate 4 curiosity-driven questions that a thoughtful reader might want to explore after reading this article. Include a mix: some that go deeper into the article's core topic, and some that connect to adjacent domains, historical parallels, or contrasting perspectives.
 
 If the article has clear sections/headings, use them. If not, divide into 2-5 logical sections.
 Return ONLY valid JSON."""
@@ -1201,6 +1204,12 @@ def build_articles(candidates: list[dict], existing_articles: list[dict],
 
         # Save incrementally
         _save_json(articles, ARTICLES_PATH)
+
+        log_server_event('article_processed',
+                         title=article['title'][:100],
+                         article_id=article_id,
+                         word_count=best['word_count'],
+                         content_type=article.get('content_type', 'unknown'))
 
     return articles
 
@@ -1724,7 +1733,7 @@ def enrich_articles(articles: list[dict], dry_run: bool = False) -> list[dict]:
             schema_parts.append("""  "follow_up_questions": [
     {{"question": "A curiosity-driven question a thoughtful reader might explore after reading this article?", "connects_to": "related topic area"}}
   ]""")
-            instructions.append("follow_up_questions: generate 2-3 curiosity-driven questions that a thoughtful reader might want to explore after reading this article.")
+            instructions.append("follow_up_questions: generate 4 curiosity-driven questions that a thoughtful reader might want to explore after reading this article. Include a mix: some that go deeper into the article's core topic, and some that connect to adjacent domains, historical parallels, or contrasting perspectives.")
 
         if need_interest_topics:
             fields_needed.append("interest_topics")

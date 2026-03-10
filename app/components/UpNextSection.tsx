@@ -8,9 +8,10 @@ import { getDisplayTitle } from '../lib/display-utils';
 
 interface UpNextSectionProps {
   onDrawerOpen: () => void;
+  isFocused?: boolean;
 }
 
-export default function UpNextSection({ onDrawerOpen }: UpNextSectionProps) {
+export default function UpNextSection({ onDrawerOpen, isFocused }: UpNextSectionProps) {
   const router = useRouter();
 
   const inProgress = getInProgressArticles();
@@ -47,7 +48,7 @@ export default function UpNextSection({ onDrawerOpen }: UpNextSectionProps) {
   if (!displayArticle) return null;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isFocused && styles.containerFocused]}>
       <Pressable
         style={styles.content}
         onPress={() => {
@@ -101,6 +102,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.rule,
     gap: 12,
+  },
+  containerFocused: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.rubric,
+    backgroundColor: 'rgba(139,37,0,0.03)',
   },
   content: {
     flex: 1,

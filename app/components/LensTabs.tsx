@@ -50,6 +50,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: layout.screenPadding,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.rule,
+    zIndex: 10,
+    ...(Platform.OS === 'web' ? {
+      maxWidth: layout.webFeedMaxWidth,
+      width: '100%',
+      alignSelf: 'center' as const,
+    } : {}),
   },
   tabs: {
     flexDirection: 'row',

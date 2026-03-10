@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import AskAI from '../components/AskAI';
 import VoiceFeedback from '../components/VoiceFeedback';
-import { spawnTopicResearch, ingestUrl, getIngestStatus, reportBadScrape } from '../lib/chat-api';
+import { spawnTopicResearch, ingestUrl, getIngestStatus, reportBadScrape, generateMoreQuestions } from '../lib/chat-api';
 import { addToQueue, addToQueueFront } from '../data/queue';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { getArticleById, getArticles, getReadingState, updateReadingState, getHighlightBlockIndices, addHighlight, removeHighlight, markArticleRead, recordInterestSignal, recordTopicInterestSignalAtLevel, getCrossArticleConnections, getParagraphConnections, dismissArticle, getAdjacentArticleId } from '../data/store';
@@ -18,6 +18,7 @@ import { logEvent } from '../data/logger';
 import { isSectionValid, parseInlineMarkdown, splitMarkdownBlocks, parseMarkdownBlock } from '../lib/markdown-utils';
 import { getDisplayTitle } from '../lib/display-utils';
 import { toggleBookmark, isBookmarked } from '../data/bookmarks';
+import { getInterestProfile } from '../data/interest-model';
 import { getQueuedArticleIds, removeFromQueue } from '../data/queue';
 import RelatedArticles from '../components/RelatedArticles';
 import KeyboardHintBar from '../components/KeyboardHintBar';
@@ -153,41 +154,59 @@ function formatTopicLabel(slug: string): string {
   return slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
-function TopicLevelRow({ label, level, indent, onSignal }: {
+type TopicState = 'interested' | 'neutral' | 'less';
+
+function getTopicState(key: string): TopicState {
+  const profile = getInterestProfile();
+  const t = profile.topics[key];
+  if (!t || (t.positive_signals === 0 && t.negative_signals === 0)) return 'neutral';
+  if (t.interest_score >= 0.6) return 'interested';
+  if (t.interest_score <= 0.35) return 'less';
+  return 'neutral';
+}
+
+function isTopicNew(key: string): boolean {
+  const profile = getInterestProfile();
+  const t = profile.topics[key];
+  return !t || (t.positive_signals === 0 && t.negative_signals === 0 && t.articles_seen <= 1);
+}
+
+const STATE_COLORS: Record<TopicState, string> = {
+  interested: '#2a7a4a',
+  neutral: '#e4dfd4',
+  less: '#d0ccc0',
+};
+
+const CYCLE_ORDER: TopicState[] = ['neutral', 'interested', 'less'];
+
+function KnownTopicDot({ label, topicKey, level, parent, onSignal }: {
   label: string;
+  topicKey: string;
   level: 'broad' | 'specific' | 'entity';
-  indent: number;
-  onSignal: (positive: boolean) => void;
+  parent?: string;
+  onSignal: (topicKey: string, level: 'broad' | 'specific' | 'entity', positive: boolean, parent?: string) => void;
 }) {
+  const [state, setState] = useState<TopicState>(() => getTopicState(topicKey));
+
+  const cycle = () => {
+    const idx = CYCLE_ORDER.indexOf(state);
+    const next = CYCLE_ORDER[(idx + 1) % CYCLE_ORDER.length];
+    setState(next);
+    onSignal(topicKey, level, next === 'interested', parent);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const textColor = state === 'interested' ? '#6a6458' : state === 'less' ? colors.claimKnown : colors.textMuted;
+
   return (
-    <View style={[interestStyles.chipRow, { paddingLeft: indent }]}>
-      <Pressable
-        style={interestStyles.chipMinus}
-        onPress={() => onSignal(false)}
-        hitSlop={8}
-      >
-        <Text style={interestStyles.chipButtonText}>−</Text>
-      </Pressable>
-      <View style={interestStyles.chipLabel}>
-        {indent > 0 && <Text style={interestStyles.treeLine}>└ </Text>}
-        <Text style={[
-          interestStyles.chipText,
-          level === 'entity' && interestStyles.chipTextEntity,
-        ]} numberOfLines={1}>
-          {level === 'entity' ? label : formatTopicLabel(label)}
-        </Text>
-        <Text style={interestStyles.levelBadge}>
-          {level === 'broad' ? 'broad' : level === 'specific' ? 'topic' : 'entity'}
-        </Text>
-      </View>
-      <Pressable
-        style={interestStyles.chipPlus}
-        onPress={() => onSignal(true)}
-        hitSlop={8}
-      >
-        <Text style={interestStyles.chipButtonText}>+</Text>
-      </Pressable>
-    </View>
+    <Pressable onPress={cycle} hitSlop={6} style={interestStyles.knownItem}>
+      <View style={[interestStyles.dot, { backgroundColor: STATE_COLORS[state] }]} />
+      <Text style={[
+        interestStyles.knownLabel,
+        { color: textColor },
+        level === 'entity' && { fontFamily: fonts.bodyItalic, ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}) },
+      ]} numberOfLines={1}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -196,107 +215,107 @@ function PostReadInterestCard({ topics, onLevelSignal, onClose }: {
   onLevelSignal: (topicKey: string, level: 'broad' | 'specific' | 'entity', positive: boolean, parent?: string) => void;
   onClose: () => void;
 }) {
-  const groups = useMemo(() => groupTopicsByBroad(topics), [topics]);
-  const uniqueBroadCount = groups.length;
-  const [expanded, setExpanded] = useState(uniqueBroadCount <= 2);
-
-  if (!expanded) {
-    // Collapsed: show leaf-level chips only (entity if present, else specific)
-    const leafTopics = topics.reduce<Array<{ key: string; label: string; level: 'specific' | 'entity'; parent: string }>>((acc, t) => {
-      if (t.entity && !acc.some(a => a.key === t.entity!.toLowerCase().replace(/\s+/g, '-'))) {
-        acc.push({ key: t.entity.toLowerCase().replace(/\s+/g, '-'), label: t.entity, level: 'entity', parent: t.specific });
-      } else if (!t.entity && !acc.some(a => a.key === t.specific)) {
-        acc.push({ key: t.specific, label: formatTopicLabel(t.specific), level: 'specific', parent: t.broad });
+  // Flatten all topics into unique items with their keys
+  const allTopics = useMemo(() => {
+    const seen = new Set<string>();
+    const items: Array<{ key: string; label: string; level: 'broad' | 'specific' | 'entity'; parent?: string; context?: string }> = [];
+    for (const t of topics) {
+      if (!seen.has(t.broad)) {
+        seen.add(t.broad);
+        items.push({ key: t.broad, label: formatTopicLabel(t.broad), level: 'broad' });
       }
-      return acc;
-    }, []);
+      if (!seen.has(t.specific)) {
+        seen.add(t.specific);
+        items.push({ key: t.specific, label: formatTopicLabel(t.specific), level: 'specific', parent: t.broad, context: formatTopicLabel(t.broad) });
+      }
+      if (t.entity) {
+        const entityKey = t.entity.toLowerCase().replace(/\s+/g, '-');
+        if (!seen.has(entityKey)) {
+          seen.add(entityKey);
+          items.push({ key: entityKey, label: t.entity, level: 'entity', parent: t.specific, context: formatTopicLabel(t.specific) });
+        }
+      }
+    }
+    return items;
+  }, [topics]);
 
-    return (
-      <View style={styles.interestCardOverlay}>
-        <View style={styles.interestCard}>
-          <Text style={styles.interestCardTitle}>{'✦ TOPICS IN THIS ARTICLE'}</Text>
-          <Text style={styles.interestCardSubtitle}>Tap + or − to shape your feed</Text>
-          <View style={interestStyles.chips}>
-            {leafTopics.slice(0, 4).map((t) => (
-              <TopicLevelRow
-                key={t.key}
-                label={t.label}
-                level={t.level}
-                indent={0}
-                onSignal={(positive) => onLevelSignal(t.key, t.level, positive, t.parent)}
-              />
-            ))}
-          </View>
-          <Pressable
-            style={interestStyles.expandButton}
-            onPress={() => {
-              setExpanded(true);
-              logEvent('interest_card_expand');
-            }}
-          >
-            <Text style={interestStyles.expandText}>Show topic hierarchy ▾</Text>
-          </Pressable>
-          <Pressable style={styles.interestCloseButton} onPress={onClose}>
-            <Text style={styles.interestCloseText}>Close</Text>
-          </Pressable>
-        </View>
-      </View>
-    );
-  }
+  const newTopics = allTopics.filter(t => isTopicNew(t.key));
+  const knownTopics = allTopics.filter(t => !isTopicNew(t.key));
 
-  // Expanded: show full hierarchy
   return (
     <View style={styles.interestCardOverlay}>
       <View style={styles.interestCard}>
-        <Text style={styles.interestCardTitle}>{'✦ TOPICS IN THIS ARTICLE'}</Text>
-        <Text style={styles.interestCardSubtitle}>Signal interest at any level of specificity</Text>
-        <View style={interestStyles.chips}>
-          {groups.map((group) => (
-            <View key={group.broad}>
-              <TopicLevelRow
-                label={group.broad}
-                level="broad"
-                indent={0}
-                onSignal={(positive) => onLevelSignal(group.broad, 'broad', positive)}
-              />
-              {group.specifics.map((sp) => (
-                <View key={sp.specific}>
-                  <TopicLevelRow
-                    label={sp.specific}
-                    level="specific"
-                    indent={20}
-                    onSignal={(positive) => onLevelSignal(sp.specific, 'specific', positive, group.broad)}
-                  />
-                  {sp.entities.map((ent) => {
-                    const entityKey = ent.toLowerCase().replace(/\s+/g, '-');
-                    return (
-                      <TopicLevelRow
-                        key={entityKey}
-                        label={ent}
-                        level="entity"
-                        indent={40}
-                        onSignal={(positive) => onLevelSignal(entityKey, 'entity', positive, sp.specific)}
-                      />
-                    );
-                  })}
+        {/* New topics — prominent with +/− */}
+        {newTopics.length > 0 && (
+          <>
+            <Text style={[styles.interestCardTitle, { color: '#2a7a4a' }]}>{'✦ NEW TOPICS'}</Text>
+            <View style={interestStyles.newSection}>
+              {newTopics.map((t) => (
+                <View key={t.key} style={interestStyles.newRow}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={[
+                      interestStyles.newLabel,
+                      t.level === 'entity' && { fontFamily: fonts.bodyItalic, ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}) },
+                    ]} numberOfLines={1}>{t.label}</Text>
+                    {t.context && (
+                      <Text style={interestStyles.newContext}>{t.level} · {t.context}</Text>
+                    )}
+                  </View>
+                  <Pressable
+                    style={interestStyles.newBtnPlus}
+                    onPress={() => {
+                      onLevelSignal(t.key, t.level, true, t.parent);
+                    }}
+                    hitSlop={4}
+                  >
+                    <Text style={interestStyles.newBtnPlusText}>+</Text>
+                  </Pressable>
+                  <Pressable
+                    style={interestStyles.newBtnMinus}
+                    onPress={() => {
+                      onLevelSignal(t.key, t.level, false, t.parent);
+                    }}
+                    hitSlop={4}
+                  >
+                    <Text style={interestStyles.newBtnMinusText}>−</Text>
+                  </Pressable>
                 </View>
               ))}
             </View>
-          ))}
-        </View>
-        {uniqueBroadCount > 2 && (
-          <Pressable
-            style={interestStyles.expandButton}
-            onPress={() => {
-              setExpanded(false);
-              logEvent('interest_card_collapse');
-            }}
-          >
-            <Text style={interestStyles.expandText}>Collapse ▴</Text>
-          </Pressable>
+          </>
         )}
+
+        {/* Known topics — compact dot list */}
+        {knownTopics.length > 0 && (
+          <>
+            <Text style={[styles.interestCardTitle, { color: colors.textMuted, marginTop: newTopics.length > 0 ? 12 : 0 }]}>{'✦ KNOWN TOPICS'}</Text>
+            <View style={interestStyles.knownSection}>
+              {knownTopics.map((t) => (
+                <KnownTopicDot
+                  key={t.key}
+                  label={t.label}
+                  topicKey={t.key}
+                  level={t.level}
+                  parent={t.parent}
+                  onSignal={onLevelSignal}
+                />
+              ))}
+            </View>
+            <View style={interestStyles.legendRow}>
+              <View style={[interestStyles.dot, { backgroundColor: '#2a7a4a' }]} />
+              <Text style={interestStyles.legendText}>interested</Text>
+              <Text style={interestStyles.legendSep}>·</Text>
+              <View style={[interestStyles.dot, { backgroundColor: '#e4dfd4' }]} />
+              <Text style={interestStyles.legendText}>neutral</Text>
+              <Text style={interestStyles.legendSep}>·</Text>
+              <View style={[interestStyles.dot, { backgroundColor: '#d0ccc0' }]} />
+              <Text style={interestStyles.legendText}>less</Text>
+            </View>
+          </>
+        )}
+
         <Pressable style={styles.interestCloseButton} onPress={onClose}>
-          <Text style={styles.interestCloseText}>Close</Text>
+          <Text style={styles.interestCloseText}>Done</Text>
         </Pressable>
       </View>
     </View>
@@ -589,8 +608,13 @@ function FollowUpSection({
   articleSummary: string;
 }) {
   const [launchedIndices, setLaunchedIndices] = useState<Set<number>>(new Set());
+  const [extraQuestions, setExtraQuestions] = useState<FollowUpQuestion[]>([]);
+  const [generating, setGenerating] = useState(false);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   if (!questions || questions.length === 0) return null;
+
+  const allQuestions = [...questions, ...extraQuestions];
 
   const handleResearch = async (q: FollowUpQuestion, index: number) => {
     logEvent('research_prompt_tap', { article_id: articleId, question: q.question });
@@ -608,10 +632,38 @@ function FollowUpSection({
     }
   };
 
+  const handleGenerateMore = async () => {
+    logEvent('further_inquiry_generate_more', { article_id: articleId, existing_count: allQuestions.length });
+    setGenerating(true);
+
+    // Pulsing animation for the ✦
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 0.3, duration: 600, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+      ])
+    );
+    pulse.start();
+
+    try {
+      const existingTexts = allQuestions.map(q => q.question);
+      const newQuestions = await generateMoreQuestions(articleId, existingTexts);
+      setExtraQuestions(prev => [...prev, ...newQuestions]);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      logEvent('further_inquiry_generated', { article_id: articleId, new_count: newQuestions.length });
+    } catch (e) {
+      logEvent('further_inquiry_generate_error', { article_id: articleId, error: String(e) });
+    } finally {
+      pulse.stop();
+      pulseAnim.setValue(1);
+      setGenerating(false);
+    }
+  };
+
   return (
     <View style={followUpStyles.container}>
       <Text style={followUpStyles.sectionTitle}>{'\u2726 FURTHER INQUIRY'}</Text>
-      {questions.map((q, i) => (
+      {allQuestions.map((q, i) => (
         <View key={i} style={followUpStyles.questionCard}>
           <Text style={followUpStyles.questionText}>{q.question}</Text>
           <Text style={followUpStyles.connectsTo}>{q.connects_to}</Text>
@@ -627,6 +679,19 @@ function FollowUpSection({
           )}
         </View>
       ))}
+      <Pressable
+        style={followUpStyles.generateMoreButton}
+        onPress={handleGenerateMore}
+        disabled={generating}
+      >
+        {generating ? (
+          <Animated.Text style={[followUpStyles.generateMoreText, { opacity: pulseAnim }]}>
+            {'\u2726 Generating...'}
+          </Animated.Text>
+        ) : (
+          <Text style={followUpStyles.generateMoreText}>{'More questions \u2197'}</Text>
+        )}
+      </Pressable>
     </View>
   );
 }
@@ -1054,10 +1119,306 @@ function buildAIChatContext(article: Article): string {
   return parts.join('\n');
 }
 
+// --- Web Grid Style ---
+
+const webGridStyle = Platform.OS === 'web' ? {
+  display: 'grid' as any,
+  gridTemplateColumns: `${layout.webReaderLeftMargin}px 1fr ${layout.webReaderRightMargin}px` as any,
+  maxWidth: layout.webReaderMaxWidth,
+  margin: '0 auto' as any,
+  minHeight: '100vh' as any,
+  gap: 0,
+} as any : undefined;
+
+// --- Web Left Margin ---
+
+function ReaderLeftMargin({
+  article,
+  novelty,
+  readingMode,
+  onModeChange,
+  bookmarked,
+  onStar,
+  onDismiss,
+  onDone,
+  onAskAI,
+  scrollProgress,
+  hasDimming,
+  shortcuts,
+}: {
+  article: Article;
+  novelty: ArticleNovelty | null;
+  readingMode: ReadingMode;
+  onModeChange: (mode: ReadingMode) => void;
+  bookmarked: boolean;
+  onStar: () => void;
+  onDismiss: () => void;
+  onDone: () => void;
+  onAskAI: () => void;
+  scrollProgress: number;
+  hasDimming: boolean;
+  shortcuts: Record<string, { handler: () => void; label: string }>;
+}) {
+  const topics = article.interest_topics || [];
+  const uniqueBroadTopics = [...new Set(topics.map(t => t.broad))];
+
+  const stickyStyle = {
+    position: 'sticky' as any,
+    top: 42,
+    alignSelf: 'start' as any,
+    height: 'calc(100vh - 42px)' as any,
+    overflowY: 'auto' as any,
+  } as any;
+
+  return (
+    <View style={[marginStyles.leftMargin, stickyStyle]}>
+      {/* Source */}
+      <View style={marginStyles.metaBlock}>
+        <Text style={marginStyles.metaLabel}>Source</Text>
+        <Text style={marginStyles.metaValue} numberOfLines={1}>{article.hostname}</Text>
+      </View>
+
+      {/* Date */}
+      {article.date ? (
+        <View style={marginStyles.metaBlock}>
+          <Text style={marginStyles.metaLabel}>Published</Text>
+          <Text style={marginStyles.metaValue}>{article.date}</Text>
+        </View>
+      ) : null}
+
+      {/* Length */}
+      <View style={marginStyles.metaBlock}>
+        <Text style={marginStyles.metaLabel}>Length</Text>
+        <Text style={marginStyles.metaValue}>
+          {article.estimated_read_minutes} min{article.word_count ? ` \u00B7 ${article.word_count.toLocaleString()} words` : ''}
+        </Text>
+      </View>
+
+      {/* Topics */}
+      {uniqueBroadTopics.length > 0 ? (
+        <View style={marginStyles.metaBlock}>
+          <Text style={marginStyles.metaLabel}>Topics</Text>
+          {uniqueBroadTopics.map((t, i) => (
+            <Text key={i} style={marginStyles.topicText}>{formatTopicLabel(t)}</Text>
+          ))}
+        </View>
+      ) : null}
+
+      {/* Novelty bar */}
+      {novelty ? (
+        <View style={marginStyles.noveltyBlock}>
+          <Text style={marginStyles.metaLabel}>Novelty</Text>
+          <View style={marginStyles.noveltyBar}>
+            <View style={[marginStyles.noveltyBarNew, { flex: novelty.new_claims }] as any} />
+            <View style={[marginStyles.noveltyBarExt, { flex: novelty.extends_claims || 0.01 }] as any} />
+            <View style={[marginStyles.noveltyBarKnown, { flex: novelty.known_claims || 0.01 }] as any} />
+          </View>
+          <Text style={marginStyles.noveltyCounts}>
+            {novelty.new_claims} new {'\u00B7'} {novelty.extends_claims} ext {'\u00B7'} {novelty.known_claims} known
+          </Text>
+        </View>
+      ) : null}
+
+      {/* Reading mode toggle — text-based */}
+      {hasDimming ? (
+        <View style={marginStyles.modeBlock}>
+          <Text style={marginStyles.metaLabel}>Reading mode</Text>
+          <View style={marginStyles.modeRow}>
+            {(['full', 'guided', 'new_only'] as ReadingMode[]).map((mode) => (
+              <Pressable key={mode} onPress={() => onModeChange(mode)}>
+                <Text style={[
+                  marginStyles.modeText,
+                  readingMode === mode && marginStyles.modeTextActive,
+                ]}>
+                  {mode === 'full' ? 'Full' : mode === 'guided' ? 'Guided' : 'New'}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ) : null}
+
+      {/* Actions — text links */}
+      <View style={marginStyles.actionsSection}>
+        <Pressable onPress={onStar} style={marginStyles.actionLink}>
+          <Text style={[marginStyles.actionLinkText, bookmarked && { color: colors.rubric }]}>
+            {bookmarked ? '\u2605' : '\u2606'} {bookmarked ? 'Bookmarked' : 'Bookmark'}
+          </Text>
+        </Pressable>
+        <Pressable onPress={onDone} style={marginStyles.actionLink}>
+          <Text style={marginStyles.actionLinkText}>{'\u2713'} Mark as read</Text>
+        </Pressable>
+        <Pressable onPress={onDismiss} style={marginStyles.actionLink}>
+          <Text style={marginStyles.actionLinkText}>{'\u2715'} Dismiss</Text>
+        </Pressable>
+        <Pressable onPress={onAskAI} style={marginStyles.actionLink}>
+          <Text style={marginStyles.actionLinkText}>{'\u2726'} Ask AI</Text>
+        </Pressable>
+      </View>
+
+      {/* Keyboard shortcuts */}
+      <View style={marginStyles.shortcutsBlock}>
+        {Object.entries(shortcuts).filter(([key]) => key !== '?').map(([key, s]) => (
+          <View key={key} style={marginStyles.shortcutRow}>
+            <View style={marginStyles.kbdBadge}>
+              <Text style={marginStyles.kbdText}>{key}</Text>
+            </View>
+            <Text style={marginStyles.shortcutLabel}>{s.label}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+// --- Web Right Margin ---
+
+function ReaderRightMargin({
+  article,
+  nextArticle,
+  connections,
+  followUpQuestions,
+  onNavigateArticle,
+  onUpNext,
+}: {
+  article: Article;
+  nextArticle: Article | null;
+  connections: CrossArticleConnection[];
+  followUpQuestions: FollowUpQuestion[];
+  onNavigateArticle: (id: string) => void;
+  onUpNext: () => void;
+}) {
+  const allArticles = getArticles();
+  const [launchedIndices, setLaunchedIndices] = useState<Set<number>>(new Set());
+
+  const stickyStyle = {
+    position: 'sticky' as any,
+    top: 42,
+    alignSelf: 'start' as any,
+    height: 'calc(100vh - 42px)' as any,
+    overflowY: 'auto' as any,
+  } as any;
+
+  const handleResearch = async (q: FollowUpQuestion, index: number) => {
+    logEvent('research_prompt_tap', { article_id: article.id, question: q.question });
+    try {
+      await spawnTopicResearch(
+        q.question,
+        `From article: ${article.title}\nConnects to: ${q.connects_to}\nSummary: ${article.one_line_summary}`,
+        [article.title],
+      );
+      setLaunchedIndices(prev => new Set(prev).add(index));
+      logEvent('research_prompt_launched', { article_id: article.id, question: q.question });
+    } catch (e) {
+      logEvent('research_prompt_error', { article_id: article.id, error: String(e) });
+    }
+  };
+
+  // Related articles for right margin
+  const relatedArticles = useMemo(() => {
+    const topics = article.interest_topics || [];
+    if (topics.length === 0) return [];
+    const topicSet = new Set(topics.map(t => t.specific));
+    const broadSet = new Set(topics.map(t => t.broad));
+    const connIds = new Set(connections.map(c => c.articleId));
+    const scored: { article: Article; overlap: number }[] = [];
+    for (const other of allArticles) {
+      if (other.id === article.id || connIds.has(other.id)) continue;
+      const otherTopics = other.interest_topics || [];
+      let overlap = 0;
+      for (const t of otherTopics) {
+        if (topicSet.has(t.specific)) overlap += 2;
+        else if (broadSet.has(t.broad)) overlap += 1;
+      }
+      if (overlap > 0) scored.push({ article: other, overlap });
+    }
+    scored.sort((a, b) => b.overlap - a.overlap);
+    return scored.slice(0, 3).map(s => s.article);
+  }, [article.id, allArticles, connections]);
+
+  return (
+    <View style={[marginStyles.rightMargin, stickyStyle]}>
+      {/* Up Next */}
+      {nextArticle ? (
+        <View style={marginStyles.rightSection}>
+          <Text style={marginStyles.rightSectionTitle}>Up next in queue</Text>
+          <Pressable onPress={onUpNext} style={marginStyles.footnoteItem}>
+            <Text style={marginStyles.footnoteText} numberOfLines={2}>{getDisplayTitle(nextArticle)}</Text>
+            <Text style={marginStyles.footnoteMeta}>
+              {nextArticle.hostname}{nextArticle.estimated_read_minutes ? ` \u00B7 ${nextArticle.estimated_read_minutes} min` : ''}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {/* Connected reading */}
+      {connections.length > 0 ? (
+        <View style={marginStyles.rightSection}>
+          <Text style={marginStyles.rightSectionTitle}>Connected reading</Text>
+          {connections.map((conn) => {
+            const target = allArticles.find(a => a.id === conn.articleId);
+            if (!target) return null;
+            return (
+              <Pressable
+                key={conn.articleId}
+                style={marginStyles.footnoteItem}
+                onPress={() => onNavigateArticle(conn.articleId)}
+              >
+                <Text style={marginStyles.footnoteText} numberOfLines={2}>{getDisplayTitle(target)}</Text>
+                <Text style={marginStyles.footnoteMeta}>
+                  {conn.sharedClaimCount} shared {conn.sharedClaimCount === 1 ? 'claim' : 'claims'}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
+
+      {/* Follow-up questions */}
+      {followUpQuestions.length > 0 ? (
+        <View style={marginStyles.rightSection}>
+          <Text style={marginStyles.rightSectionTitle}>Further inquiry</Text>
+          {followUpQuestions.slice(0, 3).map((q, i) => (
+            <View key={i} style={marginStyles.inquiryItem}>
+              <Text style={marginStyles.inquiryText} numberOfLines={3}>{q.question}</Text>
+              {launchedIndices.has(i) ? (
+                <Text style={marginStyles.researchLaunched}>{'\u2713 Launched'}</Text>
+              ) : (
+                <Pressable onPress={() => handleResearch(q, i)}>
+                  <Text style={marginStyles.researchLink}>{'Research this \u2197'}</Text>
+                </Pressable>
+              )}
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {/* Related articles */}
+      {relatedArticles.length > 0 ? (
+        <View style={marginStyles.rightSection}>
+          <Text style={marginStyles.rightSectionTitle}>Related</Text>
+          {relatedArticles.map((a) => (
+            <Pressable
+              key={a.id}
+              style={marginStyles.footnoteItem}
+              onPress={() => onNavigateArticle(a.id)}
+            >
+              <Text style={marginStyles.footnoteText} numberOfLines={2}>{getDisplayTitle(a)}</Text>
+              <Text style={marginStyles.footnoteMeta}>
+                {a.hostname}{a.estimated_read_minutes ? ` \u00B7 ${a.estimated_read_minutes} min` : ''}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 // --- Main Reader Screen ---
 
 export default function ReaderScreen() {
-  const { id, lens } = useLocalSearchParams<{ id: string; lens?: string }>();
+  const { id, lens, autoAdvanceFrom } = useLocalSearchParams<{ id: string; lens?: string; autoAdvanceFrom?: string }>();
   const router = useRouter();
   const feedLens = (lens || 'best') as FeedLens;
   const article = getArticleById(id || '');
@@ -1077,6 +1438,14 @@ export default function ReaderScreen() {
   const [showVoiceFeedback, setShowVoiceFeedback] = useState(false);
   const [activeEntity, setActiveEntity] = useState<ArticleEntity | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [autoAdvanceToast, setAutoAdvanceToast] = useState<{ title: string; articleId: string } | null>(null);
+  const autoAdvanceToastAnim = useRef(new Animated.Value(0)).current;
+
+  // Adjacent articles for top bar navigation
+  const prevArticleId = useMemo(() => article ? getAdjacentArticleId(article.id, 'prev', feedLens) : null, [article, feedLens]);
+  const nextArticleId = useMemo(() => article ? getAdjacentArticleId(article.id, 'next', feedLens) : null, [article, feedLens]);
+  const prevArticle = prevArticleId ? getArticleById(prevArticleId) : null;
+  const nextArticle = nextArticleId ? getArticleById(nextArticleId) : null;
 
   // Cross-article connections
   const crossArticleConnections = useMemo(() => {
@@ -1100,6 +1469,34 @@ export default function ReaderScreen() {
     const t = setTimeout(() => setStatusMessage(null), 2000);
     return () => clearTimeout(t);
   }, [statusMessage]);
+
+  // Show "Up next" toast when arriving via auto-advance
+  useEffect(() => {
+    if (!autoAdvanceFrom || !article) return;
+    const truncTitle = getDisplayTitle(article).length > 50
+      ? getDisplayTitle(article).slice(0, 47) + '...'
+      : getDisplayTitle(article);
+    setAutoAdvanceToast({ title: truncTitle, articleId: article.id });
+    autoAdvanceToastAnim.setValue(0);
+    Animated.timing(autoAdvanceToastAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  // Auto-dismiss "Up next" toast after 3 seconds
+  useEffect(() => {
+    if (!autoAdvanceToast) return;
+    const t = setTimeout(() => {
+      Animated.timing(autoAdvanceToastAnim, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+      }).start(() => setAutoAdvanceToast(null));
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [autoAdvanceToast]);
 
   // --- Keyboard shortcuts (web only) ---
   const readingModes: ReadingMode[] = ['full', 'guided', 'new_only'];
@@ -1133,6 +1530,7 @@ export default function ReaderScreen() {
         setReadingMode(readingModes[(idx + 1) % readingModes.length]);
       }, label: 'mode' },
       a: { handler: () => setShowAIChat(true), label: 'ask AI' },
+      gi: { handler: () => router.replace('/'), label: 'go to index' },
       '?': { handler: () => {}, label: 'shortcuts' },
     };
   }, [article, bookmarked, readingMode, feedLens, router]);
@@ -1260,15 +1658,36 @@ export default function ReaderScreen() {
     }
     logEvent('reader_open', { article_id: article.id, title: article.title });
 
-    // Restore scroll position
+    // Restore scroll position + ensure arrow-key scrolling works on web
     const savedY = state.scroll_position_y || 0;
     if (savedY > 0) {
       setTimeout(() => {
-        scrollRef.current?.scrollTo({ y: savedY, animated: false });
+        if (Platform.OS === 'web') {
+          window.scrollTo({ top: savedY });
+        } else {
+          scrollRef.current?.scrollTo({ y: savedY, animated: false });
+        }
       }, 300);
+    }
+    let webStyleEl: HTMLStyleElement | null = null;
+    const prevBodyOverflow = Platform.OS === 'web' ? document.body.style.overflow : '';
+    if (Platform.OS === 'web') {
+      // React Native Web sets body { overflow: hidden }, which blocks arrow-key scrolling.
+      // Override to 'auto' so the browser handles scroll natively (arrow keys, Page Up/Down).
+      document.body.style.overflow = 'auto';
+      setTimeout(() => {
+        (document.activeElement as HTMLElement)?.blur();
+        document.body.focus();
+      }, 100);
+      // Suppress focus outlines on divs (React Native Web renders Views as divs)
+      webStyleEl = document.createElement('style');
+      webStyleEl.textContent = 'div:focus, body:focus { outline: none !important; }';
+      document.head.appendChild(webStyleEl);
     }
 
     return () => {
+      if (webStyleEl) document.head.removeChild(webStyleEl);
+      if (Platform.OS === 'web') document.body.style.overflow = prevBodyOverflow;
       const elapsed = Date.now() - enterTime.current;
       const currentState = getReadingState(article.id);
       updateReadingState(article.id, {
@@ -1299,7 +1718,7 @@ export default function ReaderScreen() {
     setHighlightedBlocks(getHighlightBlockIndices(article.id));
   }, [article?.id]);
 
-  // Scroll handler — save position periodically + track progress
+  // Scroll handler — save position periodically + track progress (mobile)
   const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (!article) return;
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
@@ -1327,6 +1746,40 @@ export default function ReaderScreen() {
         logEvent('reader_scroll_milestone', { article_id: article.id, pct: milestone });
       }
     }
+  }, [article]);
+
+  // Web: use window scroll for progress tracking (browser handles scrolling)
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !article) return;
+    const onWindowScroll = () => {
+      const scrollY = window.scrollY;
+      const docHeight = document.documentElement.scrollHeight;
+      const viewHeight = window.innerHeight;
+      const maxScroll = docHeight - viewHeight;
+      const now = Date.now();
+
+      if (now - lastPositionSaveTime.current >= SCROLL_POSITION_SAVE_INTERVAL_MS) {
+        lastPositionSaveTime.current = now;
+        updateReadingState(article.id, { scroll_position_y: Math.round(scrollY) });
+      }
+
+      lastScrollY.current = scrollY;
+      if (scrollY > maxScrollY.current) maxScrollY.current = scrollY;
+      contentHeight.current = docHeight;
+      viewportHeight.current = viewHeight;
+
+      if (maxScroll > 0) {
+        const pct = Math.min(100, Math.max(0, (scrollY / maxScroll) * 100));
+        setScrollProgress(pct);
+        const milestone = Math.floor(pct / 25) * 25;
+        if (milestone > 0 && milestone > (scrollMilestone.current || 0)) {
+          scrollMilestone.current = milestone;
+          logEvent('reader_scroll_milestone', { article_id: article.id, pct: milestone });
+        }
+      }
+    };
+    window.addEventListener('scroll', onWindowScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onWindowScroll);
   }, [article]);
 
   // Highlight handler
@@ -1399,6 +1852,22 @@ export default function ReaderScreen() {
     setActiveEntityUrl(undefined);
   }, [article, activeEntity, activeEntityUrl]);
 
+  // Auto-advance to next queued article, or go back to feed
+  const advanceOrGoBack = useCallback(async () => {
+    if (!article) return;
+    await removeFromQueue(article.id);
+    const queuedIds = getQueuedArticleIds();
+    const nextId = queuedIds.find(qId => qId !== article.id);
+    const nextArticle = nextId ? getArticleById(nextId) : null;
+
+    if (nextArticle) {
+      logEvent('auto_advance_triggered', { from_article_id: article.id, to_article_id: nextArticle.id });
+      router.replace({ pathname: '/reader', params: { id: nextArticle.id, autoAdvanceFrom: article.id } });
+    } else {
+      router.back();
+    }
+  }, [article, router]);
+
   // Done handler — user explicitly finished, so mark ALL claims
   const handleDone = useCallback(() => {
     if (!article) return;
@@ -1419,10 +1888,10 @@ export default function ReaderScreen() {
         setShowInterestCard(true);
         logEvent('interest_card_shown', { article_id: article.id, topic_count: topics.length });
       } else {
-        router.back();
+        advanceOrGoBack();
       }
     });
-  }, [article, router]);
+  }, [article, router, advanceOrGoBack]);
 
   // Up next handler — navigate to next queued article
   const handleUpNext = useCallback(async () => {
@@ -1446,7 +1915,35 @@ export default function ReaderScreen() {
   const handleInterestClose = useCallback(() => {
     logEvent('interest_card_close', { article_id: article?.id });
     setShowInterestCard(false);
-    router.back();
+    advanceOrGoBack();
+  }, [article, advanceOrGoBack]);
+
+  const isWeb = Platform.OS === 'web';
+  const hasDimming = !!(blockDimming && Array.from(blockDimming.values()).some(d => d.opacity < 1));
+
+  // Web margin: star handler
+  const handleWebStar = useCallback(async () => {
+    if (!article) return;
+    const nowBookmarked = await toggleBookmark(article.id);
+    setBookmarked(nowBookmarked);
+    recordInterestSignal(nowBookmarked ? 'bookmark_add' : 'bookmark_remove', article.id);
+    logEvent('reader_margin_star', { article_id: article.id, bookmarked: nowBookmarked });
+  }, [article]);
+
+  // Web margin: dismiss handler
+  const handleWebDismiss = useCallback(() => {
+    if (!article) return;
+    dismissArticle(article.id, 'margin_dismiss');
+    recordInterestSignal('swipe_dismiss', article.id);
+    logEvent('reader_margin_dismiss', { article_id: article.id });
+    setStatusMessage('Dismissed');
+    setTimeout(() => router.back(), 600);
+  }, [article, router]);
+
+  // Web margin: navigate to article
+  const handleNavigateArticle = useCallback((targetId: string) => {
+    logEvent('margin_navigate_article', { source_article_id: article?.id, target_article_id: targetId });
+    router.push({ pathname: '/reader', params: { id: targetId } });
   }, [article, router]);
 
   if (!article) {
@@ -1463,30 +1960,50 @@ export default function ReaderScreen() {
   return (
     <View style={styles.container}>
       {/* Top bar */}
-      <View style={styles.topBar}>
+      <View style={[styles.topBar, Platform.OS === 'web' && styles.topBarWeb]}>
         <Pressable onPress={() => {
           logEvent('reader_back', { article_id: article.id });
           router.back();
         }} style={styles.backButton}>
           <Text style={styles.backLinkText}>{'← Feed'}</Text>
         </Pressable>
+        {Platform.OS === 'web' && prevArticle ? (
+          <Pressable onPress={() => {
+            router.replace({ pathname: '/reader', params: { id: prevArticle.id, lens: feedLens } });
+          }} style={styles.topBarNavBtn}>
+            <Text style={styles.topBarNavText} numberOfLines={1}>{'‹ '}{getDisplayTitle(prevArticle)}</Text>
+          </Pressable>
+        ) : null}
         <View style={{ flex: 1 }} />
-        <Pressable onPress={async () => {
-          const nowBookmarked = await toggleBookmark(article.id);
-          setBookmarked(nowBookmarked);
-          recordInterestSignal(nowBookmarked ? 'bookmark_add' : 'bookmark_remove', article.id);
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        }} style={styles.bookmarkButton}>
-          <Text style={[styles.bookmarkText, bookmarked && styles.bookmarkTextActive]}>
-            {bookmarked ? '★' : '☆'}
-          </Text>
-        </Pressable>
-        <Pressable onPress={() => {
-          setShowMenu(!showMenu);
-          logEvent('reader_menu_toggle', { article_id: article.id });
-        }} style={styles.menuButton}>
-          <Text style={styles.menuButtonText}>⋯</Text>
-        </Pressable>
+        {Platform.OS === 'web' && nextArticle ? (
+          <Pressable onPress={() => {
+            router.replace({ pathname: '/reader', params: { id: nextArticle.id, lens: feedLens } });
+          }} style={styles.topBarNavBtn}>
+            <Text style={styles.topBarNavText} numberOfLines={1}>{getDisplayTitle(nextArticle)}{' ›'}</Text>
+          </Pressable>
+        ) : null}
+        {Platform.OS === 'web' ? (
+          <Text style={styles.webProgressText}>{Math.round(scrollProgress)}%</Text>
+        ) : (
+          <>
+            <Pressable onPress={async () => {
+              const nowBookmarked = await toggleBookmark(article.id);
+              setBookmarked(nowBookmarked);
+              recordInterestSignal(nowBookmarked ? 'bookmark_add' : 'bookmark_remove', article.id);
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }} style={styles.bookmarkButton}>
+              <Text style={[styles.bookmarkText, bookmarked && styles.bookmarkTextActive]}>
+                {bookmarked ? '★' : '☆'}
+              </Text>
+            </Pressable>
+            <Pressable onPress={() => {
+              setShowMenu(!showMenu);
+              logEvent('reader_menu_toggle', { article_id: article.id });
+            }} style={styles.menuButton}>
+              <Text style={styles.menuButtonText}>⋯</Text>
+            </Pressable>
+          </>
+        )}
       </View>
 
       {/* Dropdown menu */}
@@ -1626,8 +2143,35 @@ export default function ReaderScreen() {
         </View>
       ) : null}
 
+      {/* Auto-advance toast */}
+      {autoAdvanceToast ? (
+        <Animated.View style={[styles.autoAdvanceToast, {
+          opacity: autoAdvanceToastAnim,
+          transform: [{
+            translateY: autoAdvanceToastAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [-20, 0],
+            }),
+          }],
+        }]}>
+          <Text style={styles.autoAdvanceToastLabel}>Up next:</Text>
+          <Text style={styles.autoAdvanceToastTitle} numberOfLines={1}>{autoAdvanceToast.title}</Text>
+          <Pressable
+            style={styles.autoAdvanceToastFeedButton}
+            onPress={() => {
+              logEvent('auto_advance_cancelled', { article_id: autoAdvanceToast.articleId });
+              setAutoAdvanceToast(null);
+              router.back();
+            }}
+            hitSlop={8}
+          >
+            <Text style={styles.autoAdvanceToastFeedText}>{'\u2190 Feed'}</Text>
+          </Pressable>
+        </Animated.View>
+      ) : null}
+
       {/* Progress bar with completion flash */}
-      <View style={styles.progressBarTrack}>
+      <View style={[styles.progressBarTrack, isWeb && styles.progressBarTrackWeb]}>
         <View style={[styles.progressBarFill, { width: `${scrollProgress}%` as any }]} />
         <Animated.View style={[
           styles.completionFlash,
@@ -1646,137 +2190,246 @@ export default function ReaderScreen() {
         ]} />
       </View>
 
-      {/* Main scrollable content */}
-      <ScrollView
-        ref={scrollRef}
-        style={styles.scroll}
-        showsVerticalScrollIndicator={false}
-        scrollEventThrottle={16}
-        onScroll={handleScroll}
-      >
-        {/* Title + metadata */}
-        <Text style={styles.articleTitle}>{getDisplayTitle(article)}</Text>
-        <View style={styles.metaRow}>
-          {article.author ? <Text style={styles.metaText}>{article.author}</Text> : null}
-          <Text style={styles.metaText}>{article.hostname}</Text>
-          {article.date ? <Text style={styles.metaText}>{article.date}</Text> : null}
-          <Text style={styles.metaText}>{article.estimated_read_minutes} min</Text>
-        </View>
-
-        {/* "What's new for you" card — knowledge-aware, prioritizing interesting claims */}
-        {claimClassifications ? (() => {
-          const newClaims = claimClassifications.filter((c: ClaimClassification) => c.classification === 'NEW');
-          // Prioritize non-factual claims (causal, evaluative, comparative, etc.)
-          const interesting = newClaims.filter((c: ClaimClassification) => c.claim_type !== 'factual');
-          const fallback = newClaims.filter((c: ClaimClassification) => c.claim_type === 'factual');
-          const displayClaims = [...interesting, ...fallback].slice(0, 3);
-          if (displayClaims.length === 0 && newClaims.length === 0) return null;
-          return (
-            <View style={styles.noveltyCard}>
-              <Text style={styles.noveltyTitle}>{'✦ What\u2019s new for you'}</Text>
-              {articleNovelty && (
-                <View style={styles.noveltyStats}>
-                  <Text style={styles.noveltyStatText}>
-                    {articleNovelty.new_claims} new · {articleNovelty.extends_claims} extend · {articleNovelty.known_claims} familiar
-                  </Text>
-                </View>
-              )}
-              {displayClaims.map((c: ClaimClassification, i: number) => (
-                <AnimatedClaimItem key={i} text={c.text} index={i} />
-              ))}
-            </View>
-          );
-        })() : article.novelty_claims && article.novelty_claims.length > 0 ? (
-          <View style={styles.noveltyCard}>
-            <Text style={styles.noveltyTitle}>{'✦ What\u2019s new'}</Text>
-            {article.novelty_claims.slice(0, 3).map((nc, i) => (
-              <AnimatedClaimItem key={i} text={nc.claim} index={i} />
-            ))}
-          </View>
-        ) : null}
-
-        {/* Reading mode toggle — only when there are familiar blocks to dim */}
-        {blockDimming && Array.from(blockDimming.values()).some(d => d.opacity < 1) && (
-          <ReadingModeToggle mode={readingMode} onModeChange={(mode) => {
-            setReadingMode(mode);
-            logEvent('reading_mode_change', { article_id: article.id, mode });
-          }} />
-        )}
-
-        {/* Full article content */}
-        <MarkdownText
-          content={fullContent}
-          highlightedBlocks={highlightedBlocks}
-          onBlockLongPress={handleBlockLongPress}
-          blockDimming={blockDimming}
-          readingMode={readingMode}
-          entities={article.entities}
-          onEntityLongPress={handleEntityLongPress}
-          linkHandler={linkHandler}
-          paragraphConnections={paragraphConnections}
-          sourceArticleId={article.id}
-        />
-
-        {/* Inline entity popup */}
-        {activeEntity && (
-          <EntityPopup
-            entity={activeEntity}
-            articleTitle={article.title}
-            url={activeEntityUrl}
-            onResearch={handleEntityResearch}
-            onIngest={activeEntityUrl ? handleEntityIngest : undefined}
-            onDismiss={() => {
-              logEvent('entity_popup_dismiss', { article_id: article.id, entity: activeEntity.name });
-              setActiveEntity(null);
-              setActiveEntityUrl(undefined);
+      {/* Web: 3-column grid layout / Mobile: single column */}
+      <View style={isWeb ? webGridStyle : { flex: 1 }}>
+        {/* Left margin (web only) */}
+        {isWeb && (
+          <ReaderLeftMargin
+            article={article}
+            novelty={articleNovelty}
+            readingMode={readingMode}
+            onModeChange={(mode) => {
+              setReadingMode(mode);
+              logEvent('reading_mode_change', { article_id: article.id, mode });
             }}
+            bookmarked={bookmarked}
+            onStar={handleWebStar}
+            onDismiss={handleWebDismiss}
+            onDone={handleDone}
+            onAskAI={() => setShowAIChat(true)}
+            scrollProgress={scrollProgress}
+            hasDimming={hasDimming}
+            shortcuts={readerShortcuts}
           />
         )}
 
-        {/* Connected reading */}
-        <ConnectedReadingSection
-          connections={crossArticleConnections}
-          articleId={article.id}
-        />
+        {/* Center column: web uses View (browser scrolls page), mobile uses ScrollView */}
+        {isWeb ? (
+          <View style={[styles.scroll, styles.scrollWeb]}>
+            <Text style={styles.articleTitle}>{getDisplayTitle(article)}</Text>
+            <View style={styles.metaRow}>
+              {article.author ? <Text style={styles.metaText}>{article.author}</Text> : null}
+              <Text style={styles.metaText}>{article.hostname}</Text>
+              {article.date ? <Text style={styles.metaText}>{article.date}</Text> : null}
+              <Text style={styles.metaText}>{article.estimated_read_minutes} min</Text>
+            </View>
 
-        {/* Follow-up research prompts */}
-        <FollowUpSection
-          questions={article.follow_up_questions || []}
-          articleTitle={article.title}
-          articleId={article.id}
-          articleSummary={article.one_line_summary}
-        />
+            {claimClassifications ? (() => {
+              const newClaims = claimClassifications.filter((c: ClaimClassification) => c.classification === 'NEW');
+              const interesting = newClaims.filter((c: ClaimClassification) => c.claim_type !== 'factual');
+              const fallback = newClaims.filter((c: ClaimClassification) => c.claim_type === 'factual');
+              const displayClaims = [...interesting, ...fallback].slice(0, 3);
+              if (displayClaims.length === 0 && newClaims.length === 0) return null;
+              return (
+                <View style={styles.noveltyCard}>
+                  <Text style={styles.noveltyTitle}>{'✦ What\u2019s new for you'}</Text>
+                  {articleNovelty && (
+                    <View style={styles.noveltyStats}>
+                      <Text style={styles.noveltyStatText}>
+                        {articleNovelty.new_claims} new · {articleNovelty.extends_claims} extend · {articleNovelty.known_claims} familiar
+                      </Text>
+                    </View>
+                  )}
+                  {displayClaims.map((c: ClaimClassification, i: number) => (
+                    <AnimatedClaimItem key={i} text={c.text} index={i} />
+                  ))}
+                </View>
+              );
+            })() : article.novelty_claims && article.novelty_claims.length > 0 ? (
+              <View style={styles.noveltyCard}>
+                <Text style={styles.noveltyTitle}>{'✦ What\u2019s new'}</Text>
+                {article.novelty_claims.slice(0, 3).map((nc, i) => (
+                  <AnimatedClaimItem key={i} text={nc.claim} index={i} />
+                ))}
+              </View>
+            ) : null}
 
-        {/* Related articles */}
-        <RelatedArticles article={article} />
+            <MarkdownText
+              content={fullContent}
+              highlightedBlocks={highlightedBlocks}
+              onBlockLongPress={handleBlockLongPress}
+              blockDimming={blockDimming}
+              readingMode={readingMode}
+              entities={article.entities}
+              onEntityLongPress={handleEntityLongPress}
+              linkHandler={linkHandler}
+              paragraphConnections={paragraphConnections}
+              sourceArticleId={article.id}
+            />
 
-        {/* Bottom spacer for footer bar */}
-        <View style={{ height: 100 }} />
-      </ScrollView>
+            {activeEntity && (
+              <EntityPopup
+                entity={activeEntity}
+                articleTitle={article.title}
+                url={activeEntityUrl}
+                onResearch={handleEntityResearch}
+                onIngest={activeEntityUrl ? handleEntityIngest : undefined}
+                onDismiss={() => {
+                  logEvent('entity_popup_dismiss', { article_id: article.id, entity: activeEntity.name });
+                  setActiveEntity(null);
+                  setActiveEntityUrl(undefined);
+                }}
+              />
+            )}
 
-      {/* Bottom footer bar: Done + Up Next */}
-      {!showInterestCard && (
+            <View style={{ height: 100 }} />
+          </View>
+        ) : (
+          <ScrollView
+            ref={scrollRef}
+            style={styles.scroll}
+            showsVerticalScrollIndicator={false}
+            scrollEventThrottle={16}
+            onScroll={handleScroll}
+          >
+            <Text style={styles.articleTitle}>{getDisplayTitle(article)}</Text>
+            <View style={styles.metaRow}>
+              {article.author ? <Text style={styles.metaText}>{article.author}</Text> : null}
+              <Text style={styles.metaText}>{article.hostname}</Text>
+              {article.date ? <Text style={styles.metaText}>{article.date}</Text> : null}
+              <Text style={styles.metaText}>{article.estimated_read_minutes} min</Text>
+            </View>
+
+            {claimClassifications ? (() => {
+              const newClaims = claimClassifications.filter((c: ClaimClassification) => c.classification === 'NEW');
+              const interesting = newClaims.filter((c: ClaimClassification) => c.claim_type !== 'factual');
+              const fallback = newClaims.filter((c: ClaimClassification) => c.claim_type === 'factual');
+              const displayClaims = [...interesting, ...fallback].slice(0, 3);
+              if (displayClaims.length === 0 && newClaims.length === 0) return null;
+              return (
+                <View style={styles.noveltyCard}>
+                  <Text style={styles.noveltyTitle}>{'✦ What\u2019s new for you'}</Text>
+                  {articleNovelty && (
+                    <View style={styles.noveltyStats}>
+                      <Text style={styles.noveltyStatText}>
+                        {articleNovelty.new_claims} new · {articleNovelty.extends_claims} extend · {articleNovelty.known_claims} familiar
+                      </Text>
+                    </View>
+                  )}
+                  {displayClaims.map((c: ClaimClassification, i: number) => (
+                    <AnimatedClaimItem key={i} text={c.text} index={i} />
+                  ))}
+                </View>
+              );
+            })() : article.novelty_claims && article.novelty_claims.length > 0 ? (
+              <View style={styles.noveltyCard}>
+                <Text style={styles.noveltyTitle}>{'✦ What\u2019s new'}</Text>
+                {article.novelty_claims.slice(0, 3).map((nc, i) => (
+                  <AnimatedClaimItem key={i} text={nc.claim} index={i} />
+                ))}
+              </View>
+            ) : null}
+
+            {hasDimming && (
+              <ReadingModeToggle mode={readingMode} onModeChange={(mode) => {
+                setReadingMode(mode);
+                logEvent('reading_mode_change', { article_id: article.id, mode });
+              }} />
+            )}
+
+            <MarkdownText
+              content={fullContent}
+              highlightedBlocks={highlightedBlocks}
+              onBlockLongPress={handleBlockLongPress}
+              blockDimming={blockDimming}
+              readingMode={readingMode}
+              entities={article.entities}
+              onEntityLongPress={handleEntityLongPress}
+              linkHandler={linkHandler}
+              paragraphConnections={paragraphConnections}
+              sourceArticleId={article.id}
+            />
+
+            {activeEntity && (
+              <EntityPopup
+                entity={activeEntity}
+                articleTitle={article.title}
+                url={activeEntityUrl}
+                onResearch={handleEntityResearch}
+                onIngest={activeEntityUrl ? handleEntityIngest : undefined}
+                onDismiss={() => {
+                  logEvent('entity_popup_dismiss', { article_id: article.id, entity: activeEntity.name });
+                  setActiveEntity(null);
+                  setActiveEntityUrl(undefined);
+                }}
+              />
+            )}
+
+            <ConnectedReadingSection
+              connections={crossArticleConnections}
+              articleId={article.id}
+            />
+
+            <FollowUpSection
+              questions={article.follow_up_questions || []}
+              articleTitle={article.title}
+              articleId={article.id}
+              articleSummary={article.one_line_summary}
+            />
+
+            <RelatedArticles article={article} />
+
+            <View style={{ height: 100 }} />
+          </ScrollView>
+        )}
+
+        {/* Right margin (web only) */}
+        {isWeb && (
+          <ReaderRightMargin
+            article={article}
+            nextArticle={nextQueuedArticle}
+            connections={crossArticleConnections}
+            followUpQuestions={article.follow_up_questions || []}
+            onNavigateArticle={handleNavigateArticle}
+            onUpNext={handleUpNext}
+          />
+        )}
+      </View>
+
+      {/* Bottom action bar — mobile: triage buttons, web: keyboard hint bar */}
+      {!showInterestCard && Platform.OS !== 'web' && (
         <View style={styles.footerBar}>
+          <Pressable style={styles.actionBtn} onPress={() => {
+            const next = !bookmarked;
+            toggleBookmark(article.id);
+            setBookmarked(next);
+            if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            logEvent('reader_footer_star', { article_id: article.id, bookmarked: next });
+          }}>
+            <Text style={[styles.actionBtnText, bookmarked && { color: colors.rubric }]}>
+              {bookmarked ? '★' : '☆'}
+            </Text>
+          </Pressable>
+          <Pressable style={styles.actionBtn} onPress={() => {
+            dismissArticle(article.id, 'footer_dismiss');
+            recordInterestSignal('swipe_dismiss', article.id);
+            logEvent('reader_footer_dismiss', { article_id: article.id });
+            setStatusMessage('Dismissed');
+            setTimeout(() => router.back(), 600);
+          }}>
+            <Text style={styles.actionBtnText}>✕</Text>
+          </Pressable>
+          <View style={styles.actionSpacer} />
           <Pressable style={styles.doneButton} onPress={handleDone}>
             <Text style={styles.doneButtonText}>Done</Text>
           </Pressable>
           {nextQueuedArticle ? (
             <Pressable style={styles.upNextButton} onPress={handleUpNext}>
-              <Text style={styles.upNextLabel}>UP NEXT</Text>
               <Text style={styles.upNextTitle} numberOfLines={1}>
-                {getDisplayTitle(nextQueuedArticle)}
+                {getDisplayTitle(nextQueuedArticle)} →
               </Text>
-              <Text style={styles.upNextArrow}>{'\u2192'}</Text>
             </Pressable>
-          ) : (
-            <Pressable style={styles.upNextButton} onPress={() => {
-              logEvent('reader_back_to_feed', { article_id: article.id });
-              router.back();
-            }}>
-              <Text style={styles.upNextArrow}>{'\u2190'}</Text>
-              <Text style={styles.upNextTitle}>Back to feed</Text>
-            </Pressable>
-          )}
+          ) : null}
         </View>
       )}
 
@@ -1811,18 +2464,22 @@ export default function ReaderScreen() {
         </View>
       )}
 
-      <KeyboardHintBar shortcuts={readerShortcuts} />
+      {!isWeb && <KeyboardHintBar shortcuts={readerShortcuts} />}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flex: Platform.OS === 'web' ? undefined as any : 1,
     backgroundColor: colors.parchment,
-    maxWidth: layout.readingMeasure,
-    alignSelf: 'center' as const,
-    width: '100%' as any,
+    ...(Platform.OS !== 'web' ? {
+      maxWidth: layout.readingMeasure,
+      alignSelf: 'center' as const,
+      width: '100%' as any,
+    } : {
+      outline: 'none',
+    } as any),
   },
 
   // Top bar
@@ -1834,6 +2491,32 @@ const styles = StyleSheet.create({
     gap: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.rule,
+  },
+  topBarWeb: {
+    maxWidth: layout.webReaderMaxWidth,
+    alignSelf: 'center' as const,
+    width: '100%' as any,
+    paddingHorizontal: 32,
+    position: 'sticky' as any,
+    top: 0,
+    zIndex: 10,
+    backgroundColor: colors.parchment,
+    paddingTop: 4,
+  },
+  webProgressText: {
+    fontFamily: fonts.ui,
+    fontSize: 10,
+    color: colors.textMuted,
+  },
+  topBarNavBtn: {
+    maxWidth: 200,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  topBarNavText: {
+    fontFamily: fonts.ui,
+    fontSize: 11,
+    color: colors.textMuted,
   },
   backButton: {
     paddingVertical: 4,
@@ -1939,6 +2622,55 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.parchment,
   },
+  autoAdvanceToast: {
+    position: 'absolute' as const,
+    top: 60,
+    left: 16,
+    right: 16,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    backgroundColor: colors.parchment,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.rule,
+    zIndex: 200,
+    gap: 8,
+    ...(Platform.OS === 'web' ? {
+      boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
+    } : {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 12,
+      elevation: 4,
+    }),
+  },
+  autoAdvanceToastLabel: {
+    fontFamily: fonts.ui,
+    fontSize: 11,
+    color: colors.textMuted,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+  },
+  autoAdvanceToastTitle: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.textPrimary,
+    flex: 1,
+  },
+  autoAdvanceToastFeedButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    minHeight: 32,
+    justifyContent: 'center' as const,
+  },
+  autoAdvanceToastFeedText: {
+    fontFamily: fonts.ui,
+    fontSize: 12,
+    color: colors.rubric,
+  },
   voiceFeedbackOverlay: {
     position: 'absolute',
     bottom: 0,
@@ -1951,6 +2683,14 @@ const styles = StyleSheet.create({
     height: 2,
     backgroundColor: colors.rule,
     overflow: 'hidden' as const,
+  },
+  progressBarTrackWeb: {
+    position: 'fixed' as any,
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 100,
+    height: 2,
   },
   progressBarFill: {
     height: 2,
@@ -1970,19 +2710,23 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: layout.screenPadding,
   },
+  scrollWeb: {
+    paddingHorizontal: 48,
+    ...(Platform.OS === 'web' ? { outline: 'none' } as any : {}),
+  },
 
   // Header
   articleTitle: {
     ...type.readerTitle,
     color: colors.ink,
     marginTop: 20,
-    marginBottom: 8,
+    marginBottom: 12,
   },
   metaRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginBottom: 16,
+    marginBottom: 32,
   },
   metaText: {
     ...type.metadata,
@@ -1991,12 +2735,12 @@ const styles = StyleSheet.create({
 
   // Novelty card
   noveltyCard: {
-    backgroundColor: colors.parchmentDark,
-    borderLeftWidth: 3,
+    borderLeftWidth: 2,
     borderLeftColor: colors.rubric,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 28,
+    ...(Platform.OS === 'web' ? { background: 'linear-gradient(135deg, rgba(240,236,226,0.5), rgba(247,244,236,0))' as any } : { backgroundColor: 'rgba(240,236,226,0.3)' }),
   },
   noveltyTitle: {
     ...type.sectionHead,
@@ -2104,71 +2848,71 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  // Footer bar (Done + Up Next)
+  // Footer action bar (mobile)
   footerBar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: layout.screenPadding,
-    paddingVertical: 12,
+    paddingVertical: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.rule,
     backgroundColor: colors.parchment,
-    gap: 12,
+    gap: 4,
+  },
+  actionBtn: {
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  actionBtnText: {
+    fontSize: 18,
+    color: colors.textMuted,
+  },
+  actionSpacer: {
+    flex: 1,
   },
   doneButton: {
     backgroundColor: colors.ink,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    minHeight: layout.touchTarget,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
+    minHeight: 36,
     justifyContent: 'center',
   },
   doneButtonText: {
     fontFamily: fonts.uiMedium,
-    fontSize: 14,
+    fontSize: 13,
     color: colors.parchment,
     ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}),
   },
   upNextButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    minHeight: layout.touchTarget,
-    paddingHorizontal: 8,
-  },
-  upNextLabel: {
-    fontFamily: fonts.uiMedium,
-    fontSize: 9,
-    letterSpacing: 0.8,
-    color: colors.textMuted,
-    ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}),
+    gap: 4,
+    minHeight: 36,
+    paddingHorizontal: 6,
+    maxWidth: 160,
   },
   upNextTitle: {
     fontFamily: fonts.body,
-    fontSize: 13,
+    fontSize: 12,
     color: colors.textSecondary,
-    flex: 1,
-  },
-  upNextArrow: {
-    fontFamily: fonts.body,
-    fontSize: 15,
-    color: colors.rubric,
   },
 
   // Markdown styles
   markdownText: {
     ...type.readerBody,
     color: colors.textBody,
-    marginBottom: 14,
+    marginBottom: 24,
   },
   markdownHeading: {
     fontFamily: fonts.displaySemiBold,
-    fontSize: 19,
-    lineHeight: 26,
+    fontSize: 20,
+    lineHeight: 28,
     color: colors.ink,
-    marginTop: 24,
-    marginBottom: 10,
+    marginTop: 40,
+    marginBottom: 16,
     ...(Platform.OS === 'web' ? { fontWeight: '600' as const } : {}),
   },
   markdownHr: {
@@ -2179,6 +2923,7 @@ const styles = StyleSheet.create({
   markdownLink: {
     color: colors.rubric,
     textDecorationLine: 'underline' as const,
+    textDecorationColor: 'rgba(139,37,0,0.15)' as any,
   },
   ingestBadgeProcessing: {
     fontFamily: fonts.ui,
@@ -2213,19 +2958,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   markdownList: {
-    marginBottom: 14,
+    marginBottom: 24,
     paddingLeft: 4,
   },
   markdownListItem: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: 4,
+    marginBottom: 5,
   },
   markdownBullet: {
     fontFamily: fonts.reading,
     fontSize: 16,
-    color: colors.textMuted,
+    color: colors.rubric,
     width: 12,
+    fontWeight: 'bold' as const,
   },
   markdownOrderedBullet: {
     fontFamily: fonts.ui,
@@ -2235,11 +2981,13 @@ const styles = StyleSheet.create({
     textAlign: 'right' as const,
   },
   markdownBlockquote: {
-    borderLeftWidth: 3,
-    borderLeftColor: colors.rule,
-    paddingLeft: 14,
-    marginBottom: 14,
-    marginLeft: 4,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.rubric,
+    paddingLeft: 20,
+    paddingVertical: 16,
+    paddingRight: 16,
+    marginBottom: 20,
+    ...(Platform.OS === 'web' ? { background: 'linear-gradient(135deg, rgba(240,236,226,0.6), rgba(247,244,236,0))' as any } : { backgroundColor: 'rgba(240,236,226,0.4)' }),
   },
   markdownBlockquoteText: {
     fontFamily: fonts.readingItalic,
@@ -2249,16 +2997,18 @@ const styles = StyleSheet.create({
     ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}),
   },
   codeBlock: {
-    backgroundColor: colors.parchmentDark,
-    padding: 14,
-    marginBottom: 14,
-    borderRadius: 3,
+    backgroundColor: 'rgba(240,236,226,0.5)',
+    borderLeftWidth: 2,
+    borderLeftColor: colors.rule,
+    padding: 16,
+    paddingLeft: 18,
+    marginBottom: 20,
   },
   codeText: {
-    fontFamily: Platform.select({ web: 'monospace', default: 'Courier' }),
-    fontSize: 13,
+    fontFamily: Platform.select({ web: "'JetBrains Mono', monospace", default: 'Courier' }),
+    fontSize: 12.5,
     lineHeight: 20,
-    color: colors.textBody,
+    color: colors.textSecondary,
   },
 
   // Table
@@ -2341,49 +3091,6 @@ const styles = StyleSheet.create({
     ...type.metadata,
     color: colors.textMuted,
     marginBottom: 16,
-  },
-  interestChips: {
-    gap: 10,
-    marginBottom: 20,
-  },
-  interestChipRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  interestChipMinus: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(180, 60, 60, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  interestChipPlus: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(60, 120, 60, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  interestChipButtonText: {
-    fontFamily: fonts.uiMedium,
-    fontSize: 18,
-    color: colors.ink,
-    ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}),
-  },
-  interestChipLabel: {
-    flex: 1,
-    backgroundColor: colors.parchmentDark,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  interestChipText: {
-    fontFamily: fonts.ui,
-    fontSize: 14,
-    color: colors.textPrimary,
   },
   interestCloseButton: {
     alignSelf: 'center',
@@ -2528,85 +3235,119 @@ const followUpStyles = StyleSheet.create({
     fontSize: 11,
     color: colors.claimNew,
   },
+  generateMoreButton: {
+    paddingVertical: 4,
+    alignSelf: 'flex-start',
+    minHeight: layout.touchTarget,
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  generateMoreText: {
+    fontFamily: fonts.ui,
+    fontSize: 11,
+    color: colors.rubric,
+  },
 });
 
 // --- Hierarchical Interest Card Styles ---
 
 const interestStyles = StyleSheet.create({
-  chips: {
-    gap: 6,
-    marginBottom: 16,
+  newSection: {
+    gap: 4,
+    marginBottom: 8,
+    marginTop: 6,
   },
-  chipRow: {
+  newRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderLeftWidth: 2,
+    borderLeftColor: '#2a7a4a',
+    backgroundColor: 'rgba(42, 122, 74, 0.015)',
     gap: 8,
-    minHeight: 40,
   },
-  chipMinus: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(180, 60, 60, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  chipPlus: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(60, 120, 60, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  chipButtonText: {
-    fontFamily: fonts.uiMedium,
-    fontSize: 16,
-    color: colors.ink,
-    ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}),
-  },
-  chipLabel: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.parchmentDark,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 6,
-    gap: 6,
-  },
-  treeLine: {
-    fontFamily: fonts.ui,
-    fontSize: 12,
-    color: colors.textMuted,
-  },
-  chipText: {
-    fontFamily: fonts.ui,
-    fontSize: 13,
+  newLabel: {
+    fontFamily: fonts.body,
+    fontSize: 14,
     color: colors.textPrimary,
-    flex: 1,
   },
-  chipTextEntity: {
-    fontFamily: fonts.bodyItalic,
-    ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}),
-  },
-  levelBadge: {
+  newContext: {
     fontFamily: fonts.ui,
     fontSize: 9,
     color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    marginTop: 1,
   },
-  expandButton: {
-    alignSelf: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 16,
+  newBtnPlus: {
+    width: 36,
+    height: 36,
+    borderRadius: 3,
+    borderWidth: 1.5,
+    borderColor: '#2a7a4a',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  newBtnPlusText: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 16,
+    color: '#2a7a4a',
+    ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}),
+  },
+  newBtnMinus: {
+    width: 36,
+    height: 36,
+    borderRadius: 3,
+    borderWidth: 1.5,
+    borderColor: colors.rule,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  newBtnMinusText: {
+    fontFamily: fonts.uiMedium,
+    fontSize: 16,
+    color: colors.claimKnown,
+    ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}),
+  },
+  knownSection: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    columnGap: 10,
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  knownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 4,
+  },
+  dot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+  },
+  knownLabel: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+  },
+  legendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 2,
     marginBottom: 8,
   },
-  expandText: {
+  legendText: {
     fontFamily: fonts.ui,
-    fontSize: 11,
-    color: colors.textSecondary,
+    fontSize: 9,
+    color: colors.textMuted,
+  },
+  legendSep: {
+    fontFamily: fonts.ui,
+    fontSize: 9,
+    color: colors.textMuted,
+    marginHorizontal: 2,
   },
 });
 
@@ -2714,5 +3455,205 @@ const connectedStyles = StyleSheet.create({
   inlineAnnotationQueue: {
     color: colors.textMuted,
     fontSize: 10,
+  },
+});
+
+// --- Web Margin Styles (Airy Folio) ---
+
+const marginStyles = StyleSheet.create({
+  // Left margin
+  leftMargin: {
+    paddingTop: 48,
+    paddingBottom: 48,
+    paddingLeft: 28,
+    paddingRight: 24,
+    borderRightWidth: 1,
+    borderRightColor: colors.rule,
+  },
+
+  // Metadata blocks — italic EB Garamond labels
+  metaBlock: {
+    marginBottom: 22,
+  },
+  metaLabel: {
+    fontFamily: fonts.bodyItalic,
+    fontSize: 11.5,
+    color: colors.textMuted,
+    marginBottom: 3,
+    ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}),
+  },
+  metaValue: {
+    fontFamily: fonts.body,
+    fontSize: 14,
+    color: colors.ink,
+    lineHeight: 20,
+  },
+  topicText: {
+    fontFamily: fonts.bodyItalic,
+    fontSize: 12.5,
+    color: colors.rubric,
+    lineHeight: 20,
+    ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}),
+  },
+
+  // Novelty bar
+  noveltyBlock: {
+    marginBottom: 22,
+  },
+  noveltyBar: {
+    flexDirection: 'row' as const,
+    height: 3,
+    marginTop: 6,
+    marginBottom: 4,
+    gap: 1,
+  },
+  noveltyBarNew: {
+    height: 3,
+    backgroundColor: colors.claimNew,
+  },
+  noveltyBarExt: {
+    height: 3,
+    backgroundColor: colors.textMuted,
+  },
+  noveltyBarKnown: {
+    height: 3,
+    backgroundColor: colors.rule,
+  },
+  noveltyCounts: {
+    fontFamily: fonts.ui,
+    fontSize: 9,
+    color: colors.textMuted,
+  },
+
+  // Reading mode toggle — text with rubric underline
+  modeBlock: {
+    marginBottom: 22,
+  },
+  modeRow: {
+    flexDirection: 'row' as const,
+    gap: 14,
+    marginTop: 4,
+  },
+  modeText: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.textMuted,
+  },
+  modeTextActive: {
+    color: colors.ink,
+    borderBottomWidth: 1.5,
+    borderBottomColor: colors.rubric,
+    paddingBottom: 1,
+  },
+
+  // Actions — text links
+  actionsSection: {
+    borderTopWidth: 1,
+    borderTopColor: colors.rule,
+    paddingTop: 20,
+    marginTop: 28,
+    gap: 10,
+  },
+  actionLink: {
+    paddingVertical: 1,
+  },
+  actionLinkText: {
+    fontFamily: fonts.body,
+    fontSize: 13.5,
+    color: colors.textSecondary,
+  },
+
+  // Keyboard shortcuts
+  shortcutsBlock: {
+    borderTopWidth: 1,
+    borderTopColor: colors.rule,
+    paddingTop: 14,
+    marginTop: 24,
+  },
+  kbdBadge: {
+    minWidth: 18,
+    height: 16,
+    backgroundColor: colors.parchmentDark,
+    borderRadius: 2,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    paddingHorizontal: 4,
+  },
+  kbdText: {
+    fontFamily: fonts.ui,
+    fontSize: 9.5,
+    color: colors.textMuted,
+  },
+  shortcutRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 7,
+    marginBottom: 5,
+  },
+  shortcutLabel: {
+    fontFamily: fonts.ui,
+    fontSize: 9.5,
+    color: colors.textMuted,
+  },
+
+  // Right margin — footnote style
+  rightMargin: {
+    paddingTop: 48,
+    paddingBottom: 48,
+    paddingLeft: 24,
+    paddingRight: 28,
+    borderLeftWidth: 1,
+    borderLeftColor: colors.rule,
+  },
+  rightSection: {
+    marginBottom: 28,
+  },
+  rightSectionTitle: {
+    fontFamily: fonts.bodyItalic,
+    fontSize: 11.5,
+    color: colors.textMuted,
+    marginBottom: 10,
+    ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}),
+  },
+  footnoteItem: {
+    marginBottom: 14,
+    paddingLeft: 10,
+    borderLeftWidth: 1,
+    borderLeftColor: 'transparent',
+  },
+  footnoteText: {
+    fontFamily: fonts.reading,
+    fontSize: 13,
+    color: colors.textSecondary,
+    lineHeight: 19,
+  },
+  footnoteMeta: {
+    fontFamily: fonts.ui,
+    fontSize: 9,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  inquiryItem: {
+    marginBottom: 12,
+    paddingLeft: 10,
+  },
+  inquiryText: {
+    fontFamily: fonts.readingItalic,
+    fontSize: 12.5,
+    color: colors.textSecondary,
+    lineHeight: 18,
+    ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}),
+  },
+  researchLink: {
+    fontFamily: fonts.ui,
+    fontSize: 9,
+    color: colors.rubric,
+    marginTop: 2,
+  },
+  researchLaunched: {
+    fontFamily: fonts.ui,
+    fontSize: 9,
+    color: colors.claimNew,
+    marginTop: 2,
   },
 });

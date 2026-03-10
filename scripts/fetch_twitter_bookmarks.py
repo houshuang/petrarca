@@ -296,6 +296,12 @@ async def main():
     bookmarks = await fetch_bookmarks(client, limit=args.limit)
     print(f"Fetched {len(bookmarks)} bookmarks", file=sys.stderr)
 
+    try:
+        from server_log import log_server_event
+        log_server_event('bookmarks_fetched', count=len(bookmarks))
+    except ImportError:
+        pass
+
     if args.search:
         bookmarks = search_bookmarks(bookmarks, args.search)
         print(f"  {len(bookmarks)} match '{args.search}'", file=sys.stderr)

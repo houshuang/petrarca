@@ -8,17 +8,17 @@ interface Props {
 }
 
 export default function KeyboardHintBar({ shortcuts }: Props) {
-  const [visible, setVisible] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   if (Platform.OS !== 'web') return null;
 
   const entries = Object.entries(shortcuts).filter(([key]) => key !== '?');
 
-  if (!visible) {
+  if (collapsed) {
     return (
       <Pressable
         style={styles.toggleBtn}
-        onPress={() => setVisible(true)}
+        onPress={() => setCollapsed(false)}
       >
         <Text style={styles.toggleText}>?</Text>
       </Pressable>
@@ -36,11 +36,10 @@ export default function KeyboardHintBar({ shortcuts }: Props) {
             <Text style={styles.label}>{label}</Text>
           </View>
         ))}
-        <Pressable onPress={() => setVisible(false)} style={styles.item}>
-          <View style={[styles.keyBadge, { borderColor: colors.rubric }]}>
-            <Text style={[styles.keyText, { color: colors.rubric }]}>?</Text>
+        <Pressable onPress={() => setCollapsed(true)} style={styles.item}>
+          <View style={[styles.keyBadge, { borderColor: colors.textMuted }]}>
+            <Text style={[styles.keyText, { color: colors.textMuted }]}>×</Text>
           </View>
-          <Text style={[styles.label, { color: colors.rubric }]}>hide</Text>
         </Pressable>
       </View>
     </View>
@@ -49,23 +48,18 @@ export default function KeyboardHintBar({ shortcuts }: Props) {
 
 const styles = StyleSheet.create({
   bar: {
-    position: 'absolute' as any,
-    bottom: 0,
-    left: 0,
-    right: 0,
     backgroundColor: colors.parchmentDark,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.rule,
     paddingVertical: 6,
     paddingHorizontal: 16,
-    zIndex: 100,
   },
   inner: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
     gap: 12,
-    maxWidth: 680,
+    maxWidth: 1100,
     alignSelf: 'center',
     width: '100%',
   },

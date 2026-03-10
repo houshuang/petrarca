@@ -21,39 +21,41 @@ type ActivityEvent = {
   meta?: Record<string, any>;
 };
 
-type FilterKey = 'all' | 'reading' | 'system' | 'research';
+type SourceFilter = 'all' | 'mine' | 'server';
 
-const FILTERS: { key: FilterKey; label: string }[] = [
+const FILTERS: { key: SourceFilter; label: string }[] = [
   { key: 'all', label: 'All' },
-  { key: 'reading', label: 'Reading' },
-  { key: 'system', label: 'System' },
-  { key: 'research', label: 'Research' },
+  { key: 'mine', label: 'Mine' },
+  { key: 'server', label: 'Server' },
 ];
+
+/* ── helpers ── */
+
+function isUserEvent(e: ActivityEvent) {
+  return e.type === 'reading' || e.type === 'interest';
+}
+
+function isTappable(e: ActivityEvent) {
+  return e.type === 'reading' && !!e.article_id;
+}
 
 const DOT_COLORS: Record<string, string> = {
   'reading/finished': colors.claimNew,
   'reading/in_progress': colors.rubric,
   'reading/dismissed': colors.textMuted,
-  'system': colors.info,
+  'reading/queued': colors.rubric,
+  'system/pipeline': colors.info,
+  'system/pipeline_step': colors.info,
+  'system/ingest': colors.claimNew,
+  'system/processed': colors.claimNew,
+  'system/fetch': colors.info,
+  'system/in_progress': colors.info,
   'research/dispatched': colors.research,
   'research/completed': colors.research,
 };
 
-function getDotColor(event: ActivityEvent): string {
-  const specific = `${event.type}/${event.subtype}`;
-  return DOT_COLORS[specific] || DOT_COLORS[event.type] || colors.textMuted;
-}
-
-function isRingDot(event: ActivityEvent): boolean {
-  return event.type === 'reading' && event.subtype === 'in_progress';
-}
-
-function isInterestEvent(event: ActivityEvent): boolean {
-  return event.type === 'interest';
-}
-
-function isTappable(event: ActivityEvent): boolean {
-  return (event.type === 'reading' && !!event.article_id);
+function getDotColor(e: ActivityEvent): string {
+  return DOT_COLORS[`${e.type}/${e.subtype}`] || colors.textMuted;
 }
 
 function getDayLabel(dateStr: string): string {
@@ -61,138 +63,130 @@ function getDayLabel(dateStr: string): string {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const eventDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const diffMs = today.getTime() - eventDay.getTime();
-  const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const diffDays = Math.round((today.getTime() - eventDay.getTime()) / 86400000);
+  if (diffDays === 0) return 'TODAY';
+  if (diffDays === 1) return 'YESTERDAY';
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase();
 }
 
 function getTimeLabel(ts: string): string {
-  const d = new Date(ts);
-  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
+
+function getDisplayTitle(e: ActivityEvent): string {
+  if (e.type === 'interest') {
+    const parts = [
+      ...(e.topics_positive || []).map(t => `+${t}`),
+      ...(e.topics_negative || []).map(t => `−${t}`),
+    ];
+    return parts.length > 0 ? parts.join('  ') : e.title;
+  }
+  return e.title;
+}
+
+function getRightMeta(e: ActivityEvent): string {
+  const time = getTimeLabel(e.ts);
+  if (e.type === 'reading' && e.subtitle) {
+    const durMatch = e.subtitle.match(/^(\d+ min|<1 min)/);
+    if (durMatch) return `${durMatch[1]} · ${time}`;
+  }
+  return time;
+}
+
+/* ── list items ── */
 
 type ListItem =
   | { kind: 'day'; label: string; key: string }
-  | { kind: 'event'; event: ActivityEvent; isLast: boolean; key: string };
+  | { kind: 'event'; event: ActivityEvent; key: string };
 
 function buildListItems(events: ActivityEvent[]): ListItem[] {
   const items: ListItem[] = [];
   let currentDay = '';
-
-  for (let i = 0; i < events.length; i++) {
-    const ev = events[i];
-    const dayLabel = getDayLabel(ev.ts);
-    if (dayLabel !== currentDay) {
-      currentDay = dayLabel;
-      items.push({ kind: 'day', label: dayLabel, key: `day-${dayLabel}` });
+  for (const ev of events) {
+    const day = getDayLabel(ev.ts);
+    if (day !== currentDay) {
+      currentDay = day;
+      items.push({ kind: 'day', label: day, key: `day-${day}` });
     }
-    const nextDay = i + 1 < events.length ? getDayLabel(events[i + 1].ts) : null;
-    const isLast = nextDay !== currentDay;
-    items.push({ kind: 'event', event: ev, isLast, key: ev.id });
+    items.push({ kind: 'event', event: ev, key: ev.id });
   }
-
   return items;
 }
 
-// --- Components ---
+/* ── components ── */
 
 function DaySeparator({ label }: { label: string }) {
   return (
-    <View style={styles.daySeparator}>
-      <View style={styles.daySeparatorLine} />
-      <Text style={styles.daySeparatorText}>{label}</Text>
-      <View style={styles.daySeparatorLine} />
+    <View style={s.dayRow}>
+      <View style={s.dayLine} />
+      <Text style={s.dayText}>{label}</Text>
+      <View style={s.dayLine} />
     </View>
   );
 }
 
-function TimelineNode({ event, isLast, onPress }: {
+function EventRow({ event, onPress }: {
   event: ActivityEvent;
-  isLast: boolean;
   onPress?: () => void;
 }) {
-  const interest = isInterestEvent(event);
-  const ring = isRingDot(event);
+  const server = !isUserEvent(event);
+  const ring = event.type === 'reading' && event.subtype === 'in_progress';
+  const interest = event.type === 'interest';
+  const dismissed = event.subtype === 'dismissed';
   const dotColor = getDotColor(event);
+  const title = getDisplayTitle(event);
+  const meta = getRightMeta(event);
   const tappable = isTappable(event);
 
-  const content = (
-    <View style={styles.nodeRow}>
-      {/* Timeline column */}
-      <View style={styles.timelineColumn}>
+  const row = (
+    <View style={s.row}>
+      <View style={s.dotCol}>
         {interest ? (
-          <Text style={styles.interestMarker}>{'\u2726'}</Text>
+          <Text style={s.star}>{'\u2726'}</Text>
         ) : ring ? (
-          <View style={[styles.dotRing, { borderColor: dotColor }]} />
+          <View style={[s.dotRing, { borderColor: dotColor }]} />
         ) : (
-          <View style={[styles.dotFilled, { backgroundColor: dotColor }]} />
+          <View style={[s.dot, { backgroundColor: dotColor }]} />
         )}
-        {!isLast && <View style={styles.verticalLine} />}
       </View>
 
-      {/* Content column */}
-      <View style={styles.contentColumn}>
-        {interest ? (
-          <InterestContent event={event} />
-        ) : (
-          <>
-            <Text style={[
-              styles.nodeTitle,
-              event.type === 'system' && styles.nodeTitleSystem,
-            ]} numberOfLines={2}>
-              {event.title}
-            </Text>
-            {event.subtitle ? (
-              <Text style={styles.nodeSubtitle} numberOfLines={1}>
-                {event.subtitle}
-              </Text>
-            ) : null}
-          </>
-        )}
-        <Text style={styles.nodeTime}>{getTimeLabel(event.ts)}</Text>
-      </View>
+      <Text
+        style={[
+          s.title,
+          server && s.titleServer,
+          dismissed && s.titleDismissed,
+        ]}
+        numberOfLines={1}
+      >
+        {title}
+      </Text>
+
+      <Text style={s.meta}>{meta}</Text>
     </View>
   );
 
-  if (tappable) {
+  if (tappable && onPress) {
     return (
       <Pressable
         onPress={onPress}
-        style={({ pressed }) => pressed ? { opacity: 0.7 } : undefined}
+        style={({ pressed, hovered }: any) => [
+          pressed && { opacity: 0.6 },
+          hovered && Platform.OS === 'web' && s.rowHover,
+        ]}
       >
-        {content}
+        {row}
       </Pressable>
     );
   }
-
-  return content;
+  return row;
 }
 
-function InterestContent({ event }: { event: ActivityEvent }) {
-  return (
-    <View style={styles.interestContent}>
-      {(event.topics_positive || []).map(t => (
-        <Text key={`pos-${t}`} style={styles.interestPositive}>{t}</Text>
-      ))}
-      {(event.topics_negative || []).map(t => (
-        <Text key={`neg-${t}`} style={styles.interestNegative}>{t}</Text>
-      ))}
-      {event.title ? (
-        <Text style={styles.nodeSubtitle}>{event.title}</Text>
-      ) : null}
-    </View>
-  );
-}
-
-// --- Main Screen ---
+/* ── main screen ── */
 
 export default function LogScreen() {
   const router = useRouter();
   const [events, setEvents] = useState<ActivityEvent[]>([]);
-  const [filter, setFilter] = useState<FilterKey>('all');
+  const [filter, setFilter] = useState<SourceFilter>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -206,7 +200,6 @@ export default function LogScreen() {
         setEvents(fetched);
       } else {
         setEvents(prev => {
-          // Merge: new data replaces any overlapping IDs
           const newIds = new Set(fetched.map(e => e.id));
           const kept = prev.filter(e => !newIds.has(e.id));
           const merged = [...fetched, ...kept];
@@ -225,33 +218,25 @@ export default function LogScreen() {
   useEffect(() => {
     logEvent('log_screen_open');
     let cancelled = false;
-
     (async () => {
       setLoading(true);
       const ok = await fetchEvents(1, true);
       if (cancelled) return;
       setLoading(false);
-
-      if (ok) {
-        // Background fetch for full week
-        await fetchEvents(7);
-      }
+      if (ok) await fetchEvents(7);
     })();
-
     return () => { cancelled = true; };
   }, [fetchEvents]);
 
   const filteredEvents = useMemo(() => {
-    if (filter === 'all') return events;
-    if (filter === 'reading') return events.filter(e => e.type === 'reading');
-    if (filter === 'system') return events.filter(e => e.type === 'system');
-    if (filter === 'research') return events.filter(e => e.type === 'research' || e.type === 'interest');
+    if (filter === 'mine') return events.filter(isUserEvent);
+    if (filter === 'server') return events.filter(e => !isUserEvent(e));
     return events;
   }, [events, filter]);
 
   const listItems = useMemo(() => buildListItems(filteredEvents), [filteredEvents]);
 
-  const handleFilterChange = useCallback((key: FilterKey) => {
+  const handleFilterChange = useCallback((key: SourceFilter) => {
     setFilter(key);
     logEvent('log_filter_change', { filter: key });
   }, []);
@@ -264,78 +249,69 @@ export default function LogScreen() {
   }, [router]);
 
   const renderItem = useCallback(({ item }: { item: ListItem }) => {
-    if (item.kind === 'day') {
-      return <DaySeparator label={item.label} />;
-    }
+    if (item.kind === 'day') return <DaySeparator label={item.label} />;
     return (
-      <TimelineNode
+      <EventRow
         event={item.event}
-        isLast={item.isLast}
         onPress={isTappable(item.event) ? () => handleNodeTap(item.event) : undefined}
       />
     );
   }, [handleNodeTap]);
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Petrarca</Text>
-        <Text style={styles.headerSubtitle}>activity log</Text>
+    <View style={s.container}>
+      <View style={s.header}>
+        <View style={s.headerRow}>
+          <Text style={s.headerTitle}>Activity</Text>
+          <Pressable onPress={() => router.push('/')} hitSlop={8}>
+            <Text style={s.backLink}>← Feed</Text>
+          </Pressable>
+        </View>
+      </View>
+      <View style={s.doubleRule}>
+        <View style={s.ruleTop} />
+        <View style={{ height: layout.doubleRuleGap }} />
+        <View style={s.ruleBottom} />
       </View>
 
-      <View style={styles.doubleRule}>
-        <View style={styles.doubleRuleTop} />
-        <View style={styles.doubleRuleGap} />
-        <View style={styles.doubleRuleBottom} />
-      </View>
-
-      {/* Filter row */}
-      <View style={styles.filterRow}>
+      <View style={s.filterRow}>
         {FILTERS.map(f => (
-          <Pressable
-            key={f.key}
-            onPress={() => handleFilterChange(f.key)}
-            style={styles.filterItem}
-          >
-            <Text style={[
-              styles.filterLabel,
-              filter === f.key && styles.filterLabelActive,
-            ]}>
+          <Pressable key={f.key} onPress={() => handleFilterChange(f.key)} style={s.filterItem}>
+            <Text style={[s.filterLabel, filter === f.key && s.filterActive]}>
               {f.label}
             </Text>
-            {filter === f.key && <View style={styles.filterUnderline} />}
           </Pressable>
         ))}
       </View>
 
       {loading ? (
-        <View style={styles.statusContainer}>
-          <Text style={styles.loadingText}>Loading...</Text>
+        <View style={s.center}>
+          <Text style={s.loadingText}>Loading…</Text>
         </View>
       ) : error && events.length === 0 ? (
-        <View style={styles.statusContainer}>
-          <Text style={styles.errorText}>Could not load activity</Text>
+        <View style={s.center}>
+          <Text style={s.errorText}>Could not load activity</Text>
           <Pressable
             onPress={() => {
               setLoading(true);
               setError(false);
               fetchEvents(7, true).then(() => setLoading(false));
             }}
-            style={styles.retryButton}
+            style={s.retryBtn}
           >
-            <Text style={styles.retryText}>Retry</Text>
+            <Text style={s.retryText}>Retry</Text>
           </Pressable>
         </View>
       ) : filteredEvents.length === 0 ? (
-        <View style={styles.statusContainer}>
-          <Text style={styles.emptyText}>No activity yet</Text>
+        <View style={s.center}>
+          <Text style={s.emptyText}>No activity</Text>
         </View>
       ) : (
         <FlatList
           data={listItems}
           keyExtractor={item => item.key}
           renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={s.listContent}
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -343,76 +319,152 @@ export default function LogScreen() {
   );
 }
 
-const DOT_SIZE = 8;
-const TIMELINE_WIDTH = 28;
+/* ── styles ── */
 
-const styles = StyleSheet.create({
+const DOT_SIZE = 6;
+
+const s = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.parchment,
   },
 
-  // Header
   header: {
     paddingHorizontal: layout.screenPadding,
     paddingTop: 12,
-    paddingBottom: 8,
+    paddingBottom: 6,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
   },
   headerTitle: {
     ...type.screenTitle,
     color: colors.ink,
+    fontSize: 22,
   },
-  headerSubtitle: {
-    ...type.screenSubtitle,
-    color: colors.textMuted,
-    marginTop: 2,
+  backLink: {
+    fontFamily: fonts.ui,
+    fontSize: 12,
+    color: colors.rubric,
+    letterSpacing: 0.3,
   },
 
-  // Double rule
   doubleRule: {
     paddingHorizontal: layout.screenPadding,
   },
-  doubleRuleTop: {
+  ruleTop: {
     borderTopWidth: layout.doubleRuleTop,
     borderTopColor: colors.ink,
   },
-  doubleRuleGap: {
-    height: layout.doubleRuleGap,
-  },
-  doubleRuleBottom: {
+  ruleBottom: {
     borderTopWidth: layout.doubleRuleBottom,
     borderTopColor: colors.ink,
   },
 
-  // Filter row
   filterRow: {
     flexDirection: 'row',
     paddingHorizontal: layout.screenPadding,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
     gap: spacing.lg,
   },
   filterItem: {
-    alignItems: 'center',
-    minHeight: 32,
+    paddingVertical: 4,
+    paddingHorizontal: 2,
   },
   filterLabel: {
-    fontFamily: fonts.body,
-    fontSize: 13,
+    fontFamily: fonts.ui,
+    fontSize: 11,
     color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
   },
-  filterLabelActive: {
+  filterActive: {
     color: colors.ink,
-  },
-  filterUnderline: {
-    marginTop: 3,
-    width: '100%',
-    height: 2,
-    backgroundColor: colors.rubric,
+    ...(Platform.OS === 'web' ? { fontWeight: '600' } : {}),
   },
 
-  // Status states
-  statusContainer: {
+  listContent: {
+    paddingBottom: 40,
+  },
+
+  dayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: layout.screenPadding,
+    gap: spacing.sm,
+  },
+  dayLine: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.rule,
+  },
+  dayText: {
+    fontFamily: fonts.ui,
+    fontSize: 10,
+    letterSpacing: 1.5,
+    color: colors.textMuted,
+  },
+
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 5,
+    paddingHorizontal: layout.screenPadding,
+    minHeight: 28,
+  },
+  rowHover: {
+    backgroundColor: 'rgba(139,37,0,0.03)',
+  },
+  dotCol: {
+    width: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dot: {
+    width: DOT_SIZE,
+    height: DOT_SIZE,
+    borderRadius: DOT_SIZE / 2,
+  },
+  dotRing: {
+    width: DOT_SIZE,
+    height: DOT_SIZE,
+    borderRadius: DOT_SIZE / 2,
+    borderWidth: 1.5,
+    backgroundColor: 'transparent',
+  },
+  star: {
+    fontSize: 10,
+    color: colors.rubric,
+    lineHeight: 12,
+  },
+  title: {
+    flex: 1,
+    fontFamily: fonts.body,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.textPrimary,
+  },
+  titleServer: {
+    color: colors.textSecondary,
+    fontFamily: fonts.reading,
+    fontSize: 12.5,
+  },
+  titleDismissed: {
+    color: colors.textMuted,
+  },
+  meta: {
+    fontFamily: fonts.ui,
+    fontSize: 11,
+    color: colors.textMuted,
+    marginLeft: spacing.sm,
+    flexShrink: 0,
+  },
+
+  center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
@@ -420,17 +472,17 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontFamily: fonts.readingItalic,
-    fontSize: 15,
+    fontSize: 14,
     color: colors.textSecondary,
     ...(Platform.OS === 'web' ? { fontStyle: 'italic' } : {}),
   },
   errorText: {
     fontFamily: fonts.reading,
-    fontSize: 15,
+    fontSize: 14,
     color: colors.textSecondary,
     marginBottom: spacing.md,
   },
-  retryButton: {
+  retryBtn: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderWidth: 1,
@@ -443,112 +495,8 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontFamily: fonts.readingItalic,
-    fontSize: 15,
+    fontSize: 14,
     color: colors.textMuted,
     ...(Platform.OS === 'web' ? { fontStyle: 'italic' } : {}),
-  },
-
-  // List
-  listContent: {
-    paddingHorizontal: layout.screenPadding,
-    paddingBottom: 40,
-  },
-
-  // Day separator
-  daySeparator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    gap: spacing.md,
-  },
-  daySeparatorLine: {
-    flex: 1,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.rule,
-  },
-  daySeparatorText: {
-    ...type.sectionHead,
-    color: colors.textMuted,
-  },
-
-  // Timeline node
-  nodeRow: {
-    flexDirection: 'row',
-    minHeight: 48,
-  },
-  timelineColumn: {
-    width: TIMELINE_WIDTH,
-    alignItems: 'center',
-    paddingTop: 4,
-  },
-  dotFilled: {
-    width: DOT_SIZE,
-    height: DOT_SIZE,
-    borderRadius: DOT_SIZE / 2,
-  },
-  dotRing: {
-    width: DOT_SIZE,
-    height: DOT_SIZE,
-    borderRadius: DOT_SIZE / 2,
-    borderWidth: 1.5,
-    backgroundColor: 'transparent',
-  },
-  interestMarker: {
-    fontSize: 12,
-    color: colors.rubric,
-    lineHeight: 14,
-    marginTop: -1,
-  },
-  verticalLine: {
-    flex: 1,
-    width: 1,
-    backgroundColor: colors.rule,
-    marginTop: 4,
-  },
-  contentColumn: {
-    flex: 1,
-    paddingBottom: spacing.md,
-    paddingLeft: spacing.sm,
-  },
-  nodeTitle: {
-    fontFamily: fonts.bodyMedium,
-    fontSize: 14,
-    lineHeight: 19,
-    color: colors.textPrimary,
-    ...(Platform.OS === 'web' ? { fontWeight: '500' } : {}),
-  },
-  nodeTitleSystem: {
-    fontFamily: fonts.reading,
-    fontSize: 13.5,
-    ...(Platform.OS === 'web' ? { fontWeight: 'normal' } : {}),
-  },
-  nodeSubtitle: {
-    fontFamily: fonts.ui,
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  nodeTime: {
-    ...type.metadata,
-    color: colors.textMuted,
-    marginTop: spacing.xs,
-  },
-
-  // Interest-specific
-  interestContent: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  interestPositive: {
-    fontFamily: fonts.ui,
-    fontSize: 12,
-    color: colors.claimNew,
-  },
-  interestNegative: {
-    fontFamily: fonts.ui,
-    fontSize: 12,
-    color: colors.textMuted,
-    textDecorationLine: 'line-through',
   },
 });

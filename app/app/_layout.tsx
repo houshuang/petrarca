@@ -6,6 +6,7 @@ import * as Font from 'expo-font';
 import { initStore } from '../data/store';
 import { startNewSession } from '../data/logger';
 import { colors } from '../design/tokens/colors';
+import FeedbackCapture from '../components/FeedbackCapture';
 
 const fontAssets = {
   'CormorantGaramond': require('../assets/fonts/CormorantGaramond-Regular.ttf'),
@@ -57,6 +58,7 @@ export default function RootLayout() {
         <Stack.Screen name="voice-notes" />
         <Stack.Screen name="+not-found" />
       </Stack>
+      <FeedbackCapture />
     </SafeAreaView>
   );
 }

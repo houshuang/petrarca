@@ -46,6 +46,8 @@ LOG_DIR = Path(os.environ.get('LOG_DIR', '/opt/petrarca/data/logs'))
 ARTICLES_PATH = Path(os.environ.get('ARTICLES_PATH', '/opt/petrarca/data/articles.json'))
 SCRAPE_REPORTS_PATH = Path(os.environ.get('SCRAPE_REPORTS_PATH', '/opt/petrarca/data/scrape_reports.json'))
 
+from server_log import log_server_event
+
 SONIOX_API_KEY = os.environ.get('SONIOX_API_KEY', '557c7c5a86a2f5b8fa734ddbbe179f0f21fd342c762768c9af4f4ffff8c58e1f')
 SONIOX_BASE_URL = 'https://api.soniox.com/v1'
 
@@ -1095,6 +1097,73 @@ Return ONLY valid JSON (no markdown fences):
     print(f'[topic_research] {request_id} -> {result["status"]}', flush=True)
 
 
+# --- Generate more follow-up questions ---
+
+def generate_more_questions(article_id: str, existing_questions: list[str]) -> list[dict]:
+    """Generate additional follow-up questions for an article using Gemini."""
+    from gemini_llm import call_llm
+
+    # Load article data
+    try:
+        articles = json.loads(ARTICLES_PATH.read_text())
+        article = next((a for a in articles if a.get('id') == article_id), None)
+    except (OSError, json.JSONDecodeError):
+        article = None
+
+    if not article:
+        return []
+
+    title = article.get('title', 'Untitled')
+    summary = article.get('one_line_summary', '') or article.get('full_summary', '')
+    claims = article.get('key_claims', [])
+    topics = article.get('topics', [])
+    entities = [e.get('name', '') for e in article.get('entities', [])]
+
+    existing_list = '\n'.join(f'- {q}' for q in existing_questions) if existing_questions else '(none)'
+
+    prompt = f"""Given this article, generate 3 NEW follow-up questions that a curious, well-read person would want to explore.
+
+Article: "{title}"
+Summary: {summary}
+Key claims: {json.dumps(claims[:6])}
+Topics: {', '.join(topics[:8])}
+Entities: {', '.join(entities[:8])}
+
+Already-shown questions (do NOT repeat or rephrase these):
+{existing_list}
+
+Generate 3 diverse questions that:
+- Connect to adjacent domains, historical parallels, or contrasting perspectives
+- Are genuinely curiosity-driven — the kind that lead to interesting rabbit holes
+- Span different angles: one might be comparative, one might be historical/contextual, one might challenge assumptions
+- Each has a "connects_to" field naming the broader topic area it relates to
+
+Return ONLY a JSON array:
+[
+  {{"question": "...", "connects_to": "..."}},
+  {{"question": "...", "connects_to": "..."}},
+  {{"question": "...", "connects_to": "..."}}
+]"""
+
+    result = call_llm(prompt, max_tokens=1024)
+    if not result:
+        return []
+
+    # Parse JSON from response
+    try:
+        cleaned = result.strip()
+        if cleaned.startswith('```'):
+            cleaned = re.sub(r'^```\w*\n?', '', cleaned)
+            cleaned = re.sub(r'\n?```$', '', cleaned)
+        questions = json.loads(cleaned)
+        if isinstance(questions, list):
+            return [q for q in questions if isinstance(q, dict) and 'question' in q and 'connects_to' in q]
+    except json.JSONDecodeError:
+        print(f'[generate-questions] JSON parse failed for article {article_id}', flush=True)
+
+    return []
+
+
 # --- Chat with article context ---
 
 def handle_chat(question: str, context: str, conversation_id: str | None = None) -> dict:
@@ -1228,6 +1297,7 @@ class ResearchHandler(BaseHTTPRequestHandler):
         sender = self.headers.get('X-From', 'unknown')
 
         print(f'[ingest-email] Received {len(raw_email)} bytes from {sender}', flush=True)
+        log_server_event('ingest_email', sender=sender)
 
         thread = threading.Thread(target=process_email, args=(raw_email,), daemon=True)
         thread.start()
@@ -1371,6 +1441,23 @@ class ResearchHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(json.dumps({'id': request_id, 'status': 'processing'}).encode())
 
+    def _handle_generate_questions(self):
+        body = self._read_json_body()
+        if body is None:
+            return
+        article_id = body.get('article_id', '').strip()
+        existing_questions = body.get('existing_questions', [])
+
+        if not article_id:
+            self._send_json_response(400, {'error': 'Missing article_id'})
+            return
+
+        print(f'[generate-questions] Generating for article {article_id}, {len(existing_questions)} existing', flush=True)
+        questions = generate_more_questions(article_id, existing_questions)
+        print(f'[generate-questions] Generated {len(questions)} new questions', flush=True)
+
+        self._send_json_response(200, {'questions': questions})
+
     def _handle_chat(self):
         body = self._read_json_body()
         if body is None:
@@ -1438,6 +1525,12 @@ class ResearchHandler(BaseHTTPRequestHandler):
             )
             thread.start()
             print(f'[ingest] Queued: {url[:80]} (source={source}, id={ingest_id})')
+
+        log_server_event('ingest_queued',
+                         url=url[:200],
+                         title=(title or url)[:100],
+                         ingest_source=source,
+                         article_id=article_id)
 
         self._send_json_response(202, {
             'status': 'queued',
@@ -1623,6 +1716,8 @@ class ResearchHandler(BaseHTTPRequestHandler):
             return self._handle_note()
         if self.path == '/research/topic':
             return self._handle_topic_research()
+        if self.path == '/generate-questions':
+            return self._handle_generate_questions()
         if self.path == '/ingest':
             return self._handle_ingest()
         if self.path == '/ingest-email':
@@ -1902,56 +1997,139 @@ class ResearchHandler(BaseHTTPRequestHandler):
                 'topics_negative': negative,
             })
 
-        # --- Pipeline events ---
+        # --- Pipeline runs ---
         pipeline_events = [e for e in raw_events if e.get('source') == 'pipeline']
         pipeline_events.sort(key=lambda e: e.get('ts', ''))
-        pipeline_groups = []
+        pipeline_runs = []
         for ev in pipeline_events:
             ev_ts = ev.get('ts', '')
             merged = False
-            for group in pipeline_groups:
-                last_ts = group[-1].get('ts', '')
+            for run in pipeline_runs:
+                last_ts = run[-1].get('ts', '')
                 try:
                     t1 = datetime.fromisoformat(last_ts.replace('Z', '+00:00'))
                     t2 = datetime.fromisoformat(ev_ts.replace('Z', '+00:00'))
-                    if abs((t2 - t1).total_seconds()) <= 900:  # 15 min window
-                        group.append(ev)
+                    if abs((t2 - t1).total_seconds()) <= 900:
+                        run.append(ev)
                         merged = True
                         break
                 except (ValueError, TypeError):
                     pass
             if not merged:
-                pipeline_groups.append([ev])
+                pipeline_runs.append([ev])
 
-        for group in pipeline_groups:
-            event_names = [e.get('event', '') for e in group]
+        STEP_LABELS = {
+            'pipeline_fetch_twitter': 'Fetched Twitter bookmarks',
+            'pipeline_fetch_readwise': 'Fetched Readwise articles',
+            'pipeline_build_articles': 'Built articles',
+            'pipeline_defrag_topics': 'Defragmented topics',
+            'pipeline_extract_claims': 'Extracted claims',
+            'pipeline_build_index': 'Built knowledge index',
+        }
+
+        for run in pipeline_runs:
+            event_names = [e.get('event', '') for e in run]
             completed = 'pipeline_complete' in event_names
+            complete_ev = next((e for e in run if e.get('event') == 'pipeline_complete'), None)
+            elapsed = complete_ev.get('elapsed_seconds') if complete_ev else None
 
-            # Collect any counts from meta
-            meta = {}
-            for ev in group:
-                for k, v in ev.items():
-                    if k not in ('ts', 'event', 'source', 'session_id'):
-                        meta[k] = v
+            if completed and elapsed:
+                mins, secs = divmod(int(elapsed), 60)
+                run_title = f'Content refresh ({mins}m {secs}s)' if mins else f'Content refresh ({secs}s)'
+            elif completed:
+                run_title = 'Content refresh complete'
+            else:
+                run_title = 'Content refresh running'
 
-            # Build subtitle from events
-            step_labels = []
-            for name in event_names:
-                label = name.replace('pipeline_', '').replace('_', ' ').title()
-                if label not in step_labels:
-                    step_labels.append(label)
-            subtitle = ' · '.join(step_labels)
-
-            subtype = 'processed' if completed else 'in_progress'
+            steps = len([n for n in event_names if n in STEP_LABELS])
             timeline.append({
-                'id': f'evt_{group[0]["ts"]}_pipeline',
+                'id': f'evt_{run[0]["ts"]}_pipeline',
                 'type': 'system',
-                'subtype': subtype,
-                'ts': group[0].get('ts'),
-                'title': 'Content refresh completed' if completed else 'Content refresh running',
-                'subtitle': subtitle if subtitle else None,
-                'meta': meta if meta else None,
+                'subtype': 'pipeline',
+                'ts': run[-1].get('ts') if completed else run[0].get('ts'),
+                'title': run_title,
+                'subtitle': f'{steps} steps' if steps else None,
             })
+
+            # Also emit individual step events for granular view
+            for ev in run:
+                name = ev.get('event', '')
+                if name in STEP_LABELS:
+                    timeline.append({
+                        'id': f'evt_{ev["ts"]}_{name}',
+                        'type': 'system',
+                        'subtype': 'pipeline_step',
+                        'ts': ev.get('ts'),
+                        'title': STEP_LABELS[name],
+                    })
+
+        # --- Server-side events (ingestion, article processing) ---
+        INGEST_LABELS = {
+            'clipper': 'Clipped',
+            'reader_link': 'From reader',
+        }
+        for ev in raw_events:
+            if ev.get('source') != 'server':
+                continue
+            event_name = ev.get('event', '')
+
+            if event_name == 'ingest_queued':
+                title = ev.get('title') or ev.get('url', 'Unknown')[:60]
+                src = ev.get('ingest_source', 'unknown')
+                label = INGEST_LABELS.get(src, 'Ingested')
+                timeline.append({
+                    'id': f'evt_{ev["ts"]}_ingest',
+                    'type': 'system',
+                    'subtype': 'ingest',
+                    'ts': ev.get('ts'),
+                    'title': f'{label}: {title}',
+                    'article_id': ev.get('article_id'),
+                })
+
+            elif event_name == 'ingest_email':
+                timeline.append({
+                    'id': f'evt_{ev["ts"]}_email',
+                    'type': 'system',
+                    'subtype': 'ingest',
+                    'ts': ev.get('ts'),
+                    'title': f'Email from {ev.get("sender", "unknown")}',
+                })
+
+            elif event_name == 'article_processed':
+                title = ev.get('title', 'Unknown')
+                wc = ev.get('word_count', 0)
+                wc_str = f' ({wc} words)' if wc else ''
+                timeline.append({
+                    'id': f'evt_{ev["ts"]}_processed',
+                    'type': 'system',
+                    'subtype': 'processed',
+                    'ts': ev.get('ts'),
+                    'title': f'Processed: {title}{wc_str}',
+                    'article_id': ev.get('article_id'),
+                })
+
+            elif event_name == 'bookmarks_fetched':
+                count = ev.get('count', 0)
+                if count > 0:
+                    timeline.append({
+                        'id': f'evt_{ev["ts"]}_twitter',
+                        'type': 'system',
+                        'subtype': 'fetch',
+                        'ts': ev.get('ts'),
+                        'title': f'Fetched {count} Twitter bookmarks',
+                    })
+
+            elif event_name == 'readwise_fetched':
+                count = ev.get('count', 0)
+                docs = ev.get('documents', count)
+                if count > 0:
+                    timeline.append({
+                        'id': f'evt_{ev["ts"]}_readwise',
+                        'type': 'system',
+                        'subtype': 'fetch',
+                        'ts': ev.get('ts'),
+                        'title': f'Fetched {count} Readwise items → {docs} docs',
+                    })
 
         # --- Research events ---
         for ev in raw_events:

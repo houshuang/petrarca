@@ -74,6 +74,25 @@ export async function spawnTopicResearch(
   return resp.json();
 }
 
+// --- Generate more follow-up questions ---
+
+export async function generateMoreQuestions(
+  articleId: string,
+  existingQuestions: string[],
+): Promise<Array<{ question: string; connects_to: string }>> {
+  const resp = await fetch(`${RESEARCH_BASE}/generate-questions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      article_id: articleId,
+      existing_questions: existingQuestions,
+    }),
+  });
+  if (!resp.ok) throw new Error(`Generate questions failed: ${resp.status}`);
+  const data = await resp.json();
+  return data.questions || [];
+}
+
 // --- Article ingestion from links ---
 
 export interface IngestResponse {

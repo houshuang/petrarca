@@ -238,6 +238,12 @@ def main():
     documents = organize_documents(raw)
     print(f"Organized into {len(documents)} documents", file=sys.stderr)
 
+    try:
+        from server_log import log_server_event
+        log_server_event('readwise_fetched', count=len(raw), documents=len(documents))
+    except ImportError:
+        pass
+
     if args.incremental and OUTPUT_PATH.exists():
         existing = json.loads(OUTPUT_PATH.read_text())
         existing_by_id = {doc["id"]: doc for doc in existing}

@@ -4,6 +4,53 @@
 
 ---
 
+## 2026-03-09 — Session 11b: Feedback Capture + More Questions + Queue Auto-Advance + Topic Signal Redesign
+
+**What**: Four UX features: floating feedback button, expanded follow-up research questions, automatic queue advancement, and redesigned topic interest signals.
+
+### Floating Feedback Button (`FeedbackCapture.tsx`)
+- **New component**: `app/components/FeedbackCapture.tsx` — floating ✦ button in bottom-right corner of every screen
+- **Tap**: Opens voice/text feedback overlay with auto-detected context (current screen name, article ID if in reader)
+- **Long-press**: Hides the button (persisted to AsyncStorage via `@petrarca/feedback_hidden`)
+- **Storage**: Feedback items saved locally to `@petrarca/feedback_items` as JSON array
+- **Integration**: Added to `app/app/_layout.tsx` so it appears globally
+- **Events**: `feedback_capture_start`, `feedback_capture_complete`, `feedback_capture_dismiss`
+- **TODO**: Screenshot capture (needs react-native-view-shot), server upload endpoint
+
+### More AI Research Queries
+- **Pipeline**: `build_articles.py` extraction prompt now generates 4 follow-up questions (was 2-3), with broader/more divergent framing
+- **New endpoint**: `POST /generate-questions` on research server — generates 3 additional questions given article context + already-shown questions (avoids duplicates)
+- **Client**: `generateMoreQuestions()` function in `app/lib/chat-api.ts`
+- **Reader UI**: "More questions" button in FURTHER INQUIRY section. Pulsing ✦ animation while generating. New questions appended below existing ones.
+- **Events**: `further_inquiry_generate_more`, `further_inquiry_generated`, `further_inquiry_generate_error`
+
+### Queue Auto-Advance
+- **Behavior**: After finishing an article (Done button + closing interest card), if there's a next queued article, auto-navigates to it via `router.replace()`
+- **Toast**: "UP NEXT: {title}" toast at top for 3 seconds with "← Feed" escape button (allows returning to feed instead)
+- **Implementation**: New `advanceOrGoBack()` function replaces old `router.back()` calls throughout reader
+- **Events**: `auto_advance_triggered`, `auto_advance_cancelled`
+
+### Redesigned Topic Interest Signals (Hybrid Minimal)
+- **Single signal model**: Merged old "follow" and "interested" into one: interested / neutral / less
+- **New topics** (zero signals + ≤1 articles): Left-bordered rows with +/− buttons, shown prominently to encourage exploration
+- **Known topics**: Compact flowing dot-list, tappable `KnownTopicDot` component that cycles state (interested → neutral → less)
+- **`isTopicNew()`**: Checks interest profile — zero signals + ≤1 articles = new
+- **Cleanup**: Removed old `TopicLevelRow`, `interestChips/ChipRow/ChipMinus/ChipPlus` styles
+- **Import**: Added `getInterestProfile` from interest-model for topic newness detection
+
+### Files Changed
+- `app/components/FeedbackCapture.tsx` — NEW: floating feedback button + overlay
+- `app/components/KeyboardHintBar.tsx` — modified
+- `app/components/LensTabs.tsx` — modified
+- `app/app/_layout.tsx` — FeedbackCapture integration
+- `app/app/(tabs)/index.tsx` — topic signal redesign
+- `app/app/reader.tsx` — more questions, queue auto-advance, topic signal redesign
+- `app/lib/chat-api.ts` — `generateMoreQuestions()` function
+- `scripts/build_articles.py` — 4 follow-up questions, broader framing
+- `scripts/research-server.py` — `POST /generate-questions` endpoint
+
+---
+
 ## 2026-03-09 — Session 11: Clipper Immediate Save + Reader Actions + Feed Metadata
 
 **What**: Robustness improvements to the Chrome clipper (save survives popup close), new reader actions (disregard, report bad scrape), and feed metadata for the Latest lens.
