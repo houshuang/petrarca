@@ -240,6 +240,7 @@ function ArticleCard({ article, onDismiss, onQueue, compact, showIngestInfo, isF
 // --- Feed Screen ---
 
 type ListItem =
+  | { type: 'header' }
   | { type: 'lens-tabs' }
   | { type: 'topics-grouped'; topicFilter?: string }
   | { type: 'article'; article: Article }
@@ -257,6 +258,17 @@ export default function FeedScreen() {
   const [focusedIndex, setFocusedIndex] = useState(Platform.OS === 'web' ? -1 : -2);
   const spinAnim = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef<FlatList>(null);
+
+  // Stable refs for FlatList viewability (must not change after mount)
+  const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
+    const articleIds = viewableItems
+      .filter((v: any) => v.item?.article?.id)
+      .map((v: any) => v.item.article.id);
+    if (articleIds.length > 0) {
+      logEvent('feed_articles_visible', { article_ids: articleIds });
+    }
+  }).current;
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50, minimumViewTime: 1000 }).current;
 
   // Re-rank feed when screen regains focus (e.g. returning from reader)
   // This ensures reading an article deprioritizes similar content via the knowledge model
@@ -320,7 +332,10 @@ export default function FeedScreen() {
   const listData = useMemo((): ListItem[] => {
     const items: ListItem[] = [];
 
-    // Lens tabs are always first (will be sticky)
+    // Header (UpNext, Recommended, TopicPills, DoubleRule) is first
+    items.push({ type: 'header' });
+
+    // Lens tabs are second (will be sticky via stickyHeaderIndices={[1]})
     items.push({ type: 'lens-tabs' });
 
     if (activeLens === 'topics') {
@@ -420,7 +435,7 @@ export default function FeedScreen() {
         el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     } else {
-      try { flatListRef.current?.scrollToIndex({ index: index + 1, viewPosition: 0.3, animated: true }); } catch {}
+      try { flatListRef.current?.scrollToIndex({ index: index + 2, viewPosition: 0.3, animated: true }); } catch {}
     }
   }, [allNavArticles, articleItems]);
 
@@ -540,6 +555,8 @@ export default function FeedScreen() {
 
   const renderItem = useCallback(({ item }: { item: ListItem }) => {
     switch (item.type) {
+      case 'header':
+        return renderHeader();
       case 'lens-tabs':
         return (
           <LensTabs activeLens={activeLens} onLensChange={handleLensChange} />
@@ -586,7 +603,7 @@ export default function FeedScreen() {
       default:
         return null;
     }
-  }, [activeLens, handleLensChange, handleDismiss, handleQueue, focusedArticleId]);
+  }, [activeLens, handleLensChange, handleDismiss, handleQueue, focusedArticleId, renderHeader]);
 
   const keyExtractor = useCallback((item: ListItem, index: number) => {
     if (item.type === 'article' || item.type === 'read') return item.article.id;
@@ -700,8 +717,7 @@ export default function FeedScreen() {
         ref={flatListRef}
         data={listData}
         keyExtractor={keyExtractor}
-        ListHeaderComponent={renderHeader}
-        stickyHeaderIndices={[0]}
+        stickyHeaderIndices={[1]}
         renderItem={renderItem}
         refreshControl={
           <RefreshControl
@@ -712,18 +728,12 @@ export default function FeedScreen() {
             style={{ backgroundColor: 'transparent' }}
           />
         }
-        onViewableItemsChanged={useCallback(({ viewableItems }: any) => {
-          const articleIds = viewableItems
-            .filter((v: any) => v.item?.article?.id)
-            .map((v: any) => v.item.article.id);
-          if (articleIds.length > 0) {
-            logEvent('feed_articles_visible', { article_ids: articleIds });
-          }
-        }, [])}
-        viewabilityConfig={{ itemVisiblePercentThreshold: 50, minimumViewTime: 1000 }}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
         extraData={focusedArticleId}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        removeClippedSubviews={false}
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyTitle}>No articles yet</Text>
