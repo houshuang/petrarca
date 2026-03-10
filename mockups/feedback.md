@@ -1,9 +1,12 @@
-# Feedback — petrarca (main)
-# Submitted: 2026-03-09T06:08:08.558Z
+# Feedback — petrarca (main) — Round 5
+# Submitted: 2026-03-09T11:59:14.151Z
 
-### Hybrid: Overview + Inline Markers  [👍]
+### Card Sort / Swipe  [👍]
+
+### Conversational Prompts  [👍]
+
+### Tap-to-Cycle Chips  [👍]
 
 ### No feedback
-- Margin Glyphs
-- Inline Claim Callouts
-- Progressive Reveal
+- Margin Annotations
+- Slider Spectrum

@@ -4,6 +4,58 @@
 
 ---
 
+## 2026-03-10 — Session 15: LLM Judge for Ambiguous Claims (G2)
+
+**What**: Integrated the LLM judge from Experiment 2 into the production pipeline. Claim pairs in the 0.68–0.78 cosine range now get verified by Gemini Flash before classification.
+
+### Implementation
+
+**Server-side** (`build_knowledge_index.py`):
+- Replaced old `verify_ambiguous_pairs()` (dead litellm code) with `judge_ambiguous_pairs()` using `gemini_llm.call_llm()`
+- Verdicts stored as `llm_verdicts: { "claimA::claimB": "ENTAILS" | "EXTENDS" | "UNRELATED" }` in `knowledge_index.json`
+- Preserves original cosine scores (no in-place mutation)
+- ThreadPoolExecutor with 10 workers, prioritizes 0.72–0.78 range, caps at 200 pairs
+- `--skip-judge` flag for fast builds
+
+**Client-side** (`knowledge-engine.ts`):
+- `getLlmVerdict()` checks both key orderings (`a::b` and `b::a`)
+- In 0.68–0.78 range: UNRELATED → NEW, ENTAILS → KNOWN, no verdict → EXTENDS (backward compatible)
+
+**Types** (`types.ts`):
+- `llm_verdicts` and stats fields optional — works with older indexes
+
+### First Production Run Results
+
+```
+250 articles, 4576 claims
+98,610 cross-article pairs (≥ 0.68)
+92,420 ambiguous pairs in 0.68–0.78 range
+200 judged (cap), 192 returned verdicts
+111 changed classification:
+  - 104 UNRELATED (cosine said EXTENDS, LLM says genuinely different)
+  - 1 ENTAILS (cosine said EXTENDS, LLM says equivalent)
+  - 87 EXTENDS confirmed (cosine was right)
+```
+
+**Key finding**: 57% of judged ambiguous pairs were reclassified — mostly downgraded from EXTENDS to UNRELATED. This confirms Experiment 2's finding that cosine overestimates relationships in this range. The ~92K total ambiguous pairs vs 200 cap means only 0.2% are currently judged — could increase the cap, but the 200 highest-scored (0.72–0.78 prioritized) are the most impactful since they're closest to the KNOWN threshold.
+
+### Scrape Report Triage Update
+
+Also updated docs: session 14's XML-first extraction + paragraph splitting resolved 2 of 4 user-reported bad scrapes. Remaining: Claude docs (JS-heavy site) and newsletter redirect URL. G14 downgraded from Medium → Low.
+
+### Files Changed
+- `scripts/build_knowledge_index.py` — `judge_ambiguous_pairs()` replaces `verify_ambiguous_pairs()`
+- `app/data/knowledge-engine.ts` — `getLlmVerdict()`, classification uses verdicts
+- `app/data/types.ts` — `llm_verdicts` field, stats fields
+- `research/implementation-status.md` — G2 and G14 status updates
+- `research/experiment-log.md` — this entry + scrape report annotations
+
+### Deployed
+- Knowledge index rebuilt and deployed (hash: `93c4246368a8e6c5`, 7.9 MB)
+- Web app rebuilt and deployed to `alifstian.duckdns.org:8084`
+
+---
+
 ## 2026-03-10 — Session 14: Parsing Fix + Mobile Feed Overlap + Platform Separation
 
 **What**: Fixed the two biggest quality issues — 43% of articles had merged paragraphs making highlighting impossible, and mobile feed items overlapped during scroll. Also separated mobile/web rendering paths more cleanly.
@@ -41,10 +93,10 @@
 ### Scrape Report Triage
 
 4 user-reported bad scrapes found in `/opt/petrarca/data/scrape_reports.json`:
-1. `df64c81e` — Claude Code docs (JS-heavy site, navigation fragments)
-2. `285b8ae5` — Coworking for Punks (Substack, long markdown list merged)
+1. `df64c81e` — Claude Code docs (JS-heavy site, navigation fragments) → **still open** (needs JS-aware scraping)
+2. `285b8ae5` — Coworking for Punks (Substack, long markdown list merged) → **fixed by XML-first extraction + paragraph splitting**
 3. `adff8371` — Grep Is Dead (tweet as single 10K-char paragraph) → **fixed by tweet normalization**
-4. `450e9396` — AI Free My Time (newsletter redirect URL, cruft not fully stripped)
+4. `450e9396` — AI Free My Time (newsletter redirect URL, cruft not fully stripped) → **still open** (redirect URL handling)
 
 ### Files Changed
 - `scripts/build_articles.py` — `_xml_to_markdown()`, `_split_long_paragraphs()`, XML-first extraction tiers, tweet text normalization, `fetch_method` persistence
