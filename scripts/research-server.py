@@ -42,6 +42,7 @@ EMAILS_DIR = INGEST_DIR / 'emails'
 CHAT_DIR = Path(os.environ.get('CHAT_DIR', '/opt/petrarca/data/chats'))
 NOTES_DIR = Path(os.environ.get('NOTES_DIR', '/opt/petrarca/data/notes'))
 AUDIO_DIR = Path(os.environ.get('AUDIO_DIR', '/opt/petrarca/data/audio'))
+BOOK_UPLOADS_DIR = Path(os.environ.get('BOOK_UPLOADS_DIR', '/opt/petrarca/data/book-uploads'))
 LOG_DIR = Path(os.environ.get('LOG_DIR', '/opt/petrarca/data/logs'))
 ARTICLES_PATH = Path(os.environ.get('ARTICLES_PATH', '/opt/petrarca/data/articles.json'))
 SCRAPE_REPORTS_PATH = Path(os.environ.get('SCRAPE_REPORTS_PATH', '/opt/petrarca/data/scrape_reports.json'))
@@ -61,6 +62,7 @@ EMAILS_DIR.mkdir(parents=True, exist_ok=True)
 CHAT_DIR.mkdir(parents=True, exist_ok=True)
 NOTES_DIR.mkdir(parents=True, exist_ok=True)
 AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+BOOK_UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -1223,6 +1225,321 @@ def handle_chat(question: str, context: str, conversation_id: str | None = None)
     return {'answer': answer, 'conversation_id': conversation_id}
 
 
+# ---------------------------------------------------------------------------
+# Physical book endpoints — processing functions
+# ---------------------------------------------------------------------------
+
+def process_book_identify(image_path: Path) -> dict:
+    """Identify a book from a cover/title page photo using Gemini Vision + web search."""
+    from gemini_llm import call_vision, call_with_search
+
+    image_data = image_path.read_bytes()
+    mime_type = 'image/png' if str(image_path).endswith('.png') else 'image/jpeg'
+
+    # Step 1: Extract title/author from photo
+    vision_result = call_vision(
+        image_data,
+        """Identify this book from the cover or title page photo.
+Return a JSON object with:
+{
+  "title": "exact book title",
+  "author": "author name(s)",
+  "isbn": "ISBN if visible, else null",
+  "publisher": "publisher if visible, else null",
+  "year": null
+}
+Return ONLY valid JSON.""",
+        mime_type=mime_type,
+        response_mime_type="application/json",
+    )
+
+    if not vision_result:
+        return {'error': 'Could not identify book from image'}
+
+    try:
+        cleaned = vision_result.strip()
+        if cleaned.startswith('```'):
+            cleaned = re.sub(r'^```(?:json)?\n?', '', cleaned)
+            cleaned = re.sub(r'\n?```$', '', cleaned)
+        book_info = json.loads(cleaned)
+    except json.JSONDecodeError:
+        return {'error': f'Failed to parse vision result: {vision_result[:200]}'}
+
+    title = book_info.get('title', '')
+    author = book_info.get('author', '')
+    if not title:
+        return {'error': 'Could not extract title from image'}
+
+    # Step 2: Web search for metadata and cover
+    search_result = call_with_search(
+        f"""Find metadata for this book:
+Title: {title}
+Author: {author}
+
+Return a JSON object with:
+{{
+  "title": "full official title",
+  "author": "full author name(s)",
+  "cover_url": "URL to a high-quality cover image (Amazon, Google Books, or publisher)",
+  "isbn": "ISBN-13 if available",
+  "publisher": "publisher name",
+  "year": publication year as integer,
+  "page_count": total pages as integer,
+  "topics": ["3-5 topic tags for this book"]
+}}
+Return ONLY valid JSON.""",
+    )
+
+    if search_result:
+        try:
+            cleaned = search_result.strip()
+            if cleaned.startswith('```'):
+                cleaned = re.sub(r'^```(?:json)?\n?', '', cleaned)
+                cleaned = re.sub(r'\n?```$', '', cleaned)
+            metadata = json.loads(cleaned)
+            # Merge vision result with search metadata (search wins for richer data)
+            for key in ('title', 'author', 'isbn', 'publisher', 'year', 'page_count', 'cover_url', 'topics'):
+                if metadata.get(key) and not book_info.get(key):
+                    book_info[key] = metadata[key]
+                elif metadata.get(key):
+                    book_info[key] = metadata[key]
+        except json.JSONDecodeError:
+            pass  # Use vision result as-is
+
+    # Ensure topics is a list
+    if not isinstance(book_info.get('topics'), list):
+        book_info['topics'] = []
+
+    # Step 3: Try to find table of contents via web search
+    chapters = _find_toc_online(title, author)
+    if chapters:
+        book_info['chapters'] = chapters
+
+    # Step 4: Find cover image via book APIs (much more reliable than LLM-generated URLs)
+    cover_url = _find_cover_image(book_info.get('isbn'), title, author)
+    if cover_url:
+        book_info['cover_url'] = cover_url
+    elif book_info.get('cover_url'):
+        # Verify LLM-provided URL actually works before trusting it
+        if not _url_returns_image(book_info['cover_url']):
+            del book_info['cover_url']
+
+    print(f'[book/identify] Identified: {book_info.get("title")} by {book_info.get("author")} (cover: {bool(book_info.get("cover_url"))})', flush=True)
+    return book_info
+
+
+def _find_cover_image(isbn: str | None, title: str, author: str) -> str | None:
+    """Find a book cover image URL via Open Library (ISBN) then Google Books (title/author)."""
+    import urllib.request
+    import urllib.error
+
+    # Try Open Library by ISBN first (direct image URL, no API key needed)
+    if isbn:
+        clean_isbn = re.sub(r'[^0-9X]', '', isbn.upper())
+        if clean_isbn:
+            ol_url = f'https://covers.openlibrary.org/b/isbn/{clean_isbn}-L.jpg?default=false'
+            try:
+                req = urllib.request.Request(ol_url, method='HEAD')
+                req.add_header('User-Agent', 'Petrarca/1.0')
+                resp = urllib.request.urlopen(req, timeout=5)
+                if resp.status == 200 and 'image' in resp.headers.get('Content-Type', ''):
+                    print(f'[cover] Found via Open Library ISBN: {clean_isbn}', flush=True)
+                    return ol_url
+            except (urllib.error.HTTPError, urllib.error.URLError, OSError):
+                pass
+
+    # Try Google Books API (free, no key needed for low volume)
+    try:
+        query = urllib.parse.quote(f'intitle:{title} inauthor:{author}')
+        gb_url = f'https://www.googleapis.com/books/v1/volumes?q={query}&maxResults=1'
+        req = urllib.request.Request(gb_url)
+        req.add_header('User-Agent', 'Petrarca/1.0')
+        resp = urllib.request.urlopen(req, timeout=8)
+        data = json.loads(resp.read().decode())
+        items = data.get('items', [])
+        if items:
+            image_links = items[0].get('volumeInfo', {}).get('imageLinks', {})
+            # Prefer larger images, upgrade HTTP to HTTPS
+            for key in ('extraLarge', 'large', 'medium', 'thumbnail', 'smallThumbnail'):
+                if key in image_links:
+                    url = image_links[key].replace('http://', 'https://')
+                    # Remove edge=curl parameter for cleaner image
+                    url = re.sub(r'&edge=curl', '', url)
+                    print(f'[cover] Found via Google Books ({key})', flush=True)
+                    return url
+    except (urllib.error.HTTPError, urllib.error.URLError, OSError, json.JSONDecodeError) as e:
+        print(f'[cover] Google Books lookup failed: {e}', flush=True)
+
+    # Try Open Library by title search as last resort
+    try:
+        query = urllib.parse.quote(f'{title} {author}')
+        ol_search = f'https://openlibrary.org/search.json?q={query}&limit=1&fields=isbn'
+        req = urllib.request.Request(ol_search)
+        req.add_header('User-Agent', 'Petrarca/1.0')
+        resp = urllib.request.urlopen(req, timeout=8)
+        data = json.loads(resp.read().decode())
+        docs = data.get('docs', [])
+        if docs:
+            isbns = docs[0].get('isbn', [])
+            for found_isbn in isbns[:3]:
+                ol_url = f'https://covers.openlibrary.org/b/isbn/{found_isbn}-L.jpg?default=false'
+                try:
+                    req2 = urllib.request.Request(ol_url, method='HEAD')
+                    req2.add_header('User-Agent', 'Petrarca/1.0')
+                    resp2 = urllib.request.urlopen(req2, timeout=5)
+                    if resp2.status == 200 and 'image' in resp2.headers.get('Content-Type', ''):
+                        print(f'[cover] Found via Open Library search → ISBN {found_isbn}', flush=True)
+                        return ol_url
+                except (urllib.error.HTTPError, urllib.error.URLError, OSError):
+                    continue
+    except (urllib.error.HTTPError, urllib.error.URLError, OSError, json.JSONDecodeError) as e:
+        print(f'[cover] Open Library search failed: {e}', flush=True)
+
+    print(f'[cover] No cover found for "{title}" by {author}', flush=True)
+    return None
+
+
+def _url_returns_image(url: str) -> bool:
+    """Check if a URL actually returns an image (HEAD request)."""
+    import urllib.request
+    import urllib.error
+    try:
+        req = urllib.request.Request(url, method='HEAD')
+        req.add_header('User-Agent', 'Petrarca/1.0')
+        resp = urllib.request.urlopen(req, timeout=5)
+        return resp.status == 200 and 'image' in resp.headers.get('Content-Type', '')
+    except (urllib.error.HTTPError, urllib.error.URLError, OSError):
+        return False
+
+
+def _find_toc_online(title: str, author: str) -> list[dict] | None:
+    """Try to find a book's table of contents via Gemini + Google Search."""
+    from gemini_llm import call_with_search
+
+    result = call_with_search(
+        f"""Find the table of contents / chapter list for this book:
+"{title}" by {author}
+
+Return a JSON array of chapters:
+[{{"number": 1, "title": "Chapter Title"}}, {{"number": 2, "title": "Chapter Title"}}]
+
+Only include actual chapter titles, not preface/index/bibliography.
+If you cannot find the chapter list, return an empty array [].
+Return ONLY the JSON array.""",
+    )
+
+    if not result:
+        return None
+
+    try:
+        cleaned = result.strip()
+        if cleaned.startswith('```'):
+            cleaned = re.sub(r'^```(?:json)?\n?', '', cleaned)
+            cleaned = re.sub(r'\n?```$', '', cleaned)
+        chapters = json.loads(cleaned)
+        if isinstance(chapters, list) and len(chapters) >= 2:
+            print(f'[toc] Found {len(chapters)} chapters online for "{title}"', flush=True)
+            return chapters
+    except json.JSONDecodeError:
+        pass
+
+    return None
+
+
+def process_book_ocr_toc(image_path: Path) -> dict:
+    """OCR a table of contents photo and parse chapter structure."""
+    from gemini_llm import call_vision
+
+    image_data = image_path.read_bytes()
+    mime_type = 'image/png' if str(image_path).endswith('.png') else 'image/jpeg'
+
+    result = call_vision(
+        image_data,
+        """Extract the table of contents from this image.
+Return a JSON object:
+{
+  "chapters": [
+    {"number": 1, "title": "Chapter Title", "start_page": 1},
+    {"number": 2, "title": "Chapter Title", "start_page": 25}
+  ]
+}
+Include chapter numbers, titles, and page numbers. If sections/parts have sub-chapters, include them.
+Return ONLY valid JSON.""",
+        mime_type=mime_type,
+        response_mime_type="application/json",
+    )
+
+    if not result:
+        return {'chapters': []}
+
+    try:
+        cleaned = result.strip()
+        if cleaned.startswith('```'):
+            cleaned = re.sub(r'^```(?:json)?\n?', '', cleaned)
+            cleaned = re.sub(r'\n?```$', '', cleaned)
+        parsed = json.loads(cleaned)
+        return {'chapters': parsed.get('chapters', [])}
+    except json.JSONDecodeError:
+        return {'chapters': []}
+
+
+def process_book_ocr_page(image_path: Path, book_title: str,
+                          page_number: int | None = None,
+                          chapter: str | None = None) -> dict:
+    """OCR a page photo, extract page number and core ideas."""
+    from gemini_llm import call_vision
+
+    image_data = image_path.read_bytes()
+    mime_type = 'image/png' if str(image_path).endswith('.png') else 'image/jpeg'
+
+    context = f"Book: {book_title}"
+    if chapter:
+        context += f"\nChapter: {chapter}"
+    if page_number:
+        context += f"\nExpected page: {page_number}"
+
+    result = call_vision(
+        image_data,
+        f"""{context}
+
+OCR this book page and extract:
+1. The full text on the page
+2. The page number (from header/footer if visible)
+3. 1-3 core ideas or claims from this page
+4. Relevant topic tags
+
+Return a JSON object:
+{{
+  "text": "full OCR text of the page",
+  "detected_page_number": page_number_or_null,
+  "extracted_ideas": ["idea 1", "idea 2"],
+  "topics": ["topic1", "topic2"]
+}}
+Return ONLY valid JSON.""",
+        mime_type=mime_type,
+        response_mime_type="application/json",
+        max_tokens=8192,
+    )
+
+    if not result:
+        return {'text': '', 'extracted_ideas': [], 'topics': []}
+
+    try:
+        cleaned = result.strip()
+        if cleaned.startswith('```'):
+            cleaned = re.sub(r'^```(?:json)?\n?', '', cleaned)
+            cleaned = re.sub(r'\n?```$', '', cleaned)
+        parsed = json.loads(cleaned)
+        return {
+            'text': parsed.get('text', ''),
+            'detected_page_number': parsed.get('detected_page_number'),
+            'extracted_ideas': parsed.get('extracted_ideas', []),
+            'topics': parsed.get('topics', []),
+        }
+    except json.JSONDecodeError:
+        return {'text': result, 'extracted_ideas': [], 'topics': []}
+
+
 class ResearchHandler(BaseHTTPRequestHandler):
     def _send_cors_headers(self):
         self.send_header('Access-Control-Allow-Origin', '*')
@@ -1732,6 +2049,182 @@ class ResearchHandler(BaseHTTPRequestHandler):
 
         self._send_json_response(200, {'status': 'saved', 'id': feedback_id})
 
+    # --- Physical book handlers ---
+
+    def _parse_multipart_form(self):
+        """Parse multipart form data, returning (form, error_response_sent)."""
+        import cgi
+        content_type = self.headers.get('Content-Type', '')
+        if 'multipart/form-data' not in content_type:
+            self._send_json_response(400, {'error': 'Expected multipart/form-data'})
+            return None, True
+        environ = {
+            'REQUEST_METHOD': 'POST',
+            'CONTENT_TYPE': content_type,
+            'CONTENT_LENGTH': self.headers.get('Content-Length', '0'),
+        }
+        form = cgi.FieldStorage(fp=self.rfile, headers=self.headers, environ=environ)
+        return form, False
+
+    def _save_upload_photo(self, form, field_name: str, prefix: str) -> Path | None:
+        """Save an uploaded photo from multipart form to BOOK_UPLOADS_DIR."""
+        if field_name not in form or not form[field_name].file:
+            return None
+        ext = 'jpg'
+        if form[field_name].filename and form[field_name].filename.endswith('.png'):
+            ext = 'png'
+        photo_path = BOOK_UPLOADS_DIR / f'{prefix}_{int(time.time())}.{ext}'
+        data = form[field_name].file.read()
+        photo_path.write_bytes(data if isinstance(data, bytes) else data.encode('latin-1'))
+        return photo_path
+
+    def _handle_book_identify(self):
+        """Identify a book from a cover/title page photo."""
+        form, err = self._parse_multipart_form()
+        if err:
+            return
+
+        photo_path = self._save_upload_photo(form, 'photo', 'cover')
+        if not photo_path:
+            self._send_json_response(400, {'error': 'Missing photo field'})
+            return
+
+        print(f'[book/identify] Received cover photo: {photo_path.name}', flush=True)
+
+        try:
+            result = process_book_identify(photo_path)
+            if 'error' in result:
+                self._send_json_response(422, result)
+            else:
+                self._send_json_response(200, result)
+        except Exception as e:
+            print(f'[book/identify] Error: {e}', flush=True)
+            self._send_json_response(500, {'error': str(e)})
+
+    def _handle_book_ocr_toc(self):
+        """OCR a table of contents photo."""
+        form, err = self._parse_multipart_form()
+        if err:
+            return
+
+        photo_path = self._save_upload_photo(form, 'photo', 'toc')
+        if not photo_path:
+            self._send_json_response(400, {'error': 'Missing photo field'})
+            return
+
+        book_id = form.getvalue('book_id', '')
+        print(f'[book/ocr-toc] Received TOC photo for book {book_id}: {photo_path.name}', flush=True)
+
+        try:
+            result = process_book_ocr_toc(photo_path)
+            self._send_json_response(200, result)
+        except Exception as e:
+            print(f'[book/ocr-toc] Error: {e}', flush=True)
+            self._send_json_response(500, {'error': str(e)})
+
+    def _handle_book_ocr_page(self):
+        """OCR a book page photo and extract core ideas."""
+        form, err = self._parse_multipart_form()
+        if err:
+            return
+
+        photo_path = self._save_upload_photo(form, 'photo', 'page')
+        if not photo_path:
+            self._send_json_response(400, {'error': 'Missing photo field'})
+            return
+
+        book_id = form.getvalue('book_id', '')
+        book_title = form.getvalue('book_title', '')
+        page_str = form.getvalue('page_number', '')
+        chapter = form.getvalue('chapter', '')
+        page_number = int(page_str) if page_str and page_str.isdigit() else None
+
+        print(f'[book/ocr-page] Received page photo for {book_title}: {photo_path.name}', flush=True)
+
+        try:
+            result = process_book_ocr_page(photo_path, book_title, page_number, chapter)
+            self._send_json_response(200, result)
+        except Exception as e:
+            print(f'[book/ocr-page] Error: {e}', flush=True)
+            self._send_json_response(500, {'error': str(e)})
+
+    def _handle_book_voice_note(self):
+        """Receive a voice note about a physical book, transcribe and extract ideas."""
+        form, err = self._parse_multipart_form()
+        if err:
+            return
+
+        if 'audio' not in form or not form['audio'].file:
+            self._send_json_response(400, {'error': 'Missing audio field'})
+            return
+
+        book_id = form.getvalue('book_id', '')
+        book_title = form.getvalue('book_title', '')
+        chapter = form.getvalue('chapter', '')
+        page_str = form.getvalue('page_number', '')
+        page_number = int(page_str) if page_str and page_str.isdigit() else None
+
+        note_id = f'bnote_{int(time.time())}_{book_id[:8]}'
+        audio_path = AUDIO_DIR / f'{note_id}.m4a'
+        data = form['audio'].file.read()
+        audio_path.write_bytes(data if isinstance(data, bytes) else data.encode('latin-1'))
+
+        print(f'[book/voice-note] Received note {note_id} for {book_title}', flush=True)
+
+        def _process_book_note():
+            from gemini_llm import call_llm
+            result = {'id': note_id, 'transcript': '', 'extracted_ideas': [], 'topics': []}
+            try:
+                transcript = transcribe_on_server(audio_path)
+                result['transcript'] = transcript
+
+                # Extract ideas from transcript
+                extraction = call_llm(
+                    f"""Extract key ideas from this voice note about the book "{book_title}".
+{f'Chapter: {chapter}' if chapter else ''}
+{f'Page: {page_number}' if page_number else ''}
+
+Transcript: {transcript}
+
+Return a JSON object:
+{{"extracted_ideas": ["idea 1", "idea 2"], "topics": ["topic1", "topic2"]}}
+Return ONLY valid JSON.""",
+                    response_mime_type="application/json",
+                )
+                if extraction:
+                    try:
+                        cleaned = extraction.strip()
+                        if cleaned.startswith('```'):
+                            cleaned = re.sub(r'^```(?:json)?\n?', '', cleaned)
+                            cleaned = re.sub(r'\n?```$', '', cleaned)
+                        parsed = json.loads(cleaned)
+                        result['extracted_ideas'] = parsed.get('extracted_ideas', [])
+                        result['topics'] = parsed.get('topics', [])
+                    except json.JSONDecodeError:
+                        pass
+
+                print(f'[book/voice-note] {note_id} processed: {len(result["extracted_ideas"])} ideas', flush=True)
+            except Exception as e:
+                print(f'[book/voice-note] {note_id} error: {e}', flush=True)
+
+            # Save note result
+            note_path = NOTES_DIR / f'{note_id}.json'
+            note_path.write_text(json.dumps({
+                **result,
+                'book_id': book_id,
+                'book_title': book_title,
+                'chapter': chapter,
+                'page_number': page_number,
+                'audio_path': str(audio_path),
+                'created_at': int(time.time() * 1000),
+            }, indent=2))
+
+        # Process in background
+        thread = threading.Thread(target=_process_book_note, daemon=True)
+        thread.start()
+
+        self._send_json_response(202, {'id': note_id, 'status': 'processing'})
+
     def _handle_ingest_book(self):
         if INGEST_TOKEN:
             token = self.headers.get('X-Petrarca-Token', '')
@@ -1825,6 +2318,14 @@ class ResearchHandler(BaseHTTPRequestHandler):
             return self._handle_report_scrape()
         if self.path == '/feedback':
             return self._handle_feedback()
+        if self.path == '/book/identify':
+            return self._handle_book_identify()
+        if self.path == '/book/ocr-toc':
+            return self._handle_book_ocr_toc()
+        if self.path == '/book/ocr-page':
+            return self._handle_book_ocr_page()
+        if self.path == '/book/voice-note':
+            return self._handle_book_voice_note()
 
         if self.path == '/research/explore-batch':
             return self._handle_explore_batch()

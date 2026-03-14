@@ -368,6 +368,71 @@ export function getArticleParagraphCount(articleId: string): number {
   return maxPara + 1;
 }
 
+export function markClaimEncountered(
+  claimId: string,
+  engagement: 'skim' | 'read' | 'highlight',
+  articleId: string = '',
+): void {
+  const stabilityMap = { skim: STABILITY_SKIM, read: STABILITY_READ, highlight: STABILITY_HIGHLIGHT };
+  const stability = stabilityMap[engagement];
+  const now = Date.now();
+
+  const existing = knowledgeLedger[claimId];
+  if (existing) {
+    existing.stability_days = Math.min(existing.stability_days * REINFORCEMENT_FACTOR, 365);
+    if (engagement === 'highlight' || engagement === 'read') {
+      existing.engagement = engagement;
+    }
+  } else {
+    knowledgeLedger[claimId] = {
+      claim_id: claimId,
+      first_seen_at: now,
+      article_id: articleId,
+      engagement,
+      stability_days: stability,
+    };
+  }
+
+  saveLedger();
+}
+
+export function markClaimsEncountered(
+  claimIds: string[],
+  engagement: 'skim' | 'read' | 'highlight',
+): number {
+  const stabilityMap = { skim: STABILITY_SKIM, read: STABILITY_READ, highlight: STABILITY_HIGHLIGHT };
+  const stability = stabilityMap[engagement];
+  const now = Date.now();
+  let count = 0;
+
+  for (const claimId of claimIds) {
+    const existing = knowledgeLedger[claimId];
+    if (existing) {
+      existing.stability_days = Math.min(existing.stability_days * REINFORCEMENT_FACTOR, 365);
+      if (engagement === 'highlight' || engagement === 'read') {
+        existing.engagement = engagement;
+      }
+    } else {
+      knowledgeLedger[claimId] = {
+        claim_id: claimId,
+        first_seen_at: now,
+        article_id: '',
+        engagement,
+        stability_days: stability,
+      };
+    }
+    count++;
+  }
+
+  logEvent('knowledge_claims_bulk_encountered', {
+    engagement,
+    claims_count: count,
+  });
+
+  saveLedger();
+  return count;
+}
+
 export function markClaimHighlighted(claimId: string): void {
   const existing = knowledgeLedger[claimId];
   if (existing) {

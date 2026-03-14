@@ -146,11 +146,29 @@ export type ReviewRating = 1 | 2 | 3 | 4; // again(1) hard(2) good(3) easy(4)
 
 // --- Topic Syntheses ---
 
+export interface SynthesisFollowUpQuestion {
+  question: string;
+  research_prompt: string;
+  related_topics: string[];
+}
+
 export interface TopicSynthesis {
-  topic: string;
-  synthesis_text: string;
+  cluster_id: string;
+  label: string;
+  synthesis_markdown: string;
   article_ids: string[];
+  article_coverage: Record<string, number>;
+  claims_covered: string[];
+  unique_per_article: Record<string, string[]>;
+  follow_up_questions: SynthesisFollowUpQuestion[];
+  tensions: Array<string | { label: string; description: string; article_ids?: string[] }>;
   generated_at: string;
+  total_articles: number;
+  total_claims_covered: number;
+  total_claims_in_cluster: number;
+  // Legacy fields (v1 format)
+  topic?: string;
+  synthesis_text?: string;
 }
 
 // --- Voice Notes ---
@@ -362,4 +380,61 @@ export interface ResearchResult {
   recommendations?: string[];
   connections?: string[];
   error?: string;
+}
+
+// --- Physical Books ---
+
+export interface PhysicalBook {
+  id: string;                         // pb_{timestamp}_{hash}
+  title: string;
+  author: string;
+  cover_image_uri?: string;           // local photo of cover
+  cover_url?: string;                 // web URL for cover image (from metadata lookup)
+  isbn?: string;
+  publisher?: string;
+  year?: number;
+  page_count?: number;
+  language: string;
+  topics: string[];
+  chapters: PhysicalBookChapter[];
+  current_chapter?: string;           // chapter title
+  current_page?: number;
+  reading_status: 'reading' | 'finished' | 'paused' | 'want_to_read';
+  added_at: number;
+  last_interaction_at: number;        // for sorting by recency
+  metadata_source?: 'photo' | 'manual' | 'search';
+}
+
+export interface PhysicalBookChapter {
+  number: number;
+  title: string;
+  start_page?: number;
+}
+
+export type BookCaptureType = 'voice_note' | 'page_photo' | 'text_note';
+
+export interface BookCapture {
+  id: string;                         // cap_{timestamp}
+  book_id: string;
+  type: BookCaptureType;
+  created_at: number;
+  // Voice
+  audio_uri?: string;                 // local file path
+  transcript?: string;
+  transcription_status?: 'pending' | 'processing' | 'completed' | 'failed';
+  // Photo
+  photo_uri?: string;                 // local file path
+  ocr_text?: string;
+  ocr_status?: 'pending' | 'processing' | 'completed' | 'failed';
+  // Text
+  text?: string;
+  // Context
+  page_number?: number;
+  chapter?: string;
+  // Extracted knowledge
+  extracted_ideas?: string[];
+  topics?: string[];
+  // Server sync
+  server_id?: string;
+  upload_status: 'pending' | 'uploaded' | 'failed';
 }

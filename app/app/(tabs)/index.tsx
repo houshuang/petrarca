@@ -5,11 +5,12 @@ import {
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   getArticlesByLens, getReadingState, dismissArticle, markArticleRead,
   getReadArticles, recordInterestSignal, refreshContent,
   bumpFeedVersion, getFeedVersion, getInProgressArticles,
-  getTopRecommendedArticle, getArticleById,
+  getTopRecommendedArticle, getArticleById, getArticleSynthesisCoverage,
 } from '../../data/store';
 import type { FeedLens } from '../../data/store';
 import { Article } from '../../data/types';
@@ -60,7 +61,7 @@ function formatSourceLabel(sources: Article['sources']): string | null {
   return labels[type] || null;
 }
 
-function ArticleCard({ article, onDismiss, onQueue, compact, showIngestInfo, isFocused, lens }: {
+function ArticleCard({ article, onDismiss, onQueue, compact, showIngestInfo, isFocused, lens, onSwipeComplete }: {
   article: Article;
   onDismiss: () => void;
   onQueue: () => void;
@@ -68,6 +69,7 @@ function ArticleCard({ article, onDismiss, onQueue, compact, showIngestInfo, isF
   showIngestInfo?: boolean;
   isFocused?: boolean;
   lens?: FeedLens;
+  onSwipeComplete?: () => void;
 }) {
   const router = useRouter();
   const state = getReadingState(article.id);
@@ -75,6 +77,7 @@ function ArticleCard({ article, onDismiss, onQueue, compact, showIngestInfo, isF
   const [hovered, setHovered] = useState(false);
 
   const novelty = isKnowledgeReady() ? getArticleNovelty(article.id) : null;
+  const synthesisCoverage = getArticleSynthesisCoverage(article.id);
   const bestClaim = !compact
     ? ((article.novelty_claims || []).find(c => c.specificity === 'high')
       || (article.novelty_claims || [])[0])
@@ -113,8 +116,8 @@ function ArticleCard({ article, onDismiss, onQueue, compact, showIngestInfo, isF
     onDismiss();
   };
 
-  const handleSwipeLeft = () => {
-    addToQueue(article.id);
+  const handleSwipeLeft = async () => {
+    await addToQueue(article.id);
     logEvent('feed_swipe_queue', { article_id: article.id });
     onQueue();
   };
@@ -208,6 +211,9 @@ function ArticleCard({ article, onDismiss, onQueue, compact, showIngestInfo, isF
           {novelty && novelty.new_claims > 0
             ? ` · ${novelty.new_claims} new`
             : ''}
+          {synthesisCoverage !== null && synthesisCoverage > 0.7
+            ? ` · ${Math.round(synthesisCoverage * 100)}% in synthesis`
+            : ''}
           {showIngestInfo && (article.ingested_at || article.date) ? ` · ${formatRelativeDate(article.ingested_at || article.date)}` : ''}
           {showIngestInfo && formatSourceLabel(article.sources) ? ` · ${formatSourceLabel(article.sources)}` : ''}
         </Text>
@@ -228,6 +234,7 @@ function ArticleCard({ article, onDismiss, onQueue, compact, showIngestInfo, isF
       renderRightActions={renderRightActions}
       renderLeftActions={renderLeftActions}
       onSwipeableOpen={(direction) => {
+        onSwipeComplete?.();
         if (direction === 'right') handleSwipeRight();
         else if (direction === 'left') handleSwipeLeft();
       }}
@@ -258,6 +265,44 @@ export default function FeedScreen() {
   const [focusedIndex, setFocusedIndex] = useState(Platform.OS === 'web' ? -1 : -2);
   const spinAnim = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef<FlatList>(null);
+
+  // Swipe hint tooltip — shown once per install on mobile
+  const SWIPE_HINT_KEY = '@petrarca/swipe_hint_shown';
+  const [showSwipeHint, setShowSwipeHint] = useState(false);
+  const swipeHintTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    AsyncStorage.getItem(SWIPE_HINT_KEY).then(val => {
+      if (val !== 'true') {
+        setShowSwipeHint(true);
+        logEvent('swipe_hint_shown');
+      }
+    });
+    return () => {
+      if (swipeHintTimeoutRef.current) clearTimeout(swipeHintTimeoutRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!showSwipeHint) return;
+    swipeHintTimeoutRef.current = setTimeout(() => {
+      setShowSwipeHint(false);
+      AsyncStorage.setItem(SWIPE_HINT_KEY, 'true');
+      logEvent('swipe_hint_dismissed', { trigger: 'timeout' });
+    }, 4000);
+    return () => {
+      if (swipeHintTimeoutRef.current) clearTimeout(swipeHintTimeoutRef.current);
+    };
+  }, [showSwipeHint]);
+
+  const dismissSwipeHint = useCallback((trigger: 'swipe' | 'tap') => {
+    if (!showSwipeHint) return;
+    setShowSwipeHint(false);
+    if (swipeHintTimeoutRef.current) clearTimeout(swipeHintTimeoutRef.current);
+    AsyncStorage.setItem(SWIPE_HINT_KEY, 'true');
+    logEvent('swipe_hint_dismissed', { trigger });
+  }, [showSwipeHint]);
 
   // Stable refs for FlatList viewability (must not change after mount)
   const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
@@ -488,9 +533,9 @@ export default function FeedScreen() {
         handleDismiss();
       }
     }, label: 'dismiss' },
-    q: { handler: () => {
+    q: { handler: async () => {
       const a = getFocusedArticle();
-      if (a) { addToQueue(a.id); handleQueue(); }
+      if (a) { await addToQueue(a.id); handleQueue(); }
     }, label: 'queue' },
     '1': { handler: () => handleLensChange('latest'), label: 'Latest' },
     '2': { handler: () => handleLensChange('best'), label: 'Best' },
@@ -681,6 +726,12 @@ export default function FeedScreen() {
     </View>
   ), [refreshing, spinAnim, handleSeeAllBest, handleTopicPress, handleSeeAllTopics, upNextArticleId, activeLens, handleLensChange]);
 
+  // Track the first article ID for swipe hint overlay
+  const firstArticleId = useMemo(() => {
+    const firstArticleItem = mobileListData.find(item => item.type === 'article');
+    return firstArticleItem && firstArticleItem.type === 'article' ? firstArticleItem.article.id : null;
+  }, [mobileListData]);
+
   const mobileRenderItem = useCallback(({ item }: { item: ListItem }) => {
     switch (item.type) {
       case 'topics-grouped':
@@ -689,7 +740,8 @@ export default function FeedScreen() {
             <TopicsGroupedList topicFilter={item.topicFilter} />
           </View>
         );
-      case 'article':
+      case 'article': {
+        const isFirstArticle = item.article.id === firstArticleId;
         return (
           <View style={styles.listPadding}>
             <ArticleCard
@@ -700,9 +752,21 @@ export default function FeedScreen() {
               showIngestInfo={activeLens === 'latest'}
               isFocused={item.article.id === focusedArticleId}
               lens={activeLens}
+              onSwipeComplete={showSwipeHint ? () => dismissSwipeHint('swipe') : undefined}
             />
+            {isFirstArticle && showSwipeHint && (
+              <Pressable
+                style={styles.swipeHintOverlay}
+                onPress={() => dismissSwipeHint('tap')}
+              >
+                <View style={styles.swipeHintPill}>
+                  <Text style={styles.swipeHintText}>{'← dismiss · queue →'}</Text>
+                </View>
+              </Pressable>
+            )}
           </View>
         );
+      }
       case 'separator':
         return (
           <View style={[styles.readSeparator, styles.listPadding]}>
@@ -725,7 +789,7 @@ export default function FeedScreen() {
       default:
         return null;
     }
-  }, [activeLens, handleDismiss, handleQueue, focusedArticleId]);
+  }, [activeLens, handleDismiss, handleQueue, focusedArticleId, firstArticleId, showSwipeHint, dismissSwipeHint]);
 
   const mobileKeyExtractor = useCallback((item: ListItem, index: number) => {
     if (item.type === 'article' || item.type === 'read') return item.article.id;
@@ -985,5 +1049,29 @@ const styles = StyleSheet.create({
   emptySubtitle: {
     ...type.entrySummary,
     color: colors.textSecondary,
+  },
+
+  // Swipe hint tooltip
+  swipeHintOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 20,
+  },
+  swipeHintPill: {
+    backgroundColor: 'rgba(42,36,32,0.85)',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  swipeHintText: {
+    fontFamily: fonts.ui,
+    fontSize: 14,
+    color: '#ffffff',
+    letterSpacing: 0.3,
   },
 });

@@ -20,8 +20,13 @@ else:
 
 
 def call_llm(prompt: str, *, model: str | None = None, max_tokens: int = 4096,
-             system_instruction: str | None = None) -> str | None:
-    """Generate text with Gemini. Returns response text or None on error."""
+             system_instruction: str | None = None,
+             response_mime_type: str | None = None) -> str | None:
+    """Generate text with Gemini. Returns response text or None on error.
+
+    Set response_mime_type="application/json" to force valid JSON output
+    (constrains token sampling, fixes parsing failures with reasoning models).
+    """
     if not _client:
         print("ERROR: No GEMINI_API_KEY or GEMINI_KEY set", flush=True)
         return None
@@ -34,6 +39,8 @@ def call_llm(prompt: str, *, model: str | None = None, max_tokens: int = 4096,
         )
         if system_instruction:
             config.system_instruction = system_instruction
+        if response_mime_type:
+            config.response_mime_type = response_mime_type
 
         response = _client.models.generate_content(
             model=use_model,
@@ -90,6 +97,96 @@ def call_chat(messages: list[dict], *, model: str | None = None,
         return response.text.strip() if response.text else None
     except Exception as e:
         print(f"Gemini chat error ({use_model}): {e}", flush=True)
+        return None
+
+
+def call_llm_tool(prompt: str, tool_declaration: "genai.types.FunctionDeclaration",
+                  *, model: str | None = None, max_tokens: int = 8192,
+                  system_instruction: str | None = None) -> dict | None:
+    """Call Gemini with forced function calling. Returns the function args dict or None.
+
+    This is more reliable than raw JSON for structured output because the model's
+    response is schema-validated at the API level — no JSON parsing needed.
+    """
+    if not _client:
+        print("ERROR: No GEMINI_API_KEY or GEMINI_KEY set", flush=True)
+        return None
+
+    use_model = model or DEFAULT_MODEL
+
+    try:
+        config = genai.types.GenerateContentConfig(
+            max_output_tokens=max_tokens,
+            tools=[genai.types.Tool(function_declarations=[tool_declaration])],
+            tool_config=genai.types.ToolConfig(
+                function_calling_config=genai.types.FunctionCallingConfig(mode="ANY"),
+            ),
+        )
+        if system_instruction:
+            config.system_instruction = system_instruction
+
+        response = _client.models.generate_content(
+            model=use_model,
+            contents=prompt,
+            config=config,
+        )
+
+        if not response.candidates or not response.candidates[0].content.parts:
+            print(f"Gemini tool error ({use_model}): empty response", flush=True)
+            return None
+
+        for part in response.candidates[0].content.parts:
+            if part.function_call:
+                return dict(part.function_call.args)
+
+        print(f"Gemini tool error ({use_model}): no function call in response", flush=True)
+        return None
+    except Exception as e:
+        print(f"Gemini tool error ({use_model}): {e}", flush=True)
+        return None
+
+
+def call_vision(image_data: bytes, prompt: str, *, model: str | None = None,
+                max_tokens: int = 4096, mime_type: str = "image/jpeg",
+                response_mime_type: str | None = None) -> str | None:
+    """Send an image + text prompt to Gemini Vision. Returns response text or None."""
+    if not _client:
+        print("ERROR: No GEMINI_API_KEY or GEMINI_KEY set", flush=True)
+        return None
+
+    # Vision needs a multimodal-capable model
+    use_model = model or "gemini-2.5-flash"
+
+    try:
+        config = genai.types.GenerateContentConfig(
+            max_output_tokens=max_tokens,
+        )
+        if response_mime_type:
+            config.response_mime_type = response_mime_type
+
+        contents = [
+            genai.types.Content(
+                role="user",
+                parts=[
+                    genai.types.Part(text=prompt),
+                    genai.types.Part(
+                        inline_data=genai.types.Blob(
+                            mime_type=mime_type,
+                            data=image_data,
+                        )
+                    ),
+                ],
+            )
+        ]
+
+        response = _client.models.generate_content(
+            model=use_model,
+            contents=contents,
+            config=config,
+        )
+        return response.text.strip() if response.text else None
+    except Exception as e:
+        print(f"Gemini vision error ({use_model}): {e}", flush=True)
         return None
 
 

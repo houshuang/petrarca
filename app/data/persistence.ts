@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UserSignal, ReadingState, Highlight } from './types';
+import { logEvent } from './logger';
 
 const SIGNALS_KEY = '@petrarca/signals';
 const READING_STATES_KEY = '@petrarca/reading_states';
@@ -11,7 +12,7 @@ export async function loadSignals(): Promise<UserSignal[]> {
     if (!raw) return [];
     return JSON.parse(raw);
   } catch (e) {
-    console.warn('[persistence] failed to load signals:', e);
+    logEvent('warning', { message: '[persistence] failed to load signals', error: String(e) });
     return [];
   }
 }
@@ -20,7 +21,7 @@ export async function saveSignals(signals: UserSignal[]): Promise<void> {
   try {
     await AsyncStorage.setItem(SIGNALS_KEY, JSON.stringify(signals));
   } catch (e) {
-    console.warn('[persistence] failed to save signals:', e);
+    logEvent('warning', { message: '[persistence] failed to save signals', error: String(e) });
   }
 }
 
@@ -43,7 +44,7 @@ export async function loadReadingStates(): Promise<Map<string, ReadingState>> {
     }
     return new Map(entries);
   } catch (e) {
-    console.warn('[persistence] failed to load reading states:', e);
+    logEvent('warning', { message: '[persistence] failed to load reading states', error: String(e) });
     return new Map();
   }
 }
@@ -53,7 +54,7 @@ export async function saveReadingStates(states: Map<string, ReadingState>): Prom
     const entries = Array.from(states.entries());
     await AsyncStorage.setItem(READING_STATES_KEY, JSON.stringify(entries));
   } catch (e) {
-    console.warn('[persistence] failed to save reading states:', e);
+    logEvent('warning', { message: '[persistence] failed to save reading states', error: String(e) });
   }
 }
 
@@ -63,7 +64,7 @@ export async function loadHighlights(): Promise<Highlight[]> {
     if (!raw) return [];
     return JSON.parse(raw);
   } catch (e) {
-    console.warn('[persistence] failed to load highlights:', e);
+    logEvent('warning', { message: '[persistence] failed to load highlights', error: String(e) });
     return [];
   }
 }
@@ -72,6 +73,6 @@ export async function saveHighlights(highlights: Highlight[]): Promise<void> {
   try {
     await AsyncStorage.setItem(HIGHLIGHTS_KEY, JSON.stringify(highlights));
   } catch (e) {
-    console.warn('[persistence] failed to save highlights:', e);
+    logEvent('warning', { message: '[persistence] failed to save highlights', error: String(e) });
   }
 }

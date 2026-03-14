@@ -8,6 +8,8 @@ const CONTENT_BASE = Platform.OS === 'web'
 const MANIFEST_URL = `${CONTENT_BASE}/manifest.json`;
 const ARTICLES_URL = `${CONTENT_BASE}/articles.json`;
 const KNOWLEDGE_INDEX_URL = `${CONTENT_BASE}/knowledge_index.json`;
+const CLUSTERS_URL = `${CONTENT_BASE}/concept_clusters.json`;
+const SYNTHESES_URL = `${CONTENT_BASE}/syntheses.json`;
 
 const CONTENT_DIR_NAME = 'content';
 const WEB_CACHE_PREFIX = '@petrarca/cache_';
@@ -62,6 +64,8 @@ interface Manifest {
   concept_count?: number;
   books_hash?: string;
   knowledge_index_hash?: string;
+  clusters_hash?: string;
+  syntheses_hash?: string;
 }
 
 export async function checkForUpdates(): Promise<boolean> {
@@ -70,12 +74,16 @@ export async function checkForUpdates(): Promise<boolean> {
     if (!resp.ok) return false;
     const remote: Manifest = await resp.json();
 
+    const hasChanged = (local: Manifest) =>
+      remote.articles_hash !== local.articles_hash
+      || remote.knowledge_index_hash !== local.knowledge_index_hash
+      || remote.clusters_hash !== local.clusters_hash
+      || remote.syntheses_hash !== local.syntheses_hash;
+
     if (Platform.OS === 'web') {
       const localRaw = webCacheRead('manifest.json');
       if (localRaw) {
-        const local: Manifest = JSON.parse(localRaw);
-        return remote.articles_hash !== local.articles_hash
-          || remote.knowledge_index_hash !== local.knowledge_index_hash;
+        return hasChanged(JSON.parse(localRaw));
       }
       return true;
     }
@@ -83,9 +91,7 @@ export async function checkForUpdates(): Promise<boolean> {
     const manifestFile = getCachedFile('manifest.json');
     if (manifestFile.exists) {
       const localRaw = await manifestFile.text();
-      const local: Manifest = JSON.parse(localRaw);
-      return remote.articles_hash !== local.articles_hash
-        || remote.knowledge_index_hash !== local.knowledge_index_hash;
+      return hasChanged(JSON.parse(localRaw));
     }
     return true;
   } catch {
@@ -93,14 +99,23 @@ export async function checkForUpdates(): Promise<boolean> {
   }
 }
 
-export async function downloadContent(): Promise<{ articles: Article[]; knowledgeIndex: KnowledgeIndex | null } | null> {
+export interface DownloadedContent {
+  articles: Article[];
+  knowledgeIndex: KnowledgeIndex | null;
+  conceptClusters: any | null;
+  syntheses: any | null;
+}
+
+export async function downloadContent(): Promise<DownloadedContent | null> {
   try {
     if (Platform.OS !== 'web') ensureContentDir();
 
-    const [articlesResp, manifestResp, knowledgeResp] = await Promise.all([
+    const [articlesResp, manifestResp, knowledgeResp, clustersResp, synthesesResp] = await Promise.all([
       fetch(ARTICLES_URL),
       fetch(MANIFEST_URL),
       fetch(KNOWLEDGE_INDEX_URL).catch(() => null),
+      fetch(CLUSTERS_URL).catch(() => null),
+      fetch(SYNTHESES_URL).catch(() => null),
     ]);
 
     if (!articlesResp.ok) return null;
@@ -119,6 +134,30 @@ export async function downloadContent(): Promise<{ articles: Article[]; knowledg
       }
     }
 
+    let conceptClusters: any = null;
+    if (clustersResp && clustersResp.ok) {
+      const clustersText = await clustersResp.text();
+      conceptClusters = JSON.parse(clustersText);
+      if (Platform.OS === 'web') {
+        webCacheWrite('concept_clusters.json', clustersText);
+      } else {
+        getCachedFile('concept_clusters.json').write(clustersText);
+      }
+    }
+
+    let syntheses: any = null;
+    if (synthesesResp && synthesesResp.ok) {
+      const synthesesText = await synthesesResp.text();
+      const synthesesData = JSON.parse(synthesesText);
+      // syntheses.json wraps the array: { meta: {...}, syntheses: [...] }
+      syntheses = Array.isArray(synthesesData) ? synthesesData : synthesesData?.syntheses ?? null;
+      if (Platform.OS === 'web') {
+        webCacheWrite('syntheses.json', synthesesText);
+      } else {
+        getCachedFile('syntheses.json').write(synthesesText);
+      }
+    }
+
     if (Platform.OS === 'web') {
       webCacheWrite('articles.json', JSON.stringify(articles));
       webCacheWrite('manifest.json', manifestText);
@@ -130,23 +169,34 @@ export async function downloadContent(): Promise<{ articles: Article[]; knowledg
     logEvent('content_downloaded', {
       article_count: articles.length,
       knowledge_index: !!knowledgeIndex,
+      clusters: !!conceptClusters,
+      syntheses: !!syntheses,
     });
-    return { articles, knowledgeIndex };
+    return { articles, knowledgeIndex, conceptClusters, syntheses };
   } catch (e) {
     logEvent('content_download_error', { error: String(e) });
     return null;
   }
 }
 
-export async function loadCachedContent(): Promise<{ articles: Article[]; knowledgeIndex: KnowledgeIndex | null } | null> {
+export async function loadCachedContent(): Promise<DownloadedContent | null> {
   try {
     if (Platform.OS === 'web') {
       const articlesRaw = webCacheRead('articles.json');
       if (!articlesRaw) return null;
       const knowledgeRaw = webCacheRead('knowledge_index.json');
+      const clustersRaw = webCacheRead('concept_clusters.json');
+      const synthesesRaw = webCacheRead('syntheses.json');
+      let parsedSyntheses = null;
+      if (synthesesRaw) {
+        const data = JSON.parse(synthesesRaw);
+        parsedSyntheses = Array.isArray(data) ? data : data?.syntheses ?? null;
+      }
       return {
         articles: JSON.parse(articlesRaw),
         knowledgeIndex: knowledgeRaw ? JSON.parse(knowledgeRaw) : null,
+        conceptClusters: clustersRaw ? JSON.parse(clustersRaw) : null,
+        syntheses: parsedSyntheses,
       };
     }
 
@@ -159,7 +209,20 @@ export async function loadCachedContent(): Promise<{ articles: Article[]; knowle
       knowledgeIndex = JSON.parse(await knowledgeFile.text());
     }
 
-    return { articles: JSON.parse(await articlesFile.text()), knowledgeIndex };
+    let conceptClusters: any = null;
+    const clustersFile = getCachedFile('concept_clusters.json');
+    if (clustersFile.exists) {
+      conceptClusters = JSON.parse(await clustersFile.text());
+    }
+
+    let syntheses: any = null;
+    const synthesesFile = getCachedFile('syntheses.json');
+    if (synthesesFile.exists) {
+      const data = JSON.parse(await synthesesFile.text());
+      syntheses = Array.isArray(data) ? data : data?.syntheses ?? null;
+    }
+
+    return { articles: JSON.parse(await articlesFile.text()), knowledgeIndex, conceptClusters, syntheses };
   } catch {
     return null;
   }

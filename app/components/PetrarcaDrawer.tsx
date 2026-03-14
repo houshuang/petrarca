@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, Pressable, Modal, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Modal, Platform, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { logEvent } from '../data/logger';
 import { getReadArticles } from '../data/store';
@@ -41,8 +41,13 @@ export default function PetrarcaDrawer({ visible, onClose }: PetrarcaDrawerProps
     (item: string) => {
       logEvent('drawer_item_tap', { item });
       onClose();
+      if (item === 'triage') {
+        router.push('/' as any);
+      } else if (item === 'voice_note') {
+        router.push('/voice-notes' as any);
+      }
     },
-    [onClose],
+    [onClose, router],
   );
 
   return (
@@ -97,6 +102,16 @@ export default function PetrarcaDrawer({ visible, onClose }: PetrarcaDrawerProps
             title="Queue"
             subtitle={`${queueCount} articles queued`}
             onPress={() => navigate('queue', '/queue')}
+          />
+          <NavItem
+            title="User Guide"
+            subtitle="How everything works"
+            onPress={() => {
+              logEvent('drawer_item_tap', { item: 'user_guide' });
+              onClose();
+              const url = Platform.OS === 'web' ? '/guide/' : 'https://alifstian.duckdns.org:8084/guide/';
+              Linking.openURL(url);
+            }}
           />
         </Pressable>
       </Pressable>

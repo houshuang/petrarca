@@ -1148,6 +1148,69 @@ def clean_markdown(text: str) -> str:
     return text.strip()
 
 
+# ---------------------------------------------------------------------------
+# Content validation — reject junk before LLM processing
+# ---------------------------------------------------------------------------
+
+_JS_ERROR_PATTERNS = [
+    re.compile(r"JavaScript is disabled", re.IGNORECASE),
+    re.compile(r"Please enable JavaScript", re.IGNORECASE),
+    re.compile(r"browser.*does not support JavaScript", re.IGNORECASE),
+    re.compile(r"enable JavaScript.*to run this app", re.IGNORECASE),
+    re.compile(r"requires JavaScript.*enabled", re.IGNORECASE),
+]
+
+_ERROR_PAGE_PATTERNS = [
+    re.compile(r"Access Denied", re.IGNORECASE),
+    re.compile(r"403 Forbidden", re.IGNORECASE),
+    re.compile(r"404 Not Found", re.IGNORECASE),
+    re.compile(r"Page Not Found", re.IGNORECASE),
+    re.compile(r"This page isn.t available", re.IGNORECASE),
+]
+
+_CONTENT_MIN_WORDS = 80
+
+
+def _content_hash(text: str) -> str:
+    """Hash normalized content for duplicate detection."""
+    normalized = " ".join(text.split())
+    return hashlib.md5(normalized.encode()).hexdigest()
+
+
+def _validate_content(text: str, url: str, existing_hashes: set[str]) -> str | None:
+    """Validate cleaned content before LLM processing.
+
+    Returns None if content is valid, or a rejection reason string.
+    """
+    if not text:
+        return "empty content"
+
+    # Check for JavaScript error pages (X.com, etc.)
+    first_500 = text[:500]
+    for pat in _JS_ERROR_PATTERNS:
+        if pat.search(first_500):
+            return f"JavaScript error page: {url}"
+
+    # Check for generic error pages
+    wc = len(text.split())
+    if wc < 200:
+        for pat in _ERROR_PAGE_PATTERNS:
+            if pat.search(first_500):
+                return f"Error page ({wc} words): {url}"
+
+    # Check minimum word count
+    if wc < _CONTENT_MIN_WORDS:
+        return f"Too short ({wc} words, minimum {_CONTENT_MIN_WORDS}): {url}"
+
+    # Check for content-hash duplicate
+    h = _content_hash(text)
+    if h in existing_hashes:
+        return f"Duplicate content (hash {h[:12]}): {url}"
+    existing_hashes.add(h)
+
+    return None
+
+
 def _is_bibliography_section(heading: str, content: str) -> bool:
     """Check if a section is a bibliography/reference-only section with no reading value."""
     bib_headings = {
@@ -1269,6 +1332,13 @@ def build_articles(candidates: list[dict], existing_articles: list[dict],
     """Transform fetched candidates into article-centric format with LLM processing."""
     articles = list(existing_articles)  # start with existing
 
+    # Build content hash set from existing articles for dedup
+    existing_content_hashes: set[str] = set()
+    for a in existing_articles:
+        cm = a.get("content_markdown", "")
+        if cm:
+            existing_content_hashes.add(_content_hash(cm))
+
     for i, cand in enumerate(candidates):
         fetched = cand.get("_fetched_articles", [])
         if not fetched:
@@ -1279,6 +1349,14 @@ def build_articles(candidates: list[dict], existing_articles: list[dict],
 
         # Skip if article ID already exists
         if any(a["id"] == article_id for a in articles):
+            continue
+
+        # Validate content before spending LLM tokens
+        cleaned_text = clean_markdown(best["text"])
+        rejection = _validate_content(cleaned_text, best.get("source_url", ""),
+                                      existing_content_hashes)
+        if rejection:
+            print(f"  [{i+1}/{len(candidates)}] REJECTED: {rejection}", file=sys.stderr)
             continue
 
         source = _build_source_ref(cand, best)
@@ -1333,7 +1411,7 @@ def build_articles(candidates: list[dict], existing_articles: list[dict],
             "source_url": best["source_url"],
             "hostname": best.get("hostname", urlparse(best["source_url"]).netloc),
             "date": best.get("date", "") or cand.get("_date", "")[:10],
-            "content_markdown": clean_markdown(best["text"]),
+            "content_markdown": cleaned_text,
             "sections": section_contents,
             "one_line_summary": llm.get("one_line_summary", ""),
             "full_summary": llm.get("full_summary", ""),

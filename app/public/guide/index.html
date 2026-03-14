@@ -540,16 +540,15 @@
         <ul>
           <li><a href="#overview">Overview</a></li>
           <li><a href="#capture">Getting Content In</a></li>
-          <li><a href="#feed">Feed Tab</a></li>
-          <li><a href="#topics">Topics Tab</a></li>
-          <li><a href="#queue">Queue Tab</a></li>
-          <li><a href="#log">Log Tab</a></li>
+          <li><a href="#navigation">Navigation</a></li>
+          <li><a href="#feed">The Feed</a></li>
+          <li><a href="#screens">Other Screens</a></li>
           <li><a href="#reader">The Reader</a></li>
           <li><a href="#voice-ai">Voice &amp; AI</a></li>
           <li><a href="#entity-research">Entity Research</a></li>
           <li><a href="#knowledge">Knowledge System</a></li>
-          <li><a href="#gestures">Gestures &amp; Signals</a></li>
           <li><a href="#pipeline">The Pipeline</a></li>
+          <li><a href="#platforms">Mobile vs Web</a></li>
           <li><a href="#patterns">Usage Patterns</a></li>
           <li><a href="#non-obvious">Non-Obvious Features</a></li>
           <li><a href="#issues">Known Issues</a></li>
@@ -672,94 +671,118 @@
 
       <hr class="section-rule" />
 
-      <!-- Feed Tab -->
-      <section id="feed">
-        <h2><span class="marker">✦</span> Feed Tab</h2>
+      <!-- Navigation -->
+      <section id="navigation">
+        <h2><span class="marker">✦</span> Navigation</h2>
         <p>
-          The Feed is the main landing screen. Articles are ranked by a composite score drawn from your personal interest model. On launch, the app checks the server for new content by comparing a manifest hash. If the hash changed (pipeline ran, new articles arrived), it downloads the updated content and merges it with your existing state. Your reading progress and signals are stored locally and never lost.
-        </p>
-        <dl class="kv-grid">
-          <dt>Interest Match</dt>
-          <dd>40% &mdash; how well topics align with what you read and engage with</dd>
-          <dt>Freshness</dt>
-          <dd>25% &mdash; newer articles score higher</dd>
-          <dt>Discovery Bonus</dt>
-          <dd>20% &mdash; topics you haven't explored yet get a boost</dd>
-          <dt>Variety</dt>
-          <dd>15% &mdash; avoids topic clustering in consecutive entries</dd>
-        </dl>
-        <p>
-          After you have read several articles, a curiosity scoring layer re-ranks the feed: articles with roughly 70% novel claims score highest, balancing learning with familiarity.
+          The <strong>Feed</strong> is the single home screen. There is no visible tab bar &mdash; all secondary screens are accessed through the <strong>&#10022; drawer</strong>.
         </p>
 
-        <h3><span class="marker">✦</span> Feed Elements</h3>
+        <h3><span class="marker">✦</span> The &#10022; Drawer</h3>
         <p>
-          Each article row shows the <strong>title</strong> and one-line summary, a <strong>best claim preview</strong> (green left border) showing the highest-specificity novelty claim, <strong>novelty hints</strong> (&ldquo;3 new claims&rdquo; in green), <strong>topic tags</strong>, and <strong>metadata</strong> (hostname, author, read time estimate).
+          Tap the &#10022; button in the feed header to open the drawer &mdash; a dark bottom sheet providing access to all secondary screens:
         </p>
-
-        <h3><span class="marker">✦</span> Swipe Gestures</h3>
         <ul>
-          <li><strong>Swipe left</strong> &rarr; Queue (green, adds to your reading queue)</li>
-          <li><strong>Swipe right</strong> &rarr; Dismiss (rubric red, hides from feed)</li>
+          <li><strong>Voice Notes</strong> &mdash; browse recorded voice notes with transcripts and action chips</li>
+          <li><strong>Activity Log</strong> &mdash; timeline of reading, system, and research events</li>
+          <li><strong>Your Landscape</strong> &mdash; topic bubble map, reading stats, cross-thread bridges</li>
+          <li><strong>Reading Trails</strong> &mdash; follow threads of connected ideas through your library</li>
+          <li><strong>Queue</strong> &mdash; your explicit reading list</li>
+          <li><strong>User Guide</strong> &mdash; this guide</li>
+        </ul>
+        <p>
+          The drawer also has two quick actions: <strong>Triage</strong> (card-by-card article decisions) and <strong>Voice Note</strong> (record a thought).
+        </p>
+      </section>
+
+      <hr class="section-rule" />
+
+      <!-- Feed -->
+      <section id="feed">
+        <h2><span class="marker">✦</span> The Feed</h2>
+        <p>
+          The feed is the main landing screen. On launch, the app checks the server for new content by comparing a manifest hash. If it changed, it downloads updates and merges with your existing state. Your reading progress and signals are stored locally and never lost.
+        </p>
+
+        <h3><span class="marker">✦</span> Feed Sections</h3>
+        <ul>
+          <li><strong>Up Next</strong> &mdash; your current in-progress article (with progress bar), or the next queued article, or an algorithmic recommendation</li>
+          <li><strong>Recommended</strong> &mdash; a hero card showing the top-ranked article with novelty claim preview</li>
+          <li><strong>Topic Pills</strong> &mdash; horizontal scrollable topic filters</li>
+          <li><strong>Lens Tabs</strong> &mdash; sticky tab bar for switching between views</li>
         </ul>
 
-        <h3><span class="marker">✦</span> Continue Reading</h3>
-        <p>
-          A <strong>&ldquo;Continue Reading&rdquo; section</strong> appears at the top when you have articles in progress, showing a progress bar based on time spent.
-        </p>
+        <h3><span class="marker">✦</span> Lens Tabs</h3>
+        <p>Four ways to view your articles, switchable via the sticky lens tabs:</p>
+        <dl class="kv-grid">
+          <dt>Latest</dt>
+          <dd>Chronological, newest first, with ingest source and relative time</dd>
+          <dt>Best</dt>
+          <dd>Ranked by blended score: interest model (60%) + knowledge curiosity (40%)</dd>
+          <dt>Topics</dt>
+          <dd>Articles grouped by topic cluster</dd>
+          <dt>Quick</dt>
+          <dd>Short articles (&lt; 5 minutes), sorted by novelty</dd>
+        </dl>
 
-        <h3><span class="marker">✦</span> Topic Filter Chips</h3>
+        <h3><span class="marker">✦</span> Feed Interactions</h3>
+        <p><strong>Mobile:</strong></p>
+        <ul>
+          <li><strong>Swipe right</strong> &rarr; Queue (adds to your reading queue)</li>
+          <li><strong>Swipe left</strong> &rarr; Dismiss (hides from feed)</li>
+          <li><strong>Pull down</strong> &rarr; Refresh (&#10022; ornament rotates)</li>
+          <li><strong>Tap</strong> &rarr; Open in reader</li>
+        </ul>
+        <p><strong>Web (desktop):</strong></p>
+        <ul>
+          <li><strong>Hover</strong> &rarr; Shows &#10003; (archive) and &#10005; (dismiss) action buttons</li>
+          <li><strong>Click</strong> &rarr; Open in reader</li>
+          <li><strong>Keyboard</strong>: <code>j</code>/<code>k</code> navigate, <code>Enter</code> open, <code>1</code>&ndash;<code>4</code> switch lens</li>
+        </ul>
         <p>
-          A horizontal scroll row of the most common topics in your feed. Tap to filter; tap again (or &ldquo;All&rdquo;) to show everything.
-        </p>
-      </section>
-
-      <hr class="section-rule" />
-
-      <!-- Topics Tab -->
-      <section id="topics">
-        <h2><span class="marker">✦</span> Topics Tab</h2>
-        <p>
-          Articles grouped by primary topic. Each topic is a collapsible cluster with article count. Topics show reading state with colored dots (grey = unread, rubric = reading, green = read) and a count breakdown.
-        </p>
-        <p>
-          When the knowledge engine is ready, topics can show <strong>delta reports</strong> &mdash; a summary of what's new across all articles in that topic.
-        </p>
-        <p>
-          Each expanded topic has a <strong>&ldquo;&nearr; Find more on [Topic]&rdquo;</strong> button that triggers topic research via Gemini search grounding, auto-ingesting the top 3 results.
-        </p>
-      </section>
-
-      <hr class="section-rule" />
-
-      <!-- Queue Tab -->
-      <section id="queue">
-        <h2><span class="marker">✦</span> Queue Tab</h2>
-        <p>
-          Your explicit reading list. Articles you've swiped left to queue from the Feed show here in order. Swipe right to remove. The queue is persisted to AsyncStorage and survives app restarts.
+          On web, articles display in a <strong>2-column grid</strong> (max-width 1100px).
         </p>
       </section>
 
       <hr class="section-rule" />
 
-      <!-- Log Tab -->
-      <section id="log">
-        <h2><span class="marker">✦</span> Log Tab</h2>
+      <!-- Other Screens -->
+      <section id="screens">
+        <h2><span class="marker">✦</span> Other Screens</h2>
+
+        <h3><span class="marker">✦</span> Topics</h3>
         <p>
-          A vertical timeline of everything happening in the system. Reading sessions, pipeline runs, research dispatches, interest signals &mdash; all in one chronological view.
-        </p>
-        <p>
-          Each entry shows a <strong>colored dot</strong> per event type, <strong>&#10022; markers</strong> for interest signals, and <strong>day separators</strong> grouping events. Timestamps, event descriptions, and relevant context are displayed for each entry.
+          Articles grouped by primary topic. Each topic is a collapsible cluster with article count and reading state dots (grey = unread, rubric = reading, green = read). When the knowledge engine is ready, topics show <strong>delta reports</strong> &mdash; a summary of what's new. Each expanded topic has a <strong>&ldquo;&nearr; Find more&rdquo;</strong> button for topic research. On web, a master-detail layout shows the topic list on the left and expanded cluster detail on the right.
         </p>
 
-        <h3><span class="marker">✦</span> Filter Toggles</h3>
+        <h3><span class="marker">✦</span> Queue</h3>
         <p>
-          <strong>All / Reading / System / Research</strong> &mdash; tap to narrow the timeline to what you care about.
+          Your explicit reading list. Articles queued from the feed (swipe right) or from the reader (&ldquo;+ Queue&rdquo; buttons) appear here in order. Mobile: swipe to remove. Web: hover to reveal &#10005; remove button. Persisted to local storage.
         </p>
 
-        <h3><span class="marker">✦</span> Paging</h3>
+        <h3><span class="marker">✦</span> Activity Log</h3>
         <p>
-          Loads the last day of events first, then fetches the previous 7 days in the background. Keeps the initial load fast.
+          A vertical timeline of everything happening in the system. Colored dots per event type, &#10022; markers for interest signals, day separators. Filter toggles: All / Reading / System / Research.
+        </p>
+
+        <h3><span class="marker">✦</span> Your Landscape</h3>
+        <p>
+          A birds-eye view of your reading territory: <strong>topic bubble map</strong> (sized by article count, colored by trend), <strong>reading stats</strong> (articles explored, topics touched, hours this week), and <strong>cross-thread bridges</strong> showing where topics overlap.
+        </p>
+
+        <h3><span class="marker">✦</span> Reading Trails</h3>
+        <p>
+          Follow threads of connected ideas: active threads with article sequences, thread detail with read/unread status, and bridges between threads. On web, a master-detail layout shows threads on the left and expanded detail on the right.
+        </p>
+
+        <h3><span class="marker">✦</span> Voice Notes</h3>
+        <p>
+          Date-grouped list of all voice notes with transcripts and extracted action chips (research/tag/remember). Each note shows when it was recorded, what article it was attached to, and the LLM-identified actions.
+        </p>
+
+        <h3><span class="marker">✦</span> Floating Feedback Capture</h3>
+        <p>
+          A floating &#10022; button appears on every screen (bottom-right). Tap to record a voice note (mobile) or type text feedback, with auto-detected context (current screen, article). Long-press to hide for the session.
         </p>
       </section>
 
@@ -971,12 +994,12 @@
             <span>Open an article in the reader. Navigate between tabs, topics, and modes.</span>
           </li>
           <li>
-            <span class="gesture-label">Swipe Left</span>
-            <span>In the Feed, adds an article to your Queue (green).</span>
+            <span class="gesture-label">Swipe Right</span>
+            <span>In the Feed, adds an article to your Queue. In the Queue, removes it.</span>
           </li>
           <li>
-            <span class="gesture-label">Swipe Right</span>
-            <span>In the Feed, dismisses an article (rubric red). In the Queue, removes it.</span>
+            <span class="gesture-label">Swipe Left</span>
+            <span>In the Feed, dismisses an article.</span>
           </li>
           <li>
             <span class="gesture-label">Long Press</span>
@@ -1033,7 +1056,7 @@
           <li><span><strong>Structure</strong> &mdash; Gemini Flash produces: summary, one-line summary, sections, key claims, interest topics.</span></li>
           <li><span><strong>Decompose</strong> &mdash; Article broken into 10&ndash;30 atomic claims, each typed as factual, procedural, evaluative, relational, or temporal.</span></li>
           <li><span><strong>Extract entities</strong> &mdash; 3&ndash;8 entities per article: people, books, concepts, companies, events, places, technologies.</span></li>
-          <li><span><strong>Generate questions</strong> &mdash; 2&ndash;3 follow-up curiosity questions per article for the &#10022; FURTHER INQUIRY section.</span></li>
+          <li><span><strong>Generate questions</strong> &mdash; 4 follow-up curiosity questions per article for the &#10022; FURTHER INQUIRY section. A &ldquo;More questions &#10022;&rdquo; button generates 3 more on demand.</span></li>
           <li><span><strong>Normalize topics</strong> &mdash; Topics checked against canonical registry with LLM-verified merge-or-create. Automatic defragmentation when categories exceed limits.</span></li>
           <li><span><strong>Embed &amp; index</strong> &mdash; All claims receive embeddings. Cosine similarity computed to build knowledge index: paragraph-level novelty mappings, cross-article novelty matrix, per-topic delta reports.</span></li>
           <li><span><strong>Serve</strong> &mdash; Processed articles and knowledge index written to JSON and served via nginx on port 8083.</span></li>
@@ -1052,6 +1075,58 @@
         <p>
           Most articles process well, especially long-form journalism, blog posts, and technical writing. Some articles are low quality (very short tweets, paywalled stubs, donation pages). The <code>clean_markdown</code> step removes navigation, cookie banners, and subscribe cruft. Gemini Flash catches most garbage but not all. Wide net with some noise is the deliberate trade-off.
         </p>
+      </section>
+
+      <hr class="section-rule" />
+
+      <!-- Mobile vs Web -->
+      <section id="platforms">
+        <h2><span class="marker">✦</span> Mobile vs Web</h2>
+        <p>
+          Petrarca runs on both mobile (Expo/React Native) and desktop web. The core experience is the same, but each platform has interactions designed for its input method.
+        </p>
+        <div class="feature-row">
+          <div class="feature-card">
+            <div class="card-title">Mobile Only</div>
+            <p>Swipe gestures (queue/dismiss) &bull; Haptic feedback &bull; Voice recording &bull; Screenshot capture &bull; Pull-to-refresh &#10022; rotation &bull; Sticky overlay lens tabs</p>
+          </div>
+          <div class="feature-card">
+            <div class="card-title">Web (Desktop) Only</div>
+            <p>2-column feed grid &bull; 3-column reader with margin annotations &bull; Hover action buttons &bull; Full keyboard navigation &bull; Master-detail layouts (Topics, Trails) &bull; Browser-native scrolling</p>
+          </div>
+        </div>
+
+        <h3><span class="marker">✦</span> Reader Keyboard Shortcuts (Web)</h3>
+        <dl class="kv-grid">
+          <dt>j / k</dt>
+          <dd>Scroll down / up</dd>
+          <dt>s</dt>
+          <dd>Toggle bookmark</dd>
+          <dt>a</dt>
+          <dd>Open Ask AI</dd>
+          <dt>d</dt>
+          <dd>Mark as done</dd>
+          <dt>e / m</dt>
+          <dd>Cycle reading mode</dd>
+          <dt>?</dt>
+          <dd>Show shortcut help</dd>
+          <dt>Escape</dt>
+          <dd>Back to feed</dd>
+          <dt>gi</dt>
+          <dd>Go to index (feed)</dd>
+        </dl>
+
+        <h3><span class="marker">✦</span> Feed Keyboard Shortcuts (Web)</h3>
+        <dl class="kv-grid">
+          <dt>j / k</dt>
+          <dd>Navigate articles</dd>
+          <dt>Enter</dt>
+          <dd>Open selected article</dd>
+          <dt>1 &ndash; 4</dt>
+          <dd>Switch lens (Latest/Best/Topics/Quick)</dd>
+          <dt>gi</dt>
+          <dd>Go to top / focus Up Next</dd>
+        </dl>
       </section>
 
       <hr class="section-rule" />
@@ -1086,8 +1161,18 @@
         </div>
 
         <div class="capture-method">
+          <div class="method-name">The Desktop Reading Session</div>
+          <p>Open the web app. Use <code>j</code>/<code>k</code> to scan the feed. Press Enter to open an article. The 3-column reader shows metadata in the left margin, article center, and connections in the right margin. Use <code>s</code> to bookmark, <code>a</code> to ask AI, <code>d</code> when done. The next queued article loads automatically.</p>
+        </div>
+
+        <div class="capture-method">
           <div class="method-name">The Research Rabbit Hole</div>
           <p>Long-press an underlined entity &mdash; a marginalia popup shows what the pipeline knows. Tap &ldquo;Research more&rdquo; &mdash; AI chat opens with context pre-filled. Then scroll to &ldquo;&#10022; FURTHER INQUIRY&rdquo; and tap a question. Gemini search finds real articles, auto-ingests them into your pipeline. Next time you open the app, they're waiting.</p>
+        </div>
+
+        <div class="capture-method">
+          <div class="method-name">Exploring Your Knowledge Landscape</div>
+          <p>Open the &#10022; drawer and tap &ldquo;Your Landscape&rdquo; to see a bubble map of all your topics &mdash; sized by article count, colored by activity trend. Check &ldquo;Reading Trails&rdquo; to see which threads of connected ideas you're following and where they bridge across topics.</p>
         </div>
       </section>
 
@@ -1099,10 +1184,10 @@
         <ol>
           <li><strong>Knowledge is automatic.</strong> Just reading an article updates your knowledge ledger. The FSRS decay handles forgetting naturally.</li>
           <li><strong>Paragraph dimming is per-claim.</strong> A paragraph might contain 3 claims &mdash; 2 known, 1 new. The dimming reflects the aggregate, not a binary known/unknown.</li>
-          <li><strong>Swipe left = queue, swipe right = dismiss.</strong> Your thumb naturally reaches right for the common action (dismiss), left for the deliberate one (save).</li>
+          <li><strong>Swipe right = queue, swipe left = dismiss.</strong> Your thumb naturally reaches right for the deliberate action (save to queue), left for the common one (dismiss).</li>
           <li><strong>Topic chips after reading shape your whole feed.</strong> The +/&minus; signals on the post-read interest card have the highest weight (2.0). A single &ldquo;+&rdquo; meaningfully boosts related articles.</li>
           <li><strong>The knowledge engine needs a knowledge index.</strong> Paragraph dimming and novelty scores only work after the pipeline generates a knowledge index with embeddings.</li>
-          <li><strong>Feed ranking is multi-factor.</strong> Interest match (40%) + freshness (25%) + discovery bonus (20%) + variety (15%), then re-ranked by curiosity score.</li>
+          <li><strong>Feed ranking is multi-factor.</strong> Interest model (60%) + curiosity score (40%) for the blended ranking. The interest model itself weighs interest match, freshness, discovery bonus, and variety.</li>
           <li><strong>The web clipper captures selected text.</strong> Select a passage before clicking the clipper &mdash; that selection is saved as a highlight.</li>
           <li><strong>Scroll position is saved.</strong> Every 2 seconds while reading, your position is saved. Leave and come back to exactly where you were.</li>
           <li><strong>Continue Reading cards have progress bars.</strong> Progress is based on time spent relative to estimated read time, capped at 95%.</li>
@@ -1112,6 +1197,8 @@
           <li><strong>Cross-article connections use claim similarity.</strong> The &ldquo;Also in&rdquo; annotations and &ldquo;&#10022; CONNECTED READING&rdquo; section are based on cosine similarity &ge;0.78 between claims, not just shared topics.</li>
           <li><strong>The Activity Log shows everything.</strong> Pipeline runs, reading sessions, interest signals, research dispatches &mdash; all in a chronological timeline with filters.</li>
           <li><strong>Related articles find connections three ways.</strong> Same topic, shared concepts (via embedding similarity), and same source. Three different lenses on &ldquo;what to read next.&rdquo;</li>
+          <li><strong>Queue auto-advance.</strong> After completing an article, if there are more in your queue, the reader auto-navigates to the next one with a toast notification. Press &ldquo;&larr; Feed&rdquo; to escape.</li>
+          <li><strong>The &#10022; drawer is your navigation hub.</strong> All secondary screens (Topics, Queue, Log, Landscape, Trails, Voice Notes, this Guide) are accessed through the drawer, not a tab bar.</li>
         </ol>
       </section>
 
@@ -1166,6 +1253,8 @@
         <dl class="kv-grid">
           <dt>Web App</dt>
           <dd><code>alifstian.duckdns.org:8084</code></dd>
+          <dt>User Guide</dt>
+          <dd><code>alifstian.duckdns.org:8084/guide/</code></dd>
           <dt>Expo (native)</dt>
           <dd><code>exp://alifstian.duckdns.org:8082</code></dd>
           <dt>Content Server</dt>
@@ -1178,30 +1267,38 @@
           <dd><code>/etc/cron.d/petrarca-refresh</code> (every 4 hours)</dd>
           <dt>Server Data</dt>
           <dd><code>/opt/petrarca/data/</code></dd>
-          <dt>Voice Notes</dt>
-          <dd>Feed header &ldquo;Notes&rdquo; link, or per-article in article info</dd>
         </dl>
 
-        <h3><span class="marker">✦</span> Keyboard Shortcuts</h3>
+        <h3><span class="marker">✦</span> Chrome Clipper Shortcuts</h3>
         <dl class="kv-grid">
           <dt>Cmd+Shift+S</dt>
-          <dd>Open web clipper (Chrome)</dd>
+          <dd>Open web clipper</dd>
           <dt>Enter</dt>
           <dd>Save in clipper popup</dd>
           <dt>Escape</dt>
           <dd>Close clipper popup</dd>
         </dl>
 
-        <h3><span class="marker">✦</span> The Four Tabs</h3>
+        <h3><span class="marker">✦</span> Navigation</h3>
         <dl class="kv-grid">
           <dt>Feed</dt>
-          <dd>Ranked article list, swipe gestures, topic filters, continue reading</dd>
+          <dd>Home screen (always)</dd>
+          <dt>Reader</dt>
+          <dd>Tap any article</dd>
           <dt>Topics</dt>
-          <dd>Articles grouped by topic, delta reports, topic research</dd>
+          <dd>&#10022; drawer &rarr; Topics</dd>
           <dt>Queue</dt>
-          <dd>Your explicit reading list, ordered</dd>
-          <dt>Log</dt>
-          <dd>Activity timeline &mdash; reading, system, research events with filters</dd>
+          <dd>&#10022; drawer &rarr; Queue</dd>
+          <dt>Activity Log</dt>
+          <dd>&#10022; drawer &rarr; Activity Log</dd>
+          <dt>Landscape</dt>
+          <dd>&#10022; drawer &rarr; Your Landscape</dd>
+          <dt>Trails</dt>
+          <dd>&#10022; drawer &rarr; Reading Trails</dd>
+          <dt>Voice Notes</dt>
+          <dd>&#10022; drawer &rarr; Voice Notes</dd>
+          <dt>User Guide</dt>
+          <dd>&#10022; drawer &rarr; User Guide</dd>
         </dl>
       </section>
 

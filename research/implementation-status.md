@@ -1,8 +1,8 @@
 # Knowledge System Implementation Status
 
-**Date**: March 10, 2026 (last updated — session 15b: feedback capture with screenshots + server upload)
-**Status**: Full corpus deployed with knowledge system, reader interactions, voice notes, AI chat, research agents, entity deep-dive, follow-up research, voice note browser + action extraction, activity log tab, scroll-aware encounter tracking, curated novelty card, hierarchical topic feedback, cross-article connections, LLM-verified topic normalization, automatic defragmentation, **unified single-screen feed with lens tabs**, **dynamic reranking**, **✦ drawer navigation**, **clipper auto-save countdown**, **tweet URL ingestion via twikit**, **auto-sync Twitter cookies**, **clipper immediate save via background worker**, **reader disregard + report bad scrape**, **feed ingest metadata**, **floating feedback capture with screenshots + server upload**, **expanded follow-up questions**, **queue auto-advance**, **hybrid topic signals**, **desktop web: 2-column feed grid**, **desktop web: 3-column reader with margin annotations**, **keyboard navigation with multi-key sequences**, **hover actions (archive + dismiss)**, **XML-first article extraction (paragraph merging fix)**, **mobile feed overlap fix**, **reader arrow-key scroll fix**, **LLM judge for ambiguous claims (G2)**
-**Latest commits**: Session 15b — Feedback capture upgraded: screenshot via react-native-view-shot (captureScreen before modal opens), server upload via POST /feedback (multipart FormData), web data-URI→Blob fix, context propagation (feedback-context.ts), Soniox audio transcription in background thread. Also: LLM judge for ambiguous claims (G2).
+**Date**: March 12, 2026 (last updated — session 19: "Restrained Folio" synthesis reader redesign + prompt overhaul + feed filtering)
+**Status**: Full corpus deployed with knowledge system, reader interactions, voice notes, AI chat, research agents, entity deep-dive, follow-up research, voice note browser + action extraction, activity log tab, scroll-aware encounter tracking, curated novelty card, hierarchical topic feedback, cross-article connections, LLM-verified topic normalization, automatic defragmentation, **unified single-screen feed with lens tabs**, **dynamic reranking**, **✦ drawer navigation**, **clipper auto-save countdown**, **tweet URL ingestion via twikit**, **auto-sync Twitter cookies**, **clipper immediate save via background worker**, **reader disregard + report bad scrape**, **feed ingest metadata**, **floating feedback capture with screenshots + server upload**, **expanded follow-up questions**, **queue auto-advance**, **hybrid topic signals**, **desktop web: 2-column feed grid**, **desktop web: 3-column reader with margin annotations**, **keyboard navigation with multi-key sequences**, **hover actions (archive + dismiss)**, **XML-first article extraction (paragraph merging fix)**, **mobile feed overlap fix**, **reader arrow-key scroll fix**, **LLM judge for ambiguous claims (G2)**, **web layouts for all secondary screens (Topics/Queue/Trails/Landscape/Voice Notes)**, **DoubleRule on all screens**, **drawer quick actions fixed**, **reader date format fix**, **user guide updated + linked from drawer**, **keyboard shortcuts on Queue + Topics screens**, **swipe hint tooltip (mobile)**, **"All topics" pill in feed**, **AnimatedHighlightWrap (reader paragraph highlights)**, **knowledge bar staggered animation**, **DoubleRule in reader**, **reader error boundary**, **cross-article synthesis pipeline (graph clustering → LLM synthesis → claim-level FSRS propagation)**, **26 syntheses with unique labels**, **synthesis reader 3-column web layout + keyboard shortcuts**, **junk article cleanup + pipeline guards**, **Gemini tool calling for structured output**, **"Restrained Folio" synthesis reader redesign (2-col CSS grid, inline chat, article popovers)**, **synthesis prompt overhaul (humanist scholar voice, article reference links, progressive disclosure)**, **feed filtering by synthesis coverage (≥80% excluded, ≥50% demoted)**
+**Latest commits**: Session 19 — "Restrained Folio" synthesis reader redesign: complete rewrite of synthesis-reader.tsx (2-column CSS grid with 190px sidebar, Cormorant Garamond + Crimson Pro two-weight typography, local folio color palette, IntersectionObserver TOC tracking, TensionBlock/ExcerptBlock/DetailSection sub-components). New synthesis prompt in generate_syntheses.py (humanist scholar voice, Article Reference Key for `[Title](article:ID)` links, descriptive headings, inline tension blockquotes, progressive disclosure markers, structured tension objects). New components: SynthesisChat.tsx (inline chat modal), ArticlePopover.tsx (web hover popovers for article links). Feed filtering wired: ≥80% synthesis coverage → excluded from feed, ≥50% → score demotion.
 
 ---
 
@@ -17,15 +17,19 @@ The system splits into **server-computed INDEX** (user-independent) and **client
 ```
 Server Pipeline (cron every 4 hours):
   Twitter + Readwise → build_articles.py --claims → atomic claims + entities + follow-up questions
+  → cleanup_articles.py → remove junk/duplicates
   → build_claim_embeddings.py → Gemini embedding-001 (batch 100)
   → build_knowledge_index.py → knowledge_index.json (parallel delta reports, 10 workers)
-  → All LLM calls via gemini_llm.py (google.genai SDK, Gemini 3.1 Flash-Lite)
+  → build_concept_clusters.py → graph clustering + two-pass contrastive labeling
+  → generate_syntheses.py → structured synthesis per cluster (Gemini 3 Flash + tool calling)
+  → All LLM calls via gemini_llm.py (google.genai SDK, call_llm/call_llm_tool)
   → All calls tracked by llm_audit.py → data/llm_audit.jsonl
 
 App (Expo SDK 54):
-  content-sync.ts downloads knowledge_index.json
+  content-sync.ts downloads knowledge_index.json + concept_clusters.json + syntheses.json
   → knowledge-engine.ts classifies claims against user's ledger
   → paragraph dimming, curiosity scoring, delta reports
+  → synthesis-reader.tsx: read synthesis → markClaimsEncountered() → all source claims get FSRS entries
   → AsyncStorage persists knowledge ledger (@petrarca/knowledge_ledger)
   → All interactions logged via logger.ts → local + server (port 8091)
 ```
@@ -50,7 +54,7 @@ App (Expo SDK 54):
 | `app/lib/chat-api.ts` | API client for research server: `askAI()`, `uploadVoiceNote()`, `spawnTopicResearch()`, `fetchNotes()`, `ingestUrl()`, `getIngestStatus()`, `reportBadScrape()`. |
 | `app/public/guide/index.html` | HTML user guide (Annotated Folio styled). Covers all 5 capture flows, 3 tabs, reader modes, knowledge system, usage patterns. Linked from Feed header. |
 | `research/user-guide.md` | Markdown source for user guide. Describes all implemented features accurately. |
-| `scripts/gemini_llm.py` | Shared Gemini LLM wrapper (google.genai SDK). Three functions: `call_llm()`, `call_chat()`, `call_with_search()`. Default model: `gemini-3.1-flash-lite-preview` (via `PETRARCA_LLM_MODEL` env var). Replaces all litellm usage. |
+| `scripts/gemini_llm.py` | Shared Gemini LLM wrapper (google.genai SDK). Functions: `call_llm()`, `call_chat()`, `call_with_search()`, `call_llm_tool()` (forced function calling). Default model: `gemini-3.1-flash-lite-preview` (via `PETRARCA_LLM_MODEL` env var). |
 | `app/app/voice-notes.tsx` | Voice notes browser screen. Global notes view with date-grouped sections, ✦ markers, Cormorant Garamond header. Accessible from Feed header "Notes" link. |
 | `app/components/VoiceNoteCard.tsx` | Reusable voice note card component. Shows timestamp, duration badge, transcript (3-line max), article link, action chips with type-colored borders. |
 | `app/lib/voice-notes-api.ts` | Voice notes API module. `fetchAllNotes()`, `fetchArticleNotes()`, `executeNoteAction()`. TypeScript interfaces for `VoiceNote` and `NoteAction`. |
@@ -60,6 +64,48 @@ App (Expo SDK 54):
 | File | Description |
 |------|-------------|
 | `app/app/(tabs)/log.tsx` | Activity Log tab — vertical timeline with reading/system/research/interest nodes. Filter toggles (All/Reading/System/Research). Paged fetch: loads last day first, then 7 days in background. Colored dots per event type, ✦ markers for interest signals, day separators. |
+
+#### New Files (Session 17: Cross-Article Synthesis Pipeline)
+
+| File | Description |
+|------|-------------|
+| `scripts/build_concept_clusters.py` | Graph-based article clustering from novelty matrix. Connected components → spectral bisection for large clusters → two-pass LLM labeling (specificity prompt + contrastive refinement for collisions). Outputs `data/concept_clusters.json`. |
+| `scripts/generate_syntheses.py` | Complete rewrite. Structured synthesis per cluster via Gemini 3 Flash + tool calling (`call_llm_tool()`). Narrative + shared themes + unique contributions + tensions + follow-up questions + claim coverage map. Claim coverage expansion: article_coverage ≥ 0.6 → include all claims, then similarity cascade ≥ 0.78. Incremental (skips unchanged). |
+| `scripts/cleanup_articles.py` | Detects/removes X.com JS error pages, duplicates, short junk. Conservative defaults (--report is dry-run). |
+| `scripts/compare_synthesis_models.py` | Model comparison framework for synthesis generation. Tests multiple Gemini models across cluster subsets. |
+| `research/synthesis-pipeline-design.md` | Full design doc: investigation findings, architecture, model comparison, prompt iteration, decisions. |
+
+#### New Files (Session 19: "Restrained Folio" Synthesis Reader Redesign)
+
+| File | Description |
+|------|-------------|
+| `app/components/SynthesisChat.tsx` | Inline chat modal for synthesis discussions. Context builder from synthesis data (title, narrative, tensions, article titles). Auto-sends initial question. Restrained Folio styling (Crimson Pro body, folio color palette). 307 lines. |
+| `app/components/ArticlePopover.tsx` | Web-only hover popover for `article:ID` reference links. Smart edge-flipping positioning (flips left/right based on viewport edge). Shows article title, summary, topics, coverage bar. Quick actions: Queue / Seen / Disregard. 194 lines. |
+
+#### Modified Files (Session 19: "Restrained Folio" Synthesis Reader Redesign)
+
+| File | Changes |
+|------|---------|
+| `scripts/generate_syntheses.py` | Major prompt overhaul: "humanist scholar" system instruction (was "expert research synthesizer"). Article Reference Key section in prompt — ID→title lookup so LLM writes proper `[Title](article:ID)` links. Descriptive `##` headings instead of prescribed structure. Inline `> ⚡ **Tension label**` blockquotes for tensions. Inline `*Open question: ...*` research prompts. `<!-- detail -->` / `<!-- /detail -->` progressive disclosure markers. Structured tensions changed from `string[]` to `Array<{label, description, article_ids}>`. Tool schema updated. max_tokens 8192→12288. Tension normalization in post-processing (handles both old string and new object formats). |
+| `app/app/synthesis-reader.tsx` | Complete "Restrained Folio" rewrite. 2-column CSS grid (1fr + 190px sidebar) on web, single column on mobile. Two visual weights only: Cormorant Garamond 30px title + Crimson Pro everything else. Local folio color palette (`fc` constant) replacing design token colors. New sub-components: SynthesisTopBar, enhanced MarkdownContent (renders article links, tension blocks, excerpt blocks, detail sections), TensionBlock (amber border), ExcerptBlock (green border), DetailSection (collapsible), SynthesisSidebar with IntersectionObserver TOC tracking. No uppercase letterspaced labels. |
+| `app/data/store.ts` | Feed filtering wired: `getArticleSynthesisCoverage()` integrated into `getRankedFeedArticles()` and `getArticlesByLens()`. Articles with ≥80% synthesis coverage excluded from feed. Articles with ≥50% coverage get score demotion `(1 - coverage * 0.5)`. |
+| `app/data/types.ts` | `tensions` type broadened from `string[]` to `Array<string \| { label, description, article_ids? }>` for backward compatibility with old string format. |
+
+#### Modified Files (Session 17: Synthesis Pipeline + Reader)
+
+| File | Changes |
+|------|---------|
+| `scripts/build_articles.py` | Added `_validate_content()` — rejects junk (empty, JS error pages, too short) before LLM processing. |
+| `scripts/gemini_llm.py` | Added `call_llm_tool()` for forced function calling with FunctionDeclaration (`mode='ANY'`). Structured output without JSON parsing. |
+| `scripts/content-refresh.sh` | Added steps 3b2 (cleanup), 4b (clustering), 4c (synthesis generation), 4d (manifest hash update for clusters + syntheses). |
+| `app/data/types.ts` | Expanded `TopicSynthesis` with cluster_id, claims_covered, article_coverage, follow_up_questions, tensions. Added `SynthesisFollowUpQuestion`. |
+| `app/data/content-sync.ts` | Downloads concept_clusters.json + syntheses.json alongside articles. |
+| `app/data/store.ts` | Module-level syntheses/clusters, getters (getSynthesisForCluster, getSynthesesForArticle, getArticleSynthesisCoverage), completedSyntheses set with AsyncStorage. |
+| `app/data/knowledge-engine.ts` | Added `markClaimsEncountered()` for bulk claim encounter tracking from synthesis reader. |
+| `app/app/synthesis-reader.tsx` | Complete rewrite: 3-column CSS Grid web layout (220px/1fr/240px matching article reader). Left margin: metadata, claim coverage bar, actions, keyboard shortcuts. Right margin: source articles with per-article coverage bars, follow-up research questions. Keyboard: Escape/d/gi. Browser-native scroll fix. Mobile: single-column with coverage bars. |
+| `app/app/_layout.tsx` | Added synthesis-reader route. |
+| `app/app/(tabs)/topics.tsx` | Added SynthesisCard component linking to synthesis-reader. |
+| `app/app/(tabs)/index.tsx` | Added synthesis coverage indicator in feed article cards. |
 
 #### New Files (Session 9: Unified Feed Redesign)
 
@@ -230,10 +276,12 @@ App (Expo SDK 54):
 
 | File | Size | Contents |
 |------|------|----------|
-| `data/articles.json` | ~7 MB | 186 articles with `atomic_claims[]`, `entities[]`, `follow_up_questions[]` |
-| `data/claim_embeddings.npz` | 33 MB | 2,954 Gemini embedding-001 vectors |
-| `data/knowledge_index.json` | 4.3 MB | 2,954 claims, cross-article similarity pairs (≥0.68), 126 article paragraph maps, article novelty matrix (3,488 pair entries), 300 LLM delta reports |
-| `data/llm_audit.jsonl` | ~77 KB | Per-call LLM usage records (tokens, cost, model, purpose) |
+| `data/articles.json` | ~7 MB | 237 articles with `atomic_claims[]`, `entities[]`, `follow_up_questions[]` (36 junk removed) |
+| `data/claim_embeddings.npz` | ~50 MB | 4,831 Gemini embedding-001 vectors |
+| `data/knowledge_index.json` | ~8 MB | 4,831 claims, cross-article similarity pairs (≥0.68), article paragraph maps, article novelty matrix, LLM delta reports |
+| `data/concept_clusters.json` | 214 KB | 29 clusters from graph-based article clustering, unique contrastive labels |
+| `data/syntheses.json` | 350 KB | 26 structured syntheses (narrative + themes + tensions + follow-up questions + claim coverage maps) |
+| `data/llm_audit.jsonl` | ~100 KB | Per-call LLM usage records (tokens, cost, model, purpose) |
 
 ### Algorithm Parameters (validated by experiments)
 
@@ -260,7 +308,7 @@ App (Expo SDK 54):
 | Component | Status | Notes |
 |-----------|--------|-------|
 | nginx content server (:8083) | ✅ Working | Serves articles.json, knowledge_index.json, manifest.json |
-| Static web app (:8084) | ✅ Deployed | Session 11b: feedback capture, more questions, queue auto-advance, hybrid topic signals |
+| Static web app (:8084) | ✅ Deployed | Session 19: "Restrained Folio" synthesis reader, inline chat, article popovers, feed filtering |
 | Expo native (:8082) | ✅ Running | systemd `petrarca-expo` |
 | Log server (:8091) | ✅ Running | systemd `petrarca-log`, collects app interaction logs |
 | articles.json | ✅ 182 articles | Full corpus with atomic claims, entities, follow-up questions |
@@ -302,6 +350,9 @@ App (Expo SDK 54):
 8. **Reading mode toggle shows even when no dimming** — Fixed: now checks `Array.from(blockDimming.values()).some(d => d.opacity < 1)`.
 9. **Feed sort unstable with empty ledger** — Fixed: added 0.05 threshold + rank tiebreaker so interest model order is preserved until curiosity scores meaningfully diverge.
 10. **Paragraph-to-block mapping is heuristic** — `buildParagraphToBlockMap()` uses text prefix matching (first 50 chars). May mismap in articles with repeated paragraph openings.
+12. ~~**Synthesis markdown has raw hex claim IDs**~~ — **RESOLVED** (session 19): Synthesis prompt redesigned with Article Reference Key section. LLM now writes proper `[Title](article:ID)` links instead of raw hex claim IDs like `[3d282718e065]`.
+13. ~~**Feed does not filter synthesis-covered articles**~~ — **RESOLVED** (session 19): `getArticleSynthesisCoverage()` wired into `getRankedFeedArticles()` and `getArticlesByLens()`. Articles with ≥80% coverage excluded, ≥50% demoted.
+14. ~~**Synthesis reader missing claim classification / paragraph dimming**~~ — Partially addressed (session 19): Synthesis reader completely rewritten with "Restrained Folio" design including inline chat, article popovers, and progressive disclosure. Claim classification and paragraph dimming in synthesis context remain future work.
 
 ---
 
@@ -386,6 +437,13 @@ App (Expo SDK 54):
 35. ~~**Ingest auth fix**~~ — DONE: Reader-originated ingests (`source: reader_link`) skip auth token check on `/ingest` endpoint. Previously all ingests required `X-Petrarca-Token`, causing 401 failures from the app.
 36. ~~**Entity tap (not just long-press)**~~ — DONE: Entity mentions respond to `onPress` instead of `onLongPress` for better discoverability.
 
+### Completed (Session 19: "Restrained Folio" Synthesis Reader Redesign)
+51. ~~**Synthesis prompt overhaul**~~ — DONE: `generate_syntheses.py` rewritten with "humanist scholar" system instruction. Article Reference Key section provides ID→title lookup so LLM writes proper `[Title](article:ID)` links. Descriptive `##` headings instead of prescribed structure. Inline tension blockquotes (`> ⚡ **label**`), inline research prompts (`*Open question: ...*`), `<!-- detail -->` progressive disclosure markers. Structured tensions changed from `string[]` to `Array<{label, description, article_ids}>`. max_tokens 8192→12288. Tested on Pirandello + AI orchestration clusters.
+52. ~~**"Restrained Folio" synthesis reader**~~ — DONE: Complete rewrite of `synthesis-reader.tsx`. 2-column CSS grid (1fr + 190px sidebar) on web, single column on mobile. Two visual weights: Cormorant Garamond 30px title + Crimson Pro everything else. Local folio color palette. Sub-components: TensionBlock (amber border), ExcerptBlock (green border), DetailSection (collapsible), SynthesisSidebar with IntersectionObserver TOC tracking. No uppercase letterspaced labels.
+53. ~~**SynthesisChat component**~~ — DONE: `app/components/SynthesisChat.tsx` (307 lines). Inline chat modal for synthesis discussions. Context builder from synthesis data. Auto-sends initial question. Restrained Folio styling.
+54. ~~**ArticlePopover component**~~ — DONE: `app/components/ArticlePopover.tsx` (194 lines). Web-only hover popover for article reference links. Smart edge-flipping positioning. Coverage bar, quick actions (Queue/Seen/Disregard).
+55. ~~**Feed synthesis coverage filtering**~~ — DONE: `getArticleSynthesisCoverage()` wired into `getRankedFeedArticles()` and `getArticlesByLens()`. Articles with ≥80% synthesis coverage excluded from feed. Articles with ≥50% coverage get score demotion `(1 - coverage * 0.5)`.
+
 ### Completed (Session 11b)
 47. ~~**Floating feedback capture**~~ — DONE: `FeedbackCapture.tsx` — floating ✦ button on every screen. Tap opens voice/text overlay with auto-detected context (screen, article ID). Long-press hides (persisted to AsyncStorage). Saves locally to `@petrarca/feedback_items`. TODO: screenshot capture, server upload.
 48. ~~**Expanded follow-up questions**~~ — DONE: Pipeline now generates 4 questions per article (was 2-3) with broader framing. "More questions" button in FURTHER INQUIRY section generates 3 more via `POST /generate-questions` (avoids duplicates). Pulsing ✦ animation while loading.
@@ -468,7 +526,7 @@ App (Expo SDK 54):
 
 | Script | Purpose |
 |--------|---------|
-| `scripts/gemini_llm.py` | Shared Gemini LLM wrapper (google.genai SDK). `call_llm()`, `call_chat()`, `call_with_search()`. Model: `gemini-3.1-flash-lite-preview` |
+| `scripts/gemini_llm.py` | Shared Gemini LLM wrapper (google.genai SDK). `call_llm()`, `call_chat()`, `call_with_search()`, `call_llm_tool()`. Model: `gemini-3.1-flash-lite-preview` |
 | `scripts/build_articles.py --claims` | Extract atomic claims, entities, and follow-up questions (Gemini 3.1 Flash-Lite, 10 parallel workers) |
 | `scripts/build_articles.py --claims-only` | Extract claims/entities/questions for articles that don't have them yet |
 | `scripts/build_articles.py --enrich` | Backfill entities + follow-up questions for existing articles (10 parallel workers) |

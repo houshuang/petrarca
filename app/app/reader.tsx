@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, Component } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Linking,
   NativeSyntheticEvent, NativeScrollEvent,
@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import AskAI from '../components/AskAI';
 import VoiceFeedback from '../components/VoiceFeedback';
+import DoubleRule from '../components/DoubleRule';
 import { spawnTopicResearch, ingestUrl, getIngestStatus, reportBadScrape, generateMoreQuestions } from '../lib/chat-api';
 import { addToQueue, addToQueueFront } from '../data/queue';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -32,6 +33,84 @@ import {
 } from '../data/knowledge-engine';
 
 const SCROLL_POSITION_SAVE_INTERVAL_MS = 2000;
+
+// --- Error Boundary ---
+
+interface ReaderErrorBoundaryProps {
+  articleId: string;
+  onGoBack: () => void;
+  children: React.ReactNode;
+}
+
+interface ReaderErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ReaderErrorBoundary extends Component<ReaderErrorBoundaryProps, ReaderErrorBoundaryState> {
+  constructor(props: ReaderErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ReaderErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error) {
+    logEvent('reader_error', { error: error.message, articleId: this.props.articleId });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={errorBoundaryStyles.container}>
+          <Text style={errorBoundaryStyles.title}>Something went wrong</Text>
+          <Text style={errorBoundaryStyles.message}>{this.state.error?.message}</Text>
+          <Pressable style={errorBoundaryStyles.button} onPress={this.props.onGoBack}>
+            <Text style={errorBoundaryStyles.buttonText}>Go back</Text>
+          </Pressable>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+const errorBoundaryStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.parchment,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  title: {
+    fontFamily: fonts.ui,
+    fontSize: 18,
+    color: colors.ink,
+    marginBottom: 8,
+  },
+  message: {
+    fontFamily: fonts.ui,
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  button: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: colors.rule,
+    borderRadius: 4,
+  },
+  buttonText: {
+    fontFamily: fonts.ui,
+    fontSize: 14,
+    color: colors.rubric,
+  },
+});
 
 // --- Types ---
 
@@ -124,6 +203,106 @@ function AnimatedClaimItem({ text, index }: { text: string; index: number }) {
       <View style={styles.noveltyDot} />
       <Text style={styles.noveltyText}>{text}</Text>
     </Animated.View>
+  );
+}
+
+// --- Animated Highlight Wrap (long-press amber border fade-in) ---
+
+function AnimatedHighlightWrap({ isHighlighted, children }: {
+  isHighlighted: boolean;
+  children: React.ReactNode;
+}) {
+  const anim = useRef(new Animated.Value(isHighlighted ? 1 : 0)).current;
+  const prevHighlighted = useRef(isHighlighted);
+
+  useEffect(() => {
+    if (isHighlighted !== prevHighlighted.current) {
+      prevHighlighted.current = isHighlighted;
+      Animated.timing(anim, {
+        toValue: isHighlighted ? 1 : 0,
+        duration: 200,
+        useNativeDriver: false,
+      }).start();
+    }
+  }, [isHighlighted]);
+
+  return (
+    <View style={{ position: 'relative' }}>
+      <Animated.View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          top: 0,
+          bottom: 0,
+          left: 0,
+          width: 3,
+          backgroundColor: '#c9a84c',
+          opacity: anim,
+        }}
+      />
+      <Animated.View style={{
+        paddingLeft: anim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, 10],
+        }),
+        backgroundColor: anim.interpolate({
+          inputRange: [0, 1],
+          outputRange: ['rgba(201, 168, 76, 0)', 'rgba(201, 168, 76, 0.15)'],
+        }),
+      }}>
+        {children}
+      </Animated.View>
+    </View>
+  );
+}
+
+// --- Animated Novelty Bar (knowledge bars with staggered fill) ---
+
+function AnimatedNoveltyBar({ novelty, articleId }: { novelty: ArticleNovelty; articleId: string }) {
+  const segments = [
+    { value: novelty.new_claims, style: marginStyles.noveltyBarNew },
+    { value: novelty.extends_claims || 0.01, style: marginStyles.noveltyBarExt },
+    { value: novelty.known_claims || 0.01, style: marginStyles.noveltyBarKnown },
+  ];
+  const anims = useRef(segments.map(() => new Animated.Value(0))).current;
+  const logged = useRef(false);
+
+  useEffect(() => {
+    const timers = segments.map((_, i) =>
+      setTimeout(() => {
+        Animated.timing(anims[i], {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: false,
+        }).start(() => {
+          if (i === segments.length - 1 && !logged.current) {
+            logged.current = true;
+            logEvent('knowledge_bar_animated', { articleId });
+          }
+        });
+      }, i * 60)
+    );
+    return () => timers.forEach(clearTimeout);
+  }, []);
+
+  const total = segments.reduce((sum, s) => sum + s.value, 0);
+
+  return (
+    <View style={marginStyles.noveltyBar}>
+      {segments.map((seg, i) => {
+        const fraction = total > 0 ? seg.value / total : 0;
+        const animatedWidth = anims[i].interpolate({
+          inputRange: [0, 1],
+          outputRange: ['0%', `${(fraction * 100).toFixed(1)}%`],
+        });
+        return (
+          <Animated.View
+            key={i}
+            style={[seg.style, { flex: undefined, width: animatedWidth }] as any}
+          />
+        );
+      })}
+    </View>
   );
 }
 
@@ -790,6 +969,14 @@ function formatTimeAgo(timestamp: number): string {
   return `${Math.floor(days / 30)} months ago`;
 }
 
+function formatDate(d: string): string {
+  try {
+    const date = new Date(d);
+    if (isNaN(date.getTime())) return d;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch { return d; }
+}
+
 // --- Inline Cross-Article Annotation ---
 
 function InlineCrossArticleAnnotation({
@@ -942,52 +1129,57 @@ function MarkdownText({ content, highlightedBlocks, onBlockLongPress, blockDimmi
 
       case 'ul':
         return (
-          <Pressable
-            key={i}
-            style={[styles.markdownList, isHighlighted && styles.paragraphHighlight, opacityStyle, novelMarkerStyle]}
-            onLongPress={onBlockLongPress ? () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onBlockLongPress(i, raw); } : undefined}
-          >
-            {(block.items || []).map((item, j) => (
-              <View key={j} style={styles.markdownListItem}>
-                <Text style={styles.markdownBullet}>{'·'}</Text>
-                <Text style={styles.markdownText}>{renderInlineMarkdown(item, linkHandler)}</Text>
-              </View>
-            ))}
-          </Pressable>
+          <AnimatedHighlightWrap key={i} isHighlighted={!!isHighlighted}>
+            <Pressable
+              style={[styles.markdownList, opacityStyle, novelMarkerStyle]}
+              onLongPress={onBlockLongPress ? () => { if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onBlockLongPress(i, raw); } : undefined}
+            >
+              {(block.items || []).map((item, j) => (
+                <View key={j} style={styles.markdownListItem}>
+                  <Text style={styles.markdownBullet}>{'·'}</Text>
+                  <Text style={styles.markdownText}>{renderInlineMarkdown(item, linkHandler)}</Text>
+                </View>
+              ))}
+            </Pressable>
+          </AnimatedHighlightWrap>
         );
 
       case 'ol':
         return (
-          <Pressable
-            key={i}
-            style={[styles.markdownList, isHighlighted && styles.paragraphHighlight, opacityStyle, novelMarkerStyle]}
-            onLongPress={onBlockLongPress ? () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onBlockLongPress(i, raw); } : undefined}
-          >
-            {(block.items || []).map((item, j) => (
-              <View key={j} style={styles.markdownListItem}>
-                <Text style={styles.markdownOrderedBullet}>{j + 1}.</Text>
-                <Text style={styles.markdownText}>{renderInlineMarkdown(item, linkHandler)}</Text>
-              </View>
-            ))}
-          </Pressable>
+          <AnimatedHighlightWrap key={i} isHighlighted={!!isHighlighted}>
+            <Pressable
+              style={[styles.markdownList, opacityStyle, novelMarkerStyle]}
+              onLongPress={onBlockLongPress ? () => { if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onBlockLongPress(i, raw); } : undefined}
+            >
+              {(block.items || []).map((item, j) => (
+                <View key={j} style={styles.markdownListItem}>
+                  <Text style={styles.markdownOrderedBullet}>{j + 1}.</Text>
+                  <Text style={styles.markdownText}>{renderInlineMarkdown(item, linkHandler)}</Text>
+                </View>
+              ))}
+            </Pressable>
+          </AnimatedHighlightWrap>
         );
 
       case 'code':
         return (
-          <View key={i} style={[styles.codeBlock, isHighlighted && styles.paragraphHighlight, opacityStyle, novelMarkerStyle]}>
-            <Text style={styles.codeText}>{block.content}</Text>
-          </View>
+          <AnimatedHighlightWrap key={i} isHighlighted={!!isHighlighted}>
+            <View style={[styles.codeBlock, opacityStyle, novelMarkerStyle]}>
+              <Text style={styles.codeText}>{block.content}</Text>
+            </View>
+          </AnimatedHighlightWrap>
         );
 
       case 'blockquote':
         return (
-          <Pressable
-            key={i}
-            onLongPress={onBlockLongPress ? () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onBlockLongPress(i, raw); } : undefined}
-            style={[styles.markdownBlockquote, isHighlighted && styles.paragraphHighlight, opacityStyle, novelMarkerStyle]}
-          >
-            <Text style={styles.markdownBlockquoteText}>{renderInlineMarkdown(block.content, linkHandler)}</Text>
-          </Pressable>
+          <AnimatedHighlightWrap key={i} isHighlighted={!!isHighlighted}>
+            <Pressable
+              onLongPress={onBlockLongPress ? () => { if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onBlockLongPress(i, raw); } : undefined}
+              style={[styles.markdownBlockquote, opacityStyle, novelMarkerStyle]}
+            >
+              <Text style={styles.markdownBlockquoteText}>{renderInlineMarkdown(block.content, linkHandler)}</Text>
+            </Pressable>
+          </AnimatedHighlightWrap>
         );
 
       case 'table':
@@ -1027,10 +1219,10 @@ function MarkdownText({ content, highlightedBlocks, onBlockLongPress, blockDimmi
           ? Array.from(new Map(blockConnections.map(c => [c.articleId, c])).values()).slice(0, 2)
           : [];
         return (
-          <View key={i}>
+          <AnimatedHighlightWrap key={i} isHighlighted={!!isHighlighted}>
             <Pressable
-              onLongPress={onBlockLongPress ? () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); onBlockLongPress(i, block.content); } : undefined}
-              style={[isHighlighted ? styles.paragraphHighlight : undefined, opacityStyle, novelMarkerStyle]}
+              onLongPress={onBlockLongPress ? () => { if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onBlockLongPress(i, block.content); } : undefined}
+              style={[opacityStyle, novelMarkerStyle]}
             >
               <Text style={styles.markdownText}>
                 {entities && entities.length > 0 && onEntityLongPress ? (
@@ -1047,7 +1239,7 @@ function MarkdownText({ content, highlightedBlocks, onBlockLongPress, blockDimmi
                 sourceArticleId={sourceArticleId || ''}
               />
             ))}
-          </View>
+          </AnimatedHighlightWrap>
         );
       }
     }
@@ -1183,7 +1375,7 @@ function ReaderLeftMargin({
       {article.date ? (
         <View style={marginStyles.metaBlock}>
           <Text style={marginStyles.metaLabel}>Published</Text>
-          <Text style={marginStyles.metaValue}>{article.date}</Text>
+          <Text style={marginStyles.metaValue}>{formatDate(article.date)}</Text>
         </View>
       ) : null}
 
@@ -1209,11 +1401,7 @@ function ReaderLeftMargin({
       {novelty ? (
         <View style={marginStyles.noveltyBlock}>
           <Text style={marginStyles.metaLabel}>Novelty</Text>
-          <View style={marginStyles.noveltyBar}>
-            <View style={[marginStyles.noveltyBarNew, { flex: novelty.new_claims }] as any} />
-            <View style={[marginStyles.noveltyBarExt, { flex: novelty.extends_claims || 0.01 }] as any} />
-            <View style={[marginStyles.noveltyBarKnown, { flex: novelty.known_claims || 0.01 }] as any} />
-          </View>
+          <AnimatedNoveltyBar novelty={novelty} articleId={article.id} />
           <Text style={marginStyles.noveltyCounts}>
             {novelty.new_claims} new {'\u00B7'} {novelty.extends_claims} ext {'\u00B7'} {novelty.known_claims} known
           </Text>
@@ -1810,6 +1998,7 @@ export default function ReaderScreen() {
       });
       setHighlightedBlocks((prev: Set<number>) => new Set(prev).add(blockIndex));
       recordInterestSignal('highlight_paragraph', article.id);
+      logEvent('paragraph_highlight', { articleId: article.id, paragraphIndex: blockIndex });
       logEvent('reader_highlight_add', { article_id: article.id, block_index: blockIndex, text_preview: text.slice(0, 80) });
     }
   }, [article]);
@@ -2046,7 +2235,7 @@ export default function ReaderScreen() {
           {article.date ? (
             <View style={styles.menuItem}>
               <Text style={styles.menuItemLabel}>Date</Text>
-              <Text style={styles.menuItemValue}>{article.date}</Text>
+              <Text style={styles.menuItemValue}>{formatDate(article.date)}</Text>
             </View>
           ) : null}
 
@@ -2195,6 +2384,7 @@ export default function ReaderScreen() {
         ]} />
       </View>
 
+      <ReaderErrorBoundary articleId={article.id} onGoBack={() => router.back()}>
       {/* Web: 3-column grid layout / Mobile: single column */}
       <View style={isWeb ? webGridStyle : { flex: 1 }}>
         {/* Left margin (web only) */}
@@ -2225,8 +2415,11 @@ export default function ReaderScreen() {
             <View style={styles.metaRow}>
               {article.author ? <Text style={styles.metaText}>{article.author}</Text> : null}
               <Text style={styles.metaText}>{article.hostname}</Text>
-              {article.date ? <Text style={styles.metaText}>{article.date}</Text> : null}
+              {article.date ? <Text style={styles.metaText}>{formatDate(article.date)}</Text> : null}
               <Text style={styles.metaText}>{article.estimated_read_minutes} min</Text>
+            </View>
+            <View style={{ marginVertical: 16 }}>
+              <DoubleRule />
             </View>
 
             {claimClassifications ? (() => {
@@ -2301,8 +2494,11 @@ export default function ReaderScreen() {
             <View style={styles.metaRow}>
               {article.author ? <Text style={styles.metaText}>{article.author}</Text> : null}
               <Text style={styles.metaText}>{article.hostname}</Text>
-              {article.date ? <Text style={styles.metaText}>{article.date}</Text> : null}
+              {article.date ? <Text style={styles.metaText}>{formatDate(article.date)}</Text> : null}
               <Text style={styles.metaText}>{article.estimated_read_minutes} min</Text>
+            </View>
+            <View style={{ marginVertical: 16 }}>
+              <DoubleRule />
             </View>
 
             {claimClassifications ? (() => {
@@ -2468,6 +2664,8 @@ export default function ReaderScreen() {
           />
         </View>
       )}
+
+      </ReaderErrorBoundary>
 
       {!isWeb && <KeyboardHintBar shortcuts={readerShortcuts} />}
     </View>

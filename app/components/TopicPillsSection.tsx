@@ -49,6 +49,16 @@ export default function TopicPillsSection({ onTopicPress, onSeeAll }: TopicPills
             {/* No article counts — "this is a river, not a todo list" */}
           </Pressable>
         ))}
+        <Pressable
+          style={styles.allTopicsPill}
+          onPress={() => {
+            logEvent('all_topics_tap', { source: 'topic_pills' });
+            onSeeAll();
+          }}
+          hitSlop={4}
+        >
+          <Text style={styles.allTopicsLabel}>All topics ›</Text>
+        </Pressable>
       </ScrollView>
     </View>
   );
@@ -103,5 +113,16 @@ const styles = StyleSheet.create({
   },
   pillLabelPrimary: {
     color: colors.parchment,
+  },
+  allTopicsPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    justifyContent: 'center',
+  },
+  allTopicsLabel: {
+    fontFamily: fonts.bodyItalic,
+    fontSize: 13,
+    color: colors.rubric,
+    ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}),
   },
 });

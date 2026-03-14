@@ -1,10 +1,11 @@
 import { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable, Platform, ScrollView } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { colors, fonts, type, layout } from '../design/tokens';
+import { colors, fonts, type, spacing, layout } from '../design/tokens';
 import { logEvent } from '../data/logger';
 import { fetchAllNotes, executeNoteAction } from '../lib/voice-notes-api';
 import VoiceNoteCard from '../components/VoiceNoteCard';
+import DoubleRule from '../components/DoubleRule';
 import type { VoiceNote } from '../lib/voice-notes-api';
 
 interface NoteSection {
@@ -72,7 +73,7 @@ export default function VoiceNotesScreen() {
       await executeNoteAction(noteId, actionId);
       await loadNotes();
     } catch (e) {
-      console.warn('Failed to execute action:', e);
+      logEvent('warning', { message: 'Failed to execute action', error: String(e) });
     }
   }, [loadNotes]);
 
@@ -87,6 +88,63 @@ export default function VoiceNotesScreen() {
     }
   }
 
+  // --- Web layout ---
+  if (Platform.OS === 'web') {
+    return (
+      <View style={styles.container}>
+        <ScrollView
+          style={webStyles.scrollView}
+          contentContainerStyle={webStyles.scrollContent}
+        >
+          <View style={webStyles.centeredColumn}>
+            <Pressable
+              onPress={() => router.back()}
+              style={webStyles.backButton}
+            >
+              <Text style={webStyles.backText}>{'\u2190'} Feed</Text>
+            </Pressable>
+
+            <View style={styles.header}>
+              <Text style={styles.title}>Voice Notes</Text>
+              <Text style={styles.subtitle}>
+                {notes.length} note{notes.length !== 1 ? 's' : ''}
+              </Text>
+            </View>
+
+            <DoubleRule />
+
+            {items.length > 0 ? (
+              items.map(item => {
+                if (item.type === 'header') {
+                  return (
+                    <Text key={item.key} style={styles.sectionHead}>
+                      <Text style={{ color: colors.rubric }}>{'\u2726'} </Text>
+                      {item.title}
+                    </Text>
+                  );
+                }
+                return (
+                  <VoiceNoteCard
+                    key={item.key}
+                    note={item.note}
+                    showArticleLink
+                    onArticlePress={handleArticlePress}
+                    onActionExecute={handleActionExecute}
+                  />
+                );
+              })
+            ) : !loading ? (
+              <View style={styles.empty}>
+                <Text style={styles.emptyText}>No voice notes yet</Text>
+              </View>
+            ) : null}
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // --- Mobile layout ---
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -102,12 +160,7 @@ export default function VoiceNotesScreen() {
         </Text>
       </View>
 
-      {/* Double rule */}
-      <View style={styles.doubleRule}>
-        <View style={styles.doubleRuleTop} />
-        <View style={styles.doubleRuleGap} />
-        <View style={styles.doubleRuleBottom} />
-      </View>
+      <DoubleRule />
 
       <FlatList
         data={items}
@@ -167,34 +220,13 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   title: {
-    fontFamily: fonts.displaySemiBold,
-    fontSize: 24,
-    lineHeight: 28,
+    ...type.screenTitle,
     color: colors.ink,
-    ...(Platform.OS === 'web' ? { fontWeight: '600' as const } : {}),
   },
   subtitle: {
-    fontFamily: fonts.displayItalic,
-    fontSize: 13,
+    ...type.screenSubtitle,
     color: colors.textMuted,
     marginTop: 2,
-    ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}),
-  },
-
-  // Double rule
-  doubleRule: {
-    paddingHorizontal: layout.screenPadding,
-  },
-  doubleRuleTop: {
-    borderTopWidth: layout.doubleRuleTop,
-    borderTopColor: colors.ink,
-  },
-  doubleRuleGap: {
-    height: layout.doubleRuleGap,
-  },
-  doubleRuleBottom: {
-    borderTopWidth: layout.doubleRuleBottom,
-    borderTopColor: colors.ink,
   },
 
   // Section headers
@@ -220,5 +252,35 @@ const styles = StyleSheet.create({
     fontFamily: fonts.reading,
     fontSize: 16,
     color: colors.textSecondary,
+  },
+});
+
+// --- Web-specific styles ---
+const webStyles = StyleSheet.create({
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 60,
+  },
+  centeredColumn: {
+    maxWidth: layout.readingMeasure,
+    marginHorizontal: 'auto' as any,
+    paddingHorizontal: spacing.xxxl,
+    width: '100%' as any,
+  },
+  backButton: {
+    paddingVertical: spacing.xs,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+    alignSelf: 'flex-start',
+    minHeight: layout.touchTarget,
+    justifyContent: 'center',
+  },
+  backText: {
+    fontFamily: fonts.ui,
+    fontSize: 13,
+    color: colors.textMuted,
+    cursor: 'pointer' as any,
   },
 });

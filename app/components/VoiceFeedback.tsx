@@ -26,7 +26,7 @@ async function savePendingNote(note: PendingNote): Promise<void> {
     pending.push(note);
     await AsyncStorage.setItem(PENDING_NOTES_KEY, JSON.stringify(pending));
   } catch (e) {
-    console.warn('[VoiceFeedback] failed to save pending note:', e);
+    logEvent('warning', { message: '[VoiceFeedback] failed to save pending note', error: String(e) });
   }
 }
 
@@ -38,7 +38,7 @@ async function removePendingNote(localPath: string): Promise<void> {
     const filtered = pending.filter(n => n.localPath !== localPath);
     await AsyncStorage.setItem(PENDING_NOTES_KEY, JSON.stringify(filtered));
   } catch (e) {
-    console.warn('[VoiceFeedback] failed to remove pending note:', e);
+    logEvent('warning', { message: '[VoiceFeedback] failed to remove pending note', error: String(e) });
   }
 }
 
@@ -62,7 +62,7 @@ async function tryUploadPending(): Promise<void> {
       }
     }
   } catch (e) {
-    console.warn('[VoiceFeedback] retry upload error:', e);
+    logEvent('warning', { message: '[VoiceFeedback] retry upload error', error: String(e) });
   }
 }
 
@@ -142,7 +142,7 @@ export default function VoiceFeedback({ articleId, articleTitle, topics, article
           logEvent('voice_note_uploaded', { article_id: articleId });
         })
         .catch(async (e) => {
-          console.warn('[VoiceFeedback] upload failed, queued for retry:', e);
+          logEvent('warning', { message: '[VoiceFeedback] upload failed, queued for retry', error: String(e) });
           await savePendingNote({
             localPath,
             articleId,

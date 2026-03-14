@@ -4,8 +4,13 @@ import {
   Platform, Animated, Modal, Dimensions, Image,
 } from 'react-native';
 import { Audio } from 'expo-av';
-import { captureScreen } from 'react-native-view-shot';
-// Note: captureScreen works on native only. On web, screenshot is skipped.
+// react-native-view-shot requires a custom dev client (not Expo Go)
+let captureScreen: (() => Promise<string>) | null = null;
+try {
+  captureScreen = require('react-native-view-shot').captureScreen;
+} catch {
+  // Not available in Expo Go — screenshot capture will be skipped
+}
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { colors, fonts, layout } from '../design/tokens';
@@ -60,7 +65,8 @@ export default function FeedbackCapture() {
 
     // Take screenshot
     try {
-      const uri = await captureScreen({ format: 'png', quality: 0.8 });
+      if (!captureScreen) throw new Error('Not available');
+      const uri = await (captureScreen as any)({ format: 'png', quality: 0.8 });
       setScreenshotUri(uri);
     } catch {
       setScreenshotUri(null);

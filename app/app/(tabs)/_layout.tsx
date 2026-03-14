@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
-import { StyleSheet } from 'react-native';
-import { colors } from '../../design/tokens';
+import { StyleSheet, Platform } from 'react-native';
+import { colors, fonts } from '../../design/tokens';
 import { logEvent } from '../../data/logger';
 
 export default function TabsLayout() {
@@ -8,8 +8,12 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: tabStyles.hidden,
-        tabBarShowLabel: false,
+        tabBarStyle: tabStyles.tabBar,
+        tabBarShowLabel: true,
+        tabBarLabelStyle: tabStyles.label,
+        tabBarActiveTintColor: colors.ink,
+        tabBarInactiveTintColor: colors.textMuted,
+        tabBarIconStyle: { display: 'none' },
       }}
       screenListeners={{
         tabPress: (e) => {
@@ -19,6 +23,9 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" options={{
         title: 'Feed',
+      }} />
+      <Tabs.Screen name="library" options={{
+        title: 'Library',
       }} />
       <Tabs.Screen name="topics" options={{
         title: 'Topics',
@@ -37,8 +44,22 @@ export default function TabsLayout() {
 }
 
 const tabStyles = StyleSheet.create({
-  hidden: {
-    display: 'none',
-    height: 0,
+  tabBar: {
+    backgroundColor: colors.parchmentDark,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.rule,
+    height: 52,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 4,
+    paddingTop: 4,
+    elevation: 0,
+    shadowOpacity: 0,
+  },
+  label: {
+    fontFamily: Platform.select({
+      web: "'EB Garamond', Georgia, serif",
+      default: 'EBGaramond',
+    }),
+    fontSize: 12,
+    letterSpacing: 0.3,
   },
 });

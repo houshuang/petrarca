@@ -176,21 +176,10 @@ All research lives in `research/` directory:
 - Languages: Norwegian, Swedish, Danish, Italian, German, Spanish, French, Chinese, Indonesian, Esperanto, English — likes reading multilingual content
 
 ## Voice Processing
-- **Soniox API**: Key is `SONIX_KEY` in `/Users/stian/src/alignment/.env`
-- API base: `https://api.soniox.com/v1`
-- Existing integration patterns: `../alif/backend/app/services/soniox_service.py` (async model `stt-async-v4`), `../alignment/transcribe_soniox.py` (older `stt-async-v3`)
-- Use latest batch model for voice note transcription
-- Voice notes are first-class input: record → transcribe → link to reading context → feed into knowledge model
+- **Soniox API**: Key is `SONIX_KEY` in `/Users/stian/src/alignment/.env`, base: `https://api.soniox.com/v1`
+- Patterns: `../alif/backend/app/services/soniox_service.py` (stt-async-v4), `../alignment/transcribe_soniox.py`
 
-## Research Agent Feature
-- User wants a "quick research button" while reading to capture ideas/questions
-- Spawns background research agents (on Hetzner VM) that find interesting diverse perspectives
-- Results waiting next time user opens app
-- Should find high-value articles from diverse sources
-- User can tag promising directions → triggers further research
-- Keep research breadth wide but don't go too deep initially
-
-## Reference Projects — Usage Notes
-- **../otak**: Scripts are useful (Twitter bookmarks, Readwise, LLM providers). The knowledge graph itself is a failed experiment — do NOT rely on it. Use otak as a code/pattern library.
-- **../bookifier**: Pipeline/caching patterns, Kindle epub generation
-- **../alif**: Mobile setup (Expo), interaction model, physical-digital integration, `claude -p` wrapper pattern
+## Reference Projects
+- **../otak**: Twitter bookmarks, Readwise, LLM provider scripts (knowledge graph is a failed experiment — do NOT rely on it)
+- **../alif**: Mobile setup (Expo), FSRS knowledge tracking, `claude -p` wrapper pattern
+- **../bookifier**: Pipeline/caching patterns

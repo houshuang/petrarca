@@ -5,6 +5,7 @@ import { colors, fonts, layout } from '../design/tokens';
 import { logEvent } from '../data/logger';
 import { getActiveThreads, getCrossThreadBridges } from '../lib/reading-insights';
 import type { ReadingThread } from '../lib/reading-insights';
+import DoubleRule from '../components/DoubleRule';
 
 export default function TrailsScreen() {
   const router = useRouter();
@@ -13,11 +14,189 @@ export default function TrailsScreen() {
   const [expandedThread, setExpandedThread] = useState<string | null>(
     threads[0]?.topic || null
   );
+  const [hoveredThread, setHoveredThread] = useState<string | null>(null);
+  const [hoveredArticle, setHoveredArticle] = useState<string | null>(null);
 
   logEvent('trails_open');
 
   const expanded = threads.find(t => t.topic === expandedThread);
 
+  // --- Shared article sequence renderer ---
+  const renderArticleSequence = (thread: ReadingThread, showHoverAction: boolean) =>
+    thread.articles.map((article, i) => (
+      <Pressable
+        key={article.id}
+        style={[
+          styles.seqItem,
+          showHoverAction && hoveredArticle === article.id && styles.seqItemHover,
+        ]}
+        onPress={() => {
+          logEvent('trail_article_tap', { article_id: article.id, topic: thread.topic });
+          router.push({ pathname: '/reader', params: { id: article.id } });
+        }}
+        {...(Platform.OS === 'web' ? {
+          onMouseEnter: () => setHoveredArticle(article.id),
+          onMouseLeave: () => setHoveredArticle(null),
+        } as any : {})}
+      >
+        {/* Gutter with marker and line */}
+        <View style={styles.seqGutter}>
+          <View style={[
+            styles.seqMarker,
+            article.status === 'read' && styles.seqMarkerDone,
+            article.status === 'reading' && styles.seqMarkerActive,
+            article.status === 'unread' && styles.seqMarkerNext,
+          ]}>
+            <Text style={[
+              styles.seqMarkerText,
+              article.status === 'read' && styles.seqMarkerTextDone,
+              article.status === 'reading' && styles.seqMarkerTextActive,
+            ]}>
+              {article.status === 'read' ? '✓' : String(i + 1)}
+            </Text>
+          </View>
+          {i < thread.articles.length - 1 && (
+            <View style={[
+              styles.seqLine,
+              article.status === 'read' ? styles.seqLineSolid : styles.seqLineDashed,
+            ]} />
+          )}
+        </View>
+
+        {/* Content */}
+        <View style={styles.seqContent}>
+          <View style={styles.seqTitleRow}>
+            <Text style={[
+              styles.seqTitle,
+              article.status === 'read' && styles.seqTitleDone,
+              article.status === 'reading' && styles.seqTitleActive,
+            ]} numberOfLines={2}>
+              {article.title}
+            </Text>
+            {showHoverAction && hoveredArticle === article.id && (
+              <Text style={styles.seqOpenHint}>Open →</Text>
+            )}
+          </View>
+          <Text style={styles.seqSource}>
+            {article.source ? `${article.source} · ` : ''}
+            {article.status === 'read' ? 'read'
+              : article.status === 'reading' ? 'in progress'
+              : article.readMinutes ? `${article.readMinutes} min` : ''}
+          </Text>
+        </View>
+      </Pressable>
+    ));
+
+  // --- Web master-detail layout ---
+  if (Platform.OS === 'web') {
+    return (
+      <View style={webStyles.container}>
+        <View style={webStyles.contentWrap}>
+          {/* Header */}
+          <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
+            <Text style={styles.backText}>← Feed</Text>
+          </Pressable>
+
+          <Text style={styles.pageTitle}>Reading Trails</Text>
+          <Text style={styles.pageSub}>Follow threads of connected ideas through your library</Text>
+          <View style={webStyles.doubleRuleWrap}>
+            <DoubleRule />
+          </View>
+
+          {/* Master-detail grid */}
+          <View style={webStyles.masterDetail}>
+            {/* Left panel — thread list */}
+            <View style={webStyles.threadList}>
+              <Text style={styles.sectionLabel}>✦ Threads</Text>
+              {threads.map(thread => (
+                <Pressable
+                  key={thread.topic}
+                  style={[
+                    webStyles.threadListCard,
+                    expandedThread === thread.topic && webStyles.threadListCardActive,
+                    hoveredThread === thread.topic && expandedThread !== thread.topic && webStyles.threadListCardHover,
+                  ]}
+                  onPress={() => {
+                    setExpandedThread(thread.topic);
+                    logEvent('trail_thread_tap', { topic: thread.topic });
+                  }}
+                  {...{
+                    onMouseEnter: () => setHoveredThread(thread.topic),
+                    onMouseLeave: () => setHoveredThread(null),
+                  } as any}
+                >
+                  <Text style={[
+                    styles.tcTopic,
+                    expandedThread === thread.topic && webStyles.tcTopicActive,
+                  ]}>{thread.topic}</Text>
+                  {thread.description ? (
+                    <Text style={styles.tcDesc} numberOfLines={2}>{thread.description}</Text>
+                  ) : null}
+                  <View style={styles.tcDotRow}>
+                    {thread.articles.slice(0, 8).map((a, i) => (
+                      <View
+                        key={i}
+                        style={[
+                          styles.tcDot,
+                          a.status === 'read' && styles.tcDotRead,
+                          a.status === 'reading' && styles.tcDotReading,
+                          a.status === 'unread' && styles.tcDotUnread,
+                        ]}
+                      />
+                    ))}
+                  </View>
+                  <Text style={styles.tcMeta}>
+                    {thread.unreadCount > 0 && (
+                      <Text style={styles.tcMetaGreen}>{thread.unreadCount} unread</Text>
+                    )}
+                    {thread.unreadCount > 0 ? ' · ' : ''}
+                    {thread.totalArticles} articles
+                  </Text>
+                </Pressable>
+              ))}
+
+              {/* Bridges below thread list */}
+              {bridges.length > 0 && (
+                <>
+                  <View style={styles.thinRule} />
+                  <Text style={styles.sectionLabel}>✦ Bridges</Text>
+                  {bridges.map((bridge, i) => (
+                    <View key={i} style={styles.bridgeBox}>
+                      <Text style={webStyles.bridgeTopics}>{bridge.fromTopic} ↔ {bridge.toTopic}</Text>
+                      <Text style={styles.bridgeText}>{bridge.description}</Text>
+                    </View>
+                  ))}
+                </>
+              )}
+            </View>
+
+            {/* Right panel — thread detail */}
+            <View style={webStyles.threadDetail}>
+              {expanded ? (
+                <>
+                  <Text style={webStyles.detailTitle}>✦ {expanded.topic}</Text>
+                  {expanded.description ? (
+                    <Text style={webStyles.detailDesc}>{expanded.description}</Text>
+                  ) : null}
+                  <View style={webStyles.detailArticles}>
+                    {renderArticleSequence(expanded, true)}
+                  </View>
+                </>
+              ) : (
+                <View style={webStyles.emptyDetail}>
+                  <Text style={webStyles.emptyText}>Select a thread to see its articles</Text>
+                </View>
+              )}
+            </View>
+          </View>
+
+          <View style={{ height: 40 }} />
+        </View>
+      </View>
+    );
+  }
+
+  // --- Mobile layout ---
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* Header */}
@@ -27,10 +206,8 @@ export default function TrailsScreen() {
 
       <Text style={styles.pageTitle}>Reading Trails</Text>
       <Text style={styles.pageSub}>Follow threads of connected ideas through your library</Text>
-      <View style={styles.doubleRule}>
-        <View style={styles.ruleTop} />
-        <View style={styles.ruleGap} />
-        <View style={styles.ruleBottom} />
+      <View style={styles.doubleRuleWrap}>
+        <DoubleRule />
       </View>
 
       {/* Thread cards */}
@@ -81,91 +258,7 @@ export default function TrailsScreen() {
         <>
           <View style={styles.thinRule} />
           <Text style={styles.sectionLabel}>✦ {expanded.topic}</Text>
-          <View style={Platform.OS === 'web' ? styles.threadDetailWeb : undefined}>
-            <View style={Platform.OS === 'web' ? styles.threadDetailLeft : undefined}>
-              {expanded.articles.map((article, i) => (
-                <Pressable
-                  key={article.id}
-                  style={styles.seqItem}
-                  onPress={() => {
-                    logEvent('trail_article_tap', { article_id: article.id, topic: expanded.topic });
-                    router.push({ pathname: '/reader', params: { id: article.id } });
-                  }}
-                >
-                  {/* Gutter with marker and line */}
-                  <View style={styles.seqGutter}>
-                    <View style={[
-                      styles.seqMarker,
-                      article.status === 'read' && styles.seqMarkerDone,
-                      article.status === 'reading' && styles.seqMarkerActive,
-                      article.status === 'unread' && styles.seqMarkerNext,
-                    ]}>
-                      <Text style={[
-                        styles.seqMarkerText,
-                        article.status === 'read' && styles.seqMarkerTextDone,
-                        article.status === 'reading' && styles.seqMarkerTextActive,
-                      ]}>
-                        {article.status === 'read' ? '✓' : String(i + 1)}
-                      </Text>
-                    </View>
-                    {i < expanded.articles.length - 1 && (
-                      <View style={[
-                        styles.seqLine,
-                        article.status === 'read' ? styles.seqLineSolid : styles.seqLineDashed,
-                      ]} />
-                    )}
-                  </View>
-
-                  {/* Content */}
-                  <View style={styles.seqContent}>
-                    <Text style={[
-                      styles.seqTitle,
-                      article.status === 'read' && styles.seqTitleDone,
-                      article.status === 'reading' && styles.seqTitleActive,
-                    ]} numberOfLines={2}>
-                      {article.title}
-                    </Text>
-                    <Text style={styles.seqSource}>
-                      {article.source ? `${article.source} · ` : ''}
-                      {article.status === 'read' ? 'read'
-                        : article.status === 'reading' ? 'in progress'
-                        : article.readMinutes ? `${article.readMinutes} min` : ''}
-                    </Text>
-                  </View>
-                </Pressable>
-              ))}
-            </View>
-
-            {/* Bridge insights (web sidebar) */}
-            {Platform.OS === 'web' && bridges.length > 0 && (
-              <View style={styles.threadDetailRight}>
-                <Text style={styles.insightLabel}>Bridges to other threads</Text>
-                {bridges
-                  .filter(b =>
-                    b.fromTopic.toLowerCase() === expanded.topic.toLowerCase() ||
-                    b.toTopic.toLowerCase() === expanded.topic.toLowerCase()
-                  )
-                  .slice(0, 2)
-                  .map((bridge, i) => (
-                    <View key={i} style={styles.bridgeBox}>
-                      <Text style={styles.bridgeText}>{bridge.description}</Text>
-                    </View>
-                  ))
-                }
-                {bridges
-                  .filter(b =>
-                    b.fromTopic.toLowerCase() !== expanded.topic.toLowerCase() &&
-                    b.toTopic.toLowerCase() !== expanded.topic.toLowerCase()
-                  ).length === bridges.length && bridges.length > 0 && (
-                  <View style={styles.bridgeBox}>
-                    <Text style={styles.bridgeText}>
-                      Connections between {bridges[0].fromTopic} and {bridges[0].toTopic}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            )}
-          </View>
+          {renderArticleSequence(expanded, false)}
         </>
       )}
 
@@ -174,6 +267,7 @@ export default function TrailsScreen() {
   );
 }
 
+// --- Mobile styles ---
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.parchment },
   content: {
@@ -202,10 +296,10 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginBottom: 8,
   },
-  doubleRule: { marginBottom: 28 },
-  ruleTop: { height: 2, backgroundColor: colors.ink },
-  ruleGap: { height: layout.doubleRuleGap },
-  ruleBottom: { height: 1, backgroundColor: colors.ink },
+  doubleRuleWrap: {
+    marginHorizontal: -layout.screenPadding,
+    marginBottom: 28,
+  },
 
   sectionLabel: {
     fontFamily: fonts.bodyItalic,
@@ -214,7 +308,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
 
-  // Thread cards grid
+  // Thread cards grid (mobile)
   threadGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -226,8 +320,7 @@ const styles = StyleSheet.create({
     borderColor: colors.rule,
     borderRadius: 3,
     padding: 16,
-    width: Platform.OS === 'web' ? 280 : '100%' as any,
-    ...(Platform.OS === 'web' ? { cursor: 'pointer' as any } : {}),
+    width: '100%' as any,
   },
   threadCardActive: {
     borderColor: colors.rubric,
@@ -277,25 +370,14 @@ const styles = StyleSheet.create({
     marginVertical: 24,
   },
 
-  // Thread detail (web: 2-column)
-  threadDetailWeb: {
-    flexDirection: 'row',
-    gap: 28,
-  } as any,
-  threadDetailLeft: {
-    flex: 1,
-  } as any,
-  threadDetailRight: {
-    width: 260,
-    paddingLeft: 24,
-    borderLeftWidth: 1,
-    borderLeftColor: colors.rule,
-  } as any,
-
-  // Sequence items
+  // Sequence items (shared mobile + web)
   seqItem: {
     flexDirection: 'row',
     ...(Platform.OS === 'web' ? { cursor: 'pointer' as any } : {}),
+  },
+  seqItemHover: {
+    backgroundColor: colors.parchmentHover,
+    borderRadius: 3,
   },
   seqGutter: {
     width: 40,
@@ -345,34 +427,39 @@ const styles = StyleSheet.create({
     paddingLeft: 10,
     paddingBottom: 20,
   },
+  seqTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+  },
   seqTitle: {
     fontFamily: fonts.bodyMedium,
     fontSize: 13.5,
     color: colors.ink,
     lineHeight: 18,
     marginBottom: 2,
+    flex: 1,
     ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}),
   },
   seqTitleDone: { color: colors.textSecondary },
   seqTitleActive: { color: colors.rubric },
+  seqOpenHint: {
+    fontFamily: fonts.ui,
+    fontSize: 11,
+    color: colors.rubric,
+    marginLeft: 8,
+    flexShrink: 0,
+  },
   seqSource: {
     fontFamily: fonts.ui,
     fontSize: 10,
     color: colors.textMuted,
   },
 
-  // Bridge insights
-  insightLabel: {
-    fontFamily: fonts.ui,
-    fontSize: 10,
-    color: colors.textMuted,
-    textTransform: 'uppercase' as any,
-    letterSpacing: 0.3,
-    marginBottom: 10,
-  },
+  // Bridge insights (mobile)
   bridgeBox: {
     padding: 12,
-    backgroundColor: 'rgba(139, 37, 0, 0.03)',
+    backgroundColor: colors.parchmentHover,
     borderRadius: 3,
     marginBottom: 10,
   },
@@ -383,3 +470,90 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 });
+
+// --- Web-only styles (plain object to support CSS Grid properties) ---
+const webStyles: Record<string, any> = Platform.OS === 'web' ? {
+  container: {
+    flex: 1,
+    backgroundColor: colors.parchment,
+    overflow: 'auto',
+  },
+  contentWrap: {
+    maxWidth: 1100,
+    width: '100%',
+    alignSelf: 'center',
+    paddingHorizontal: 32,
+    paddingTop: 16,
+  },
+  doubleRuleWrap: {
+    marginHorizontal: -32,
+    marginBottom: 28,
+  },
+  masterDetail: {
+    display: 'grid',
+    gridTemplateColumns: '320px 1fr',
+    gap: 32,
+  },
+  threadList: {
+    borderRightWidth: 1,
+    borderRightColor: colors.rule,
+    paddingRight: 24,
+  },
+  threadListCard: {
+    borderWidth: 1,
+    borderColor: colors.rule,
+    borderRadius: 3,
+    padding: 14,
+    marginBottom: 10,
+    cursor: 'pointer',
+    transition: 'background-color 0.15s',
+  },
+  threadListCardActive: {
+    borderColor: colors.rubric,
+    borderLeftWidth: 3,
+    backgroundColor: 'rgba(139, 37, 0, 0.04)',
+  },
+  threadListCardHover: {
+    backgroundColor: colors.parchmentHover,
+  },
+  tcTopicActive: {
+    color: colors.rubric,
+  },
+  threadDetail: {
+    minHeight: 400,
+  },
+  detailTitle: {
+    fontFamily: fonts.displaySemiBold,
+    fontSize: 20,
+    color: colors.ink,
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  detailDesc: {
+    fontFamily: fonts.readingItalic,
+    fontSize: 14,
+    color: colors.textSecondary,
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  detailArticles: {},
+  bridgeTopics: {
+    fontFamily: fonts.ui,
+    fontSize: 10,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    marginBottom: 6,
+  },
+  emptyDetail: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 80,
+  },
+  emptyText: {
+    fontFamily: fonts.readingItalic,
+    fontSize: 15,
+    color: colors.textMuted,
+  },
+} : {};

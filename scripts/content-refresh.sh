@@ -67,6 +67,12 @@ log "Step 3b: Validating articles..."
 python3 "$SCRIPT_DIR/validate_articles.py" --fix \
     || log "Step 3b FAILED: validate_articles.py"
 
+# Step 3b2: Cleanup junk articles and merge duplicates (before embeddings to save compute)
+log "Step 3b2: Cleaning up junk articles and duplicates..."
+python3 "$SCRIPT_DIR/cleanup_articles.py" --fix \
+    && pipeline_log "pipeline_cleanup_articles" \
+    || log "Step 3b2 FAILED: cleanup_articles.py (continuing)"
+
 # Step 3c: Extract entity concepts for new articles (incremental)
 log "Step 3c: Extracting entity concepts for new articles..."
 python3 "$SCRIPT_DIR/extract_entity_concepts.py" --incremental \
@@ -99,6 +105,33 @@ log "Step 4: Building knowledge index..."
 python3 "$SCRIPT_DIR/build_knowledge_index.py" \
     && pipeline_log "pipeline_build_index" \
     || log "Step 4 FAILED: build_knowledge_index.py"
+
+# Step 4b: Build concept clusters (graph-based article grouping)
+log "Step 4b: Building concept clusters..."
+python3 "$SCRIPT_DIR/build_concept_clusters.py" \
+    && pipeline_log "pipeline_build_clusters" \
+    || log "Step 4b FAILED: build_concept_clusters.py (continuing)"
+
+# Step 4c: Generate structured syntheses per cluster
+log "Step 4c: Generating syntheses..."
+python3 "$SCRIPT_DIR/generate_syntheses.py" --all --min-articles 2 \
+    && pipeline_log "pipeline_generate_syntheses" \
+    || log "Step 4c FAILED: generate_syntheses.py (continuing)"
+
+# Step 4d: Update manifest with cluster and synthesis hashes
+log "Step 4d: Updating manifest with cluster/synthesis hashes..."
+python3 -c "
+import json, hashlib, pathlib
+data_dir = pathlib.Path('$PROJECT_DIR/data')
+manifest_path = data_dir / 'manifest.json'
+manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
+for name, key in [('concept_clusters.json', 'clusters_hash'), ('syntheses.json', 'syntheses_hash')]:
+    fpath = data_dir / name
+    if fpath.exists() and fpath.stat().st_size > 0:
+        manifest[key] = hashlib.sha256(fpath.read_bytes()).hexdigest()[:16]
+        print(f'  {key}={manifest[key]}')
+manifest_path.write_text(json.dumps(manifest, indent=2))
+" || log "Step 4d FAILED: manifest hash update"
 
 # Step 5: Generate books manifest from individual book meta files
 BOOKS_DIR="$PROJECT_DIR/data/books"
@@ -139,7 +172,7 @@ fi
 
 # Step 6: Copy output to app data directory (with file size validation)
 log "Step 6: Copying output files..."
-for f in articles.json concepts.json manifest.json books.json knowledge_index.json claim_embeddings.npz; do
+for f in articles.json concepts.json manifest.json books.json knowledge_index.json claim_embeddings.npz concept_clusters.json syntheses.json; do
     if [ -s "$PROJECT_DIR/data/$f" ]; then
         cp "$PROJECT_DIR/data/$f" "$PROJECT_DIR/app/data/"
     elif [ -f "$PROJECT_DIR/data/$f" ]; then
@@ -151,7 +184,7 @@ done
 log "Copied to $PROJECT_DIR/app/data/"
 
 if [ -d "/opt/petrarca/data" ]; then
-    for f in articles.json concepts.json manifest.json books.json knowledge_index.json claim_embeddings.npz; do
+    for f in articles.json concepts.json manifest.json books.json knowledge_index.json claim_embeddings.npz concept_clusters.json syntheses.json; do
         if [ -s "$PROJECT_DIR/data/$f" ]; then
             cp "$PROJECT_DIR/data/$f" /opt/petrarca/data/
         else

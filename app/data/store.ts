@@ -1,4 +1,4 @@
-import { Article, ReadingState, UserSignal, Highlight } from './types';
+import { Article, ReadingState, UserSignal, Highlight, TopicSynthesis } from './types';
 import type { ClaimClassification, ParagraphDimming, ArticleNovelty, DeltaReport } from './types';
 import { logEvent } from './logger';
 import { loadSignals, saveSignals, loadReadingStates, saveReadingStates, loadHighlights, saveHighlights } from './persistence';
@@ -12,6 +12,7 @@ import {
   classifyArticleClaims as _classifyArticleClaims,
   computeParagraphDimming as _computeParagraphDimming,
   markArticleEncountered as _markArticleEncountered,
+  markClaimsEncountered as _markClaimsEncountered,
   getDeltaReports as _getDeltaReports,
   getCrossArticleConnections as _getCrossArticleConnections,
   getParagraphConnections as _getParagraphConnections,
@@ -19,15 +20,21 @@ import {
 import type { CrossArticleConnection } from './knowledge-engine';
 import { loadQueue, getQueuedArticleIds, isQueued } from './queue';
 import { loadBookmarks } from './bookmarks';
+import { initBookStore } from './book-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 let articles: Article[] = [];
+let syntheses: TopicSynthesis[] = [];
+let conceptClusters: any = null;
 let readingStates = new Map<string, ReadingState>();
 let highlights: Highlight[] = [];
 let signals: UserSignal[] = [];
 let dismissedArticles = new Set<string>();
+let completedSyntheses = new Set<string>();
 let initialized = false;
 let initPromise: Promise<void> | null = null;
+
+const COMPLETED_SYNTHESES_KEY = '@petrarca/completed_syntheses';
 
 const DISMISSED_KEY = '@petrarca/dismissed_articles';
 
@@ -73,6 +80,12 @@ export async function initStore(): Promise<void> {
     if (cached && cached.articles.length > 0) {
       articles = cached.articles;
       cachedKnowledgeIndex = cached.knowledgeIndex;
+      if (cached.syntheses && Array.isArray(cached.syntheses)) {
+        syntheses = cached.syntheses;
+      }
+      if (cached.conceptClusters) {
+        conceptClusters = cached.conceptClusters;
+      }
     }
 
     // Sort by date (newest first)
@@ -82,15 +95,18 @@ export async function initStore(): Promise<void> {
     readingStates = await loadReadingStates();
     highlights = await loadHighlights();
     await loadDismissedArticles();
+    await loadCompletedSyntheses();
     await loadInterestProfile();
     await loadQueue();
     await loadBookmarks();
+    await initBookStore();
     await initKnowledgeEngine(cachedKnowledgeIndex);
 
     initialized = true;
 
     logEvent('store_initialized', {
       total_articles: articles.length,
+      total_syntheses: syntheses.length,
       loaded_signals: signals.length,
       loaded_reading_states: readingStates.size,
       loaded_highlights: highlights.length,
@@ -107,9 +123,16 @@ export async function initStore(): Promise<void> {
         if (fresh.knowledgeIndex) {
           await initKnowledgeEngine(fresh.knowledgeIndex);
         }
+        if (fresh.syntheses && Array.isArray(fresh.syntheses)) {
+          syntheses = fresh.syntheses;
+        }
+        if (fresh.conceptClusters) {
+          conceptClusters = fresh.conceptClusters;
+        }
         logEvent('content_downloaded_first_launch', {
           article_count: fresh.articles.length,
           knowledge_index: !!fresh.knowledgeIndex,
+          syntheses_count: syntheses.length,
         });
       }
     } else {
@@ -122,9 +145,16 @@ export async function initStore(): Promise<void> {
             if (fresh.knowledgeIndex) {
               await initKnowledgeEngine(fresh.knowledgeIndex);
             }
+            if (fresh.syntheses && Array.isArray(fresh.syntheses)) {
+              syntheses = fresh.syntheses;
+            }
+            if (fresh.conceptClusters) {
+              conceptClusters = fresh.conceptClusters;
+            }
             logEvent('content_refreshed', {
               article_count: fresh.articles.length,
               knowledge_index_updated: !!fresh.knowledgeIndex,
+              syntheses_count: syntheses.length,
             });
           }
         }
@@ -150,9 +180,16 @@ export async function refreshContent(): Promise<boolean> {
         if (fresh.knowledgeIndex) {
           await initKnowledgeEngine(fresh.knowledgeIndex);
         }
+        if (fresh.syntheses && Array.isArray(fresh.syntheses)) {
+          syntheses = fresh.syntheses;
+        }
+        if (fresh.conceptClusters) {
+          conceptClusters = fresh.conceptClusters;
+        }
         logEvent('content_pull_refresh', {
           article_count: fresh.articles.length,
           knowledge_index_updated: !!fresh.knowledgeIndex,
+          syntheses_count: syntheses.length,
         });
         return true;
       }
@@ -183,6 +220,8 @@ export function getRankedFeedArticles(): Article[] {
     if (dismissedArticles.has(a.id)) return false;
     const state = readingStates.get(a.id);
     if (state && state.status === 'read') return false;
+    const synthCoverage = getArticleSynthesisCoverage(a.id);
+    if (synthCoverage !== null && synthCoverage >= 0.80) return false;
     return true;
   });
 
@@ -201,12 +240,19 @@ export function getRankedFeedArticles(): Article[] {
   return candidates
     .map(a => {
       const interestScore = scoreArticle(a, recentTopics);
-      if (!useKnowledge) return { article: a, score: interestScore };
-      const novelty = _getArticleNovelty(a.id);
-      const curiosity = novelty.curiosity_score;
-      // Blend: interest model (60%) + knowledge curiosity (40%)
-      // Curiosity score already peaks at 70% novelty via Gaussian
-      return { article: a, score: interestScore * 0.6 + curiosity * 0.4 };
+      let score: number;
+      if (!useKnowledge) {
+        score = interestScore;
+      } else {
+        const novelty = _getArticleNovelty(a.id);
+        const curiosity = novelty.curiosity_score;
+        // Blend: interest model (60%) + knowledge curiosity (40%)
+        // Curiosity score already peaks at 70% novelty via Gaussian
+        score = interestScore * 0.6 + curiosity * 0.4;
+      }
+      const sc = getArticleSynthesisCoverage(a.id);
+      if (sc !== null && sc >= 0.50) score *= (1 - sc * 0.5);
+      return { article: a, score };
     })
     .sort((a, b) => b.score - a.score)
     .map(x => x.article);
@@ -370,6 +416,73 @@ export function getParagraphConnections(articleId: string): Map<number, Array<{ 
   return _getParagraphConnections(articleId);
 }
 
+export function markClaimsEncountered(claimIds: string[], engagement: 'skim' | 'read' | 'highlight'): number {
+  return _markClaimsEncountered(claimIds, engagement);
+}
+
+// --- Syntheses ---
+
+async function loadCompletedSyntheses(): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem(COMPLETED_SYNTHESES_KEY);
+    if (raw) completedSyntheses = new Set(JSON.parse(raw));
+  } catch (e) {
+    logEvent('completed_syntheses_load_error', { error: String(e) });
+  }
+}
+
+async function saveCompletedSyntheses(): Promise<void> {
+  try {
+    await AsyncStorage.setItem(COMPLETED_SYNTHESES_KEY, JSON.stringify([...completedSyntheses]));
+  } catch (e) {
+    logEvent('completed_syntheses_save_error', { error: String(e) });
+  }
+}
+
+export function getConceptClusters(): any {
+  return conceptClusters;
+}
+
+export function getSyntheses(): TopicSynthesis[] {
+  return syntheses;
+}
+
+export function getSynthesisForCluster(clusterId: string): TopicSynthesis | undefined {
+  return syntheses.find(s => s.cluster_id === clusterId);
+}
+
+export function getSynthesisForArticle(articleId: string): TopicSynthesis | undefined {
+  return syntheses.find(s => s.article_ids.includes(articleId));
+}
+
+export function getSynthesesForArticle(articleId: string): TopicSynthesis[] {
+  return syntheses.filter(s => s.article_ids.includes(articleId));
+}
+
+export function isSynthesisCompleted(clusterId: string): boolean {
+  return completedSyntheses.has(clusterId);
+}
+
+export function markSynthesisCompleted(clusterId: string): void {
+  completedSyntheses.add(clusterId);
+  saveCompletedSyntheses();
+}
+
+export function getArticleSynthesisCoverage(articleId: string): number | null {
+  const completedSynths = syntheses.filter(
+    s => completedSyntheses.has(s.cluster_id) && s.article_ids.includes(articleId)
+  );
+  if (completedSynths.length === 0) return null;
+  let maxCoverage = 0;
+  for (const s of completedSynths) {
+    const coverage = s.article_coverage[articleId];
+    if (coverage !== undefined && coverage > maxCoverage) {
+      maxCoverage = coverage;
+    }
+  }
+  return maxCoverage > 0 ? maxCoverage : null;
+}
+
 // --- Feed version (for reactive reranking) ---
 
 let feedVersion = 0;
@@ -411,6 +524,8 @@ export function getArticlesByLens(lens: FeedLens, topicFilter?: string): Article
     if (dismissedArticles.has(a.id)) return false;
     const state = readingStates.get(a.id);
     if (state && state.status === 'read') return false;
+    const synthCoverage = getArticleSynthesisCoverage(a.id);
+    if (synthCoverage !== null && synthCoverage >= 0.80) return false;
     return true;
   });
 

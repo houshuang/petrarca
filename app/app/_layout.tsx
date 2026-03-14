@@ -59,9 +59,12 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="reader" />
+        <Stack.Screen name="synthesis-reader" />
         <Stack.Screen name="voice-notes" />
         <Stack.Screen name="landscape" />
         <Stack.Screen name="trails" />
+        <Stack.Screen name="book-detail" />
+        <Stack.Screen name="add-book" />
         <Stack.Screen name="+not-found" />
       </Stack>
       <FeedbackCapture />

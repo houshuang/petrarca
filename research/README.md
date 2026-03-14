@@ -61,6 +61,19 @@ Master index of all research documents. **Always update this file when adding ne
 |----------|-------------|--------|
 | [feed-redesign-plan.md](feed-redesign-plan.md) | **Navigation overhaul**: Replace 4-tab layout with single unified screen + lens tabs + ✦ drawer. Queue → "Up Next", Topics → lens, Log → drawer. 3 rounds of mockup exploration, approved direction, detailed implementation plan. | Active |
 
+## Audits & Platform Consistency
+| Document | Description | Status |
+|----------|-------------|--------|
+| [user-journeys-platform-plan.md](user-journeys-platform-plan.md) | **Unified user journeys & platform plan**: All 10 user journeys across mobile/web, shared vs separate code boundaries, web layout specs for secondary screens, 4-phase implementation plan | Active |
+| [web-app-audit.md](web-app-audit.md) | **Web app audit**: comprehensive comparison of DESIGN_GUIDE.md specs vs actual implementation — 16 gaps identified across design elements, polish issues, and broken stubs, with prioritized recommendations | Active |
+| [mobile-app-audit.md](mobile-app-audit.md) | **Mobile app audit**: comprehensive review of plans vs reality — design system compliance, feature completeness (~95%), code robustness issues (error boundaries, async safety, FlatList memory), prioritized fix list | Active |
+
+## Cross-Article Synthesis
+| Document | Description | Status |
+|----------|-------------|--------|
+| [synthesis-pipeline-design.md](synthesis-pipeline-design.md) | **Session 17+19**: Concept cluster detection (graph-based + spectral bisection), synthesis generation (Gemini 3 Flash + tool calling), junk cleanup, two-pass contrastive labeling. 26 syntheses across 29 clusters. Session 19: prompt overhaul (humanist scholar voice, article reference links, structured tensions, progressive disclosure markers). Scripts: `build_concept_clusters.py`, `generate_syntheses.py`, `cleanup_articles.py`, `compare_synthesis_models.py`. | Active |
+| [synthesis-knowledge-tracking.md](synthesis-knowledge-tracking.md) | **Session 18**: System design for synthesis read tracking → feed filtering → ingestion novelty. Covers: feed coverage threshold (80%), partial coverage demotion, richer SynthesisReadState, chat as knowledge artifact. **Feed filtering implemented in session 19**: ≥80% coverage excluded, ≥50% demoted. | Active |
+
 ## Experiments & Development
 | Document | Description | Status |
 |----------|-------------|--------|
