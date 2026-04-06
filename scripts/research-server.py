@@ -4388,6 +4388,20 @@ JSON array only:"""
                     entity['notes'] = [dict(n) for n in notes]
                 except Exception:
                     entity['notes'] = []
+                # Voice context from transcript chunks
+                try:
+                    voice_ctx_rows = conn.execute('''
+                        SELECT tc.chunk_text, tc.chunk_type
+                        FROM transcript_chunks tc
+                        JOIN chunk_entity_links cel ON tc.id = cel.chunk_id
+                        WHERE cel.entity_name = ?
+                        AND tc.chunk_type != 'raw_speech'
+                        ORDER BY cel.relevance DESC
+                        LIMIT 8
+                    ''', (entity.get('name', ''),)).fetchall()
+                    entity['voice_context'] = [{'text': r['chunk_text'][:300], 'type': r['chunk_type']} for r in voice_ctx_rows]
+                except Exception:
+                    entity['voice_context'] = []
                 self._send_json_response(200, entity)
             elif ml_backlinks:
                 # Dynamic entity from microlearning annotations

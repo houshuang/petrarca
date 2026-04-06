@@ -256,6 +256,20 @@ export default function EntitySheet({ entityId, onClose, onExploreEntity }: Prop
               {/* User notes + capture */}
               <View style={es.notesSection}>
                 <Text style={es.sectionLabel}>What I know</Text>
+                {entity.voice_context && entity.voice_context.length > 0 && (
+                  <View style={{ marginBottom: 12 }}>
+                    <Text style={[es.sectionLabel, { fontSize: 11, color: colors.textMuted, marginBottom: 4 }]}>
+                      From your voice recall
+                    </Text>
+                    {entity.voice_context.map((vc: { text: string; type: string }, i: number) => (
+                      <View key={i} style={{ marginBottom: 6 }}>
+                        <Text style={{ fontFamily: fonts.serif, fontSize: 13, color: colors.textSecondary, lineHeight: 18 }}>
+                          {vc.text}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
                 {entity.notes && entity.notes.length > 0 && entity.notes.map(n => (
                   <Text key={n.id} style={es.noteText}>{n.note}</Text>
                 ))}

@@ -642,6 +642,7 @@ export interface EntityDetails {
   curriculum_links: EntityCurriculumLink[];
   microlearning_backlinks?: MicrolearningBacklink[];
   notes?: EntityNote[];
+  voice_context?: Array<{ text: string; type: string }>;
 }
 
 export interface EntityCurriculumLink {

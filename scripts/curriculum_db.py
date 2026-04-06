@@ -1499,6 +1499,22 @@ def get_knowledge_atlas_data(conn=None) -> dict:
                 knowledge_dist[knowledge] = knowledge_dist.get(knowledge, 0) + 1
                 all_node_count += 1
 
+                # Voice chunks linked to this node
+                voice_chunks = []
+                try:
+                    voice_rows = conn.execute('''
+                        SELECT tc.chunk_text, tc.chunk_type
+                        FROM transcript_chunks tc
+                        JOIN chunk_node_links cnl ON tc.id = cnl.chunk_id
+                        WHERE cnl.node_id = ? AND cnl.domain_id = ?
+                        AND tc.chunk_type != 'raw_speech'
+                        ORDER BY cnl.relevance DESC
+                        LIMIT 5
+                    ''', (node['id'], domain_id)).fetchall()
+                    voice_chunks = [{'text': r['chunk_text'][:200], 'type': r['chunk_type']} for r in voice_rows]
+                except Exception:
+                    pass
+
                 nodes.append({
                     'id': node['id'],
                     'title': node['title'],
@@ -1515,9 +1531,24 @@ def get_knowledge_atlas_data(conn=None) -> dict:
                     'prerequisites': node.get('prerequisites', []),
                     'books': node_books.get(node['id'], []),
                     'article_count': node_articles.get(node['id'], 0),
+                    'voice_chunks': voice_chunks,
                 })
 
-            curricula.append({
+            # Domain knowledge portrait
+            portrait = None
+            portrait_version = None
+            try:
+                portrait_row = conn.execute(
+                    'SELECT summary, version, updated_at FROM domain_knowledge_summaries WHERE domain_id = ?',
+                    (domain_id,)
+                ).fetchone()
+                if portrait_row:
+                    portrait = portrait_row['summary']
+                    portrait_version = portrait_row['version']
+            except Exception:
+                pass
+
+            domain_dict = {
                 'id': domain_id,
                 'title': curriculum['title'],
                 'description': curriculum.get('description', ''),
@@ -1525,7 +1556,11 @@ def get_knowledge_atlas_data(conn=None) -> dict:
                 'node_count': len(nodes),
                 'nodes': nodes,
                 'stats': domain_stats,
-            })
+            }
+            if portrait:
+                domain_dict['portrait'] = portrait
+                domain_dict['portrait_version'] = portrait_version
+            curricula.append(domain_dict)
 
         # Shared entities with curriculum links and knowledge
         entity_rows = conn.execute('''
@@ -1560,6 +1595,21 @@ def get_knowledge_atlas_data(conn=None) -> dict:
         entities = []
         for er in entity_rows:
             eid = er['entity_id']
+            # Voice chunks linked to this entity
+            entity_voice_chunks = []
+            try:
+                voice_rows = conn.execute('''
+                    SELECT tc.chunk_text, tc.chunk_type
+                    FROM transcript_chunks tc
+                    JOIN chunk_entity_links cel ON tc.id = cel.chunk_id
+                    WHERE cel.entity_name = ?
+                    AND tc.chunk_type != 'raw_speech'
+                    ORDER BY cel.relevance DESC
+                    LIMIT 5
+                ''', (er['name'],)).fetchall()
+                entity_voice_chunks = [{'text': r['chunk_text'][:200], 'type': r['chunk_type']} for r in voice_rows]
+            except Exception:
+                pass
             entities.append({
                 'id': eid, 'name': er['name'], 'entity_type': er['entity_type'],
                 'description': er['description'], 'modern_name': er['modern_name'],
@@ -1567,6 +1617,7 @@ def get_knowledge_atlas_data(conn=None) -> dict:
                 'date_start': er['date_start'], 'date_end': er['date_end'],
                 'knowledge': entity_knowledge.get(eid, 'unknown'),
                 'curriculum_links': entity_link_map.get(eid, []),
+                'voice_chunks': entity_voice_chunks,
             })
 
         # Books with curriculum mappings

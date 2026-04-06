@@ -912,6 +912,16 @@ function openDetail(type, item) {
         <div class="detail-row"><span class="label">Articles</span><span class="value">${item.article_count || 0}</span></div>
         ${item.date_start != null ? `<div class="detail-row"><span class="label">Period</span><span class="value">${formatYear(item.date_start)} – ${formatYear(item.date_end)}</span></div>` : ''}
       </div>`;
+    if (item.voice_chunks && item.voice_chunks.length) {
+      html += `<div class="detail-section"><div class="detail-section-title">✦ Your Voice Recall</div>`;
+      item.voice_chunks.forEach(vc => {
+        const typeLabel = vc.type === 'captured_fact' ? 'Recalled' :
+                          vc.type === 'wondering' ? 'Wondered' :
+                          vc.type === 'interesting' ? 'Connected' : vc.type;
+        html += `<div style="margin-bottom:6px"><span style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted)">${typeLabel}</span><div style="font-size:12px;color:var(--text-secondary);line-height:1.4">"${vc.text}"</div></div>`;
+      });
+      html += `</div>`;
+    }
     if (item.books && item.books.length) {
       html += `<div class="detail-section"><div class="detail-section-title">✦ Source Books</div>`;
       item.books.forEach(b => {
@@ -944,6 +954,16 @@ function openDetail(type, item) {
       </div>`;
     });
     html += `</div>`;
+    if (item.voice_chunks && item.voice_chunks.length) {
+      html += `<div class="detail-section"><div class="detail-section-title">✦ What You've Said</div>`;
+      item.voice_chunks.forEach(vc => {
+        const typeLabel = vc.type === 'captured_fact' ? 'Recalled' :
+                          vc.type === 'wondering' ? 'Wondered' :
+                          vc.type === 'interesting' ? 'Connected' : vc.type;
+        html += `<div style="margin-bottom:6px"><span style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted)">${typeLabel}</span><div style="font-size:12px;color:var(--text-secondary);line-height:1.4">"${vc.text}"</div></div>`;
+      });
+      html += `</div>`;
+    }
   } else if (type === 'book') {
     const domains = [...new Set(item.curriculum_mappings.map(m => m.domain_title))];
     html += `
@@ -980,6 +1000,12 @@ function openDetail(type, item) {
         <div class="detail-section-title">✦ Actions</div>
         <div class="detail-link" onclick="switchToExplorer('${item.id}')">Explore this curriculum →</div>
       </div>`;
+    if (item.portrait) {
+      html += `<div class="detail-section"><div class="detail-section-title">✦ Your Knowledge Portrait</div>`;
+      html += `<div style="font-size:12px;color:var(--text-secondary);line-height:1.5;white-space:pre-wrap">${item.portrait}</div>`;
+      if (item.portrait_version) html += `<div style="font-size:10px;color:var(--text-muted);margin-top:4px">v${item.portrait_version}</div>`;
+      html += `</div>`;
+    }
   }
 
   inner.innerHTML = html;
