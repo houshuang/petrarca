@@ -5,10 +5,11 @@ Dual-layer logging (modeled on Alif's interaction_logger.py):
 - SQLite: interaction_log table (for queries/analytics)
 """
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-LOG_DIR = Path('/opt/petrarca/data/logs')
+LOG_DIR = Path(os.environ.get('LOG_DIR', '/opt/petrarca/data/logs'))
 
 
 def log_server_event(event: str, **kwargs):

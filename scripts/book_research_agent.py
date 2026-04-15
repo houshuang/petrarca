@@ -11,6 +11,7 @@ Uses call_with_search() for Gemini + Google Search grounding.
 """
 
 import json
+import os
 import re
 import sys
 import time
@@ -22,6 +23,24 @@ BOOK_RESEARCH_DIR = DATA_DIR / "book_research"
 ARTICLES_PATH = DATA_DIR / "articles.json"
 
 BOOK_RESEARCH_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _book_research_model() -> str | None:
+    """Optional override for book-research LLM calls (see PETRARCA_BOOK_RESEARCH_MODEL)."""
+    m = (os.environ.get('PETRARCA_BOOK_RESEARCH_MODEL') or '').strip()
+    return m or None
+
+
+def invalidate_book_research(book_id: str) -> bool:
+    """Remove cached research so the next run writes fresh JSON. Returns True if a file was removed."""
+    if not book_id:
+        return False
+    path = BOOK_RESEARCH_DIR / f'{book_id}.json'
+    if path.exists():
+        path.unlink()
+        print(f'[book-research] Invalidated cache for {book_id}', flush=True)
+        return True
+    return False
 
 
 def _parse_json(text: str) -> dict | list | None:
@@ -106,8 +125,9 @@ def research_book(book_id: str, title: str, author: str,
     t0 = time.time()
 
     # Step 1: Book-level research (thesis, arguments, reception)
+    isbn_line = f'ISBN: {isbn}. Use this to disambiguate editions and avoid confusing this work with same-titled books.' if isbn else ''
     book_prompt = f"""Research the book "{title}" by {author}.
-{f'ISBN: {isbn}' if isbn else ''}
+{isbn_line}
 
 Provide:
 1. The book's central thesis or argument (2-3 sentences)
@@ -124,7 +144,8 @@ Return a JSON object:
 }}
 Return ONLY valid JSON."""
 
-    book_result = call_with_search(book_prompt, max_tokens=4096)
+    _bm = _book_research_model()
+    book_result = call_with_search(book_prompt, max_tokens=4096, model=_bm)
     book_data = _parse_json(book_result) if book_result else None
     if not book_data or not isinstance(book_data, dict):
         book_data = {'thesis': '', 'debates': [], 'key_terms': [], 'reception': ''}
@@ -163,7 +184,7 @@ Return a JSON object where keys are chapter numbers (as strings):
 }}
 Return ONLY valid JSON."""
 
-        chapter_result = call_with_search(chapter_prompt, max_tokens=8192)
+        chapter_result = call_with_search(chapter_prompt, max_tokens=8192, model=_bm)
         parsed_chapters = _parse_json(chapter_result) if chapter_result else None
         if parsed_chapters and isinstance(parsed_chapters, dict):
             chapter_research = parsed_chapters
@@ -210,8 +231,12 @@ Return a JSON array:
 }}]
 Return ONLY valid JSON."""
 
-            classify_result = call_llm(classify_prompt, response_mime_type="application/json",
-                                       max_tokens=4096)
+            classify_result = call_llm(
+                classify_prompt,
+                model=_bm,
+                response_mime_type='application/json',
+                max_tokens=4096,
+            )
             parsed_connections = _parse_json(classify_result) if classify_result else None
             if parsed_connections and isinstance(parsed_connections, list):
                 enriched_connections = parsed_connections
@@ -247,7 +272,7 @@ Return a JSON array:
 }}]
 Return ONLY valid JSON."""
 
-    suggest_result = call_with_search(suggest_prompt, max_tokens=4096)
+    suggest_result = call_with_search(suggest_prompt, max_tokens=4096, model=_bm)
     parsed_suggestions = _parse_json(suggest_result) if suggest_result else None
     if parsed_suggestions and isinstance(parsed_suggestions, list):
         suggested_reading = parsed_suggestions

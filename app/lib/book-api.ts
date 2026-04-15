@@ -159,6 +159,11 @@ export async function uploadBookVoiceNote(
 
 // --- Book Research API ---
 
+export type ResearchBookOptions = {
+  /** Delete cached `book_research/{id}.json` before queuing a fresh run */
+  invalidate?: boolean;
+};
+
 export async function researchBook(
   bookId: string,
   title: string,
@@ -166,6 +171,7 @@ export async function researchBook(
   chapters: PhysicalBookChapter[],
   topics: string[],
   isbn?: string,
+  options?: ResearchBookOptions,
 ): Promise<void> {
   const resp = await fetchWithTimeout(`${RESEARCH_BASE}/book/research`, {
     method: 'POST',
@@ -174,13 +180,38 @@ export async function researchBook(
       book_id: bookId, title, author, isbn,
       chapters: chapters.map(ch => ({ number: ch.number, title: ch.title })),
       topics,
+      invalidate: options?.invalidate === true,
     }),
-    timeout: 120000, // research spawns claude -p, can take a while
+    timeout: 120000, // research runs in background; 202 returns quickly
   });
   if (!resp.ok) {
     const text = await resp.text();
     throw new Error(`Book research failed (${resp.status}): ${text}`);
   }
+}
+
+export type WaitForBookResearchOptions = {
+  maxWaitMs?: number;
+  intervalMs?: number;
+};
+
+/** Poll until cached research has a non-empty thesis or timeout. */
+export async function waitForBookResearch(
+  bookId: string,
+  options?: WaitForBookResearchOptions,
+): Promise<BookResearch | null> {
+  const maxWait = options?.maxWaitMs ?? 180000;
+  const interval = options?.intervalMs ?? 4000;
+  const deadline = Date.now() + maxWait;
+  let last: BookResearch | null = null;
+  while (Date.now() < deadline) {
+    last = await getBookResearch(bookId);
+    if (last?.thesis?.trim()) return last;
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, interval);
+    });
+  }
+  return last;
 }
 
 export async function getBookResearch(

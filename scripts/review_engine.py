@@ -3943,6 +3943,19 @@ def run_voice_elicitation(node_id: str, domain_id: str, audio_path: Path, conn, 
         print(f'[voice-elicit] LLM returned non-dict: {repr(str(result)[:200])}', flush=True)
         result = {}
 
+    # Avoid empty JSON → client "Server returned empty analysis" with no UI text
+    _cap = result.get('captured') or []
+    _miss = result.get('missed') or []
+    _fb = (result.get('feedback_summary') or '').strip()
+    if not _cap and not _miss and not _fb and not result.get('error'):
+        result['feedback_summary'] = (
+            'Structured recall scoring did not return data (Claude CLI, OpenAI, or Gemini '
+            'failed, or the model returned invalid JSON). Check research-server logs and '
+            'API keys on the Mac, then try again.'
+        )
+        result.setdefault('coverage_pct', 0)
+        result.setdefault('suggested_score', 'missed')
+
     # Populate result metadata (no DB needed)
     result['node_title'] = node['title']
     result['node_description'] = node['description']

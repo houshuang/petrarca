@@ -15,7 +15,9 @@ import {
   addBookCapture, generateCaptureId, updatePhysicalBook, updateBookCapture,
 } from '../data/book-store';
 import { useBookStoreVersion } from '../data/use-book-store';
-import { uploadBookVoiceNote, researchBook, getBookResearch, getStorySoFar, identifyBookCover } from '../lib/book-api';
+import {
+  uploadBookVoiceNote, researchBook, getBookResearch, getStorySoFar, identifyBookCover, waitForBookResearch,
+} from '../lib/book-api';
 import { notifyChapterComplete } from '../lib/review-api';
 import ChapterContext from '../components/ChapterContext';
 import { enqueuePhotoUpload, pollPhotoResults, getUploadQueueStatus, initUploadQueue } from '../lib/upload-queue';
@@ -177,6 +179,7 @@ export default function BookDetailScreen() {
   const [chapterDropdownOpen, setChapterDropdownOpen] = useState(false);
   const [research, setResearch] = useState<BookResearch | null>(null);
   const [researchLoading, setResearchLoading] = useState(false);
+  const [researchRegenerating, setResearchRegenerating] = useState(false);
   const [storySoFar, setStorySoFar] = useState<StorySoFarBriefing | null>(null);
   const [showStorySoFar, setShowStorySoFar] = useState(false);
   const [chapterCompleteText, setChapterCompleteText] = useState<string | null>(null);
@@ -237,16 +240,21 @@ export default function BookDetailScreen() {
     (async () => {
       try {
         const res = await getBookResearch(book.id);
-        if (!cancelled) {
-          setResearch(res);
-          if (!res) {
-            setResearchLoading(true);
-            logEvent('book_research_started', { book_id: book.id, title: book.title });
-            await researchBook(book.id, book.title, book.author, book.chapters, book.topics, book.isbn);
-            if (!cancelled) setResearchLoading(false);
-          }
+        if (cancelled) return;
+        setResearch(res);
+        if (!res?.thesis?.trim()) {
+          setResearchLoading(true);
+          logEvent('book_research_started', { book_id: book.id, title: book.title });
+          await researchBook(book.id, book.title, book.author, book.chapters, book.topics, book.isbn, {
+            invalidate: Boolean(res),
+          });
+          if (cancelled) return;
+          const updated = await waitForBookResearch(book.id, { maxWaitMs: 180000, intervalMs: 4000 });
+          if (!cancelled) setResearch(updated);
         }
       } catch {
+        if (!cancelled) setResearch(null);
+      } finally {
         if (!cancelled) setResearchLoading(false);
       }
 
@@ -255,6 +263,70 @@ export default function BookDetailScreen() {
 
     return () => { cancelled = true; };
   }, [book?.id]));
+
+  const handleKickoffResearch = useCallback(() => {
+    if (!book || researchRegenerating || researchLoading) return;
+    void (async () => {
+      setResearchRegenerating(true);
+      setResearch(null);
+      try {
+        logEvent('book_research_kickoff', { book_id: book.id, title: book.title });
+        await researchBook(book.id, book.title, book.author, book.chapters, book.topics, book.isbn, {
+          invalidate: true,
+        });
+        const updated = await waitForBookResearch(book.id, { maxWaitMs: 180000, intervalMs: 4000 });
+        setResearch(updated);
+        if (!updated?.thesis?.trim()) {
+          Alert.alert(
+            'Still running',
+            'Research is not ready yet. Tap Generate summary again in a minute, or reopen this book.',
+          );
+        }
+      } catch (e) {
+        Alert.alert('Summary failed', e instanceof Error ? e.message : 'Unknown error');
+      } finally {
+        setResearchRegenerating(false);
+      }
+    })();
+  }, [book, researchRegenerating, researchLoading]);
+
+  const handleRegenerateResearch = useCallback(() => {
+    if (!book || researchRegenerating || researchLoading) return;
+    Alert.alert(
+      'Regenerate book research?',
+      'Clears the cached summary and re-runs search-backed research. This usually takes one to three minutes.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Regenerate',
+          onPress: () => {
+            void (async () => {
+              setResearchRegenerating(true);
+              setResearch(null);
+              try {
+                logEvent('book_research_regenerate', { book_id: book.id, title: book.title });
+                await researchBook(book.id, book.title, book.author, book.chapters, book.topics, book.isbn, {
+                  invalidate: true,
+                });
+                const updated = await waitForBookResearch(book.id, { maxWaitMs: 180000, intervalMs: 4000 });
+                setResearch(updated);
+                if (!updated?.thesis?.trim()) {
+                  Alert.alert(
+                    'Still running',
+                    'Research is not ready yet. Leave this screen and open the book again in a minute.',
+                  );
+                }
+              } catch (e) {
+                Alert.alert('Regenerate failed', e instanceof Error ? e.message : 'Unknown error');
+              } finally {
+                setResearchRegenerating(false);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  }, [book, researchRegenerating, researchLoading]);
 
   if (!book) {
     return (
@@ -269,6 +341,8 @@ export default function BookDetailScreen() {
 
   const coverUri = book.cover_url || book.cover_image_uri;
   const progress = book.current_page && book.page_count ? Math.round((book.current_page / book.page_count) * 100) : 0;
+  const hasResearchThesis = Boolean(research?.thesis?.trim());
+  const researchBusy = researchLoading || researchRegenerating;
 
   const handlePageUpdate = async () => {
     const page = parseInt(pageInput, 10);
@@ -732,22 +806,39 @@ export default function BookDetailScreen() {
         )}
       </View>
 
-      {/* Research: Thesis & chapter insights */}
-      {research?.thesis && (
-        <View style={styles.researchSection}>
+      {/* Research: thesis + manual kickoff (always visible so Generate / Regenerate are reachable) */}
+      <View style={styles.researchSection}>
+        <View style={styles.researchSectionHeader}>
           <Text style={styles.sectionLabel}>{'\u2726'} About this book</Text>
-          <Text style={styles.thesisText}>{research.thesis}</Text>
-          {research.reception ? <Text style={styles.receptionText}>{research.reception}</Text> : null}
+          {hasResearchThesis && !researchBusy ? (
+            <Pressable onPress={handleRegenerateResearch} hitSlop={10}>
+              <Text style={styles.regenerateLink}>Wrong? Regenerate</Text>
+            </Pressable>
+          ) : null}
+          {!hasResearchThesis && !researchBusy ? (
+            <Pressable onPress={handleKickoffResearch} hitSlop={10}>
+              <Text style={styles.regenerateLink}>Generate summary</Text>
+            </Pressable>
+          ) : null}
         </View>
-      )}
-      {researchLoading && (
-        <View style={styles.researchSection}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        {researchBusy ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
             <ActivityIndicator size="small" color={colors.rubric} />
-            <Text style={styles.researchLoadingText}>Researching this book...</Text>
+            <Text style={styles.researchLoadingText}>
+              {researchRegenerating ? 'Regenerating summary…' : 'Researching this book…'}
+            </Text>
           </View>
-        </View>
-      )}
+        ) : hasResearchThesis && research ? (
+          <>
+            <Text style={styles.thesisText}>{research.thesis}</Text>
+            {research.reception ? <Text style={styles.receptionText}>{research.reception}</Text> : null}
+          </>
+        ) : (
+          <Text style={styles.researchEmptyHint}>
+            No AI summary yet. The server uses Gemini with search; tap Generate summary to run or retry (may take a few minutes).
+          </Text>
+        )}
+      </View>
 
       {/* Research: Article connections */}
       {research?.article_connections && research.article_connections.length > 0 && (
@@ -932,6 +1023,26 @@ const styles = StyleSheet.create({
   emptyCaptures: { fontFamily: fonts.readingItalic, fontSize: 14, color: colors.textMuted, paddingVertical: 20, textAlign: 'center', ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}) },
   // Research sections
   researchSection: { paddingHorizontal: layout.screenPadding, paddingTop: 18, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.rule },
+  researchSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 4,
+  },
+  regenerateLink: {
+    fontFamily: fonts.ui,
+    fontSize: 12,
+    color: colors.rubric,
+    textDecorationLine: 'underline',
+  },
+  researchEmptyHint: {
+    fontFamily: fonts.reading,
+    fontSize: 14,
+    lineHeight: 21,
+    color: colors.textMuted,
+    marginTop: 8,
+  },
   researchLoadingText: { fontFamily: fonts.readingItalic, fontSize: 13, color: colors.textMuted, ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}) },
   thesisText: { fontFamily: fonts.reading, fontSize: 15, lineHeight: 22, color: colors.textBody, marginBottom: 8 },
   receptionText: { fontFamily: fonts.readingItalic, fontSize: 13, lineHeight: 19, color: colors.textSecondary, ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}) },

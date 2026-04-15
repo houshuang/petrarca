@@ -12,6 +12,7 @@ import os
 import math
 import random
 import re
+import shutil
 import subprocess
 import time
 from datetime import datetime
@@ -25,9 +26,10 @@ from db import get_connection
 def _call_opus(prompt: str, max_tokens: int = 32768, timeout: int = 1200) -> str | None:
     """Call Claude Opus for high-quality generation.
 
-    Tries Anthropic SDK first (if ANTHROPIC_KEY set — works on server),
-    then falls back to `claude -p` CLI (works locally with Max plan).
-    Returns the raw text response, or None on failure.
+    1. Anthropic SDK if ANTHROPIC_* key set (servers, API credits).
+    2. `claude -p` CLI with **API keys stripped from the child env** so the CLI uses
+       Claude Code / Max subscription auth instead of billing the same exhausted API key.
+    3. If ``PETRARCA_CURRICULUM_FALLBACK_MODEL`` is set (e.g. ``gpt-4o-mini``), ``call_llm`` as last resort when SDK and CLI both fail.
     """
     anthropic_key = os.environ.get('ANTHROPIC_KEY') or os.environ.get('ANTHROPIC_API_KEY')
 
@@ -44,15 +46,45 @@ def _call_opus(prompt: str, max_tokens: int = 32768, timeout: int = 1200) -> str
         except Exception as e:
             print(f'[curriculum] Anthropic SDK failed: {e}', flush=True)
 
-    # Fallback: claude -p CLI (free with Max plan, local only)
-    try:
-        cmd = ['claude', '-p', '--tools', '', '--output-format', 'text',
-               '--model', 'opus', '--no-session-persistence']
-        proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True, timeout=timeout)
-        if proc.returncode == 0 and proc.stdout.strip():
-            return proc.stdout.strip()
-    except Exception as e:
-        print(f'[curriculum] claude CLI failed: {e}', flush=True)
+    # Fallback: claude -p CLI — strip ANTHROPIC_* from env so CLI uses Max/subscription, not the API key wallet.
+    if shutil.which('claude'):
+        try:
+            cmd = ['claude', '-p', '--tools', '', '--output-format', 'text',
+                   '--model', 'opus', '--no-session-persistence']
+            _strip = ('ANTHROPIC_API_KEY', 'ANTHROPIC_KEY', 'ANTHROPIC_AUTH_TOKEN')
+            cli_env = {k: v for k, v in os.environ.items() if k not in _strip}
+            proc = subprocess.run(
+                cmd, input=prompt, capture_output=True, text=True, timeout=timeout, env=cli_env,
+            )
+            if proc.returncode == 0 and proc.stdout and proc.stdout.strip():
+                print('[curriculum] claude CLI (subscription path) succeeded', flush=True)
+                return proc.stdout.strip()
+            out = (proc.stdout or '').strip()
+            err = (proc.stderr or '').strip()
+            combo = (out + '\n' + err).strip()[:1200]
+            print(
+                f'[curriculum] claude CLI: rc={proc.returncode} output={combo!r}',
+                flush=True,
+            )
+        except Exception as e:
+            print(f'[curriculum] claude CLI failed: {e}', flush=True)
+    else:
+        print('[curriculum] claude CLI not found on PATH', flush=True)
+
+    fb = (os.environ.get('PETRARCA_CURRICULUM_FALLBACK_MODEL') or '').strip().lower()
+    if fb and fb not in ('none', 'off', 'false', ''):
+        try:
+            raw = call_llm(
+                prompt, model=fb, max_tokens=16384, response_mime_type='application/json',
+            )
+            if raw and str(raw).strip():
+                print(
+                    f'[curriculum] Fallback LLM ({fb}) — lower quality than Opus',
+                    flush=True,
+                )
+                return str(raw).strip()
+        except Exception as e:
+            print(f'[curriculum] Fallback LLM failed: {e}', flush=True)
 
     return None
 
@@ -145,7 +177,8 @@ def generate_curriculum(domain: str, depth: str = "introductory", model: str = "
     if model == 'opus' or model.startswith('claude'):
         raw = _call_opus(prompt)
     else:
-        raw = call_llm(prompt, model=model, max_tokens=32768,
+        # OpenAI chat completions cap completion tokens (e.g. 16k); avoid 32k here.
+        raw = call_llm(prompt, model=model, max_tokens=16384,
                        response_mime_type="application/json")
     if not raw:
         return None

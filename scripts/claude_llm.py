@@ -78,14 +78,16 @@ def call_claude_json(prompt: str, *, timeout: int = 180, retries: int = 1,
         if result is not None:
             return result
 
-    print('[call_claude_json] Claude failed, falling back to Gemini', flush=True)
+    print('[call_claude_json] Claude failed, falling back to Gemini/OpenAI', flush=True)
     try:
         from gemini_llm import call_llm
         raw = call_llm(prompt, max_tokens=4096, response_mime_type='application/json')
         if raw:
             return extract_json(raw)
+    except ImportError as e:
+        print(f'[call_claude_json] gemini_llm import failed: {e}', flush=True)
     except Exception as e:
-        print(f'[call_claude_json] Gemini fallback also failed: {e}', flush=True)
+        print(f'[call_claude_json] Gemini/OpenAI fallback also failed: {e}', flush=True)
 
     return None
 

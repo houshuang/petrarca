@@ -1,0 +1,11 @@
+{
+  "name": "petrarca-repo",
+  "private": true,
+  "description": "Expo app lives in app/. Use npm start from repo root, or cd app && npx expo start.",
+  "scripts": {
+    "start": "cd app && npx expo start",
+    "ios": "cd app && npx expo start --ios",
+    "android": "cd app && npx expo start --android",
+    "web": "cd app && npx expo start --web"
+  }
+}

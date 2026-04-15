@@ -246,13 +246,15 @@ export default function CurriculumScanScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.parchment }}>
-      <View style={containerStyle}>
+      <View style={[containerStyle, styles.scanColumn]}>
         {/* Header */}
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} hitSlop={12}>
             <Text style={styles.backText}>← Knowledge Map</Text>
           </Pressable>
-          <Text style={styles.subtitle}>{domainTitle}</Text>
+          <Text style={styles.subtitle} numberOfLines={3} ellipsizeMode="tail">
+            {domainTitle}
+          </Text>
         </View>
 
         {/* Progress bar */}
@@ -278,47 +280,57 @@ export default function CurriculumScanScreen() {
               )}
             </View>
 
-            <Text style={styles.cardTitle}>{currentNode.title}</Text>
-            <Text style={styles.cardPrompt}>Read the description, then: did you already know this?</Text>
-            <Text style={styles.cardDesc}>{currentNode.description}</Text>
+            <ScrollView
+              style={styles.cardScroll}
+              contentContainerStyle={styles.cardScrollContent}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+              showsVerticalScrollIndicator
+            >
+              <Text style={styles.cardTitle}>{currentNode.title}</Text>
+              <Text style={styles.cardPrompt}>Read the description, then: did you already know this?</Text>
+              <Text style={styles.cardDesc}>{currentNode.description}</Text>
+            </ScrollView>
 
-            {/* Familiarity buttons */}
-            <View style={styles.responseRow}>
-              <Pressable style={styles.respBtn} onPress={() => handleAnswer('new_to_me')}>
-                {isWeb && <Text style={styles.keyHint}>1</Text>}
-                <Text style={styles.respText}>New to me</Text>
-              </Pressable>
-              <Pressable style={styles.respBtn} onPress={() => handleAnswer('knew_some')}>
-                {isWeb && <Text style={styles.keyHint}>2</Text>}
-                <Text style={styles.respText}>Knew some</Text>
-              </Pressable>
-              <Pressable style={styles.respBtn} onPress={() => handleAnswer('knew_all')}>
-                {isWeb && <Text style={styles.keyHint}>3</Text>}
-                <Text style={styles.respText}>Knew all</Text>
-              </Pressable>
+            <View style={styles.cardActions}>
+              {/* Familiarity buttons */}
+              <View style={styles.responseRow}>
+                <Pressable style={styles.respBtn} onPress={() => handleAnswer('new_to_me')}>
+                  {isWeb && <Text style={styles.keyHint}>1</Text>}
+                  <Text style={styles.respText}>New to me</Text>
+                </Pressable>
+                <Pressable style={styles.respBtn} onPress={() => handleAnswer('knew_some')}>
+                  {isWeb && <Text style={styles.keyHint}>2</Text>}
+                  <Text style={styles.respText}>Knew some</Text>
+                </Pressable>
+                <Pressable style={styles.respBtn} onPress={() => handleAnswer('knew_all')}>
+                  {isWeb && <Text style={styles.keyHint}>3</Text>}
+                  <Text style={styles.respText}>Knew all</Text>
+                </Pressable>
+              </View>
+
+              {/* Interest buttons */}
+              <View style={styles.interestRow}>
+                <Pressable
+                  style={[styles.intBtn, selectedInterest === 'skip' && styles.intBtnActive]}
+                  onPress={() => setSelectedInterest(selectedInterest === 'skip' ? null : 'skip')}
+                >
+                  {isWeb && <Text style={styles.keyHint}>Q</Text>}
+                  <Text style={styles.intText}>– Only if prereq</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.intBtn, selectedInterest === 'star' && styles.intBtnActive]}
+                  onPress={() => setSelectedInterest(selectedInterest === 'star' ? null : 'star')}
+                >
+                  {isWeb && <Text style={styles.keyHint}>E</Text>}
+                  <Text style={styles.intText}>★ Fascinating</Text>
+                </Pressable>
+              </View>
+
+              {isWeb && (
+                <Text style={styles.keyLegend}>1-3 familiarity · Q skip / E star (optional) · Backspace back</Text>
+              )}
             </View>
-
-            {/* Interest buttons */}
-            <View style={styles.interestRow}>
-              <Pressable
-                style={[styles.intBtn, selectedInterest === 'skip' && styles.intBtnActive]}
-                onPress={() => setSelectedInterest(selectedInterest === 'skip' ? null : 'skip')}
-              >
-                {isWeb && <Text style={styles.keyHint}>Q</Text>}
-                <Text style={styles.intText}>– Only if prereq</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.intBtn, selectedInterest === 'star' && styles.intBtnActive]}
-                onPress={() => setSelectedInterest(selectedInterest === 'star' ? null : 'star')}
-              >
-                {isWeb && <Text style={styles.keyHint}>E</Text>}
-                <Text style={styles.intText}>★ Fascinating</Text>
-              </Pressable>
-            </View>
-
-            {isWeb && (
-              <Text style={styles.keyLegend}>1-3 familiarity · Q skip / E star (optional) · Backspace back</Text>
-            )}
           </View>
         )}
       </View>
@@ -327,6 +339,10 @@ export default function CurriculumScanScreen() {
 }
 
 const styles = StyleSheet.create({
+  scanColumn: {
+    flex: 1,
+    minHeight: 0,
+  },
   container: {
     flex: 1,
     paddingHorizontal: layout.screenPadding,
@@ -383,14 +399,31 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
 
-  // Card
+  // Card — flex so long descriptions scroll; actions stay on screen
   card: {
+    flex: 1,
+    minHeight: 0,
     backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: colors.rule,
     borderRadius: 6,
     padding: 24,
     marginTop: 8,
+    marginBottom: 8,
+  },
+  cardScroll: {
+    flex: 1,
+    minHeight: 0,
+  },
+  cardScrollContent: {
+    flexGrow: 1,
+    paddingBottom: 8,
+  },
+  cardActions: {
+    flexShrink: 0,
+    paddingTop: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.rule,
   },
   cardTop: {
     flexDirection: 'row',
@@ -437,10 +470,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 23,
     color: colors.textBody,
-    marginBottom: 20,
-    paddingBottom: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.rule,
   },
 
   // Response buttons

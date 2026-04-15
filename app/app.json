@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.stian.petrarca",
+      "bundleIdentifier": "com.mmccray.petrarca",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSAppTransportSecurity": {
@@ -23,6 +23,7 @@
       }
     },
     "android": {
+      "package": "com.mmccray.petrarca",
       "adaptiveIcon": {
         "backgroundColor": "#f7f4ec",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -44,8 +45,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "5d72383d-5e3f-4e71-9a58-65bef214943d"
+        "projectId": "c4ca9ce7-1886-4401-a655-28ba7886f9b6"
       }
-    }
+    },
+    "owner": "mmccray"
   }
 }

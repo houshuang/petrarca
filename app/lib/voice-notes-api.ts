@@ -1,8 +1,4 @@
-import { Platform } from 'react-native';
-
-const RESEARCH_BASE = Platform.OS === 'web'
-  ? `${window.location.protocol}//${window.location.hostname}:8090`
-  : 'http://alifstian.duckdns.org:8090';
+import { RESEARCH_BASE } from './chat-api';
 
 export interface NoteAction {
   id: string;

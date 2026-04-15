@@ -35,6 +35,7 @@ import { Platform, StyleSheet, View, ViewStyle } from 'react-native';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import { EntityDetails } from '../data/types';
 import { colors } from '../design/tokens';
+import { getMapHtmlUrl } from '../lib/server-urls';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -122,9 +123,7 @@ export interface AncientMapRef {
 
 // ── Map HTML source ───────────────────────────────────────────────────────────
 
-const MAP_HTML_URI = Platform.OS === 'web'
-  ? '/map/index.html'
-  : 'http://alifstian.duckdns.org:8084/map/index.html';
+const MAP_HTML_URI = getMapHtmlUrl();
 
 // ── Component ─────────────────────────────────────────────────────────────────
 

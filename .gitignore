@@ -29,7 +29,11 @@ yarn-error.*
 
 # Environment
 .env*.local
+.env.save
 *.pem
+
+# Machine-specific server env (may contain API keys); use scripts/env.mac-mini.example
+scripts/.env.mac-mini
 
 # TypeScript
 *.tsbuildinfo

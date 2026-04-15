@@ -26,6 +26,25 @@ A mobile-first read-later app combining incremental reading, user knowledge mode
 
 **Scripts** (`scripts/`): Data processing pipeline — article extraction, claim embedding, curriculum bootstrapping, book research agents.
 
+## Local development (Mac or Linux)
+
+Rough path for a second machine; paths are examples — adjust to your layout.
+
+1. **Clone** the repo and create a Python **venv** at the repo root: `python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`  
+   Optional: `pip install -e /path/to/limbic` if you use embeddings features that need it.
+
+2. **API keys (repo root)** — copy templates and edit (never commit filled files):
+   - `cp .env.keys.template .env` — set at least **`GEMINI_KEY`** or **`GEMINI_API_KEY`** (book research and many interactive paths use Gemini + Google Search via `scripts/gemini_llm.py`). OpenAI-only mode has **no live web search** for `call_with_search`.
+   - Optional: `ANTHROPIC_*`, `OPENAI_API_KEY`, `PETRARCA_OPENAI_MODEL`, `PETRARCA_BOOK_RESEARCH_MODEL` — see comments in `.env.keys.template` and `scripts/env.mac-mini.example`.
+
+3. **Data layout** — `bash scripts/bootstrap-mac-mini.sh` creates `scripts/.env.mac-mini` from `scripts/env.mac-mini.example` (first run), sets `PETRARCA_DATA`, SQLite under `~/petrarca-data` by default, and `CURRICULUM_DIR`. Edit `scripts/.env.mac-mini` for your disk layout; that file is **gitignored** once it exists.
+
+4. **Expo app** — `cp app/.env.example app/.env` and set **`EXPO_PUBLIC_RESEARCH_SERVER_URL`** to your research host (e.g. `http://192.168.x.x:8090` on the same Wi‑Fi, or Tailscale). Restart Metro after any change to `app/.env`.
+
+5. **Run** — from repo root: `bash scripts/dev-all.sh` starts `research-server.py` on **:8090** (health check) then Expo Metro on **:8081**. Or run `bash scripts/run-research-server.sh` and `cd app && npx expo start` in two terminals.
+
+6. **Sanity** — `curl -sS http://127.0.0.1:8090/health` should return `{"status":"ok"}`. More detail: `research/implementation-status.md`, `CLAUDE.md` (deploy and store rules).
+
 ## Tech highlights (for Claude Code users)
 
 This project demonstrates several patterns that may be interesting:
