@@ -7346,7 +7346,7 @@ JSON array only:"""
             finally:
                 conn.close()
             return self._send_json_response(200, data)
-        if self.path == '/voice/calibration':
+        if self.path == '/voice/calibration' or self.path.startswith('/voice/calibration?'):
             return self._serve_html_file('voice_calibration.html')
         if self.path.startswith('/voice/calibration-data'):
             try:

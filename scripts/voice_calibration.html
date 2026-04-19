@@ -595,6 +595,9 @@ function wireHover() {
 }
 
 async function load() {
+  // Pre-seed from URL on first load
+  const urlLimit = new URLSearchParams(window.location.search).get('limit');
+  if (urlLimit && !load._seeded) { document.getElementById('limit').value = urlLimit; load._seeded = true; }
   const limit = document.getElementById('limit').value || 5;
   document.getElementById('main').innerHTML = '<div class="loading">Loading calibration data…</div>';
   document.getElementById('toc').innerHTML = '';
