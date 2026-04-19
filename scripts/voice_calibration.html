@@ -522,13 +522,14 @@ function renderTranscriptSection(t) {
 
   return `<section class="transcript" id="tx-${ESC(t.id)}">
     <div class="tx-head">
-      <h2>${ESC(t.routed_node_title || t.id)}</h2>
+      <h2>${ESC(t.transcript.slice(0, 90).replace(/\s+$/,''))}${t.transcript.length > 90 ? '…' : ''}</h2>
       <div>
         <div class="tsource">${ESC(t.source)}</div>
         <div class="tdate">${fmtDate(t.created_at)}</div>
       </div>
       <div class="tid">${ESC(t.id)} · ${t.transcript_length} chars</div>
     </div>
+    ${t.routed_node_title && t.touched_nodes.length === 0 ? `<div style="font-size:11px;color:var(--warning);font-style:italic;margin:2px 0 4px 0" title="voice_transcripts.node_title — set by the router at capture time, not a content summary">⚠ router pinned this to "${ESC(t.routed_node_title)}" (${ESC(t.routed_domain_id || '')}) but no curriculum nodes matched</div>` : ''}
     ${t.llm_summary ? `<div class="tx-summary">${ESC(t.llm_summary)}</div>` : ''}
     <div class="grid-metrics" style="max-width:900px">
       <div class="metric"><div class="k">facts extracted</div><div class="v">${total_facts}</div></div>
@@ -567,9 +568,10 @@ function renderToc(transcripts) {
       `<span class="badge entities">${t.touched_entities.length} e</span>`,
       t.unrouted_fact_indices.length ? `<span class="badge unrouted">${t.unrouted_fact_indices.length} un</span>` : '',
     ].join('');
+    const head = (t.transcript || '').slice(0, 60).replace(/\s+$/, '');
     return `<li><a href="#tx-${ESC(t.id)}">
       <div class="tdate">${fmtDate(t.created_at)}</div>
-      <div>${ESC(t.routed_node_title || t.id)}</div>
+      <div>${ESC(head)}${t.transcript && t.transcript.length > 60 ? '…' : ''}</div>
       <div class="tsummary">${ESC((t.llm_summary||'').slice(0,110))}${(t.llm_summary||'').length>110?'…':''}</div>
       <div style="margin-top:4px">${badges}</div>
     </a></li>`;
