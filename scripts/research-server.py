@@ -7346,6 +7346,26 @@ JSON array only:"""
             finally:
                 conn.close()
             return self._send_json_response(200, data)
+        if self.path == '/voice/calibration':
+            return self._serve_html_file('voice_calibration.html')
+        if self.path.startswith('/voice/calibration-data'):
+            try:
+                from voice_calibration import get_voice_calibration_data
+            except ImportError as e:
+                return self._send_json_response(500, {'error': f'voice_calibration import failed: {e}'})
+            from urllib.parse import urlparse, parse_qs
+            q = parse_qs(urlparse(self.path).query)
+            try:
+                limit = int(q.get('limit', ['5'])[0])
+            except ValueError:
+                limit = 5
+            limit = max(1, min(limit, 20))
+            conn = get_connection(readonly=True)
+            try:
+                data = get_voice_calibration_data(conn, limit=limit)
+            finally:
+                conn.close()
+            return self._send_json_response(200, data)
         if self.path == '/knowledge/atlas':
             return self._serve_html_file('knowledge_atlas.html')
         if self.path == '/knowledge/atlas-data':

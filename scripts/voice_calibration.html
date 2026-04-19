@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Voice Capture — Calibration</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Crimson+Pro:wght@400;500;600&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --parchment: #f7f4ec;
+    --parchment-dark: #f0ece2;
+    --parchment-warm: #faf6ec;
+    --ink: #2a2420;
+    --ink-light: #1a1a18;
+    --rubric: #8b2500;
+    --text-body: #333;
+    --text-secondary: #6a6458;
+    --text-muted: #b0a898;
+    --rule: #e4dfd4;
+    --rule-dark: #2a2420;
+    --success: #2a7a4a;
+    --warning: #92600e;
+    --info: #2a4a6a;
+    --danger: #8b2500;
+    --fact-alpha: 0.28;
+    --fact-alpha-strong: 0.55;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; background: var(--parchment); color: var(--ink); font-family: 'EB Garamond', Georgia, serif; font-size: 16px; line-height: 1.55; }
+  a { color: var(--rubric); text-decoration: none; border-bottom: 1px dotted var(--rubric); }
+  a:hover { color: var(--ink); }
+  code, kbd, pre, .mono { font-family: 'JetBrains Mono', 'SF Mono', Menlo, monospace; font-size: 12.5px; }
+
+  header.app {
+    padding: 28px 40px 18px;
+    border-bottom: 2px solid var(--rule-dark);
+    background: var(--parchment-warm);
+    display: flex; align-items: baseline; justify-content: space-between; gap: 30px;
+  }
+  header.app h1 { font-family: 'Cormorant Garamond', serif; font-weight: 700; font-size: 32px; margin: 0; letter-spacing: -0.3px; color: var(--ink); }
+  header.app h1 .sub { font-size: 18px; font-weight: 400; color: var(--text-secondary); font-style: italic; margin-left: 12px; }
+  header.app .meta { font-size: 13px; color: var(--text-secondary); }
+  header.app .meta .k { color: var(--rubric); font-weight: 600; }
+
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: calc(100vh - 72px); }
+  aside.toc {
+    position: sticky; top: 0; align-self: start;
+    border-right: 1px solid var(--rule); padding: 20px 20px 20px 20px;
+    background: var(--parchment-warm); max-height: 100vh; overflow-y: auto;
+  }
+  aside.toc h2 { font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 15px; text-transform: uppercase; letter-spacing: 1.4px; color: var(--rubric); border-bottom: 1px solid var(--rule); padding-bottom: 6px; margin: 0 0 10px 0; }
+  aside.toc ul { list-style: none; padding:0; margin:0; }
+  aside.toc li { border-bottom: 1px solid var(--rule); padding: 8px 2px; }
+  aside.toc a { display: block; border: none; color: var(--ink); font-size: 13.5px; line-height: 1.35; }
+  aside.toc a:hover { color: var(--rubric); }
+  aside.toc .tdate { color: var(--text-muted); font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+  aside.toc .tsummary { color: var(--text-secondary); font-size: 12px; font-style: italic; margin-top: 2px; }
+  aside.toc .badge {
+    display: inline-block; font-size: 10px; letter-spacing: 0.8px; text-transform: uppercase;
+    padding: 1px 5px; margin-right: 4px; border: 1px solid var(--rule); color: var(--text-secondary); border-radius: 2px;
+  }
+  aside.toc .badge.nodes { color: var(--success); border-color: var(--success); }
+  aside.toc .badge.entities { color: var(--info); border-color: var(--info); }
+  aside.toc .badge.unrouted { color: var(--warning); border-color: var(--warning); }
+
+  main { padding: 10px 40px 80px 40px; max-width: 1400px; }
+
+  section.transcript { margin: 30px 0 60px 0; border-bottom: 1px solid var(--rule-dark); padding-bottom: 40px; }
+  .tx-head { display: flex; gap: 30px; align-items: baseline; margin-bottom: 8px; }
+  .tx-head h2 { font-family: 'Cormorant Garamond', serif; font-size: 26px; font-weight: 700; margin: 0; color: var(--ink); letter-spacing: -0.2px; }
+  .tx-head .tid { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); }
+  .tx-head .tsource { font-size: 11px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--rubric); font-weight: 600; }
+  .tx-head .tdate { font-size: 13px; color: var(--text-secondary); font-style: italic; }
+  .tx-summary { color: var(--text-body); font-size: 15px; margin: 4px 0 16px 0; font-style: italic; border-left: 3px solid var(--rule); padding-left: 12px; }
+
+  .tx-body { display: grid; grid-template-columns: minmax(0,1.2fr) minmax(360px, 1fr); gap: 28px; align-items: start; }
+  @media (max-width: 1100px) { .tx-body { grid-template-columns: 1fr; } }
+
+  .transcript-panel {
+    background: #fffdf6; border: 1px solid var(--rule); padding: 22px 26px; font-family: 'EB Garamond', serif;
+    font-size: 17px; line-height: 1.72; color: var(--ink-light);
+    white-space: pre-wrap; word-wrap: break-word;
+    position: relative;
+  }
+  .transcript-panel .transcript-label {
+    position: absolute; top: -10px; left: 16px; background: var(--parchment); padding: 0 8px;
+    font-family: 'Cormorant Garamond', serif; font-weight: 600; letter-spacing: 1.4px;
+    font-size: 11px; text-transform: uppercase; color: var(--rubric);
+  }
+  .transcript-panel .fact-span {
+    background: var(--span-color, rgba(139,37,0,0.14));
+    border-bottom: 2px solid var(--span-border, rgba(139,37,0,0.5));
+    padding: 1px 0 0 0; cursor: pointer; transition: background 120ms;
+    position: relative;
+  }
+  .transcript-panel .fact-span:hover { background: var(--span-hover, rgba(139,37,0,0.28)); }
+  .transcript-panel .fact-span.active { background: var(--span-hover, rgba(139,37,0,0.36)) !important; }
+  .transcript-panel .fact-num {
+    display: inline-block; font-size: 10px; color: #fff; background: var(--span-border, rgba(139,37,0,0.8));
+    padding: 0 4px; margin-right: 3px; border-radius: 2px; vertical-align: middle;
+    font-family: 'JetBrains Mono', monospace; line-height: 1.2; font-weight: 600;
+  }
+
+  /* Facts panel */
+  .facts-panel {
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .facts-panel .fh {
+    font-family: 'Cormorant Garamond', serif; font-weight: 600;
+    font-size: 12px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--rubric);
+    border-bottom: 2px solid var(--rule-dark); padding-bottom: 6px; margin-bottom: 4px;
+  }
+  .fact-card {
+    border: 1px solid var(--rule);
+    border-left: 4px solid var(--span-border, rgba(139,37,0,0.5));
+    padding: 10px 14px; background: #fffdf8;
+    transition: background 120ms, transform 120ms;
+  }
+  .fact-card.highlight { background: #fdf4e2; }
+  .fact-card:hover { transform: translateX(-2px); }
+  .fact-card .fact-head { display: flex; gap: 8px; font-size: 10.5px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 4px; align-items: center; }
+  .fact-card .fact-head .idx { background: var(--span-border, rgba(139,37,0,0.8)); color: #fff; padding: 1px 5px; border-radius: 2px; font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+  .fact-card .fact-head .conf { padding: 0 5px; border: 1px solid currentColor; border-radius: 2px; font-size: 9.5px; letter-spacing: 0.8px; }
+  .fact-card .fact-head .conf.certain { color: var(--success); }
+  .fact-card .fact-head .conf.approximate { color: var(--warning); }
+  .fact-card .fact-head .conf.speculative { color: var(--rubric); }
+  .fact-card .fact-text { font-size: 14.5px; color: var(--ink-light); line-height: 1.5; margin: 2px 0 6px; }
+  .fact-card .fact-meta { font-size: 12px; color: var(--text-secondary); }
+  .fact-card .chip { display: inline-block; font-size: 11px; padding: 1px 6px; margin: 2px 3px 2px 0; border-radius: 2px; border: 1px solid var(--rule); background: var(--parchment-warm); color: var(--text-body); }
+  .fact-card .chip.node { border-color: var(--success); color: var(--success); }
+  .fact-card .chip.entity { border-color: var(--info); color: var(--info); }
+  .fact-card .chip.none { border-color: var(--warning); color: var(--warning); font-style: italic; }
+  .fact-card .fact-excerpt { margin-top: 4px; font-size: 12px; color: var(--text-muted); font-style: italic; border-left: 2px solid var(--rule); padding-left: 8px; }
+
+  /* Nodes section */
+  .nodes-section { margin-top: 30px; }
+  .nodes-section .sh {
+    font-family: 'Cormorant Garamond', serif; font-weight: 600;
+    font-size: 13px; letter-spacing: 1.6px; text-transform: uppercase; color: var(--rubric);
+    border-bottom: 2px solid var(--rule-dark); padding-bottom: 6px; margin: 0 0 14px 0;
+  }
+  .node-card {
+    border: 1px solid var(--rule); background: #fffdf8; margin-bottom: 14px;
+    border-left: 4px solid var(--span-border, var(--rubric));
+  }
+  .node-card .nc-head {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    padding: 12px 18px; border-bottom: 1px solid var(--rule);
+    background: var(--parchment-warm);
+  }
+  .node-card .nc-title { font-family: 'Cormorant Garamond', serif; font-weight: 700; font-size: 19px; color: var(--ink); }
+  .node-card .nc-title .dom { font-size: 11px; letter-spacing: 1px; color: var(--text-muted); text-transform: uppercase; font-family: 'JetBrains Mono', monospace; font-weight: 400; margin-left: 8px; }
+  .node-card .nc-meta { font-size: 11.5px; color: var(--text-secondary); font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
+  .node-card .nc-meta .kl { display: inline-block; padding: 1px 6px; margin-right: 6px; border: 1px solid; border-radius: 2px; font-size: 10px; letter-spacing: 0.8px; text-transform: uppercase; }
+  .kl.anchored { color: var(--success); border-color: var(--success); background: rgba(42,122,74,0.08); }
+  .kl.engaged  { color: var(--info); border-color: var(--info); background: rgba(42,74,106,0.08); }
+  .kl.mentioned{ color: var(--warning); border-color: var(--warning); background: rgba(146,96,14,0.08); }
+  .kl.unknown  { color: var(--text-muted); border-color: var(--text-muted); }
+  .nc-body { padding: 12px 18px 16px; }
+  .nc-body .qbox { border-left: 3px solid var(--rubric); padding-left: 12px; margin-bottom: 10px; }
+  .nc-body .qbox .q { font-size: 15px; color: var(--ink); font-weight: 600; }
+  .nc-body .qbox .a { font-size: 13.5px; color: var(--text-body); margin-top: 3px; }
+  .nc-body .qbox .hook { font-size: 12.5px; color: var(--rubric); font-style: italic; margin-top: 5px; border-top: 1px dotted var(--rule); padding-top: 4px; }
+  .nc-body .qbox .rich { font-size: 13px; color: var(--text-secondary); margin-top: 4px; line-height: 1.5; }
+  .nc-body .assessed { font-size: 13px; color: var(--text-body); font-style: italic; margin-bottom: 10px; border-left: 2px solid var(--rule); padding: 0 10px; }
+  .nc-body h4 { font-family: 'Cormorant Garamond', serif; font-size: 13px; text-transform: uppercase; letter-spacing: 1.3px; color: var(--rubric); margin: 12px 0 4px 0; border-bottom: 1px solid var(--rule); padding-bottom: 2px; font-weight: 600; }
+  .nc-body ul { padding-left: 22px; margin: 4px 0; font-size: 13px; }
+  .nc-body ul li { margin-bottom: 3px; }
+
+  .angles-table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 4px; }
+  .angles-table th, .angles-table td { text-align: left; padding: 5px 8px; vertical-align: top; border-top: 1px solid var(--rule); }
+  .angles-table th { font-family: 'Cormorant Garamond', serif; font-weight: 600; color: var(--rubric); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; background: var(--parchment-warm); }
+  .angles-table .fid { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); }
+  .angles-table .angle-pill { display: inline-block; font-size: 10px; letter-spacing: 0.8px; padding: 1px 5px; border-radius: 2px; margin-right: 3px; margin-bottom: 2px; border: 1px solid; text-transform: uppercase; font-family: 'JetBrains Mono', monospace; }
+  .angle-pill.date_reverse { color: #2a6a3a; border-color: #2a6a3a; }
+  .angle-pill.date { color: #2a6a3a; border-color: #2a6a3a; }
+  .angle-pill.order { color: #7a5a20; border-color: #7a5a20; }
+  .angle-pill.role { color: #2a4a6a; border-color: #2a4a6a; }
+  .angle-pill.causal { color: #6a2a7a; border-color: #6a2a7a; }
+  .angle-pill.location { color: #8b2500; border-color: #8b2500; }
+  .angle-pill.multicue { color: var(--rubric); border-color: var(--rubric); }
+  .angle-pill.none { color: var(--warning); border-color: var(--warning); font-style: italic; }
+  .angle-pill.suggestion { color: var(--text-muted); border-color: var(--text-muted); border-style: dashed; }
+
+  .entity-card { border: 1px solid var(--info); border-left-width: 4px; }
+  .entity-card .nc-head { background: rgba(42,74,106,0.06); }
+  .entity-card .nc-title .dom { color: var(--info); }
+
+  .unrouted-box {
+    margin-top: 24px; padding: 14px 18px; background: rgba(146,96,14,0.05);
+    border: 1px dashed var(--warning); border-radius: 3px;
+  }
+  .unrouted-box h4 { color: var(--warning); margin-top: 0; }
+  .unrouted-box ul { padding-left: 22px; margin: 6px 0; font-size: 13.5px; }
+
+  .wonderings-box {
+    margin-top: 18px; padding: 14px 18px; background: rgba(42,74,106,0.04);
+    border: 1px solid var(--info); border-radius: 3px;
+  }
+  .wonderings-box h4 { color: var(--info); margin-top: 0; font-family: 'Cormorant Garamond', serif; font-size: 13px; text-transform: uppercase; letter-spacing: 1.4px; font-weight: 600; margin-bottom: 6px; }
+  .wonderings-box ul { padding-left: 22px; margin: 4px 0; font-size: 13.5px; }
+
+  .grid-metrics { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px,1fr)); gap: 8px; margin-top: 10px; }
+  .metric { background: var(--parchment-warm); border: 1px solid var(--rule); padding: 8px 10px; }
+  .metric .k { font-size: 10.5px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--text-muted); }
+  .metric .v { font-size: 20px; font-family: 'Cormorant Garamond', serif; font-weight: 600; color: var(--ink); }
+  .metric .v.warn { color: var(--warning); }
+  .metric .v.ok { color: var(--success); }
+
+  details > summary { cursor: pointer; user-select: none; }
+  details[open] > summary { margin-bottom: 6px; }
+  .loading, .empty { padding: 80px 40px; text-align: center; color: var(--text-secondary); font-style: italic; font-size: 15px; }
+  .controls {
+    display: flex; gap: 10px; align-items: center; margin-top: 6px; font-size: 13px;
+  }
+  .controls label { color: var(--text-secondary); }
+  .controls input[type=number] { width: 50px; padding: 2px 6px; border: 1px solid var(--rule); background: var(--parchment-warm); font-family: 'JetBrains Mono', monospace; }
+  .controls button { padding: 3px 10px; border: 1px solid var(--rubric); background: transparent; color: var(--rubric); font-family: 'EB Garamond', serif; font-size: 13px; cursor: pointer; }
+  .controls button:hover { background: var(--rubric); color: var(--parchment); }
+  .legend { margin-top: 6px; font-size: 12px; color: var(--text-secondary); }
+  .legend .sq { display: inline-block; width: 11px; height: 11px; margin: 0 3px -1px 7px; border-radius: 2px; vertical-align: middle; border: 1px solid rgba(0,0,0,0.12); }
+</style>
+</head>
+<body>
+<header class="app">
+  <div>
+    <h1>Voice Capture <span class="sub">— a calibration folio</span></h1>
+    <div class="legend">
+      Each fact extracted from a transcript is highlighted inline; its margin card shows the curriculum nodes and knowledge-entities it was routed to, and every quiz "angle" generated from it.
+      <span class="sq" style="background:rgba(42,122,74,0.3);border-color:#2a7a4a"></span>curriculum node
+      <span class="sq" style="background:rgba(42,74,106,0.3);border-color:#2a4a6a"></span>entity
+      <span class="sq" style="background:rgba(146,96,14,0.3);border-color:#92600e"></span>unrouted
+    </div>
+  </div>
+  <div class="meta">
+    <div class="controls">
+      <label>transcripts:</label>
+      <input id="limit" type="number" min="1" max="20" value="5">
+      <button id="reload">reload</button>
+    </div>
+    <div id="genat" class="mono" style="margin-top:8px"></div>
+  </div>
+</header>
+<div class="layout">
+  <aside class="toc">
+    <h2>Transcripts</h2>
+    <ul id="toc"></ul>
+  </aside>
+  <main id="main"><div class="loading">Loading calibration data…</div></main>
+</div>
+
+<script>
+const ESC = (s) => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const fmtDate = (ms) => { const d = new Date(ms); return d.toLocaleString(undefined, { dateStyle:'medium', timeStyle:'short'}); };
+
+// Distinct color palette for facts — muted warm/cool pairs matching folio aesthetic
+const FACT_PALETTE = [
+  { bg:'rgba(139, 37, 0, 0.18)',  bd:'rgba(139, 37, 0, 0.7)',  hv:'rgba(139, 37, 0, 0.32)' },   // rubric red
+  { bg:'rgba(42, 122, 74, 0.20)', bd:'rgba(42, 122, 74, 0.7)', hv:'rgba(42, 122, 74, 0.35)' },  // success green
+  { bg:'rgba(42, 74, 106, 0.20)', bd:'rgba(42, 74, 106, 0.7)', hv:'rgba(42, 74, 106, 0.35)' },  // info blue
+  { bg:'rgba(146, 96, 14, 0.22)', bd:'rgba(146, 96, 14, 0.7)', hv:'rgba(146, 96, 14, 0.36)' },  // warning amber
+  { bg:'rgba(106, 42, 122, 0.20)',bd:'rgba(106, 42, 122, 0.7)',hv:'rgba(106, 42, 122, 0.35)' }, // purple
+  { bg:'rgba(34, 102, 136, 0.20)',bd:'rgba(34, 102, 136, 0.7)',hv:'rgba(34, 102, 136, 0.35)' }, // teal
+  { bg:'rgba(166, 83, 37, 0.22)', bd:'rgba(166, 83, 37, 0.7)', hv:'rgba(166, 83, 37, 0.36)' },  // terracotta
+  { bg:'rgba(95, 105, 57, 0.22)', bd:'rgba(95, 105, 57, 0.7)', hv:'rgba(95, 105, 57, 0.38)' },  // olive
+];
+const factColor = (i) => FACT_PALETTE[i % FACT_PALETTE.length];
+
+function renderTranscript(t) {
+  // Sort facts by span start; facts without spans skipped in text (but cards still show)
+  const spans = t.facts.filter(f => f.span).map(f => ({ idx:f.idx, start:f.span[0], end:f.span[1] }));
+  spans.sort((a,b) => a.start - b.start);
+  // Resolve overlaps: if two spans overlap, keep both but nest by truncating later one
+  const out = [];
+  let cursor = 0;
+  const tx = t.transcript || '';
+  for (const s of spans) {
+    if (s.start < cursor) {
+      // overlapping; skip the overlap portion by moving to cursor
+      s.start = cursor;
+      if (s.start >= s.end) continue;
+    }
+    if (s.start > cursor) out.push({ kind:'text', text: tx.slice(cursor, s.start) });
+    out.push({ kind:'span', idx:s.idx, text: tx.slice(s.start, s.end) });
+    cursor = s.end;
+  }
+  if (cursor < tx.length) out.push({ kind:'text', text: tx.slice(cursor) });
+  return out.map(p => {
+    if (p.kind === 'text') return ESC(p.text);
+    const c = factColor(p.idx);
+    return `<span class="fact-span" data-fact="${p.idx}" data-tid="${ESC(t.id)}" style="--span-color:${c.bg};--span-border:${c.bd};--span-hover:${c.hv}"><span class="fact-num">${p.idx}</span>${ESC(p.text)}</span>`;
+  }).join('');
+}
+
+function klClass(lvl) { return 'kl ' + (lvl || 'unknown'); }
+
+function renderFact(f, tId) {
+  const c = factColor(f.idx);
+  const chips = [];
+  if (f.node_ids.length) {
+    for (const n of f.node_ids) chips.push(`<span class="chip node">${ESC(n)}</span>`);
+  }
+  if (f.entities.length) {
+    for (const e of f.entities) chips.push(`<span class="chip entity">${ESC(e)}</span>`);
+  }
+  if (!f.node_ids.length && !f.entities.length) chips.push(`<span class="chip none">unrouted</span>`);
+  const confBadge = f.confidence ? `<span class="conf ${ESC(f.confidence)}">${ESC(f.confidence)}</span>` : '';
+  const excerpt = f.source_excerpt ? `<div class="fact-excerpt">"${ESC(f.source_excerpt)}"</div>` : '';
+  return `<div class="fact-card" data-fact="${f.idx}" data-tid="${ESC(tId)}" style="--span-border:${c.bd}">
+    <div class="fact-head"><span class="idx">${f.idx}</span>${confBadge}${f.span ? '' : '<span style="color:var(--warning)">span-missing</span>'}</div>
+    <div class="fact-text">${ESC(f.text)}</div>
+    <div class="fact-meta">${chips.join('')}</div>
+    ${excerpt}
+  </div>`;
+}
+
+function renderQuizRow(qr) {
+  const qt = qr.quiz_type || 'none';
+  const reviewInfo = qr.review_count ? ` · ${qr.review_count}× reviewed, last=${ESC(qr.last_score||'—')}` : ' · not yet reviewed';
+  return `<tr>
+    <td><span class="angle-pill ${ESC(qt)}">${ESC(qt || '—')}</span></td>
+    <td>${ESC(qr.question)}<div style="color:var(--text-muted);font-size:11.5px">${ESC(qr.answer.slice(0,120))}${qr.answer.length>120?'…':''}${reviewInfo}</div></td>
+  </tr>`;
+}
+
+function renderNodeCard(n) {
+  const c = factColor(n.color_index || 0);
+  const lvl = n.assessed_level || 'unknown';
+  const ki = n.ki;
+  const notFoundMsg = !n.exists_in_ki ? `<p style="color:var(--warning);font-style:italic;margin:6px 0">⚠ No knowledge_item exists for this node yet — voice capture recorded the assessment but no card was created.</p>` : '';
+  const feedingFacts = (n.feeding_fact_indices || []).map(i => `<span class="chip">fact ${i}</span>`).join(' ');
+  let kiBody = '';
+  if (ki) {
+    // Build union of fact_ids referenced: main_fact_id + quiz_suggestions.*.fact_id
+    const allFactEntries = [];
+    if (ki.main_fact_id) {
+      allFactEntries.push({
+        fact_id: ki.main_fact_id,
+        origin: 'main question',
+        question: ki.main_question,
+        type: ki.answer_type || 'main',
+        quiz_rows: ki.main_quiz_rows || [],
+      });
+    }
+    for (const qs of (ki.quiz_suggestions || [])) {
+      allFactEntries.push({
+        fact_id: qs.fact_id,
+        origin: 'suggestion',
+        question: qs.question,
+        type: qs.type,
+        quiz_rows: qs.quiz_rows || [],
+      });
+    }
+    // Angles coverage summary
+    const angleTypes = new Set();
+    for (const e of allFactEntries) for (const qr of e.quiz_rows) if (qr.quiz_type) angleTypes.add(qr.quiz_type);
+    const totalQuizzes = allFactEntries.reduce((a,e) => a + e.quiz_rows.length, 0);
+
+    // Render facts-to-angles table
+    const anglesHtml = allFactEntries.length
+      ? allFactEntries.map(fe => {
+          const suggestionPill = fe.origin === 'main question'
+            ? `<span class="angle-pill multicue">main</span>`
+            : `<span class="angle-pill suggestion">suggest</span>`;
+          const rows = fe.quiz_rows.length
+            ? fe.quiz_rows.map(renderQuizRow).join('')
+            : `<tr><td><span class="angle-pill none">none</span></td><td style="color:var(--text-muted);font-style:italic">No quiz cards exist for this fact_id yet.</td></tr>`;
+          return `<tr><th colspan="2" style="background:var(--parchment);color:var(--ink);font-family:'EB Garamond',serif;font-weight:500;text-transform:none;letter-spacing:0">
+            ${suggestionPill} <span class="angle-pill ${ESC(fe.type || 'none')}">${ESC(fe.type || '—')}</span>
+            <span class="fid">${ESC(fe.fact_id || '(no fact_id)')}</span><br>
+            <em>${ESC(fe.question)}</em></th></tr>${rows}`;
+        }).join('')
+      : `<tr><td colspan="2" style="color:var(--text-muted);font-style:italic">No quiz suggestions on this KI's cached_question — main question has no fact_id, and no quiz_suggestions are recorded.</td></tr>`;
+
+    const followUps = (ki.follow_up_queries || []).length
+      ? `<h4>Sideways follow-ups (${ki.follow_up_queries.length})</h4><ul>${ki.follow_up_queries.map(f => `<li>${ESC(f)}</li>`).join('')}</ul>`
+      : '';
+
+    const srcs = ki.sources || {};
+    const srcLine = `<div style="font-size:11.5px;color:var(--text-secondary);margin-top:4px">📖 ${srcs.book_count||0} book source${srcs.book_count===1?'':'s'} · 🎙 ${srcs.voice_count||0} voice capture${srcs.voice_count===1?'':'s'}</div>`;
+
+    kiBody = `
+      <div class="qbox">
+        <div class="q">${ESC(ki.main_question || '—')}</div>
+        ${ki.answer_guidance ? `<div class="a"><em>A:</em> ${ESC(ki.answer_guidance)}</div>` : ''}
+        ${ki.rich_answer ? `<div class="rich">${ESC(ki.rich_answer.slice(0,550))}${ki.rich_answer.length>550?'…':''}</div>` : ''}
+        ${ki.memory_hook ? `<div class="hook">🧠 ${ESC(ki.memory_hook)}</div>` : '<div class="hook" style="color:var(--text-muted)">🧠 <em>no memory_hook recorded</em></div>'}
+      </div>
+      <div class="grid-metrics">
+        <div class="metric"><div class="k">reviews</div><div class="v">${ki.review_count}</div></div>
+        <div class="metric"><div class="k">last score</div><div class="v ${ki.last_score==='knew'?'ok':(ki.last_score==='missed'?'warn':'')}">${ESC(ki.last_score||'—')}</div></div>
+        <div class="metric"><div class="k">stability</div><div class="v">${ki.stability_days.toFixed(1)}d</div></div>
+        <div class="metric"><div class="k">angle types</div><div class="v ${angleTypes.size>=3?'ok':(angleTypes.size===0?'warn':'')}">${angleTypes.size}</div></div>
+        <div class="metric"><div class="k">quiz rows</div><div class="v ${totalQuizzes>=3?'ok':(totalQuizzes===0?'warn':'')}">${totalQuizzes}</div></div>
+      </div>
+      ${srcLine}
+      <h4>Fact angles asked (main + suggestions → microlearning_quizzes)</h4>
+      <table class="angles-table">
+        <thead><tr><th style="width:110px">angle</th><th>question</th></tr></thead>
+        <tbody>${anglesHtml}</tbody>
+      </table>
+      ${followUps}
+      ${srcs.voice_snippets && srcs.voice_snippets.length ? `
+        <details style="margin-top:10px">
+          <summary style="font-size:12px;color:var(--text-secondary)">show voice-source snippets on this KI (${srcs.voice_snippets.length})</summary>
+          <ul style="font-size:12px;color:var(--text-secondary)">${srcs.voice_snippets.map(vs => `<li><em>${ESC(vs.entity||'—')}</em> (${vs.fact_count||0} facts): ${ESC(vs.text)}</li>`).join('')}</ul>
+        </details>` : ''}
+    `;
+  }
+
+  return `<div class="node-card" data-node="${ESC(n.node_id)}" style="--span-border:${c.bd}">
+    <div class="nc-head">
+      <div class="nc-title">${ESC(n.node_title)} <span class="dom">${ESC(n.domain_id)}</span></div>
+      <div class="nc-meta"><span class="${klClass(lvl)}">${ESC(lvl)}</span>${n.facts_captured?` · ${n.facts_captured} facts`:''}</div>
+    </div>
+    <div class="nc-body">
+      ${n.assessed_summary ? `<div class="assessed">${ESC(n.assessed_summary)}</div>` : ''}
+      ${feedingFacts ? `<div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px">← fed by: ${feedingFacts}</div>` : ''}
+      ${notFoundMsg}
+      ${kiBody}
+    </div>
+  </div>`;
+}
+
+function renderEntityCard(e) {
+  const c = { bg:'rgba(42,74,106,0.14)', bd:'rgba(42,74,106,0.6)' };
+  const feedingFacts = (e.feeding_fact_indices || []).map(i => `<span class="chip">fact ${i}</span>`).join(' ');
+  const angleTypes = new Set();
+  let totalQuizzes = 0;
+  for (const kf of e.key_facts) for (const qr of (kf.quiz_rows||[])) { angleTypes.add(qr.quiz_type || 'none'); totalQuizzes++; }
+  for (const qr of (e.main_quiz_rows||[])) { angleTypes.add(qr.quiz_type || 'none'); totalQuizzes++; }
+
+  const factsHtml = e.key_facts.length
+    ? e.key_facts.map(kf => {
+        const rows = (kf.quiz_rows || []).length
+          ? kf.quiz_rows.map(renderQuizRow).join('')
+          : `<tr><td><span class="angle-pill none">none</span></td><td style="color:var(--text-muted);font-style:italic">No quiz cards generated from this key_fact yet.</td></tr>`;
+        return `<tr><th colspan="2" style="background:var(--parchment);color:var(--ink);font-family:'EB Garamond',serif;font-weight:500;text-transform:none;letter-spacing:0">
+          <span class="angle-pill ${ESC(kf.type||'none')}">${ESC(kf.type||'—')}</span>
+          <span class="fid">${ESC(kf.id)}</span><br>
+          <em>Q: ${ESC(kf.question)}</em> · <span style="color:var(--text-secondary)">A: ${ESC((kf.answer||'').slice(0,140))}</span>
+          ${kf.source_excerpt ? `<div style="font-size:11.5px;color:var(--text-muted);margin-top:3px;font-style:italic">"${ESC(kf.source_excerpt)}"</div>`:''}
+        </th></tr>${rows}`;
+      }).join('')
+    : `<tr><td colspan="2" style="color:var(--text-muted);font-style:italic">No key_facts on this entity.</td></tr>`;
+
+  const tagLine = `${e.wikidata_qid ? `🔷 ${ESC(e.wikidata_qid)}` : '💬 no QID'} · ${ESC(e.entity_type||'—')} · ${e.touched_via_capture_id ? '🎙 linked via capture_id' : '↳ inferred via entities_mentioned'}`;
+
+  return `<div class="node-card entity-card" data-entity="${ESC(e.entity_id)}" style="--span-border:${c.bd}">
+    <div class="nc-head">
+      <div class="nc-title">${ESC(e.entity_name)} <span class="dom">ent:${ESC(e.entity_id)}</span></div>
+      <div class="nc-meta">reviews ${e.review_count} · ${e.stability_days.toFixed(1)}d</div>
+    </div>
+    <div class="nc-body">
+      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px">${tagLine}</div>
+      ${feedingFacts ? `<div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px">← fed by: ${feedingFacts}</div>` : ''}
+      ${e.main_question ? `<div class="qbox">
+        <div class="q">${ESC(e.main_question)}</div>
+        ${e.rich_answer ? `<div class="rich">${ESC(e.rich_answer.slice(0,500))}${e.rich_answer.length>500?'…':''}</div>` : ''}
+        ${e.memory_hook ? `<div class="hook">🧠 ${ESC(e.memory_hook)}</div>` : '<div class="hook" style="color:var(--text-muted)">🧠 <em>no memory_hook</em></div>'}
+      </div>` : ''}
+      <div class="grid-metrics">
+        <div class="metric"><div class="k">key_facts</div><div class="v">${e.key_facts.length}</div></div>
+        <div class="metric"><div class="k">angle types</div><div class="v ${angleTypes.size>=2?'ok':(angleTypes.size===0?'warn':'')}">${angleTypes.size}</div></div>
+        <div class="metric"><div class="k">quiz rows</div><div class="v ${totalQuizzes>=3?'ok':(totalQuizzes===0?'warn':'')}">${totalQuizzes}</div></div>
+      </div>
+      <h4>Key facts → quiz angles</h4>
+      <table class="angles-table">
+        <thead><tr><th style="width:110px">angle</th><th>question</th></tr></thead>
+        <tbody>${factsHtml}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function renderTranscriptSection(t) {
+  const total_facts = t.facts.length;
+  const routed_to_node = t.facts.filter(f => f.node_ids.length).length;
+  const routed_to_entity = t.facts.filter(f => f.entities.length).length;
+  const unrouted = t.unrouted_fact_indices.length;
+  const withSpan = t.facts.filter(f => f.span).length;
+
+  const factsHtml = t.facts.map(f => renderFact(f, t.id)).join('');
+  const nodesHtml = t.touched_nodes.length
+    ? t.touched_nodes.map(renderNodeCard).join('')
+    : `<p style="color:var(--text-muted);font-style:italic;padding:10px 0">No curriculum nodes were touched by this capture. (All facts either unrouted or captured via entity path only.)</p>`;
+  const entitiesHtml = t.touched_entities.length
+    ? t.touched_entities.map(renderEntityCard).join('')
+    : `<p style="color:var(--text-muted);font-style:italic;padding:10px 0">No knowledge_entities touched.</p>`;
+
+  const unroutedBox = t.unrouted_fact_indices.length
+    ? `<div class="unrouted-box">
+        <h4>Unrouted facts (${t.unrouted_fact_indices.length}) — extracted but not routed to any node or entity</h4>
+        <ul>${t.unrouted_fact_indices.map(i => {
+          const f = t.facts[i];
+          return `<li><span class="chip none">${i}</span> ${ESC(f.text)}</li>`;
+        }).join('')}</ul>
+       </div>`
+    : '';
+  const wonderingsBox = t.wonderings.length
+    ? `<div class="wonderings-box">
+        <h4>Wonderings (${t.wonderings.length}) — captured but not yet surfaced as cards</h4>
+        <ul>${t.wonderings.map(w => `<li>${ESC(w)}</li>`).join('')}</ul>
+      </div>`
+    : '';
+
+  return `<section class="transcript" id="tx-${ESC(t.id)}">
+    <div class="tx-head">
+      <h2>${ESC(t.routed_node_title || t.id)}</h2>
+      <div>
+        <div class="tsource">${ESC(t.source)}</div>
+        <div class="tdate">${fmtDate(t.created_at)}</div>
+      </div>
+      <div class="tid">${ESC(t.id)} · ${t.transcript_length} chars</div>
+    </div>
+    ${t.llm_summary ? `<div class="tx-summary">${ESC(t.llm_summary)}</div>` : ''}
+    <div class="grid-metrics" style="max-width:900px">
+      <div class="metric"><div class="k">facts extracted</div><div class="v">${total_facts}</div></div>
+      <div class="metric"><div class="k">with span match</div><div class="v ${withSpan===total_facts?'ok':(withSpan<total_facts*0.7?'warn':'')}">${withSpan}/${total_facts}</div></div>
+      <div class="metric"><div class="k">→ nodes</div><div class="v ok">${routed_to_node}</div></div>
+      <div class="metric"><div class="k">→ entities</div><div class="v">${routed_to_entity}</div></div>
+      <div class="metric"><div class="k">unrouted</div><div class="v ${unrouted>0?'warn':'ok'}">${unrouted}</div></div>
+      <div class="metric"><div class="k">nodes touched</div><div class="v">${t.touched_nodes.length}</div></div>
+      <div class="metric"><div class="k">entities touched</div><div class="v">${t.touched_entities.length}</div></div>
+      <div class="metric"><div class="k">wonderings</div><div class="v">${t.wonderings.length}</div></div>
+    </div>
+    <div class="tx-body" style="margin-top:14px">
+      <div class="transcript-panel"><span class="transcript-label">transcript</span>${renderTranscript(t)}</div>
+      <div class="facts-panel">
+        <div class="fh">${total_facts} extracted facts</div>
+        ${factsHtml}
+      </div>
+    </div>
+    <div class="nodes-section">
+      <h3 class="sh">Touched curriculum nodes (${t.touched_nodes.length})</h3>
+      ${nodesHtml}
+    </div>
+    <div class="nodes-section">
+      <h3 class="sh">Touched knowledge entities (${t.touched_entities.length})</h3>
+      ${entitiesHtml}
+    </div>
+    ${unroutedBox}
+    ${wonderingsBox}
+  </section>`;
+}
+
+function renderToc(transcripts) {
+  return transcripts.map(t => {
+    const badges = [
+      `<span class="badge nodes">${t.touched_nodes.length} n</span>`,
+      `<span class="badge entities">${t.touched_entities.length} e</span>`,
+      t.unrouted_fact_indices.length ? `<span class="badge unrouted">${t.unrouted_fact_indices.length} un</span>` : '',
+    ].join('');
+    return `<li><a href="#tx-${ESC(t.id)}">
+      <div class="tdate">${fmtDate(t.created_at)}</div>
+      <div>${ESC(t.routed_node_title || t.id)}</div>
+      <div class="tsummary">${ESC((t.llm_summary||'').slice(0,110))}${(t.llm_summary||'').length>110?'…':''}</div>
+      <div style="margin-top:4px">${badges}</div>
+    </a></li>`;
+  }).join('');
+}
+
+function wireHover() {
+  document.querySelectorAll('.fact-span').forEach(el => {
+    el.addEventListener('mouseenter', () => {
+      const idx = el.dataset.fact;
+      const tid = el.dataset.tid;
+      document.querySelectorAll(`.fact-card[data-fact="${idx}"][data-tid="${tid}"]`).forEach(c => c.classList.add('highlight'));
+    });
+    el.addEventListener('mouseleave', () => {
+      document.querySelectorAll(`.fact-card.highlight`).forEach(c => c.classList.remove('highlight'));
+    });
+    el.addEventListener('click', () => {
+      const idx = el.dataset.fact;
+      const tid = el.dataset.tid;
+      const card = document.querySelector(`.fact-card[data-fact="${idx}"][data-tid="${tid}"]`);
+      if (card) { card.scrollIntoView({behavior:'smooth', block:'center'}); card.classList.add('highlight'); setTimeout(()=>card.classList.remove('highlight'), 2000); }
+    });
+  });
+  document.querySelectorAll('.fact-card').forEach(card => {
+    card.addEventListener('mouseenter', () => {
+      const idx = card.dataset.fact; const tid = card.dataset.tid;
+      document.querySelectorAll(`.fact-span[data-fact="${idx}"][data-tid="${tid}"]`).forEach(s => s.classList.add('active'));
+    });
+    card.addEventListener('mouseleave', () => {
+      document.querySelectorAll(`.fact-span.active`).forEach(s => s.classList.remove('active'));
+    });
+    card.addEventListener('click', () => {
+      const idx = card.dataset.fact; const tid = card.dataset.tid;
+      const span = document.querySelector(`.fact-span[data-fact="${idx}"][data-tid="${tid}"]`);
+      if (span) span.scrollIntoView({behavior:'smooth', block:'center'});
+    });
+  });
+}
+
+async function load() {
+  const limit = document.getElementById('limit').value || 5;
+  document.getElementById('main').innerHTML = '<div class="loading">Loading calibration data…</div>';
+  document.getElementById('toc').innerHTML = '';
+  try {
+    const res = await fetch(`/voice/calibration-data?limit=${limit}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    document.getElementById('genat').textContent = 'generated ' + fmtDate(data.generated_at);
+    if (!data.transcripts.length) {
+      document.getElementById('main').innerHTML = '<div class="empty">No voice_capture/entity_capture transcripts found.</div>';
+      return;
+    }
+    document.getElementById('toc').innerHTML = renderToc(data.transcripts);
+    document.getElementById('main').innerHTML = data.transcripts.map(renderTranscriptSection).join('');
+    wireHover();
+  } catch (e) {
+    document.getElementById('main').innerHTML = `<div class="empty">Load failed: ${ESC(e.message)}</div>`;
+  }
+}
+
+document.getElementById('reload').addEventListener('click', load);
+load();
+</script>
+</body>
+</html>
