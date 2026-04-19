@@ -267,9 +267,19 @@ const FACT_PALETTE = [
 ];
 const factColor = (i) => FACT_PALETTE[i % FACT_PALETTE.length];
 
+function factTooltip(f) {
+  // Short one-line summary shown on hover over an inline span or fact card
+  const bits = [];
+  if (f.node_ids && f.node_ids.length) bits.push(`→ ${f.node_ids.length} node${f.node_ids.length===1?'':'s'}: ${f.node_ids.join(', ')}`);
+  if (f.entities && f.entities.length) bits.push(`→ ${f.entities.length} entit${f.entities.length===1?'y':'ies'}: ${f.entities.join(', ')}`);
+  if (!bits.length) bits.push('UNROUTED — extracted but not linked to a curriculum node or entity');
+  if (f.confidence) bits.push(`confidence: ${f.confidence}`);
+  return bits.join('  ·  ');
+}
+
 function renderTranscript(t) {
   // Sort facts by span start; facts without spans skipped in text (but cards still show)
-  const spans = t.facts.filter(f => f.span).map(f => ({ idx:f.idx, start:f.span[0], end:f.span[1] }));
+  const spans = t.facts.filter(f => f.span).map(f => ({ idx:f.idx, start:f.span[0], end:f.span[1], fact:f }));
   spans.sort((a,b) => a.start - b.start);
   // Resolve overlaps: if two spans overlap, keep both but nest by truncating later one
   const out = [];
@@ -286,10 +296,13 @@ function renderTranscript(t) {
     cursor = s.end;
   }
   if (cursor < tx.length) out.push({ kind:'text', text: tx.slice(cursor) });
+  // Precompute tooltips keyed by idx so the span map can attach them
+  const tipByIdx = Object.fromEntries(t.facts.map(f => [f.idx, factTooltip(f)]));
   return out.map(p => {
     if (p.kind === 'text') return ESC(p.text);
     const c = factColor(p.idx);
-    return `<span class="fact-span" data-fact="${p.idx}" data-tid="${ESC(t.id)}" style="--span-color:${c.bg};--span-border:${c.bd};--span-hover:${c.hv}"><span class="fact-num">${p.idx}</span>${ESC(p.text)}</span>`;
+    const tip = tipByIdx[p.idx] || '';
+    return `<span class="fact-span" data-fact="${p.idx}" data-tid="${ESC(t.id)}" title="${ESC(tip)}" style="--span-color:${c.bg};--span-border:${c.bd};--span-hover:${c.hv}"><span class="fact-num">${p.idx}</span>${ESC(p.text)}</span>`;
   }).join('');
 }
 
@@ -307,8 +320,8 @@ function renderFact(f, tId) {
   if (!f.node_ids.length && !f.entities.length) chips.push(`<span class="chip none">unrouted</span>`);
   const confBadge = f.confidence ? `<span class="conf ${ESC(f.confidence)}">${ESC(f.confidence)}</span>` : '';
   const excerpt = f.source_excerpt ? `<div class="fact-excerpt">"${ESC(f.source_excerpt)}"</div>` : '';
-  return `<div class="fact-card" data-fact="${f.idx}" data-tid="${ESC(tId)}" style="--span-border:${c.bd}">
-    <div class="fact-head"><span class="idx">${f.idx}</span>${confBadge}${f.span ? '' : '<span style="color:var(--warning)">span-missing</span>'}</div>
+  return `<div class="fact-card" data-fact="${f.idx}" data-tid="${ESC(tId)}" title="${ESC(factTooltip(f))}" style="--span-border:${c.bd}">
+    <div class="fact-head"><span class="idx">${f.idx}</span>${confBadge}${f.span ? '' : '<span style="color:var(--warning)" title="source_excerpt could not be substring-matched in the transcript">span-missing</span>'}</div>
     <div class="fact-text">${ESC(f.text)}</div>
     <div class="fact-meta">${chips.join('')}</div>
     ${excerpt}
@@ -385,17 +398,18 @@ function renderNodeCard(n) {
         <div class="q">${ESC(ki.main_question || '—')}</div>
         ${ki.answer_guidance ? `<div class="a"><em>A:</em> ${ESC(ki.answer_guidance)}</div>` : ''}
         ${ki.rich_answer ? `<div class="rich">${ESC(ki.rich_answer.slice(0,550))}${ki.rich_answer.length>550?'…':''}</div>` : ''}
-        ${ki.memory_hook ? `<div class="hook">🧠 ${ESC(ki.memory_hook)}</div>` : '<div class="hook" style="color:var(--text-muted)">🧠 <em>no memory_hook recorded</em></div>'}
+        ${ki.memory_hook ? `<div class="hook">🧠 ${ESC(ki.memory_hook)}</div>` : '<div class="hook" style="color:var(--text-muted)" title="cached_question JSON has no memory_hook field — common for book-sourced KIs">🧠 <em>no memory_hook in cached_question</em></div>'}
       </div>
       <div class="grid-metrics">
         <div class="metric"><div class="k">reviews</div><div class="v">${ki.review_count}</div></div>
         <div class="metric"><div class="k">last score</div><div class="v ${ki.last_score==='knew'?'ok':(ki.last_score==='missed'?'warn':'')}">${ESC(ki.last_score||'—')}</div></div>
         <div class="metric"><div class="k">stability</div><div class="v">${ki.stability_days.toFixed(1)}d</div></div>
-        <div class="metric"><div class="k">angle types</div><div class="v ${angleTypes.size>=3?'ok':(angleTypes.size===0?'warn':'')}">${angleTypes.size}</div></div>
-        <div class="metric"><div class="k">quiz rows</div><div class="v ${totalQuizzes>=3?'ok':(totalQuizzes===0?'warn':'')}">${totalQuizzes}</div></div>
+        <div class="metric" title="Distinct quiz_type values in microlearning_quizzes rows for this KI's fact_ids"><div class="k">multicue angles</div><div class="v ${angleTypes.size>=3?'ok':(angleTypes.size===0?'warn':'')}">${angleTypes.size}</div></div>
+        <div class="metric" title="Total microlearning_quizzes rows generated from this KI's fact_ids"><div class="k">quiz rows</div><div class="v ${totalQuizzes>=3?'ok':(totalQuizzes===0?'warn':'')}">${totalQuizzes}</div></div>
       </div>
       ${srcLine}
-      <h4>Fact angles asked (main + suggestions → microlearning_quizzes)</h4>
+      <h4>Angles asked (main question + suggestions → microlearning_quizzes rows)</h4>
+      <div style="font-size:11.5px;color:var(--text-muted);margin:-2px 0 4px;font-style:italic">Grouped headers are the fact_ids on this KI's cached_question. Rows underneath are the actual microlearning_quizzes rows tied to that fact_id. <strong>"none"</strong> means that fact_id has no quiz rows yet — a coverage gap.</div>
       <table class="angles-table">
         <thead><tr><th style="width:110px">angle</th><th>question</th></tr></thead>
         <tbody>${anglesHtml}</tbody>
@@ -462,10 +476,11 @@ function renderEntityCard(e) {
       </div>` : ''}
       <div class="grid-metrics">
         <div class="metric"><div class="k">key_facts</div><div class="v">${e.key_facts.length}</div></div>
-        <div class="metric"><div class="k">angle types</div><div class="v ${angleTypes.size>=2?'ok':(angleTypes.size===0?'warn':'')}">${angleTypes.size}</div></div>
-        <div class="metric"><div class="k">quiz rows</div><div class="v ${totalQuizzes>=3?'ok':(totalQuizzes===0?'warn':'')}">${totalQuizzes}</div></div>
+        <div class="metric" title="Distinct quiz_type values in microlearning_quizzes rows tied to these key_facts"><div class="k">multicue angles</div><div class="v ${angleTypes.size>=2?'ok':(angleTypes.size===0?'warn':'')}">${angleTypes.size}</div></div>
+        <div class="metric" title="Total microlearning_quizzes rows generated from this entity's key_facts"><div class="k">quiz rows</div><div class="v ${totalQuizzes>=3?'ok':(totalQuizzes===0?'warn':'')}">${totalQuizzes}</div></div>
       </div>
-      <h4>Key facts → quiz angles</h4>
+      <h4>Key facts and quiz angles generated from them</h4>
+      <div style="font-size:11.5px;color:var(--text-muted);margin:-2px 0 4px;font-style:italic">Each indented header is a key_fact; the rows under it are the actual microlearning_quizzes rows generated for that fact_id, with their quiz_type ("angle"). Entity-path key_facts currently don't produce multicue quizzes in the pipeline — so expect "none" rows for most facts.</div>
       <table class="angles-table">
         <thead><tr><th style="width:110px">angle</th><th>question</th></tr></thead>
         <tbody>${factsHtml}</tbody>
