@@ -10,6 +10,7 @@ retrieval questions at review time using current knowledge state.
 import json
 import os
 import re
+import sqlite3
 import subprocess
 import threading
 import time
@@ -1323,6 +1324,22 @@ def _pick_key_fact(key_facts: list, question_history: list) -> dict | None:
     return None
 
 
+def _rank_wonderings(wonderings: list, top_k: int = 5) -> list:
+    """Rank wonderings before truncating so the richest ones survive.
+
+    Why: plain `wonderings[:5]` dropped the intellectually richest 6th wondering
+    from the Iran Revolution capture (Session 87) — longer, multi-question
+    reflections lost to whatever order Gemini happened to emit. Scoring prefers
+    length (proxy for specificity / multi-clause reasoning) and explicit
+    question marks (genuine curiosity markers).
+    """
+    def score(w: str) -> float:
+        if not isinstance(w, str):
+            return -1.0
+        return len(w) + 40.0 * w.count('?')
+    return sorted(wonderings, key=score, reverse=True)[:top_k]
+
+
 _ENRICH_PROMPT = """A learner just answered a history review card. Enrich the answer into a learning moment.
 
 Topic: {node_title}
@@ -1340,9 +1357,25 @@ Generate:
    a number), a vivid image, and why this fact matters in the bigger picture.
 2. memory_hook: One sentence connecting this to another period or event.
    Be SPECIFIC with dates.
+3. temporal_hook: One short phrase anchoring this fact in time using the learner's own
+   temporal neighbors (from the "Other entities you've captured from the same period" block
+   above, when present). Prefer same-moment connections ("the year Carter took office", "two
+   years after the Suez crisis") over generic century markers. Empty string if no suitable
+   anchor exists.
+
+BAD temporal_hook: "In the 20th century" (too vague)
+BAD temporal_hook: "Around the time of the Cold War" (span, not moment)
+BAD temporal_hook: "During the Carter administration" (fine only if Carter is NOT in the
+  learner's captured neighbors — otherwise name the specific moment)
+GOOD temporal_hook: "444 days from Nov 4 1979 to Jan 20 1981 — Carter's last day, Reagan's first"
+GOOD temporal_hook: "Two weeks after the Shah fled, Feb 1979"
+GOOD temporal_hook: "1953, 26 years before the revolution — the CIA coup against Mossadegh"
+
+STRICT: do not invent dates or events not present in the provided context. If the context has
+no usable temporal anchor, return "".
 
 Output JSON only:
-{{"rich_answer":"...","memory_hook":"..."}}"""
+{{"rich_answer":"...","memory_hook":"...","temporal_hook":"..."}}"""
 
 
 # Wrapper block header used only when entity_graph_context is non-empty.
@@ -1411,6 +1444,9 @@ def _key_fact_to_question(fact: dict, node_title: str, node_description: str,
                 result['rich_answer'] = enriched['rich_answer']
             if enriched.get('memory_hook'):
                 result['memory_hook'] = enriched['memory_hook']
+            th = enriched.get('temporal_hook')
+            if isinstance(th, str) and th.strip():
+                result['temporal_hook'] = th.strip()
     except Exception as e:
         print(f'[review] enrich failed for {node_title}: {e}', flush=True)
     return result
@@ -5542,7 +5578,7 @@ def process_voice_capture(transcript: str, entity_id: str = None,
     primary_domain = next(iter(candidate_domains)) if candidate_domains else None
     primary_node = node_assessments[0]['node_id'] if node_assessments else None
 
-    for w in wonderings[:5]:
+    for w in _rank_wonderings(wonderings, top_k=5):
         try:
             card_id = create_microlearning_request(
                 query=w,
@@ -5906,10 +5942,12 @@ def _process_voice_capture_entity_path(
     if ke_ids_created:
         def _pregen_entity_questions():
             from db import get_connection as _gc
-            generated = 0
-            for kid in ke_ids_created:
+
+            def _try_one(kid: str) -> str:
+                # Returns 'ok' on success, 'skip' if already cached, 'empty' if
+                # LLM returned nothing (retriable — 429s and transient failures
+                # land here), 'error' on exception (also retriable).
                 try:
-                    # Read (no lock held beyond this block)
                     c = _gc(readonly=True)
                     row = c.execute(
                         'SELECT cached_question FROM knowledge_entities WHERE id=?',
@@ -5917,18 +5955,16 @@ def _process_voice_capture_entity_path(
                     ).fetchone()
                     c.close()
                     if not row or row['cached_question']:
-                        continue
+                        return 'skip'
 
-                    # Slow Claude call — fresh readonly conn, no dirty state
                     rc = _gc(readonly=True)
                     try:
                         q = generate_entity_question(kid, rc)
                     finally:
                         rc.close()
                     if not q:
-                        continue
+                        return 'empty'
 
-                    # Fast write — fresh conn, single UPDATE, commit, close
                     wc = _gc()
                     try:
                         wc.execute(
@@ -5938,9 +5974,46 @@ def _process_voice_capture_entity_path(
                         wc.commit()
                     finally:
                         wc.close()
-                    generated += 1
+                    return 'ok'
                 except Exception as e:
                     print(f'[voice-capture-entity] pre-gen failed {kid}: {e}', flush=True)
+                    return 'error'
+
+            generated = 0
+            failed_kids: list[str] = []
+            for kid in ke_ids_created:
+                outcome = _try_one(kid)
+                if outcome == 'ok':
+                    generated += 1
+                elif outcome == 'empty':
+                    print(
+                        f'[voice-capture-entity] pre-gen empty for {kid} — '
+                        f'LLM returned None, queuing retry', flush=True)
+                    failed_kids.append(kid)
+                elif outcome == 'error':
+                    failed_kids.append(kid)
+
+            # Retry once after a 60s cooldown. The prior Iran Revolution capture
+            # (Session 87) had Khomeini stuck at cached_question=NULL because a
+            # Gemini 429 at 15:01:43 silently dropped the entity; waiting out
+            # the per-minute quota window almost always recovers.
+            if failed_kids:
+                print(
+                    f'[voice-capture-entity] sleeping 60s before retrying '
+                    f'{len(failed_kids)} failed kid(s)', flush=True)
+                time.sleep(60)
+                recovered = 0
+                for kid in failed_kids:
+                    if _try_one(kid) == 'ok':
+                        generated += 1
+                        recovered += 1
+                        print(f'[voice-capture-entity] retry recovered {kid}', flush=True)
+                    else:
+                        print(f'[voice-capture-entity] retry still failing {kid}', flush=True)
+                print(
+                    f'[voice-capture-entity] retry: {recovered}/{len(failed_kids)} recovered',
+                    flush=True)
+
             print(
                 f'[voice-capture-entity] Pre-generated {generated}/{len(ke_ids_created)} questions',
                 flush=True,
@@ -5954,7 +6027,7 @@ def _process_voice_capture_entity_path(
     # --- Trigger ML cards from wonderings (entity-tagged, no curriculum domain) ---
     ml_triggered = []
     primary_entity_slug = ke_ids_created[0].split(':', 1)[1] if ke_ids_created else None
-    for w in wonderings[:5]:
+    for w in _rank_wonderings(wonderings, top_k=5):
         try:
             card_id = create_microlearning_request(
                 query=w,
