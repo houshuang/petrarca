@@ -3,7 +3,7 @@ subprocess + cost logging. Preserves the legacy Petrarca API (call_claude,
 call_claude_json, call_claude_search, call_claude_or_gemini) so existing
 callers (review_engine.py, curriculum_db.py, etc.) don't need edits.
 
-Returns None on failure, never raises. Gemini fallback stays in this module.
+Returns None on failure, never raises.
 
 Usage:
     from claude_llm import call_claude, call_claude_json
@@ -62,12 +62,12 @@ def call_claude(prompt: str, *, timeout: int = 180, retries: int = 1,
 
 def call_claude_json(prompt: str, *, timeout: int = 180, retries: int = 1,
                      model: str | None = None) -> dict | list | None:
-    """Call Claude and parse JSON from the response. Falls back to Gemini on failure.
+    """Call Claude and parse JSON from the response.
 
     Uses a text-mode call and a tolerant JSON extractor (not --json-schema),
     since the existing prompts rely on soft "Output JSON only" hints rather
-    than strict schemas. The Gemini fallback stays in petrarca — limbic
-    doesn't know about cross-provider fallback.
+    than strict schemas. Returns None if Claude fails or the response can't
+    be parsed as JSON; callers must handle None.
     """
     if 'json' not in prompt.lower()[-100:]:
         prompt = prompt.rstrip() + '\n\nOutput JSON only.'
@@ -77,15 +77,6 @@ def call_claude_json(prompt: str, *, timeout: int = 180, retries: int = 1,
         result = extract_json(raw)
         if result is not None:
             return result
-
-    print('[call_claude_json] Claude failed, falling back to Gemini', flush=True)
-    try:
-        from gemini_llm import call_llm
-        raw = call_llm(prompt, max_tokens=4096, response_mime_type='application/json')
-        if raw:
-            return extract_json(raw)
-    except Exception as e:
-        print(f'[call_claude_json] Gemini fallback also failed: {e}', flush=True)
 
     return None
 
@@ -145,30 +136,11 @@ def call_claude_search(prompt: str, *, timeout: int = 180,
 def call_claude_or_gemini(prompt: str, *, timeout: int = 180,
                           json_mode: bool = False,
                           model: str | None = None) -> str | dict | list | None:
-    """Try Claude first, fall back to Gemini if Claude fails.
+    """Call Claude only — name kept for backwards compatibility.
 
-    For the transition period — gradually remove Gemini fallbacks as
-    Claude proves reliable for each use case.
+    The Gemini fallback was removed (2026-04-20). Returns None on Claude failure;
+    callers must handle None.
     """
     if json_mode:
-        result = call_claude_json(prompt, timeout=timeout, model=model)
-        if result is not None:
-            return result
-    else:
-        result = call_claude(prompt, timeout=timeout, model=model)
-        if result is not None:
-            return result
-
-    print('[claude] falling back to Gemini', flush=True)
-    try:
-        from gemini_llm import call_llm
-        kwargs = {'max_tokens': 4096}
-        if json_mode:
-            kwargs['response_mime_type'] = 'application/json'
-        raw = call_llm(prompt, **kwargs)
-        if raw and json_mode:
-            return extract_json(raw)
-        return raw
-    except Exception as e:
-        print(f'[claude] Gemini fallback also failed: {e}', flush=True)
-        return None
+        return call_claude_json(prompt, timeout=timeout, model=model)
+    return call_claude(prompt, timeout=timeout, model=model)
