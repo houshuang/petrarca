@@ -240,7 +240,7 @@ def generate_resonance_prompt(capture: dict, book: dict,
 
 def generate_cross_book_dialogue(books: list[dict], captures: list[dict]) -> dict | None:
     """Find an interesting claim pair across two books and generate a dialogue prompt."""
-    from gemini_llm import call_llm
+    from claude_llm import call_claude
 
     # Collect all book research claims grouped by book
     book_claims = {}
@@ -311,7 +311,7 @@ Generate a brief (1-2 sentence) prompt that:
 
 Return ONLY the prompt text, nothing else."""
 
-    tension_text = call_llm(tension_prompt_request, max_tokens=256)
+    tension_text = call_claude(tension_prompt_request, timeout=60, model='sonnet')
     if not tension_text:
         tension_text = (
             f"How do these two perspectives relate? "

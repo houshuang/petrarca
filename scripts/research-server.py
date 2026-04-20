@@ -278,7 +278,7 @@ def route_voice_input(transcript: str, source_context: dict) -> dict:
     conn.close()
     project_names_list = [p['name'] for p in active_projects]
 
-    from gemini_llm import call_llm
+    from claude_llm import call_claude_json
 
     prompt = f"""Classify this voice input. The user has these active projects: {json.dumps(project_names_list)}
 
@@ -296,14 +296,10 @@ Return JSON only:
 {{"intent": "...", "project_name": "..." or null, "confidence": 0.0-1.0, "cleaned_text": "the note text without the routing prefix"}}"""
 
     try:
-        raw = call_llm(prompt)
-        json_start = raw.find('{')
-        json_end = raw.rfind('}') + 1
-        if json_start < 0 or json_end <= json_start:
+        result = call_claude_json(prompt, timeout=60, model='sonnet')
+        if not isinstance(result, dict):
             return {"intent": "general_note", "project_id": None, "project_name": None,
                     "confidence": 0.0, "cleaned_text": transcript}
-
-        result = json.loads(raw[json_start:json_end])
 
         # Resolve project_name to project_id via fuzzy match
         matched_project = None
@@ -1442,9 +1438,9 @@ def transcribe_on_server(audio_path: Path) -> str:
 
 
 def extract_note_actions(transcript: str, article_title: str, topics: list[str]) -> list[dict]:
-    """Use Gemini to extract actionable intents from a voice note transcript."""
+    """Extract actionable intents from a voice note transcript via Claude."""
     import uuid
-    from gemini_llm import call_llm
+    from claude_llm import call_claude_json
 
     prompt = f"""Analyze this voice note transcript and extract actionable intents.
 
@@ -1468,23 +1464,14 @@ If no clear actions are found, return an empty array.
 Return ONLY the JSON array, no other text."""
 
     try:
-        raw = call_llm(prompt, max_tokens=1000)
-        if not raw:
+        actions = call_claude_json(prompt, timeout=90, model='sonnet')
+        if not isinstance(actions, list):
             return []
-        # Strip markdown code fences if present
-        if raw.startswith('```'):
-            raw = raw.split('\n', 1)[1] if '\n' in raw else raw[3:]
-            if raw.endswith('```'):
-                raw = raw[:-3].strip()
-
-        json_start = raw.find('[')
-        json_end = raw.rfind(']') + 1
-        if json_start >= 0 and json_end > json_start:
-            actions = json.loads(raw[json_start:json_end])
-            for action in actions:
+        for action in actions:
+            if isinstance(action, dict):
                 action['id'] = f'act_{uuid.uuid4().hex[:8]}'
                 action['status'] = 'pending'
-            return actions
+        return [a for a in actions if isinstance(a, dict)]
     except Exception as e:
         print(f'[note] Action extraction failed: {e}', flush=True)
 
@@ -1603,8 +1590,8 @@ Return ONLY valid JSON (no markdown fences):
 # --- Generate more follow-up questions ---
 
 def generate_more_questions(article_id: str, existing_questions: list[str]) -> list[dict]:
-    """Generate additional follow-up questions for an article using Gemini."""
-    from gemini_llm import call_llm
+    """Generate additional follow-up questions for an article via Claude."""
+    from claude_llm import call_claude_json
 
     # Load article data
     try:
@@ -1648,16 +1635,12 @@ Return ONLY a JSON array:
   {{"question": "...", "connects_to": "..."}}
 ]"""
 
-    result = call_llm(prompt, max_tokens=1024, response_mime_type='application/json')
-    if not result:
+    questions = call_claude_json(prompt, timeout=90, model='sonnet')
+    if not questions:
         return []
-
-    try:
-        questions = json.loads(result) if isinstance(result, str) else result
-        if isinstance(questions, list):
-            return [q for q in questions if isinstance(q, dict) and 'question' in q and 'connects_to' in q]
-    except (json.JSONDecodeError, TypeError):
-        print(f'[generate-questions] JSON parse failed for article {article_id}', flush=True)
+    if isinstance(questions, list):
+        return [q for q in questions if isinstance(q, dict) and 'question' in q and 'connects_to' in q]
+    print(f'[generate-questions] Unexpected response shape for article {article_id}', flush=True)
 
     return []
 
@@ -2994,7 +2977,7 @@ class ResearchHandler(BaseHTTPRequestHandler):
 
         print(f'[book/voice-note] Received note {note_id} for {book_title}', flush=True)
 
-        from gemini_llm import call_llm
+        from claude_llm import call_claude_json
         result = {'id': note_id, 'transcript': '', 'extracted_ideas': [], 'topics': []}
         try:
             transcript = transcribe_on_server(audio_path)
@@ -3002,7 +2985,7 @@ class ResearchHandler(BaseHTTPRequestHandler):
 
             # Extract ideas from transcript
             if transcript.strip():
-                extraction = call_llm(
+                parsed = call_claude_json(
                     f"""Extract key ideas from this voice note about the book "{book_title}".
 {f'Chapter: {chapter}' if chapter else ''}
 {f'Page: {page_number}' if page_number else ''}
@@ -3012,19 +2995,12 @@ Transcript: {transcript}
 Return a JSON object:
 {{"extracted_ideas": ["idea 1", "idea 2"], "topics": ["topic1", "topic2"]}}
 Return ONLY valid JSON.""",
-                    response_mime_type="application/json",
+                    timeout=90,
+                    model='sonnet',
                 )
-                if extraction:
-                    try:
-                        cleaned = extraction.strip()
-                        if cleaned.startswith('```'):
-                            cleaned = re.sub(r'^```(?:json)?\n?', '', cleaned)
-                            cleaned = re.sub(r'\n?```$', '', cleaned)
-                        parsed = json.loads(cleaned)
-                        result['extracted_ideas'] = parsed.get('extracted_ideas', [])
-                        result['topics'] = parsed.get('topics', [])
-                    except json.JSONDecodeError:
-                        pass
+                if isinstance(parsed, dict):
+                    result['extracted_ideas'] = parsed.get('extracted_ideas', [])
+                    result['topics'] = parsed.get('topics', [])
 
             print(f'[book/voice-note] {note_id} processed: {len(result["extracted_ideas"])} ideas', flush=True)
         except Exception as e:
@@ -3585,7 +3561,7 @@ Return ONLY valid JSON.""",
             self._send_json_response(200, {'status': 'ok', 'message': 'All books already classified', 'classified': 0})
             return
 
-        from gemini_llm import call_llm
+        from claude_llm import call_claude_json
         classified_count = 0
         valid_cats = ('non-fiction', 'classical-literature', 'literary-fiction', 'genre-fiction', 'language-learning', 'reference')
         classified_pairs = []  # (key, category) tuples
@@ -3613,13 +3589,14 @@ Books:
 Return JSON array only, no markdown fences:"""
 
             try:
-                result = call_llm(prompt)
-                result_text = result.strip()
-                if result_text.startswith('```'):
-                    result_text = result_text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
-                classifications = json.loads(result_text)
+                classifications = call_claude_json(prompt, timeout=180, model='sonnet')
+                if not isinstance(classifications, list):
+                    print(f'[kindle/classify] Batch {i//50}: unexpected shape', flush=True)
+                    continue
 
                 for item in classifications:
+                    if not isinstance(item, dict):
+                        continue
                     idx = item.get('index', 0) - 1
                     category = item.get('category', '')
                     if 0 <= idx < len(batch) and category in valid_cats:
@@ -3664,7 +3641,7 @@ Return JSON array only, no markdown fences:"""
             self._send_json_response(400, {'error': 'No books to resolve'})
             return
 
-        from gemini_llm import call_llm
+        from claude_llm import call_claude_json
 
         resolved = {}
         for i in range(0, len(books_to_resolve), 30):
@@ -3686,13 +3663,14 @@ If unsure, set title to null.
 JSON array only:"""
 
             try:
-                result = call_llm(prompt)
-                result_text = result.strip()
-                if result_text.startswith('```'):
-                    result_text = result_text.split('\n', 1)[1].rsplit('```', 1)[0].strip()
-                titles = json.loads(result_text)
+                titles = call_claude_json(prompt, timeout=180, model='sonnet')
+                if not isinstance(titles, list):
+                    print(f'[kindle/resolve-titles] Batch {i//30}: unexpected shape', flush=True)
+                    continue
 
                 for item in titles:
+                    if not isinstance(item, dict):
+                        continue
                     idx = item.get('index', 0) - 1
                     title = item.get('title')
                     if 0 <= idx < len(batch) and title:
@@ -5411,11 +5389,11 @@ JSON array only:"""
                     # Bootstrap SQLite entities (shared_entities + entity_curriculum_links)
                     _curriculum_jobs[job_id]['status'] = 'bootstrapping_entities'
                     try:
-                        from gemini_llm import call_llm as _llm_call
+                        from claude_llm import call_claude
                         curriculum = load_curriculum(domain_id)
                         if curriculum:
                             prompt = _entity_extraction_prompt(curriculum)
-                            raw = _llm_call(prompt, model='gemini-2.0-flash', max_tokens=16384)
+                            raw = call_claude(prompt, timeout=300, model='sonnet')
                             entities = _entity_parse_json(raw) if raw else None
                             if entities:
                                 from db import get_connection as _get_conn
@@ -5684,13 +5662,13 @@ JSON array only:"""
                     enriched_nodes[0],
                 )
                 try:
-                    from gemini_llm import call_llm as llm_call
+                    from claude_llm import call_claude
                     q_prompt = (
                         f"Generate one short question (6-12 words) testing understanding of: {target['node_title']}\n"
                         f"Definition: {target['description'][:200]}\n"
                         f"Start with What/Why/How. Output just the question text, nothing else."
                     )
-                    q_text = llm_call(q_prompt, max_tokens=100)
+                    q_text = call_claude(q_prompt, timeout=60, model='sonnet')
                     if q_text:
                         assessment_question = {
                             'node_id': target['node_id'],

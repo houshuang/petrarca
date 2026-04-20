@@ -17,7 +17,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from gemini_llm import call_llm
+from claude_llm import call_claude, call_claude_json
 from curriculum_db import load_curriculum, list_curricula, load_knowledge_states, update_knowledge
 from db import get_connection
 
@@ -132,8 +132,8 @@ Output as a JSON array of node objects. No markdown, just the JSON array."""
 def generate_curriculum(domain: str, depth: str = "introductory", model: str = "opus") -> dict | None:
     """Generate a curriculum for a domain. Returns the full curriculum dict or None.
 
-    Always uses Claude Opus by default — Gemini Flash produces poor quality curricula
-    (vague titles, shallow descriptions). Use model='gemini-2.5-flash' only for testing.
+    Uses Claude Opus for quality. Non-opus values route to Claude Sonnet as a faster
+    but lower-quality option; Gemini was removed (2026-04-20).
     """
     prompt = CURRICULUM_GENERATION_PROMPT.format(domain=domain)
 
@@ -145,8 +145,7 @@ def generate_curriculum(domain: str, depth: str = "introductory", model: str = "
     if model == 'opus' or model.startswith('claude'):
         raw = _call_opus(prompt)
     else:
-        raw = call_llm(prompt, model=model, max_tokens=32768,
-                       response_mime_type="application/json")
+        raw = call_claude(prompt, timeout=600, model='sonnet')
     if not raw:
         return None
 
@@ -404,14 +403,8 @@ def map_book_to_curriculum(book_id: str, domain_id: str) -> list[dict] | None:
         curriculum_nodes="\n".join(node_lines),
     )
 
-    raw = call_llm(prompt, model="gemini-2.5-flash", max_tokens=8192,
-                   response_mime_type="application/json")
-    if not raw:
-        return None
-
-    try:
-        mappings_raw = json.loads(raw)
-    except json.JSONDecodeError:
+    mappings_raw = call_claude_json(prompt, timeout=180, model='sonnet')
+    if mappings_raw is None:
         return None
 
     if not isinstance(mappings_raw, list):
@@ -655,7 +648,7 @@ def tag_curriculum_entities(domain_id: str, force: bool = False) -> int:
     """Tag all nodes in a curriculum with persons/places/events/time_span.
 
     Skips nodes that already have an 'entities' field unless force=True.
-    Uses Gemini Flash in batches of 12 nodes. Returns count of nodes tagged.
+    Uses Claude Sonnet in batches of 12 nodes. Returns count of nodes tagged.
     """
     curriculum = load_curriculum(domain_id)
     if not curriculum:
@@ -682,19 +675,9 @@ def tag_curriculum_entities(domain_id: str, force: bool = False) -> int:
             for n in batch
         ]
         prompt = _ENTITY_TAG_PROMPT.format(nodes_json=json.dumps(batch_input, indent=2))
-        raw = call_llm(prompt, max_tokens=4096, response_mime_type='application/json')
-        if not raw:
-            continue
-
-        try:
-            text = raw.strip()
-            if text.startswith('```'):
-                text = re.sub(r'^```(?:json)?\s*', '', text)
-                text = re.sub(r'\s*```$', '', text.strip())
-            m = re.search(r'\[[\s\S]*\]', text)
-            results = json.loads(m.group() if m else text)
-        except Exception as e:
-            print(f'[curriculum] entity tag parse error: {e}', flush=True)
+        results = call_claude_json(prompt, timeout=180, model='sonnet')
+        if not isinstance(results, list):
+            print('[curriculum] entity tag: unexpected shape', flush=True)
             continue
 
         result_by_id = {r['id']: r for r in results if isinstance(r, dict)}
@@ -1331,21 +1314,16 @@ def _generate_next_question(session: dict, curriculum: dict) -> dict:
         history=history_text,
     )
 
-    raw = call_llm(prompt, model="gemini-2.5-flash", max_tokens=1024,
-                   response_mime_type="application/json")
+    q_data = call_claude_json(prompt, timeout=60, model='sonnet')
 
     question_text = f"Are you familiar with {target_node['title']}?"
     card_summary = target_node.get("description", "")
     follow_up = None
 
-    if raw:
-        try:
-            q_data = json.loads(raw)
-            question_text = q_data.get("question", question_text)
-            card_summary = q_data.get("card_summary", card_summary)
-            follow_up = q_data.get("follow_up_if_yes")
-        except json.JSONDecodeError:
-            pass
+    if isinstance(q_data, dict):
+        question_text = q_data.get("question", question_text)
+        card_summary = q_data.get("card_summary", card_summary)
+        follow_up = q_data.get("follow_up_if_yes")
 
     # Record in history
     entry = {

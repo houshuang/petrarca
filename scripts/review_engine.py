@@ -1265,9 +1265,6 @@ def _generate_follow_up_queries(node_title: str, node_description: str,
                                 conn=None, node_id=None, domain_id=None) -> list[str]:
     """Generate 3 LLM-powered follow-up queries for a review item.
     Returns empty list on failure (caller should fall back to templates).
-
-    Uses Gemini Flash directly for interactive latency (~2-5s vs 15-60s
-    with claude -p subprocess).
     """
     try:
         learner_ctx = ''
@@ -1280,13 +1277,10 @@ def _generate_follow_up_queries(node_title: str, node_description: str,
             fact_context=fact_context or '(general review)',
             learner_context=learner_ctx,
         )
-        from gemini_llm import call_llm
-        raw = call_llm(prompt, model='gemini-2.0-flash',
-                       response_mime_type='application/json')
-        if raw:
-            fq = json.loads(raw) if isinstance(raw, str) else raw
-            if isinstance(fq, list) and len(fq) >= 2:
-                return fq[:6]
+        from claude_llm import call_claude_json
+        fq = call_claude_json(prompt, timeout=90, model='sonnet')
+        if isinstance(fq, list) and len(fq) >= 2:
+            return fq[:6]
     except Exception as e:
         print(f'[review] follow-up gen failed for {node_title}: {e}', flush=True)
     return []
@@ -2362,16 +2356,13 @@ def generate_multicue_quizzes(node_id: str, domain_id: str):
                             for i, f in enumerate(facts_to_process)}
         prompt = MULTICUE_PROMPT.format(facts_json=json.dumps(facts_for_prompt, indent=2))
 
-        from gemini_llm import call_llm
-        result = call_llm(prompt, max_tokens=2000, response_mime_type='application/json')
-        if not result:
-            print(f'[multicue] {node_id}: Gemini returned no result', flush=True)
+        from claude_llm import call_claude_json
+        cues_by_idx = call_claude_json(prompt, timeout=120, model='sonnet')
+        if not cues_by_idx:
+            print(f'[multicue] {node_id}: Claude returned no result', flush=True)
             return
-
-        try:
-            cues_by_idx = json.loads(result)
-        except json.JSONDecodeError as e:
-            print(f'[multicue] {node_id}: JSON parse error: {e}', flush=True)
+        if not isinstance(cues_by_idx, dict):
+            print(f'[multicue] {node_id}: unexpected shape {type(cues_by_idx).__name__}', flush=True)
             return
 
         # Reopen DB for writes
@@ -3440,8 +3431,6 @@ def create_targeted_quiz(item_id: str, query: str) -> dict:
         node_title = node[0] if node else ''
         node_desc = (node[1] or '')[:300] if node else ''
 
-        # Quick LLM call to generate Q+A for this specific fact
-        # Uses Gemini directly for interactive latency (~1-3s)
         prompt = f"""Generate a single quiz question and answer for this specific knowledge gap.
 
 Topic: {node_title}
@@ -3451,12 +3440,11 @@ User wants to know: {query}
 Return JSON: {{"question": "...", "answer": "..."}}
 The question should be direct and factual. The answer should be 1-2 sentences."""
 
-        from gemini_llm import call_llm
-        raw = call_llm(prompt, response_mime_type='application/json')
-        result = json.loads(raw) if isinstance(raw, str) else raw
+        from claude_llm import call_claude_json
+        result = call_claude_json(prompt, timeout=90, model='sonnet') or {}
 
-        question = result.get('question', query)
-        answer = result.get('answer', '')
+        question = result.get('question', query) if isinstance(result, dict) else query
+        answer = result.get('answer', '') if isinstance(result, dict) else ''
 
         # Store as a microlearning quiz linked to a lightweight ML card
         card_id = f'ml_{int(time.time())}_{hash(query) % 10000:04d}'
@@ -5111,12 +5099,12 @@ def process_voice_capture(transcript: str, entity_id: str = None,
           f'directly linked nodes: {len(directly_linked_node_ids)}, '
           f'domains: {candidate_domains}', flush=True)
 
-    # --- Domain routing: when entity matching finds few nodes, use Gemini Flash
+    # --- Domain routing: when entity matching finds few nodes, use an LLM
     # to identify the most relevant curriculum domains from the transcript ---
     routed_domain_ids: list[str] = []
     if len(directly_linked_node_ids) < 5:
         try:
-            from gemini_llm import call_llm as _gemini_call
+            from claude_llm import call_claude_json
             all_domains = conn.execute(
                 "SELECT DISTINCT domain_id FROM curriculum_nodes ORDER BY domain_id"
             ).fetchall()
@@ -5134,10 +5122,9 @@ def process_voice_capture(transcript: str, entity_id: str = None,
                 f"Transcript (excerpt):\n{transcript[:1500]}\n\n"
                 f'Return JSON: {{"domains": ["domain_id_1", "domain_id_2", "domain_id_3"]}}'
             )
-            route_raw = _gemini_call(route_prompt, max_tokens=200,
-                                     response_mime_type="application/json")
-            if route_raw:
-                routed = json.loads(route_raw).get("domains", [])[:3]
+            route_result = call_claude_json(route_prompt, timeout=60, model='sonnet')
+            if isinstance(route_result, dict):
+                routed = route_result.get("domains", [])[:3]
                 valid_ids = {d['domain_id'] for d in all_domains}
                 routed_domain_ids = [d for d in routed if d in valid_ids]
                 for rid in routed_domain_ids:
@@ -6145,7 +6132,7 @@ def _resolve_voice_entities_background(entities_mentioned: list, transcript: str
         return
 
     try:
-        from gemini_llm import call_llm
+        from claude_llm import call_claude_json
         from limbic.amygdala.embed import EmbeddingModel
         from limbic.amygdala.temporal import DateRange
         from limbic.amygdala.wikidata import WikidataClient
@@ -6165,15 +6152,11 @@ def _resolve_voice_entities_background(entities_mentioned: list, transcript: str
         f'Return JSON: {{"mentions": [{{"mention": "...", "type": "person|place|event|work|concept|other", '
         f'"date_start": year_or_null, "date_end": year_or_null}}]}}'
     )
-    raw = call_llm(extract_prompt, max_tokens=2000, response_mime_type="application/json")
-    if not raw:
-        print('[voice-entity-resolve] Gemini extraction returned empty', flush=True)
+    extracted = call_claude_json(extract_prompt, timeout=120, model='sonnet')
+    if not isinstance(extracted, dict):
+        print('[voice-entity-resolve] extraction returned empty or wrong shape', flush=True)
         return
-    try:
-        mentions_data = json.loads(raw).get("mentions", [])
-    except (json.JSONDecodeError, AttributeError):
-        print('[voice-entity-resolve] Bad JSON from extraction', flush=True)
-        return
+    mentions_data = extracted.get("mentions", []) or []
 
     # Deduplicate and normalize
     seen = set()
@@ -6274,12 +6257,8 @@ def _resolve_voice_entities_background(entities_mentioned: list, transcript: str
             context=transcript[:500],
             candidates=cand_block,
         )
-        answer_raw = call_llm(prompt, max_tokens=400, response_mime_type="application/json")
-        if not answer_raw:
-            continue
-        try:
-            answer = json.loads(answer_raw)
-        except json.JSONDecodeError:
+        answer = call_claude_json(prompt, timeout=60, model='sonnet')
+        if not isinstance(answer, dict):
             continue
         chosen = answer.get("chosen_qid")
         if not chosen or not validate_chosen_qid(candidates, chosen):
