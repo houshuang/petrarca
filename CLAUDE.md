@@ -126,6 +126,12 @@ This project is exploratory — 60+ sessions in many directions. That means:
 - Every screen MUST call `setFeedbackContext()` on focus/mount
 - New screens: add `setFeedbackContext({ screen: 'screen-name' })` in `useFocusEffect` or `useEffect`
 
+### Production Data Discipline
+- **NEVER POST synthetic/test text to `/explore/capture`, `/review/voice-elicit`, `/review/voice-memo`, `/book/voice-note`, or any other user-data ingest endpoint on the live server.** These endpoints treat all input as user-authored. Test rows are indistinguishable from real ones downstream and can be silently destroyed by dedup jobs — we lost real captures this way in Session 86 (2026-04-20).
+- To test a voice/capture pipeline: use `scripts/pipeline-tests/run.py` with fixtures, or write a unit test that calls `process_voice_capture()` against an in-memory SQLite, or `curl` a dedicated dev/staging server — never alif's prod DB.
+- If a test MUST write to prod (rare), pass `input_mode='test'` through and document why in the session prompt so the data can be cleaned up.
+- `voice_transcripts.input_mode` is stamped at ingest (`audio` / `text_json` / `test`) — check it on `/voice/calibration` to verify provenance before treating a row as real user data.
+
 ### Pipeline Testing
 - Use `scripts/pipeline-tests/run.py` when iterating on prompts/models/extraction
 - Always run relevant fixtures before AND after changes

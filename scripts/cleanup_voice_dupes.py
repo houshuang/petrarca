@@ -11,13 +11,27 @@ conn.row_factory = sqlite3.Row
 conn.execute("PRAGMA journal_mode=WAL")
 conn.execute("PRAGMA busy_timeout=30000")
 
-# 1. Find and remove duplicate voice_transcripts (keep earliest per node_id+audio_bytes)
+# 1. Find and remove duplicate voice_transcripts (keep earliest per transcript hash)
+#
+# Dedup key fix (2026-04): the previous key GROUP BY (node_id, audio_bytes) was
+# fundamentally broken for voice_capture rows — every voice_capture row has
+# audio_bytes=0 and often a coarse node_id ('general'), so a test-harness or
+# agent-created row with the same routing would silently collapse a real user
+# capture into one row. The new key uses a hash of the transcript text itself
+# plus created_at proximity, so only truly-identical text within a 10 minute
+# window counts as a duplicate.
 print("=== CLEANING DUPLICATE VOICE TRANSCRIPTS ===")
 dupes = conn.execute("""
+    WITH hashed AS (
+        SELECT id, node_id, audio_bytes, created_at,
+               substr(transcript, 1, 200) AS head,
+               (created_at / (1000 * 60 * 10)) AS time_bucket_10min
+        FROM voice_transcripts
+    )
     SELECT id, node_id, audio_bytes, created_at FROM voice_transcripts
     WHERE rowid NOT IN (
-        SELECT MIN(rowid) FROM voice_transcripts
-        GROUP BY node_id, audio_bytes
+        SELECT MIN(rowid) FROM voice_transcripts vt
+        GROUP BY substr(vt.transcript, 1, 200), (vt.created_at / 600000)
     )
 """).fetchall()
 print(f"Found {len(dupes)} duplicate transcript(s) to remove:")

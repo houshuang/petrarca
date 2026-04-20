@@ -25,8 +25,13 @@ DATA_DIR = Path(os.environ.get('PETRARCA_DATA', '/opt/petrarca/data'))
 def _log_voice_transcript(source: str, node_id: str, domain_id: str,
                           node_title: str, transcript: str, audio_bytes: int,
                           llm_result: dict, ml_triggered: list,
-                          vt_id: str = None):
-    """Persist every voice transcript for later analysis. Returns the vt_id used."""
+                          vt_id: str = None, input_mode: str = 'audio'):
+    """Persist every voice transcript for later analysis. Returns the vt_id used.
+
+    input_mode records how the transcript originally reached us so we can tell
+    real audio captures apart from text-path ingests (which can be produced by
+    agents or test harnesses). Values: 'audio' | 'text_json' | 'test'.
+    """
     try:
         from db import get_connection
         conn = get_connection()
@@ -35,12 +40,12 @@ def _log_voice_transcript(source: str, node_id: str, domain_id: str,
         conn.execute(
             '''INSERT OR IGNORE INTO voice_transcripts
                (id, source, node_id, domain_id, node_title, transcript,
-                audio_bytes, llm_result, microlearning_triggered, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?)''',
+                audio_bytes, llm_result, microlearning_triggered, created_at, input_mode)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)''',
             (vt_id, source, node_id, domain_id, node_title, transcript,
              audio_bytes, json.dumps(llm_result) if llm_result else None,
              json.dumps([m.get('id', m) for m in ml_triggered]) if ml_triggered else '[]',
-             int(time.time() * 1000)),
+             int(time.time() * 1000), input_mode),
         )
         conn.commit()
         conn.close()
@@ -4894,7 +4899,8 @@ def run_voice_elicitation(node_id: str, domain_id: str, audio_path: Path, conn, 
 
 def process_voice_capture(transcript: str, entity_id: str = None,
                           entity_name: str = None, mode: str = 'general',
-                          sync: bool = False, capture_type: str = 'analyze') -> dict:
+                          sync: bool = False, capture_type: str = 'analyze',
+                          input_mode: str = 'audio') -> dict:
     """Process a voice capture for knowledge graph ingestion.
 
     Unlike run_voice_elicitation (which tests recall of a specific node),
@@ -5204,6 +5210,7 @@ def process_voice_capture(transcript: str, entity_id: str = None,
             entity_name=entity_name,
             detected_entity_ids=detected_entity_ids,
             sync=sync,
+            input_mode=input_mode,
         )
 
     # Sort: direct links first, then siblings by overlap, then domain fillers
@@ -5339,6 +5346,7 @@ def process_voice_capture(transcript: str, entity_id: str = None,
             audio_bytes=0,
             llm_result={'nodes_linked': nodes_linked, 'capture_type': 'insight'},
             ml_triggered=[],
+            input_mode=input_mode,
         )
 
         top_scored = [(n['node_id'], round(_composite_score(n), 2)) for n in direct_candidates[:5]]
@@ -5562,6 +5570,7 @@ def process_voice_capture(transcript: str, entity_id: str = None,
             entity_name=entity_name,
             detected_entity_ids=detected_entity_ids,
             sync=sync,
+            input_mode=input_mode,
         )
         entity_path_triggered = True
         # Surface the entity-path outcome in the curriculum-path response
@@ -5584,6 +5593,7 @@ def process_voice_capture(transcript: str, entity_id: str = None,
         audio_bytes=0,
         llm_result={**analysis, 'knowledge_updates': knowledge_updates},
         ml_triggered=ml_triggered,
+        input_mode=input_mode,
     )
 
     # --- Background: resolve entities to Wikidata QIDs ---
@@ -5689,6 +5699,7 @@ def _process_voice_capture_entity_path(
     entity_name: str | None,
     detected_entity_ids: list,
     sync: bool = False,
+    input_mode: str = 'audio',
 ) -> dict:
     """Process a voice capture via the entity-keyed path (no curriculum required).
 
@@ -5982,6 +5993,7 @@ def _process_voice_capture_entity_path(
         llm_result=llm_result,
         ml_triggered=ml_triggered,
         vt_id=vt_id,
+        input_mode=input_mode,
     )
 
     # --- Background Wikidata resolution for mentioned entities ---

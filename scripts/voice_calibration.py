@@ -242,7 +242,8 @@ def get_voice_calibration_data(conn: sqlite3.Connection, limit: int = 5) -> dict
     conn.row_factory = sqlite3.Row
     placeholders = ",".join("?" * len(CALIBRATION_SOURCES))
     transcripts = conn.execute(
-        f"""SELECT id, source, node_id, domain_id, node_title, transcript, llm_result, created_at
+        f"""SELECT id, source, node_id, domain_id, node_title, transcript, llm_result,
+                   created_at, input_mode, audio_bytes
             FROM voice_transcripts
             WHERE source IN ({placeholders})
             ORDER BY created_at DESC
@@ -420,6 +421,8 @@ def get_voice_calibration_data(conn: sqlite3.Connection, limit: int = 5) -> dict
             "id": vt["id"],
             "source": vt["source"],
             "created_at": vt["created_at"],
+            "input_mode": vt["input_mode"],
+            "audio_bytes": vt["audio_bytes"] or 0,
             "routed_node_id": vt["node_id"],
             "routed_domain_id": vt["domain_id"],
             "routed_node_title": vt["node_title"],

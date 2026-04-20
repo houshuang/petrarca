@@ -632,7 +632,8 @@ CREATE TABLE IF NOT EXISTS voice_transcripts (
     audio_bytes INTEGER,
     llm_result TEXT,                   -- full JSON from LLM analysis
     microlearning_triggered TEXT DEFAULT '[]',
-    created_at INTEGER NOT NULL
+    created_at INTEGER NOT NULL,
+    input_mode TEXT                    -- 'audio' | 'text_json' | 'test' | NULL (pre-migration)
 );
 CREATE INDEX IF NOT EXISTS idx_vt_source ON voice_transcripts(source);
 CREATE INDEX IF NOT EXISTS idx_vt_created ON voice_transcripts(created_at);

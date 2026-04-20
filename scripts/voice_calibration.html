@@ -527,7 +527,13 @@ function renderTranscriptSection(t) {
         <div class="tsource">${ESC(t.source)}</div>
         <div class="tdate">${fmtDate(t.created_at)}</div>
       </div>
-      <div class="tid">${ESC(t.id)} · ${t.transcript_length} chars</div>
+      <div class="tid">
+        ${t.input_mode === 'audio' ? '<span title="Came through the audio→Soniox path" style="color:var(--success);font-weight:600">🎙 audio</span>' :
+          t.input_mode === 'text_json' ? '<span title="Came via JSON text payload, NOT real audio. Could be typed or agent-generated." style="color:var(--warning);font-weight:600">📝 text</span>' :
+          t.input_mode === 'test' ? '<span title="Explicitly test-mode" style="color:var(--danger);font-weight:600">🧪 test</span>' :
+          '<span title="Pre-migration — input_mode unknown. Check disfluency count to guess authenticity." style="color:var(--text-muted)">? mode</span>'}
+        · ${ESC(t.id)} · ${t.transcript_length} chars
+      </div>
     </div>
     ${t.routed_node_title && t.touched_nodes.length === 0 ? `<div style="font-size:11px;color:var(--warning);font-style:italic;margin:2px 0 4px 0" title="voice_transcripts.node_title — set by the router at capture time, not a content summary">⚠ router pinned this to "${ESC(t.routed_node_title)}" (${ESC(t.routed_domain_id || '')}) but no curriculum nodes matched</div>` : ''}
     ${t.llm_summary ? `<div class="tx-summary">${ESC(t.llm_summary)}</div>` : ''}

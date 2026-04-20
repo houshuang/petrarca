@@ -4720,12 +4720,17 @@ JSON array only:"""
         print(f'[explore/capture] Running {"insight save" if capture_type == "insight" else "rich pipeline"}: '
               f'entity={entity_id}, name={entity_name}, mode={mode}, transcript={len(transcript)} chars', flush=True)
 
+        # input_mode records provenance: did this transcript come from a real
+        # audio recording (Soniox) or from a text JSON payload (could be an
+        # agent/test harness). Surfaces on the calibration page.
+        input_mode = 'audio' if audio_path is not None else 'text_json'
         result = process_voice_capture(
             transcript=transcript,
             entity_id=entity_id,
             entity_name=entity_name,
             mode=mode,
             capture_type=capture_type,
+            input_mode=input_mode,
         )
 
         # Ensure backward-compatible fields for client
