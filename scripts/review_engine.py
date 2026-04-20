@@ -1340,6 +1340,22 @@ def _rank_wonderings(wonderings: list, top_k: int = 5) -> list:
     return sorted(wonderings, key=score, reverse=True)[:top_k]
 
 
+def _shared_trigrams(a: str, b: str) -> int:
+    """Count character trigrams shared between two strings (lowercased).
+
+    Used for cross-path wondering dedup: the curriculum + entity voice-capture
+    paths fire on the same transcript seconds apart and sometimes produce
+    near-identical ML queries. 20+ shared trigrams ≈ ~60 chars of overlap,
+    which reliably catches paraphrase pairs like "Who paid for Khomeini's
+    chartered airplane" vs "Who paid for the chartered airplane that brought
+    Khomeini back" without tripping on unrelated wonderings.
+    """
+    def trigrams(s: str) -> set:
+        s = ' ' + (s or '').lower() + ' '
+        return {s[i:i+3] for i in range(len(s) - 2)}
+    return len(trigrams(a) & trigrams(b))
+
+
 _ENRICH_PROMPT = """A learner just answered a history review card. Enrich the answer into a learning moment.
 
 Topic: {node_title}
@@ -6025,9 +6041,34 @@ def _process_voice_capture_entity_path(
             threading.Thread(target=_pregen_entity_questions, daemon=True).start()
 
     # --- Trigger ML cards from wonderings (entity-tagged, no curriculum domain) ---
+    # Cross-path dedup: the curriculum path runs first on the same transcript and
+    # may have already fired ML cards for overlapping wonderings. Skip any entity-
+    # path wondering that shares ≥20 trigrams with an ML query created in the last
+    # 5 minutes — the two paths fire seconds apart, so a generous window catches
+    # retries while staying tight enough to avoid false positives from unrelated
+    # later captures. See SESSION_89_GAP_CLEANUP.md § P1.2.
     ml_triggered = []
     primary_entity_slug = ke_ids_created[0].split(':', 1)[1] if ke_ids_created else None
+
+    dedup_conn = get_connection(readonly=True)
+    try:
+        recent_queries = [
+            r['query'] for r in dedup_conn.execute(
+                '''SELECT query FROM microlearning_cards
+                   WHERE created_at > ? AND status != 'deleted' ''',
+                (int(time.time() * 1000) - 300000,),
+            ).fetchall()
+        ]
+    finally:
+        dedup_conn.close()
+
     for w in _rank_wonderings(wonderings, top_k=5):
+        dup_query = next(
+            (q for q in recent_queries if _shared_trigrams(w, q) >= 20), None)
+        if dup_query:
+            print(f'[voice-capture-entity→ml] skip dup: {w[:60]!r} '
+                  f'overlaps {dup_query[:60]!r}', flush=True)
+            continue
         try:
             card_id = create_microlearning_request(
                 query=w,
@@ -6036,6 +6077,7 @@ def _process_voice_capture_entity_path(
                 source_type='voice_wondering',
             )
             ml_triggered.append({'id': card_id, 'query': w})
+            recent_queries.append(w)  # suppress later dups within this same call
             print(f'[voice-capture-entity→ml] wondering → {card_id}: {w[:60]}', flush=True)
         except Exception as e:
             print(f'[voice-capture-entity→ml] failed: {e}', flush=True)

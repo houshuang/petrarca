@@ -7512,9 +7512,50 @@ class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
 
 
+def _retry_failed_ml_cards():
+    """Requeue ML cards that failed within the last 24h.
+
+    Session 89: 4 Iran-capture ML cards sat at status='failed' forever because the
+    original processing pipeline has no retry path — they failed during a Gemini
+    429 window and were never revisited. Spacing retries 30s apart avoids
+    re-triggering the same per-minute rate limit that caused the original fail.
+    """
+    from db import get_connection
+    from review_engine import _run_microlearning_research
+
+    conn = get_connection(readonly=True)
+    now_ms = int(time.time() * 1000)
+    try:
+        rows = conn.execute(
+            '''SELECT id, query, source_node_id, source_domain
+               FROM microlearning_cards
+               WHERE status='failed' AND created_at > ?
+               ORDER BY created_at''',
+            (now_ms - 86400000,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    if not rows:
+        return
+    print(f'[ml-retry] sweeping {len(rows)} failed cards from the last 24h',
+          flush=True)
+    for i, row in enumerate(rows):
+        if i > 0:
+            time.sleep(30)
+        try:
+            _run_microlearning_research(
+                row['id'], row['query'],
+                row['source_node_id'], row['source_domain'],
+            )
+        except Exception as e:
+            print(f'[ml-retry] {row["id"]} still failing: {e}', flush=True)
+
+
 if __name__ == '__main__':
     init_db()
     migrate_kindle_json_to_sqlite()
+    threading.Thread(target=_retry_failed_ml_cards, daemon=True).start()
     server = ThreadingHTTPServer(('0.0.0.0', PORT), ResearchHandler)
     print(f'Research server listening on port {PORT}')
     print(f'Results directory: {RESULTS_DIR}')
