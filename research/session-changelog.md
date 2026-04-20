@@ -1,6 +1,67 @@
 # Knowledge System Implementation Status
 
-**Date**: April 20, 2026 (last updated — session 86: voice-capture calibration page + synthetic-capture incident + provenance hardening)
+**Date**: April 20, 2026 (last updated — session 87: silent-drop fixes in voice-capture entity pipeline + deploy drift prevention + Claude-only directive)
+
+## Session 87: Voice-Capture Silent-Drop Fixes + Iran Backfill Validation + Claude-only Directive (April 20, 2026)
+
+### What
+Session 86 closed with a real Iran Revolution voice capture (`vt_1776697230_4034` entity-path + `vt_1776697289_4034` curriculum-path, 3518 chars, 6 entities, 10 ML cards) that ran the full pipeline end-to-end and exposed five concrete drops. This session addressed the three highest-priority ones and validated them against real data by regenerating the 6 Iran entities' `cached_question` with the new prompt. User ended the session by declaring an end to all Gemini usage ("i can't afford gemini") — saved as a durable preference and scoped into a parallel migration session.
+
+### P0.1 — Pre-gen retry for 429s (`review_engine.py:_pregen_entity_questions`)
+`_pregen_entity_questions` previously swallowed LLM failures silently (`if not q: continue`). A Gemini 429 at 15:01:43 dropped Khomeini's entire `cached_question` generation; the only log was `Pre-generated 5/6 questions` with no indication which entity failed. Refactored to return outcome strings (`ok/skip/empty/error`) per entity, log distinctly per failure, and retry `empty`+`error` kids once after a 60s cooldown (matches Gemini's per-minute quota window).
+
+### P0.3 — `_rank_wonderings` helper, rank before truncating (`review_engine.py:1327`)
+`wonderings[:5]` dropped the richest wondering from the Iran curriculum-path transcript: *"how did the revolution manage to be both conservative/backward-looking AND inspired by French Revolution and student sit-ins?"* (125 chars, 1 question mark — the 6th in Gemini's emitted order). New helper scores `len(w) + 40 * count('?')`, sorts descending, takes top-k. Applied at both voice-capture sites (`:5581` curriculum path, `:5993` entity path). Validated deterministically: the Iran capture's 6th wondering now ranks #1.
+
+### P1.1 — `temporal_hook` in `_ENRICH_PROMPT` (`review_engine.py:1344`)
+All 6 Iran entities had empty `temporal_hook` despite the transcript containing "November 4, 1979", "January 20, 1981", "444 days", "two weeks later". Root cause: `_ENRICH_PROMPT` output schema was `{"rich_answer":"...","memory_hook":"..."}` — `temporal_hook` was initialized to `''` in `_key_fact_to_question` but the prompt never asked the LLM to fill it. Added `temporal_hook` as a third output field with 3 BAD / 3 GOOD examples (all grounded in the Iran transcript's own temporal scaffolding: "444 days from Nov 4 1979 to Jan 20 1981 — Carter's last day, Reagan's first"; "Two weeks after the Shah fled, Feb 1979"; "1953, 26 years before the revolution"). STRICT anti-hallucination clause mirrors the existing `_ENRICH_ENTITY_GRAPH_BLOCK` rule. Consumes `enriched['temporal_hook']` in `_key_fact_to_question` when non-empty.
+
+### Also lifted `import sqlite3` to module scope
+`_process_voice_capture_entity_path` had `except sqlite3.OperationalError` with no `sqlite3` binding in scope — a real DB-lock during concurrent microlearning would NameError and the server would return 500. Lifted the import to line 13.
+
+### Iran backfill — P1.1 validation on real data
+NULLed `cached_question` for the 6 Iran entities, regenerated via `generate_entity_question()` using the new prompt. **100% temporal_hook fill rate.** Every hook was a specific same-moment anchor, not a vague span:
+- Iranian Revolution: *"Nov 4 1979 to Jan 20 1981 — Carter's final day in office, Reagan's first"* (72c)
+- Brzezinski: *"During the revolution that overthrew Mohammad Reza I (1978–79)"* (112c)
+- Mohammad Reza Pahlavi: *"Two weeks before Khomeini returned to Iran on February 1, 1979"* (62c)
+- Khomeini: *"Feb 1979, the same year Brzezinski was navigating the collapse"* (83c)
+- Argo: *"November 1979, eight months after Khomeini returned to establish the Islamic Republic"* (85c)
+- Jimmy Carter: *"444 days from Nov 4 1979 to Jan 20 1981 — Carter's last day in office, Reagan's first"* (140c)
+
+Regen bypassed Gemini by monkey-patching `_generate_follow_up_queries = lambda *a, **kw: []` — only Claude Sonnet ran for the enrichment path.
+
+### Deploy-script server-drift prevention (`~/src/expo/scripts/deploy.sh`)
+Prior agent sessions have occasionally edited files directly in `/opt/petrarca/` on the server to test something live, without committing back. The next deploy then hits a cryptic "local changes would be overwritten by merge" and aborts mid-stream. Added pre-pull server-side `git status --porcelain | grep -v '^??'` check that prints the dirty files + reconciliation commands and hard-aborts before touching the server further. End-to-end verified by injecting a fake drift line, watching the abort fire, and cleaning up. Caught exactly this scenario once already this session (the `import sqlite3` that last turn had applied to the running server but never committed).
+
+### Retention-projection analysis on the Iran capture
+Used the regenerated bundle + the 10 ML cards + the transcript to project what the user would retain after a year of perfect recall vs. what the transcript contained. Findings:
+- **Gain** (~3× more than the raw capture): specific dates, names (Mendez, Bazargan, Freedom Movement), newspapers (Keyhan, Ettela'at), historical parallels (1953 Mossadegh, Eden/Suez, Augustus), quantitative anchors (52 hostages, 2,500 years).
+- **Lost**: 4 failed ML cards (torture, demands misunderstood, transitional PM, Khomeini-at-embassy), the user's uncertainty markers (*"Egypt or Morocco"*, *"I'm not sure who paid"*), the "another shot was fired" moment, one accuracy contradiction (two sibling ML cards disagree on Khomeini's age — 76 vs 78).
+- **False alarm**: the "richest wondering dropped" concern resolved itself — the Iran capture was processed *before* this session's `_rank_wonderings` deploy, so `wonderings[:5]` truncated it. Future captures will keep it.
+
+### Claude-only directive
+User (end of session): *"let's always use claude, i can't afford gemini"*. Saved as `memory/feedback_claude_only_never_gemini.md` — overrides CLAUDE.md's "Gemini for interactive paths" rule-of-thumb. CLAUDE.md § LLM Calling Discipline updated with a prominent warning pointer. Actual migration scoped for SESSION_88.
+
+### Parallel session prompts for 88 + 89
+Wrote two self-contained session prompts so the user can spawn them in parallel worktrees:
+- `SESSION_88_GEMINI_TO_CLAUDE.md` — migrate ~60 call sites across 32 files to Claude. Tiered (Tier 1 active live paths, Tier 2 batch scripts, Tier 3 disabled subsystems skip, Tier 4 special cases like `call_with_search` needing user input, Tier 5 experiments optional). First step: remove `claude_llm.py`'s Gemini fallback.
+- `SESSION_89_GAP_CLEANUP.md` — P0.2 (ML retry sweep on startup, recovers the 4 failed Iran cards), P1.2 (cross-path wondering dedup), optional P2.x (accuracy + uncertainty preservation). Explicitly tells the agent NOT to chase the "richest wondering dropped" false alarm.
+
+### Files
+- MODIFIED: `scripts/review_engine.py` (three fixes + sqlite3 import, +84 / −11 lines)
+- MODIFIED: `~/src/expo/scripts/deploy.sh` (drift check, +22 lines)
+- MODIFIED: `CLAUDE.md` (LLM Calling Discipline pointer)
+- NEW: `memory/feedback_claude_only_never_gemini.md`
+- NEW: `SESSION_88_GEMINI_TO_CLAUDE.md`, `SESSION_89_GAP_CLEANUP.md`
+
+### Commits
+- `024b7ec` — "Fix silent drops in voice-capture entity pipeline"
+- `efd3700` (in `~/src/expo`) — "Check server-side git tree before pulling"
+
+### Next (for Session 88 + 89)
+User will spawn both in parallel with `isolation: "worktree"`. 88 migrates Gemini → Claude; 89 recovers the 4 stuck Iran ML cards + dedups cross-path wonderings. Both avoid the other's call sites so they can merge cleanly.
+
+---
 
 ## Session 86: Voice Calibration Page + Synthetic-Capture Incident + Provenance Hardening (April 19–20, 2026)
 

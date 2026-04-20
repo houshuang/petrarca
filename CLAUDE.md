@@ -157,10 +157,10 @@ Background: Session 86 (2026-04-20) cleaned up 9 synthetic `voice_capture` rows 
 - `research/experiment-log.md` is **append-only** — new entries at top, log BEFORE making changes
 
 ### LLM Calling Discipline
-- **`claude -p` subprocess (`claude_llm.py`)** is for batch/pipeline work only — process spawn + CLI startup adds 5-15s of overhead on top of the actual API call. Free via Max plan.
-- **Gemini direct API (`gemini_llm.py`)** is for user-facing interactive paths — follow-up generation, targeted quizzes, article question generation. ~2-5s latency. Use `response_mime_type='application/json'` for guaranteed valid JSON.
-- **Rule of thumb**: If the user is waiting on a spinner, use Gemini direct API. If it's a cron job or batch pipeline, `claude -p` is fine.
-- **Curriculum generation**: Still Opus only via `claude -p` — Gemini Flash curricula have meaningless titles.
+- **⚠️ Claude-only directive (2026-04-20, Session 87)**: All new LLM code MUST use Claude, never Gemini. See `memory/feedback_claude_only_never_gemini.md`. Triggered by a Gemini 429 that silently dropped Khomeini's `cached_question` during the Iran Revolution capture. Existing Gemini call sites are being migrated under SESSION_88 — until complete, follow the Claude-only rule for any new code and avoid adding Gemini imports even when touching legacy paths.
+- **`claude -p` subprocess (`claude_llm.py`)** is the batch/pipeline LLM path — process spawn + CLI startup adds 5-15s of overhead on top of the actual API call. Free via Max plan.
+- **Gemini direct API (`gemini_llm.py`)** — LEGACY. Currently still used by ~60 call sites across 32 files. Being phased out. Do not add new callers.
+- **Curriculum generation**: Opus-only via `claude -p` — unchanged.
 
 ### Code Conventions
 - **Entity spans are offset-based on plain text.** `_compute_entity_spans()` in `review_engine.py` uses `text.find(name)`. Content must be markdown-stripped before span computation — use `_strip_markdown()`. Structured display uses `sections` JSON alongside flat `content`.
