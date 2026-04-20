@@ -1,6 +1,60 @@
 # Knowledge System Implementation Status
 
-**Date**: April 17, 2026 (last updated — session 85: speculative card gate + recency decay + rhythm + alignment)
+**Date**: April 20, 2026 (last updated — session 86: voice-capture calibration page + synthetic-capture incident + provenance hardening)
+
+## Session 86: Voice Calibration Page + Synthetic-Capture Incident + Provenance Hardening (April 19–20, 2026)
+
+### What
+Built a voice-capture calibration HTML page showing, for each transcript, exactly how extracted facts are routed to curriculum nodes and entities, and every quiz "angle" (main question + multicue microlearning_quizzes rows) generated from each fact_id. While demoing it, discovered that most recent `voice_capture` rows were not real user recordings — Session 76–77 agents had POSTed synthetic text to `/explore/capture` to validate pipeline behavior, producing rows stylistically similar to but distinct from the user's actual speech (no disfluencies; factual additions the user had never heard, e.g. "Operation Ajax" in the Iran transcript).
+
+### Calibration page — `/voice/calibration`
+- `scripts/voice_calibration.py` (318 lines) builds a per-transcript payload: transcript + `llm_result.facts[]` (with `source_excerpt` → substring-matched spans, `node_ids`, `entities`, confidence), `node_assessments`, `wonderings`, `confidence_tagged`, plus for each touched curriculum node the KI's `cached_question` (main Q, rich_answer, memory_hook, quiz_suggestions, follow_up_queries) and every `microlearning_quizzes` row grouped by `fact_id`. Same for touched `knowledge_entities`.
+- `scripts/voice_calibration.html` (≈650 lines) renders inline colored span overlays per fact on the transcript (up to 8-colour palette, distinct per fact), margin fact cards with routing chips / confidence / source_excerpt, per-node cards with a quiz-angle table (header row per fact_id, sub-rows per `microlearning_quizzes` row, `NONE` placeholder where a fact_id has no quiz rows), per-entity cards, "unrouted facts" panel, and "wonderings" panel.
+- Hover tooltips on every inline span + fact card summarize routing. Section heading shows first 90 chars of transcript (not `routed_node_title`, which is the router's pick at capture time and misleads when routing misfires — flagged with ⚠ when touched_nodes is empty).
+- Provenance badge: 🎙 audio / 📝 text / 🧪 test / ? mode (pre-migration) per row, based on new `input_mode` column.
+- Commits: `ab8d2ec` (initial), `e8cb97f` (?limit), `472e914` (tooltips + labels), `ef05e5b` (header fix).
+
+### Verification subagent
+Spawned independent reviewer after initial build. Verdict: "YES with caveats" — inline markup, per-fact linkage, angle tables, memory hooks, gap surfacing all present. Real issues raised: empty fact-span tooltips (fixed), confusing "angle types" metric on entity cards (relabelled "multicue angles" + added table explainer), "no memory_hook" label (sharpened to "no memory_hook in cached_question" since this is pipeline truth, not UI bug — book-sourced KIs don't generate hooks).
+
+### Synthetic capture incident
+**Discovery**: user noticed the Karl XII transcript section was titled "1693 Earthquake" (router misfire), said the text didn't sound like his speech, and confirmed he had never talked about Aztecs at all. Probe of the DB:
+- All `voice_capture` rows had `audio_bytes=0` (misleading — `process_voice_capture()` hardcodes to 0 regardless of actual audio).
+- Disfluency count is the real authenticity signal: one `voice_capture` row (vt_1775365719 Sicily, Apr 5) had 35 real `uh/um/like` markers; the other 8 + 2 `voice_capture_entity` rows had 0–2 each.
+- Session 75–76 changelog explicitly names "Rollo retest", "Aztec Empire test", and "Iran" as topics agents tested. The original Rollo transcript referenced in Session 70 (`vt_1776097010_8381`) no longer exists.
+
+**Mechanism**: `/explore/capture` JSON endpoint accepts text verbatim (`research-server.py:4645-4652`). No LLM smoothing anywhere in the pipeline (`transcribe_on_server` returns raw Soniox tokens, `_log_voice_transcript` inserts verbatim, no `UPDATE voice_transcripts SET transcript=` anywhere). Prior agents POSTed Claude-composed first-person prose mimicking user style but drawing on Claude's training data (hence facts the user hadn't heard). `cleanup_voice_dupes.py` keyed on `(node_id, audio_bytes)` — since every voice_capture has `audio_bytes=0` and often shares `node_id='general'`, test rows could silently collapse real originals into one row.
+
+### Cleanup
+`/tmp/cleanup_synthetic.py --execute` against alif — dry-run first. Removed 9 test transcripts (6 `voice_capture` + 2 `voice_capture_entity` + 1 uncertain Apr 5 linguistic). Aztec-specific cascade: 1 knowledge_item (`ap_world_history_modern:ap_world_h_americas_1200`), 2 microlearning_cards (`ml_1776272606_*`), 8 microlearning_quizzes. Per user decision, Karl XII / Rollo / Narva / Poltava / Viking Paris knowledge_entities + all KI review history on Frederick II / Sicily nodes retained — these represent real knowledge the user has acquired through reading.
+
+**Surviving voice-family rows**: 30 elicitations (real audio), 1 insight, 1 voice_capture (vt_1775365719 Sicily), 1 explore_capture.
+
+### Three-layer hardening (commit `daad91b`)
+1. **Provenance stamp**: new `voice_transcripts.input_mode` column (`'audio' | 'text_json' | 'test' | NULL` for pre-migration rows). Threaded through `_log_voice_transcript` → `process_voice_capture` / `_process_voice_capture_entity_path` → `_handle_explore_capture` (assigns based on whether `audio_path` was set). ALTER TABLE run on live DB.
+2. **Fix cleanup_voice_dupes dedup key**: now groups on `(substr(transcript, 1, 200), created_at / 600000)` — identical 200-char head within a 10-minute bucket. Test rows no longer collapse real data.
+3. **CLAUDE.md § Production Data Discipline**: explicit rule — agents must not POST synthetic text to `/explore/capture`, `/review/voice-elicit`, `/review/voice-memo`, or any user-data ingest endpoint on the live server. Test via `pipeline-tests/run.py`, in-memory SQLite, or dedicated staging. If a test MUST write to prod, pass `input_mode='test'` and document.
+
+### Pipeline gaps observed (from calibration-page work, not fixed this session)
+1. Provenance asymmetry: `knowledge_items.sources` records voice_capture entries *without* `capture_id`; `knowledge_entities.sources` preserves it. Makes "which capture contributed to this KI?" unreconstructible from the KI row.
+2. Memory_hook missing on book-sourced KIs: `cached_question` from book-ingestion path has no `memory_hook` key; only voice/entity paths populate it. Inconsistent retention-hook coverage across sessions.
+3. Entity-path facts don't generate multicue quizzes — `generate_multicue_quizzes()` is curriculum-path only. Karl XII's 6 key_facts → 0 microlearning_quizzes rows.
+4. 30–40% of extracted facts are unrouted (no node_ids, no entities) — stored in `voice_transcripts.llm_result.facts[]` with no downstream consumer.
+5. Wonderings never surface as cards.
+6. Curriculum-path vs entity-path fact_ids use different namespaces (`jerusalem_negotiation` vs `f1` vs `vc_{ts}_{idx}`) — no global uniqueness.
+7. `transcript_chunks` stopped being populated for recent captures (0 rows for vt_1776272663).
+
+### Files
+- NEW: `scripts/voice_calibration.py`, `scripts/voice_calibration.html`
+- MODIFIED: `scripts/research-server.py` (routes + input_mode), `scripts/review_engine.py` (input_mode threading), `scripts/db.py` (schema), `scripts/cleanup_voice_dupes.py` (dedup key), `CLAUDE.md` (rule)
+
+### Commits
+`ab8d2ec`, `e8cb97f`, `472e914`, `ef05e5b`, `daad91b`
+
+### Next (for Session 87)
+User will record a fresh authentic voice capture. First-session task: verify it arrives with `input_mode='audio'`, view it on `/voice/calibration`, and use it as ground-truth to investigate the pipeline gaps above (especially multicue coverage for entity-path facts + wonderings surfacing).
+
+---
 
 ## Session 85: Speculative Card Gate, Recency Decay, Front-Load, Alignment (April 17, 2026)
 
