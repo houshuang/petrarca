@@ -88,6 +88,22 @@ This project is exploratory — 60+ sessions in many directions. That means:
 4. **Clean up what you touch.** Remove dead code, unused imports, stale data when you encounter them.
 5. **Diagnose before patching.** Read the full error, check concurrency, understand architecture. One correct fix beats four incremental attempts.
 
+## User triggers (natural language)
+
+When the user says something matching one of these — even loosely — run the associated runbook immediately.
+
+### "I've recorded a voice, do the calibration" (or: "run the voice calibration", "check my new capture", "calibrate the voice capture")
+1. Verify the newest `voice_capture` / `voice_capture_entity` row arrived cleanly:
+   ```
+   ssh alif "sqlite3 /opt/petrarca/data/petrarca.db \"SELECT id, source, input_mode, length(transcript) AS tlen, substr(transcript,1,140) FROM voice_transcripts WHERE source IN ('voice_capture','voice_capture_entity') ORDER BY created_at DESC LIMIT 3\""
+   ```
+   The newest row should have `input_mode='audio'`. If it's `text_json` or `NULL` (on a row created *after* 2026-04-20), investigate the provenance-stamping path in `_handle_explore_capture` + `process_voice_capture`.
+2. Open `http://alifstian.duckdns.org:8090/voice/calibration?limit=5` (use `agent-browser` to load + screenshot if headless). The new row should show the 🎙 audio badge.
+3. Use the new capture as ground truth to investigate the pipeline gaps logged in `research/session-changelog.md` § Session 86 (entity-path multicue coverage, unrouted facts, wonderings-never-carded, knowledge_items.sources provenance asymmetry, book-sourced KIs lack `memory_hook`). Pick whichever the new capture illustrates most clearly.
+4. Report findings; don't start refactors without checking in.
+
+Background: Session 86 (2026-04-20) cleaned up 9 synthetic `voice_capture` rows that prior agents had POSTed as text for pipeline validation. User recorded a fresh real audio capture after that session for calibration; this runbook picks up there.
+
 ## Critical Rules
 
 ### Data Store Discipline
