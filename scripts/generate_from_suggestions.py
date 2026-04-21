@@ -19,7 +19,7 @@ import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from gemini_llm import call_llm
+from claude_llm import call_claude_json
 from db import get_connection, init_db
 
 # ── Prompts ─────────────────────────────────────────────────────────────
@@ -163,16 +163,13 @@ def generate_from_suggestion(suggestion: dict, conn, dry_run: bool = False) -> s
         print(f"  SKIP: unsupported card type '{card_type}'")
         return None
 
-    print(f"  Calling Gemini Flash for {card_type} card...")
-    result = call_llm(prompt, response_mime_type='application/json', max_tokens=4096)
-    if not result:
-        print(f"  ERROR: LLM returned empty result")
+    print(f"  Calling Claude Sonnet for {card_type} card...")
+    parsed = call_claude_json(prompt, timeout=240, model='sonnet')
+    if not parsed:
+        print("  ERROR: LLM returned empty result")
         return None
-
-    try:
-        parsed = json.loads(result)
-    except json.JSONDecodeError:
-        print(f"  ERROR: Invalid JSON from LLM")
+    if not isinstance(parsed, dict):
+        print("  ERROR: Unexpected shape from LLM")
         return None
 
     if dry_run:

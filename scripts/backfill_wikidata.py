@@ -408,9 +408,9 @@ def run_llm_disambiguation(
 
     Returns counts: {picked, null_answer, invalid_qid, dedup_deferred, errors}.
     """
-    # Import lazily so the resolver pass doesn't depend on the Gemini client.
+    # Import lazily so the resolver pass doesn't depend on the Claude CLI.
     sys.path.insert(0, str(Path(__file__).parent))  # scripts/ on path
-    from gemini_llm import call_llm
+    from claude_llm import call_claude_json
 
     q = """
         SELECT er.id, er.entity_id, er.mention_text, er.context_excerpt,
@@ -479,15 +479,8 @@ def run_llm_disambiguation(
                      i, len(rows), stats["picked"], stats["null_answer"],
                      stats["invalid_qid"])
 
-        raw = call_llm(prompt, max_tokens=400, response_mime_type="application/json")
-        if not raw:
-            stats["errors"] += 1
-            continue
-
-        try:
-            answer = json.loads(raw)
-        except json.JSONDecodeError:
-            log.warning("  %s: bad JSON from LLM: %r", entity_id, raw[:80])
+        answer = call_claude_json(prompt, timeout=60, model='sonnet')
+        if not isinstance(answer, dict):
             stats["errors"] += 1
             continue
 
@@ -640,7 +633,7 @@ def run_no_match_rescue(
     LLM can only hallucinate. Alternate-query rescue gets to a real entity.
     """
     sys.path.insert(0, str(Path(__file__).parent))
-    from gemini_llm import call_llm
+    from claude_llm import call_claude_json
 
     # Fetch latest-per-entity resolutions that are no_match OR ambiguous.
     # Then filter in Python to keep: no_match | ambiguous-with-only-disambig-candidates.
@@ -690,16 +683,11 @@ def run_no_match_rescue(
             type_hint=r["type_hint"] or "(unknown)",
             context=(r["entity_description"] or r["context_excerpt"] or "(none)")[:500],
         )
-        raw = call_llm(prompt, max_tokens=200, response_mime_type="application/json")
-        if not raw:
+        data = call_claude_json(prompt, timeout=60, model='sonnet')
+        if not isinstance(data, dict):
             stats["errors"] += 1
             continue
-        try:
-            data = json.loads(raw)
-            alternates = [q for q in (data.get("queries") or []) if isinstance(q, str)]
-        except json.JSONDecodeError:
-            stats["errors"] += 1
-            continue
+        alternates = [q for q in (data.get("queries") or []) if isinstance(q, str)]
 
         if not alternates:
             stats["curriculum_label"] += 1

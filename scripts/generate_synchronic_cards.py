@@ -14,7 +14,7 @@ import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from gemini_llm import call_llm
+from claude_llm import call_claude_json
 from curriculum_db import get_connection
 
 
@@ -255,19 +255,11 @@ def generate_synchronic_card(anchor: dict, anchor_year: int, anchor_year_display
         max_positions=MAX_POSITIONS,
     )
 
-    result = call_llm(
-        prompt,
-        response_mime_type='application/json',
-        max_tokens=4096,
-    )
-    if not result:
+    result = call_claude_json(prompt, timeout=180, model='sonnet')
+    if not isinstance(result, dict):
+        print("  ERROR: No/invalid response")
         return None
-
-    try:
-        return json.loads(result)
-    except json.JSONDecodeError:
-        print(f"  ERROR: Invalid JSON from Gemini")
-        return None
+    return result
 
 
 def store_synchronic_card(card_data: dict, anchor: dict, anchor_year: int,

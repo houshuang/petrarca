@@ -22,7 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from curriculum_db import get_connection
-from gemini_llm import call_llm
+from claude_llm import call_claude_json
 
 # ── Prompts ──────────────────────────────────────────────────────────────
 
@@ -376,15 +376,9 @@ def _process_role_batch(conn, batch, batch_meta, model, existing_embedded) -> tu
     facts_for_prompt = [{'idx': i, **f} for i, f in enumerate(batch)]
     prompt = ROLE_QUIZ_PROMPT.format(facts_json=json.dumps(facts_for_prompt, indent=2))
 
-    result = call_llm(prompt, max_tokens=2000, response_mime_type='application/json')
-    if not result:
-        print("  WARNING: Gemini returned no result for role batch")
-        return 0, 0
-
-    try:
-        quizzes = json.loads(result)
-    except json.JSONDecodeError:
-        print("  WARNING: Invalid JSON from Gemini for role batch")
+    quizzes = call_claude_json(prompt, timeout=180, model='sonnet')
+    if not isinstance(quizzes, list):
+        print("  WARNING: No/invalid result for role batch")
         return 0, 0
 
     for quiz in quizzes:
@@ -457,13 +451,8 @@ def _process_causal_batch(conn, batch, batch_meta, model, existing_embedded) -> 
     facts_for_prompt = [{'idx': i, **f} for i, f in enumerate(batch)]
     prompt = CAUSAL_QUIZ_PROMPT.format(facts_json=json.dumps(facts_for_prompt, indent=2))
 
-    result = call_llm(prompt, max_tokens=2000, response_mime_type='application/json')
-    if not result:
-        return 0, 0
-
-    try:
-        quizzes = json.loads(result)
-    except json.JSONDecodeError:
+    quizzes = call_claude_json(prompt, timeout=180, model='sonnet')
+    if not isinstance(quizzes, list):
         return 0, 0
 
     for quiz in quizzes:

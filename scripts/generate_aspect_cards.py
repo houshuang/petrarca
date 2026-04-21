@@ -16,7 +16,7 @@ import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from gemini_llm import call_llm
+from claude_llm import call_claude_json
 from curriculum_db import get_connection
 
 # ── Prompt for title + reverse cue generation ────────────────────────────
@@ -92,20 +92,13 @@ def generate_card_for_node(node: dict, domain_title: str) -> dict | None:
         facts_json=json.dumps(facts_for_prompt, indent=2),
     )
 
-    result = call_llm(
-        prompt,
-        response_mime_type='application/json',
-        max_tokens=2048,
-    )
+    parsed = call_claude_json(prompt, timeout=180, model='sonnet')
 
-    if not result:
+    if not parsed:
         print(f"  ERROR: No response for {node['title']}")
         return None
-
-    try:
-        parsed = json.loads(result)
-    except json.JSONDecodeError:
-        print(f"  ERROR: Invalid JSON for {node['title']}")
+    if not isinstance(parsed, dict):
+        print(f"  ERROR: Unexpected shape for {node['title']}")
         return None
 
     return parsed

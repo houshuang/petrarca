@@ -26,7 +26,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from gemini_llm import call_llm
+from claude_llm import call_claude_json
 from db import get_connection, init_db
 
 MNEMONIC_PROMPT = """You are generating memory aids (mnemonics) for a knowledge retention system about history.
@@ -91,15 +91,10 @@ def generate_mnemonics_for_card(card: dict, positions: list[dict], domain_title:
         positions_json=json.dumps(pos_for_prompt, indent=2),
     )
 
-    result = call_llm(prompt, response_mime_type='application/json', max_tokens=2048)
-    if not result:
+    parsed = call_claude_json(prompt, timeout=180, model='sonnet')
+    if not isinstance(parsed, dict):
         return None
-
-    try:
-        parsed = json.loads(result)
-        return parsed.get('mnemonics', [])
-    except json.JSONDecodeError:
-        return None
+    return parsed.get('mnemonics', [])
 
 
 def main():

@@ -15,7 +15,7 @@ import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from gemini_llm import call_llm
+from claude_llm import call_claude_json
 from curriculum_db import get_connection
 
 # ── Prompt ────────────────────────────────────────────────────────────────
@@ -144,14 +144,10 @@ def generate_cast_card(candidate: dict) -> dict | None:
         persons_json=json.dumps(persons_for_prompt, indent=2),
     )
 
-    result = call_llm(prompt, max_tokens=2048, response_mime_type='application/json')
-    if not result:
+    result = call_claude_json(prompt, timeout=180, model='sonnet')
+    if not isinstance(result, dict):
         return None
-
-    try:
-        return json.loads(result)
-    except json.JSONDecodeError:
-        return None
+    return result
 
 
 def store_cast_card(candidate: dict, generation: dict, conn) -> str:

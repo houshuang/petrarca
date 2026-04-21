@@ -18,7 +18,7 @@ import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from gemini_llm import call_llm
+from claude_llm import call_claude_json
 from curriculum_db import get_connection
 
 # Historical domains only — no Classical Reception or Philosophy
@@ -127,15 +127,10 @@ def generate_chains_for_domain(domain_id: str, domain_title: str, conn) -> list[
         date_facts=json.dumps(date_facts[:30], indent=2),
     )
 
-    result = call_llm(prompt, max_tokens=4096, response_mime_type='application/json')
-    if not result:
+    parsed = call_claude_json(prompt, timeout=240, model='sonnet')
+    if not isinstance(parsed, dict):
         return None
-
-    try:
-        parsed = json.loads(result)
-        return parsed.get('chains', [])
-    except json.JSONDecodeError:
-        return None
+    return parsed.get('chains', [])
 
 
 def store_causal_card(chain: dict, domain_id: str, conn) -> str:

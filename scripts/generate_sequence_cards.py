@@ -14,7 +14,7 @@ import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from gemini_llm import call_llm
+from claude_llm import call_claude_json
 from curriculum_db import get_connection
 
 # ── Prompt for sequence identification + milestone generation ────────────
@@ -163,21 +163,12 @@ def generate_sequences_for_domain(data: dict) -> list[dict] | None:
         entities_json=json.dumps(data['entities'][:50], indent=2),
     )
 
-    result = call_llm(
-        prompt,
-        response_mime_type='application/json',
-        max_tokens=8192,
-    )
+    parsed = call_claude_json(prompt, timeout=300, model='sonnet')
 
-    if not result:
+    if not isinstance(parsed, dict):
+        print(f"  ERROR: No/invalid response for {data['domain_title']}")
         return None
-
-    try:
-        parsed = json.loads(result)
-        return parsed.get('sequences', [])
-    except json.JSONDecodeError:
-        print(f"  ERROR: Invalid JSON for {data['domain_title']}")
-        return None
+    return parsed.get('sequences', [])
 
 
 def store_sequence_card(seq: dict, domain_id: str, conn) -> str:

@@ -66,26 +66,24 @@ TEXT:
 
 
 def extract_entities_batch(texts: list[str]) -> list[dict]:
-    """Extract entities from a batch of texts using Gemini Flash."""
+    """Extract entities from a batch of texts via Claude Sonnet."""
     combined = '\n\n---\n\n'.join(t[:2000] for t in texts)
     if not combined.strip():
         return []
 
     try:
-        from gemini_llm import call_llm
-        raw = call_llm(
+        from claude_llm import call_claude_json
+        entities = call_claude_json(
             EXTRACTION_PROMPT.format(text=combined[:8000]),
-            model='gemini-2.0-flash',
-            response_mime_type='application/json',
+            timeout=180,
+            model='sonnet',
         )
-        if raw:
-            entities = json.loads(raw) if isinstance(raw, str) else raw
-            if isinstance(entities, list):
-                return entities
-            else:
-                print(f'  [warn] unexpected response type: {type(entities)}')
+        if isinstance(entities, list):
+            return entities
+        if entities is None:
+            print('  [warn] empty response from LLM')
         else:
-            print(f'  [warn] empty response from Gemini')
+            print(f'  [warn] unexpected response type: {type(entities)}')
     except Exception as e:
         import traceback
         print(f'  [warn] extraction failed: {e}')

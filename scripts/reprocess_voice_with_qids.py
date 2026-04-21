@@ -117,19 +117,14 @@ Return JSON: {{"chosen_qid": "Q123" or null, "confidence": 0.0-1.0, "reasoning":
 def extract_mentions(transcript: str) -> list[dict]:
     """LLM-based mention extraction. Returns list of {mention, type, date_start, date_end}."""
     sys.path.insert(0, str(Path(__file__).parent))
-    from gemini_llm import call_llm
+    from claude_llm import call_claude_json
 
-    raw = call_llm(
+    data = call_claude_json(
         EXTRACT_PROMPT.format(transcript=transcript[:4000]),
-        max_tokens=2000, response_mime_type="application/json",
+        timeout=120, model='sonnet',
     )
-    if not raw:
-        log.error("LLM extraction returned empty")
-        return []
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
-        log.error("Bad JSON from extraction: %r", raw[:200])
+    if not isinstance(data, dict):
+        log.error("LLM extraction returned empty or wrong shape")
         return []
     mentions = data.get("mentions") or []
     # Normalize.
@@ -219,7 +214,7 @@ def run(transcript_id: str, db_path: Path, *, write: bool) -> None:
     # Step 3: LLM disambiguation for ambiguous cases.
     log.info("pass 2 — LLM disambiguation...")
     sys.path.insert(0, str(Path(__file__).parent))
-    from gemini_llm import call_llm
+    from claude_llm import call_claude_json
 
     for i, (m, res) in enumerate(resolutions):
         if res is None or res.status != "ambiguous":
@@ -238,12 +233,8 @@ def run(transcript_id: str, db_path: Path, *, write: bool) -> None:
             context=transcript[:500],
             candidates=cand_block,
         )
-        raw = call_llm(prompt, max_tokens=400, response_mime_type="application/json")
-        if not raw:
-            continue
-        try:
-            answer = json.loads(raw)
-        except json.JSONDecodeError:
+        answer = call_claude_json(prompt, timeout=60, model='sonnet')
+        if not isinstance(answer, dict):
             continue
         chosen = answer.get("chosen_qid")
         if chosen is None:

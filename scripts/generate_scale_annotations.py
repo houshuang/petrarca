@@ -21,7 +21,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from gemini_llm import call_llm
+from claude_llm import call_claude_json
 from db import get_connection, init_db
 
 SCALE_PROMPT = """You are generating scale annotations for gaps between milestones on a history timeline card.
@@ -74,15 +74,10 @@ def generate_for_card(card: dict, positions: list[dict], user_domains: list[str]
         milestones_json=json.dumps(milestones_for_prompt, indent=2),
     )
 
-    result = call_llm(prompt, response_mime_type='application/json', max_tokens=1024)
-    if not result:
+    parsed = call_claude_json(prompt, timeout=120, model='sonnet')
+    if not isinstance(parsed, dict):
         return None
-
-    try:
-        parsed = json.loads(result)
-        return parsed.get('annotations', [])
-    except json.JSONDecodeError:
-        return None
+    return parsed.get('annotations', [])
 
 
 def main():

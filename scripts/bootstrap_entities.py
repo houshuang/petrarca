@@ -25,9 +25,9 @@ from db import get_connection, init_db
 from curriculum_db import load_curriculum, list_curricula
 
 try:
-    from gemini_llm import call_llm
+    from claude_llm import call_claude
 except ImportError:
-    call_llm = None
+    call_claude = None
 
 
 def build_extraction_prompt(domain: dict) -> str:
@@ -261,13 +261,12 @@ def main():
             print('...')
             continue
 
-        if not call_llm:
-            print('  No LLM available (gemini_llm not importable)')
+        if not call_claude:
+            print('  No LLM available (claude_llm not importable)')
             continue
 
         print(f'  Calling LLM ({len(prompt)} chars)...', flush=True)
-        model = args.model or 'gemini-2.0-flash'
-        raw = call_llm(prompt, model=model, max_tokens=16384)
+        raw = call_claude(prompt, timeout=600, model='sonnet')
 
         print(f'  Response: {len(raw) if raw else 0} chars', flush=True)
         entities = parse_json_response(raw)
