@@ -1,6 +1,71 @@
 # Knowledge System Implementation Status
 
-**Date**: April 21, 2026 (last updated — session 89: ML retry sweep + cross-path wondering dedup + pre-push hook fix for worktrees)
+**Date**: April 21, 2026 (last updated — session 88: Gemini → Claude migration across all active paths, OCR carve-out)
+
+## Session 88: Gemini → Claude Migration (April 20–21, 2026)
+
+### What
+User directive (2026-04-20): *"i can't afford gemini"* — Claude via Max plan is effectively free within rate limits, Gemini's per-call billing and 429s (one of which silently dropped Khomeini's `cached_question` during the Iran Revolution capture — Session 87 P0.1) had to stop being part of the system. Ran in a worktree in parallel with SESSION_89 (ML retry sweep + cross-path dedup). Both branches rebased onto main cleanly with zero conflicts despite both editing `review_engine.py` + `research-server.py` — textually disjoint regions.
+
+### Phase A — Remove `claude_llm.py` Gemini fallback
+Two functions (`call_claude_json`, `call_claude_or_gemini`) silently fell back to Gemini on Claude CLI failure. A "Claude-only, free" pipeline that secretly hands off to a paid service on every timeout is exactly the failure class the directive is trying to eliminate. Removed both fallbacks — callers now see `None` on Claude failure and must handle it (every caller already had a truthiness check; the Gemini branch was reached only when Claude failed outright). Kept `call_claude_or_gemini` as a no-op alias that just calls Claude, for any callers outside `scripts/` still importing the name.
+
+### Phase B — Tier 1 live paths (18 sites)
+User-blocking or per-request call sites. All swapped from `gemini_llm.call_llm` to `claude_llm.call_claude` / `call_claude_json` with `model='sonnet'` and per-call timeouts sized to prompt length:
+- `review_engine.py` ×5: follow-up chips, multi-cue quiz generation, targeted quiz creation, voice-capture domain routing, voice entity extraction + disambiguation.
+- `research-server.py` ×8: voice routing, note action extraction, article follow-up questions, book voice notes, kindle classify + title resolve, curriculum entity bootstrap, review-mode assessment question generation.
+- `curriculum.py` ×4: curriculum generation (non-opus path), book mapping, entity tagging, elicitation question.
+- `resurfacing_engine.py` ×1: cross-book dialogue tension.
+
+Consistent shape-guard pattern replaced `json.loads(raw)` boilerplate: `call_claude_json` returns `dict | list | None`; migrated code checks `isinstance(result, dict|list)` and logs-and-skips on mismatch. Stricter than old code, which often silently swallowed `JSONDecodeError` into `{}`.
+
+### Tier 4 — `call_with_search` → `call_claude_search`
+5 live grounded-search sites migrated: `run_topic_research`, `process_book_identify` (search portion only), `_find_toc_online`, `book_research_agent` book + chapter research. Skipped `build_articles.py:335` (disabled subsystem). `call_claude_search` uses `claude -p --tools WebSearch,WebFetch` — same text-answer return shape, different grounding source (Google → Anthropic WebSearch). Generous 300–600s timeouts for tool-using search.
+
+### Deliberate carve-out — Gemini kept for OCR/vision
+`gemini_llm.call_vision` retained at 3 sites in `research-server.py` (book cover identify, OCR TOC, OCR book page). Gemini vision/OCR quality is materially better than base64-image-through-Anthropic-SDK for this workload, volume is admin-triggered (low cost), and the directive was cost-driven for high-volume text generation — vision is a principled exception. Recorded in `memory/feedback_claude_only_never_gemini.md` § Carve-outs so it doesn't get re-litigated. `call_chat` at `research-server.py:1653` left alone — article chat subsystem is disabled per CLAUDE.md.
+
+### Tier 2 — Batch scripts (13 files)
+Structural-card generators (aspect/sequence/synchronic/cast/causal), enrichment batches (scale annotations, aspect mnemonics), quick quizzes, suggestion→card pipeline, entity tooling (bootstrap/enrich), Wikidata backfill LLM disambig + no-match rescue, voice transcript QID reprocessing. `claude -p` subprocess latency is acceptable here — CLAUDE.md § LLM Calling Discipline says so and these run on cron or manual invocation.
+
+### Tier 5 — Experiment scripts (5 files)
+Research/ground-truth/benchmark scripts tagged with `# TODO(session-88): migrate to claude_llm when this script gets revived` rather than migrated. They pull in research fixtures that may never run again — migrating dead research code is churn.
+
+### What remains on Gemini (all intentional)
+- 3 × `call_vision` — deliberate OCR carve-out (user preference).
+- 1 × `call_chat` — dead article-chat endpoint, disabled subsystem.
+- 12 × Tier 3 disabled subsystems (`synthesis_pipeline.py`, `generate_syntheses.py`, `build_articles.py`, `build_concept_clusters.py`) — preserved-but-disabled per CLAUDE.md § Session 71.
+- 5 × Tier 5 experiments — TODO-marked for future migration.
+- `scripts/gemini_llm.py` itself — kept, Tier 3/5 still imports it.
+
+### Latency risk logged but not mitigated
+Two user-blocking paths moved from ~2–5s Gemini direct API → ~8–15s `claude -p` subprocess startup:
+- `_generate_follow_up_queries` — the "also want to know…" chips on review cards.
+- `create_targeted_quiz` — tap-a-chip-to-generate quiz flow.
+
+No mitigation in this session — waiting on real-use feedback before routing these two paths through the Anthropic SDK directly (like `curriculum.py:_call_opus`) instead of the CLI wrapper.
+
+### Files
+- MODIFIED (18 Python files): `scripts/claude_llm.py`, `scripts/review_engine.py`, `scripts/research-server.py`, `scripts/curriculum.py`, `scripts/resurfacing_engine.py`, `scripts/book_research_agent.py`, `scripts/backfill_wikidata.py`, `scripts/bootstrap_entities.py`, `scripts/enrich_entities.py`, `scripts/generate_aspect_cards.py`, `scripts/generate_aspect_mnemonics.py`, `scripts/generate_cast_cards.py`, `scripts/generate_causal_cards.py`, `scripts/generate_from_suggestions.py`, `scripts/generate_quick_quizzes.py`, `scripts/generate_scale_annotations.py`, `scripts/generate_sequence_cards.py`, `scripts/generate_synchronic_cards.py`, `scripts/reprocess_voice_with_qids.py`.
+- TAGGED (5 Tier 5 scripts): `scripts/compare_synthesis_models.py`, `scripts/generate_benchmark.py`, `scripts/generate_similarity_ground_truth.py`, `scripts/experiments/autoresearch_question_gen_eval.py`, `scripts/ground-truth/two_stage_pipeline_experiment.py`.
+- UPDATED: `memory/feedback_claude_only_never_gemini.md` (added Carve-outs section for OCR/vision exception).
+
+### Commits (on main after rebase)
+- `5710194` — Remove Gemini fallback from `claude_llm.py` (Phase A)
+- `225d40a` — Migrate Tier 1 live LLM paths (Phase B)
+- `35e4695` — Migrate `call_with_search` to `call_claude_search` (Tier 4)
+- `0bdd13f` — Migrate Tier 2 batch scripts
+- `1504950` — Mark Tier 5 experiment scripts for later migration
+
+Net diff: 24 files changed, +196 / −365 lines. Deployed to alif at 1504950; verified live `/voice/calibration`, `/stats/dashboard` return 200 and `grep -c 'gemini_llm' /opt/petrarca/scripts/{claude_llm,review_engine,curriculum,resurfacing_engine}.py` returns 0 on every file.
+
+### Branch hygiene
+`sh/gemini-to-claude` on origin; five commits rebased twice onto moving main (for Session 89 land, then docs commit) with zero conflicts each time. Worktree at `.claude/worktrees/agent-a40398d4` can be pruned.
+
+### Next
+Measure interactive latency on the two flagged user-blocking paths (`_generate_follow_up_queries`, `create_targeted_quiz`) during real use. If felt as lag, migrate those two specifically to the Anthropic SDK direct path instead of `claude -p` subprocess.
+
+---
 
 ## Session 89: Pipeline Gap Cleanup — ML Retry Sweep + Cross-Path Wondering Dedup (April 20–21, 2026)
 
