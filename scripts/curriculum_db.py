@@ -1744,6 +1744,11 @@ def generate_review_stream(domain_filter: str | None = None, limit: int = 20,
                 'domain_id': item['curriculum_domain'],
                 'memory_hook': cq.get('memory_hook') or cq.get('temporal_hook', ''),
                 'temporal_hook': cq.get('temporal_hook', ''),
+                # Session 90: surface the learner's captured confidence + any
+                # verifiable correction so the client can render them.
+                'confidence': cq.get('confidence') or 'certain',
+                'source_excerpt': cq.get('source_excerpt') or '',
+                'correction': cq.get('correction') or None,
                 'curriculum_context': cq.get('curriculum_context', ''),
                 'anchors': _parse_json_safe(cq.get('anchors'), []),
                 'review_count': item['review_count'] or 0,

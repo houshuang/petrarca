@@ -544,6 +544,15 @@ export interface ResurfacingItem {
   domain_id?: string;
   memory_hook?: string;
   temporal_hook?: string;
+  // Session 90 P1.1: learner's own captured confidence on this fact
+  confidence?: 'certain' | 'uncertain' | 'wrong';
+  source_excerpt?: string;
+  // Session 90 P1.2: verifiable correction when the short answer contradicts ground truth
+  correction?: {
+    user_said: string;
+    actually: string;
+    why_confused: string;
+  } | null;
   curriculum_context?: string;
   anchors?: string[];
   follow_up_queries?: string[];

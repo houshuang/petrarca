@@ -499,13 +499,17 @@ Instructions:
    - "engaged": learner demonstrates real knowledge but with gaps or uncertainty
    - "mentioned": learner references the topic but with little substance
 4. ALWAYS extract wonderings, questions, uncertainties, "I think...", "I'm not sure if...", speculative statements — even if no nodes match. These are the most valuable signals. Rephrase as clear research questions.
-5. CONFIDENCE_TAGGED: For each key factual claim, tag the learner's apparent confidence: "certain" (stated as fact), "uncertain" (hedged, "I think...", "maybe..."), or "wrong" (stated confidently but incorrect).
+5. CONFIDENCE per-fact: Tag EACH fact with the learner's apparent confidence as an inline "confidence" field.
+   - "certain": stated as fact without hedge. GOOD: "Khomeini returned to Iran on February 1, 1979" (specific date, no hedging).
+   - "uncertain": learner explicitly hedges with "I think", "maybe", "something like", alternatives offered. GOOD: "The Shah went to Egypt, I think — Morocco or somewhere" (explicit hedge + alternative). BAD: marking a confidently-stated fact as uncertain just because it's complex — the signal is the learner's language, not the topic's difficulty.
+   - "wrong": stated confidently but verifiably incorrect. GOOD: "Khomeini was 78 when he returned" (confident assertion; actual age was 76). When in doubt between certain and wrong, prefer certain — "wrong" requires you to know the learner is mistaken.
+   Also keep the legacy confidence_tagged sibling field for backward compatibility.
 6. ALWAYS provide overall_summary and entities_mentioned, regardless of node matching.
 
 IMPORTANT: The transcript may cover topics NOT in the curriculum nodes list. That's fine — still extract all facts, wonderings, entities, and summary. The node matching is optional; fact extraction is mandatory.
 
 Output JSON:
-{{"facts": [{{"fact": "specific factual claim", "node_ids": ["node_id_1"], "source_excerpt": "relevant 1-2 sentences from transcript"}}],
+{{"facts": [{{"fact": "specific factual claim", "node_ids": ["node_id_1"], "source_excerpt": "relevant 1-2 sentences from transcript", "confidence": "certain|uncertain|wrong"}}],
 "node_assessments": [{{"node_id": "...", "node_title": "...", "knowledge_level": "anchored|engaged|mentioned", "fact_count": 3, "summary": "brief summary of what learner knows about this node"}}],
 "wonderings": ["research question 1", "research question 2"],
 "entities_mentioned": ["entity name 1", "entity name 2"],
@@ -532,7 +536,11 @@ Instructions:
    - "source_excerpt" is 1-2 sentences quoted from the transcript that support this fact
 3. Be thorough — include dates, names, causal claims, and connections. Aim for 3-8 facts per main entity.
 4. Extract ALL wonderings, speculative statements, "I think...", "I'm not sure if..." — rephrase as clear research questions.
-5. Tag each factual claim with confidence: "certain" (stated as fact), "uncertain" (hedged), "wrong" (stated confidently but incorrect).
+5. CONFIDENCE per-fact: Tag EACH entity fact with the learner's apparent confidence as an inline "confidence" field on the fact object.
+   - "certain": stated as fact without hedge. GOOD: "Khomeini returned to Iran on February 1, 1979" (specific date, no hedging).
+   - "uncertain": learner explicitly hedges ("I think", "maybe", "something like", alternatives offered). GOOD: "The Shah went to Egypt, I think — Morocco or somewhere" (explicit hedge + alternative). BAD: marking a confidently-stated fact as uncertain just because the topic is obscure — the signal is the learner's language, not the topic's difficulty.
+   - "wrong": stated confidently but verifiably incorrect. GOOD: "Khomeini was 78 when he returned" (confident assertion; actual age was 76). When in doubt between certain and wrong, prefer certain.
+   Also keep the legacy confidence_tagged sibling field (same three values) for backward compatibility.
 6. List all entities mentioned (even if they don't have associated facts).
 7. For each entity discussed OR mentioned, classify its type as one of: "person", "place", "event", "battle", "dynasty", "work", "organization", "concept". Include this in "entity_types".
 8. Provide an overall_summary (2-3 sentences).
@@ -546,8 +554,8 @@ CANONICAL NAMING — critical for downstream Wikidata resolution:
 
 Output JSON:
 {{"entity_facts": {{
-    "Entity Name 1": [{{"id": "f1", "question": "specific question", "answer": "concise answer", "type": "date|event|person|place|concept|cause|significance", "source_excerpt": "..."}}],
-    "Entity Name 2": [{{"id": "f2", "question": "...", "answer": "...", "type": "...", "source_excerpt": "..."}}]
+    "Entity Name 1": [{{"id": "f1", "question": "specific question", "answer": "concise answer", "type": "date|event|person|place|concept|cause|significance", "source_excerpt": "...", "confidence": "certain|uncertain|wrong"}}],
+    "Entity Name 2": [{{"id": "f2", "question": "...", "answer": "...", "type": "...", "source_excerpt": "...", "confidence": "certain|uncertain|wrong"}}]
   }},
   "entity_types": {{"Entity Name 1": "person|place|event|battle|dynasty|work|organization|concept", "Entity Name 2": "..."}},
   "wonderings": ["research question 1", "research question 2"],
@@ -1359,7 +1367,7 @@ Short answer: {answer}
 
 {learner_context}
 
-{entity_graph_context_block}If learner context is provided, personalize the memory hook using connections the
+{entity_graph_context_block}{epistemic_context}If learner context is provided, personalize the memory hook using connections the
 learner has already made. Reference their known temporal anchors rather than generic ones.
 
 Generate:
@@ -1372,6 +1380,14 @@ Generate:
    above, when present). Prefer same-moment connections ("the year Carter took office", "two
    years after the Suez crisis") over generic century markers. Empty string if no suitable
    anchor exists.
+4. correction: If the short answer contradicts verified knowledge on a specific, checkable point
+   (a name, date, number, place), output an object:
+     {{"user_said": "<their claim, verbatim>", "actually": "<verified fact with 1 concrete anchor>", "why_confused": "<1-sentence explanation of the plausible confusion>"}}
+   Otherwise output null.
+   BAD correction: used for vibes ("user was uncertain", "user showed hesitation") — the field is
+     for verifiable, named contradictions only, not tone.
+   BAD correction: {{"user_said": "Morocco", "actually": "Egypt"}} — missing why_confused.
+   GOOD correction: {{"user_said": "Morocco", "actually": "Egypt (Anwar Sadat received the Shah on Jan 16 1979)", "why_confused": "The Shah moved through several countries of exile — Egypt first, then Morocco briefly, then the Bahamas, Mexico, and finally Egypt again where he died. Confusion between stops is natural."}}
 
 BAD temporal_hook: "In the 20th century" (too vague)
 BAD temporal_hook: "Around the time of the Cold War" (span, not moment)
@@ -1385,7 +1401,7 @@ STRICT: do not invent dates or events not present in the provided context. If th
 no usable temporal anchor, return "".
 
 Output JSON only:
-{{"rich_answer":"...","memory_hook":"...","temporal_hook":"..."}}"""
+{{"rich_answer":"...","memory_hook":"...","temporal_hook":"...","correction":null}}"""
 
 
 # Wrapper block header used only when entity_graph_context is non-empty.
@@ -1407,6 +1423,32 @@ him?" — not as an assertion.
 """
 
 
+def _build_epistemic_context_block(fact: dict) -> str:
+    """Return an EPISTEMIC CONTEXT block for _ENRICH_PROMPT when the learner hedged or erred.
+
+    Session 90 P1.1: preserves the learner's own epistemic state through to the
+    rich_answer so enrichment can mirror the hedge or gently correct. Empty string
+    if the fact was captured as 'certain' — don't inject noise when none is needed.
+    The learner's epistemic map is the product; flattening "I think Morocco" to
+    "Morocco ↦ definitely" destroys it.
+    """
+    conf = (fact.get('confidence') or 'certain').lower()
+    if conf not in ('uncertain', 'wrong'):
+        return ''
+    excerpt = (fact.get('source_excerpt') or '').strip()
+    excerpt_line = f'Their own words: "{excerpt}"\n' if excerpt else ''
+    if conf == 'uncertain':
+        tone = ('The learner captured this fact with HEDGED confidence. Acknowledge their uncertainty '
+                'and confirm or correct the claim gently. Do NOT condescend — the learner\'s hedge was '
+                'epistemically sound.')
+    else:  # wrong
+        tone = ('The learner captured this fact CONFIDENTLY but it is factually incorrect. The '
+                'rich_answer should gently but clearly correct the error. Use the `correction` '
+                'output field below to surface the specific contradiction as a separate, '
+                'prominent block — do not bury the fix in the prose.')
+    return f"EPISTEMIC CONTEXT: {tone}\n{excerpt_line}\n"
+
+
 def _key_fact_to_question(fact: dict, node_title: str, node_description: str,
                           conn=None, node_id=None, domain_id=None,
                           entity_graph_context: str = '') -> dict:
@@ -1418,6 +1460,11 @@ def _key_fact_to_question(fact: dict, node_title: str, node_description: str,
     callers — the prompt block is omitted in that case, keeping behaviour
     identical to Phase 1.
     """
+    # Propagate the learner's captured confidence so the client can render an
+    # uncertainty indicator and so downstream enrichment can mirror the hedge.
+    fact_confidence = (fact.get('confidence') or 'certain').lower()
+    if fact_confidence not in ('certain', 'uncertain', 'wrong'):
+        fact_confidence = 'certain'
     result = {
         'question': fact['question'],
         'answer_guidance': fact['answer'],
@@ -1427,6 +1474,9 @@ def _key_fact_to_question(fact: dict, node_title: str, node_description: str,
         'curriculum_context': node_description[:200] if node_description else '',
         'fact_id': fact.get('id', ''),
         'entities': fact.get('entities', []),
+        'confidence': fact_confidence,
+        'source_excerpt': fact.get('source_excerpt', ''),
+        'correction': None,
     }
     # Learner context for enrichment personalization
     learner_ctx = ''
@@ -1438,6 +1488,7 @@ def _key_fact_to_question(fact: dict, node_title: str, node_description: str,
         if entity_graph_context.strip()
         else ''
     )
+    epistemic_block = _build_epistemic_context_block(fact)
 
     # Enrich bare answers with narrative + memory hook
     try:
@@ -1448,6 +1499,7 @@ def _key_fact_to_question(fact: dict, node_title: str, node_description: str,
             answer=fact['answer'],
             learner_context=learner_ctx,
             entity_graph_context_block=egc_block,
+            epistemic_context=epistemic_block,
         ), timeout=90, model='sonnet')
         if enriched and isinstance(enriched, dict):
             if enriched.get('rich_answer'):
@@ -1457,6 +1509,16 @@ def _key_fact_to_question(fact: dict, node_title: str, node_description: str,
             th = enriched.get('temporal_hook')
             if isinstance(th, str) and th.strip():
                 result['temporal_hook'] = th.strip()
+            # P1.2: the LLM returns a verifiable-contradiction block or null. Accept only
+            # the structured form — a string or malformed value is dropped rather than
+            # corrupting the cached_question.
+            corr = enriched.get('correction')
+            if isinstance(corr, dict) and corr.get('user_said') and corr.get('actually'):
+                result['correction'] = {
+                    'user_said': str(corr.get('user_said') or '').strip(),
+                    'actually': str(corr.get('actually') or '').strip(),
+                    'why_confused': str(corr.get('why_confused') or '').strip(),
+                }
     except Exception as e:
         print(f'[review] enrich failed for {node_title}: {e}', flush=True)
     return result
@@ -5844,12 +5906,19 @@ def _process_voice_capture_entity_path(
                     a = (f.get('answer') or '').strip()
                     if not q or not a:
                         continue
+                    # Session 90 P1.1: per-fact confidence preserves the learner's epistemic state
+                    # through to enrichment + review rendering. Only accept the three canonical
+                    # values; anything else defaults to 'certain' (the safe non-hedge path).
+                    conf = (f.get('confidence') or '').strip().lower()
+                    if conf not in ('certain', 'uncertain', 'wrong'):
+                        conf = 'certain'
                     normalized_facts.append({
                         'id': f.get('id') or f'vc_{int(time.time())}_{i}',
                         'question': q,
                         'answer': a,
                         'type': f.get('type') or 'event',
                         'source_excerpt': f.get('source_excerpt') or '',
+                        'confidence': conf,
                     })
                 if not normalized_facts:
                     continue

@@ -629,6 +629,13 @@ function ReviewCard({
       {/* Question */}
       <Text style={cs.question}>{item.question}</Text>
 
+      {/* Uncertainty indicator — learner's captured confidence (Session 90 P1.1) */}
+      {item.confidence === 'uncertain' ? (
+        <Text style={cs.epistemicHedge}>{'\u223C'} you captured this with a hedge</Text>
+      ) : item.confidence === 'wrong' ? (
+        <Text style={cs.epistemicWrong}>{'\u26A0'} captured as a confident guess</Text>
+      ) : null}
+
       {/* Reveal / Answer */}
       {!revealed ? (
         <View style={cs.actionRow}>
@@ -641,6 +648,19 @@ function ReviewCard({
         </View>
       ) : (
         <View>
+          {/* Correction block — verifiable contradiction (Session 90 P1.2) */}
+          {item.correction && item.correction.user_said && item.correction.actually ? (
+            <View style={cs.correctionBox}>
+              <Text style={cs.correctionLabel}>You said</Text>
+              <Text style={cs.correctionUserSaid}>{item.correction.user_said}</Text>
+              <Text style={cs.correctionLabel}>Actually</Text>
+              <Text style={cs.correctionActually}>{item.correction.actually}</Text>
+              {item.correction.why_confused ? (
+                <Text style={cs.correctionWhy}>{item.correction.why_confused}</Text>
+              ) : null}
+            </View>
+          ) : null}
+
           {/* Short answer (succinct) + quick "Knew it" */}
           {showShortAnswer ? (
             <View style={cs.shortAnswerBox}>
@@ -1862,6 +1882,23 @@ const cs = StyleSheet.create({
   hookBox: { backgroundColor: 'rgba(139,37,0,0.04)', borderLeftWidth: 2, borderLeftColor: colors.rubric, paddingLeft: 12, paddingVertical: 8, marginBottom: 12, borderRadius: 2 },
   hookLabel: { fontFamily: fonts.uiMedium, fontSize: 10, color: colors.rubric, letterSpacing: 0.3, marginBottom: 4, ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}) },
   hookText: { fontFamily: fonts.readingItalic, fontSize: 14, lineHeight: 20, color: colors.textBody, ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}) },
+  // Session 90 P1.1: small indicators near the question when the learner's capture was hedged
+  epistemicHedge: { fontFamily: fonts.ui, fontSize: 12, color: colors.textMuted, marginTop: -10, marginBottom: 14 },
+  epistemicWrong: { fontFamily: fonts.ui, fontSize: 12, color: colors.rubric, marginTop: -10, marginBottom: 14 },
+  // Session 90 P1.2: prominent correction block when the short answer contradicts ground truth
+  correctionBox: {
+    borderWidth: 1, borderColor: colors.rubric,
+    backgroundColor: 'rgba(139,37,0,0.04)',
+    borderRadius: 4, padding: 12, marginBottom: 14,
+  },
+  correctionLabel: {
+    fontFamily: fonts.uiMedium, fontSize: 10, color: colors.rubric,
+    letterSpacing: 0.5, textTransform: 'uppercase' as const, marginBottom: 2, marginTop: 2,
+    ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}),
+  },
+  correctionUserSaid: { fontFamily: fonts.reading, fontSize: 14, color: colors.textBody, marginBottom: 8, textDecorationLine: 'line-through' as const },
+  correctionActually: { fontFamily: fonts.reading, fontSize: 15, color: colors.ink, marginBottom: 8 },
+  correctionWhy: { fontFamily: fonts.readingItalic, fontSize: 13, lineHeight: 19, color: colors.textSecondary, ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}) },
   anchorBox: { marginBottom: 14 },
   anchorText: { fontFamily: fonts.ui, fontSize: 12, color: colors.textSecondary, lineHeight: 18, marginBottom: 2 },
   contextText: { fontFamily: fonts.readingItalic, fontSize: 12, lineHeight: 18, color: colors.textMuted, marginBottom: 14, ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}) },
