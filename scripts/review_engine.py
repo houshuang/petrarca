@@ -2957,6 +2957,181 @@ Requirements:
 Output JSON array of 3 strings only: ["q1","q2","q3"]"""
 
 
+ML_CONSISTENCY_PROMPT = """You are auditing a batch of short educational cards generated from a single voice capture. Look for SPECIFIC, VERIFIABLE CONTRADICTIONS between cards — disagreements on names, dates, numbers, places, or sequences that cannot both be true.
+
+Cards (each labeled by ml_id):
+{cards_text}
+
+A contradiction is only real if two cards assert incompatible specific facts. Examples:
+- GOOD contradiction: card A says "Khomeini was 76 in 1979"; card B says "Khomeini was 78 in 1979" (same person, same year, different age).
+- GOOD contradiction: card A says "the Shah was exiled to Egypt"; card B says "the Shah was exiled to Morocco" (same event, different place).
+- BAD (not a contradiction): one card focuses on causes, another on consequences — complementary, not conflicting.
+- BAD (not a contradiction): different levels of detail on the same fact ("1979" vs "February 1979").
+- BAD (not a contradiction): different topics that happen to share vocabulary.
+
+For each contradiction, identify which card is correct (the winner) based on verifiable historical fact. If you cannot determine which is correct, set `verdict` to null — do NOT guess. The loser card will be auto-flagged as inaccurate, so precision matters.
+
+Output JSON only:
+{{"contradictions": [
+  {{"card_ids": ["ml_id_1", "ml_id_2"], "conflict": "1-sentence description of the incompatible claims", "verdict": "ml_id_X or null", "why": "1-sentence rationale citing the verifiable fact"}}
+]}}
+
+If there are no contradictions, output {{"contradictions": []}}."""
+
+
+def _run_consistency_check_after_capture(capture_id: str, card_ids: list) -> None:
+    """Poll sibling ML cards until completed/failed, then auto-flag contradictions.
+
+    Session 90 P2.1: after all ML cards from a single voice capture finish, run ONE
+    Claude pass over their titles + rich_answers + quizzes to detect specific,
+    verifiable contradictions (e.g. "Khomeini was 76" vs "78" from the same
+    transcript). The losing card in each contradiction is auto-flagged via the
+    same flagged_inaccurate channel the user uses manually.
+
+    Design notes:
+    - Fire-and-forget background thread; caller does not wait.
+    - Polls every 15s, times out at 5 min (most ML cards complete in <90s).
+    - At least two candidate cards are required for the pass to run — no
+      contradictions are possible with one card.
+    - Only flags the LOSER when `verdict` names a specific winner. Ambiguous
+      contradictions (verdict=null) are skipped so the user can adjudicate.
+    """
+    from db import get_connection
+
+    if not card_ids or len(card_ids) < 2:
+        return
+
+    deadline = time.time() + 300  # 5 min
+    poll_interval = 15
+    ready: dict[str, dict] = {}
+
+    while time.time() < deadline:
+        time.sleep(poll_interval)
+        try:
+            conn = get_connection(readonly=True)
+            placeholders = ','.join('?' for _ in card_ids)
+            rows = conn.execute(
+                f'''SELECT id, status, title, query, content
+                    FROM microlearning_cards
+                    WHERE id IN ({placeholders})''',
+                card_ids,
+            ).fetchall()
+            terminal = {'completed', 'failed', 'dismissed'}
+            all_done = all((r['status'] or '') in terminal for r in rows) and len(rows) == len(card_ids)
+            for r in rows:
+                if (r['status'] or '') == 'completed':
+                    ready[r['id']] = dict(r)
+            conn.close()
+            if all_done:
+                break
+        except Exception as e:
+            print(f'[consistency-check] poll failed: {e}', flush=True)
+
+    if len(ready) < 2:
+        print(f'[consistency-check] capture={capture_id}: only {len(ready)} completed cards — skipping', flush=True)
+        return
+
+    # Build a compact card summary for the LLM. Pull quizzes for added context.
+    card_summaries = []
+    try:
+        conn = get_connection(readonly=True)
+        for cid, card in ready.items():
+            quiz_rows = conn.execute(
+                '''SELECT question, answer FROM microlearning_quizzes
+                   WHERE card_id = ? ORDER BY rowid LIMIT 4''',
+                (cid,),
+            ).fetchall()
+            quiz_text = '\n'.join(f'    Q: {q["question"]}\n    A: {q["answer"]}' for q in quiz_rows)
+            title = card.get('title') or card.get('query') or cid
+            content = (card.get('content') or '')[:800]
+            card_summaries.append(
+                f'---\nml_id: {cid}\ntitle: {title}\ncontent: {content}\nquizzes:\n{quiz_text}'
+            )
+        conn.close()
+    except Exception as e:
+        print(f'[consistency-check] card load failed: {e}', flush=True)
+        return
+
+    prompt = ML_CONSISTENCY_PROMPT.format(cards_text='\n'.join(card_summaries))
+    try:
+        result = call_claude_json(prompt, timeout=120)
+    except Exception as e:
+        print(f'[consistency-check] LLM call failed: {e}', flush=True)
+        return
+
+    if not isinstance(result, dict):
+        return
+    contradictions = result.get('contradictions') or []
+    if not isinstance(contradictions, list):
+        return
+
+    flagged = 0
+    try:
+        conn = get_connection()
+        conn.execute('PRAGMA busy_timeout = 30000')
+        now_ms = int(time.time() * 1000)
+        for c in contradictions:
+            if not isinstance(c, dict):
+                continue
+            cids = c.get('card_ids') or []
+            verdict = (c.get('verdict') or '').strip() if isinstance(c.get('verdict'), str) else ''
+            conflict = (c.get('conflict') or '').strip()
+            why = (c.get('why') or '').strip()
+            if not verdict or not conflict or len(cids) < 2:
+                continue
+            # Flag every card that is NOT the verdict winner, but only cards in the batch.
+            losers = [cid for cid in cids if cid != verdict and cid in ready]
+            if not losers:
+                continue
+            reason = f'consistency check: contradicts {verdict} — {conflict}'
+            if why:
+                reason = f'{reason} ({why})'
+            reason = reason[:500]
+            for loser in losers:
+                conn.execute(
+                    '''UPDATE microlearning_cards
+                       SET flagged_inaccurate=1, flagged_reason=?, flagged_at=?
+                       WHERE id=? AND COALESCE(flagged_inaccurate, 0)=0''',
+                    (reason, now_ms, loser),
+                )
+                flagged += 1
+                try:
+                    from server_log import log_interaction
+                    log_interaction(
+                        'ml_consistency_flag', item_id=loser,
+                        extra=json.dumps({
+                            'capture_id': capture_id,
+                            'winner': verdict,
+                            'conflict': conflict,
+                        }),
+                    )
+                except Exception:
+                    pass
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f'[consistency-check] flag write failed: {e}', flush=True)
+        return
+
+    print(
+        f'[consistency-check] capture={capture_id}: '
+        f'{len(contradictions)} contradiction(s), {flagged} card(s) flagged',
+        flush=True,
+    )
+
+
+def _kick_off_consistency_check(capture_id: str, ml_triggered: list) -> None:
+    """Spawn the consistency-check background thread for a voice capture's ML cards."""
+    card_ids = [m.get('id') for m in (ml_triggered or []) if isinstance(m, dict) and m.get('id')]
+    if len(card_ids) < 2:
+        return
+    threading.Thread(
+        target=_run_consistency_check_after_capture,
+        args=(capture_id, card_ids),
+        daemon=True,
+    ).start()
+
+
 def _find_related_entities(entity_id: str, entity_name: str, entity_type: str,
                            conn) -> list[dict]:
     """Find entities related by time period or location."""
@@ -5672,6 +5847,7 @@ def process_voice_capture(transcript: str, entity_id: str = None,
             detected_entity_ids=detected_entity_ids,
             sync=sync,
             input_mode=input_mode,
+            fire_consistency_check=False,
         )
         entity_path_triggered = True
         # Surface the entity-path outcome in the curriculum-path response
@@ -5791,6 +5967,14 @@ def process_voice_capture(transcript: str, entity_id: str = None,
 
     print(f'[voice-capture] Done: {len(facts)} facts → {len(knowledge_updates)} nodes, '
           f'{len(ml_triggered)} ML cards', flush=True)
+
+    # Session 90 P2.1: background consistency pass flags contradictions between
+    # sibling ML cards from the same capture (e.g. "Khomeini was 76" vs "78").
+    # Safe to fire regardless of which path produced the cards — losers are only
+    # flagged when a specific winner can be identified.
+    capture_vt_id = vt_row if isinstance(vt_row, str) else 'unknown'
+    _kick_off_consistency_check(capture_vt_id, ml_triggered)
+
     return result
 
 
@@ -5801,6 +5985,7 @@ def _process_voice_capture_entity_path(
     detected_entity_ids: list,
     sync: bool = False,
     input_mode: str = 'audio',
+    fire_consistency_check: bool = True,
 ) -> dict:
     """Process a voice capture via the entity-keyed path (no curriculum required).
 
@@ -6174,6 +6359,12 @@ def _process_voice_capture_entity_path(
             args=(entities_mentioned, transcript, vt_id, {}),
             daemon=True,
         ).start()
+
+    # Session 90 P2.1: pairwise consistency check across sibling ML cards.
+    # Skipped when invoked as a curriculum-path fallback — the outer path fires
+    # it once with the combined ml_triggered list so we don't double-run.
+    if fire_consistency_check:
+        _kick_off_consistency_check(vt_id, ml_triggered)
 
     return {
         'status': 'completed',
