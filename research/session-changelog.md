@@ -1,6 +1,69 @@
 # Knowledge System Implementation Status
 
-**Date**: April 21, 2026 (last updated — session 88: Gemini → Claude migration across all active paths, OCR carve-out)
+**Date**: April 21, 2026 (last updated — session 90: epistemic fidelity — flag-inaccurate button, per-fact confidence, correction field, sibling-ML consistency check)
+
+## Session 90: Epistemic Fidelity — Accuracy Flags + Uncertainty Preservation (April 21, 2026)
+
+### Why
+The pipeline previously lost the distinction between *what the user said/knows* and *what the LLM confidently asserts*. A voice capture of "the Shah went to Egypt, I think — Morocco or somewhere" would be flattened to "Morocco ↦ definitely" by the time it became a review card. Session 87's Iran retention-diff analysis flagged this as two concrete gaps (P2.1 accuracy contradictions, P2.2 uncertainty-marker preservation); Session 90 ships the minimum viable response to each plus a user-visible error channel to collect bad-card ground truth going forward.
+
+### P0 — "Flag as inaccurate" button on ML cards
+The canonical error channel was missing entirely: no way for the user to say "this ML card is factually wrong". Every downstream accuracy effort (consistency checks, validator against `knowledge_items`, training-data mining) needs labeled bad cards as ground truth, so P0 had to ship first.
+
+- **Schema**: 3 new columns on `microlearning_cards` — `flagged_inaccurate INTEGER DEFAULT 0`, `flagged_reason TEXT`, `flagged_at INTEGER`. Added to `MIGRATIONS` in `scripts/db.py`.
+- **Endpoint**: `POST /review/ml-flag-inaccurate` in `scripts/research-server.py`. Body `{card_id, reason}`, sets the three columns, logs `ml_flag_inaccurate` to `interaction_log`. Returns 404 if the card doesn't exist so stale client IDs surface.
+- **Stream filter**: `_mix_ml` in `scripts/curriculum_db.py` adds `COALESCE(flagged_inaccurate, 0) = 0` to both the new-card selection and the due-quiz query. `COALESCE` handles the legacy-NULL case SQLite leaves behind after a non-NOT-NULL ALTER — `flagged_inaccurate = 0` would silently exclude those rows.
+- **UI**: `MicrolearningQuizCard` gets an "Inaccurate fact" option in its existing `⋯` menu. `MicrolearningCard` (the first-encounter multi-quiz card) gets a fourth top-action button because it never had a menu — introducing one would've been a bigger change. Both open a single bottom-sheet modal (`TextInput` + Cancel/Flag) for the optional reason; `handleFlagInaccurate`/`confirmFlagInaccurate` sit at the review-screen level so only one modal lives in the tree.
+- **API helper**: `flagMicrolearningInaccurate(cardId, reason)` in `app/lib/book-api.ts`.
+
+### P1.1 — Per-fact `confidence` through the pipeline
+Voice capture prompts already had a sibling `confidence_tagged` list, but it was severed from the facts themselves — by the time `entity_facts` reached `knowledge_entities.key_facts`, no downstream consumer could tell which fact the learner hedged on.
+
+- **Prompts**: `VOICE_CAPTURE_ANALYSIS_PROMPT` and `VOICE_CAPTURE_ENTITY_PROMPT` (`scripts/review_engine.py:482` and `:516`) now require `confidence: "certain" | "uncertain" | "wrong"` as an inline per-fact field with BAD/GOOD examples. Key disambiguation: "certain" vs "uncertain" is the learner's *language* (hedge words, alternatives offered), NOT topic difficulty. "Wrong" requires the pipeline to know the claim is verifiably incorrect — in doubt, prefer "certain" so user knowledge isn't auto-flagged as wrong. The legacy `confidence_tagged` sibling field is retained for backward compat.
+- **Entity path**: `_process_voice_capture_entity_path` normalizes each fact into `key_facts` with a `confidence` field (clamped to the three canonical values, default "certain" on malformed input). Flows straight into `cached_question` via `_key_fact_to_question`.
+- **Curriculum path**: facts don't flow into `knowledge_items.key_facts` (those come from curriculum generation, not voice capture), so per-fact confidence is a no-op there for now. Documented as a known limitation — if we later populate voice-derived key_facts onto curriculum-mapped items, the confidence field is already waiting.
+- **Enrichment**: `_build_epistemic_context_block(fact)` returns an `EPISTEMIC CONTEXT:` block for `_ENRICH_PROMPT` when the captured confidence is `uncertain` or `wrong`. For "uncertain" the LLM is asked to mirror the hedge rather than flatten it; for "wrong" it's asked to correct gently using the new `correction` field (P1.2) instead of burying the fix in prose. The block passes through the learner's own `source_excerpt` so the LLM can echo the actual words.
+- **Render**: ReviewCard shows `~ you captured this with a hedge` (muted) for uncertain and `⚠ captured as a confident guess` (rubric) for wrong, positioned tight under the question. Low-key UI — this is a learning moment, not a scold.
+
+### P1.2 — `correction` field on `_ENRICH_PROMPT`
+When the rich_answer silently contradicts the short_answer on a specific, verifiable point, surfacing that contradiction in a bordered block above the rich_answer IS the retention moment for that fact. Burying "actually it was Egypt" mid-paragraph loses it.
+
+- **Prompt**: `_ENRICH_PROMPT` gains a 4th output field: `correction: null | {user_said, actually, why_confused}`. BAD/GOOD examples make clear the field is for verifiable named contradictions (a name, date, number, place), not tone ("user was uncertain" is NOT correction material). The `actually` field must carry at least one concrete anchor so the correction itself is testable; `why_confused` explains the plausible confusion so the moment sticks.
+- **Storage**: `_key_fact_to_question` captures `correction` from the enriched output, validates it's a dict with non-empty `user_said`+`actually`, and stores it on `cached_question.correction`. Malformed or string-shaped values are dropped rather than corrupting the cached question.
+- **Surface**: `generate_review_stream` pulls `correction` off `cached_question` onto the review item dict. `ResurfacingItem` type in `app/data/types.ts` now carries `confidence?`, `source_excerpt?`, `correction?: { user_said; actually; why_confused } | null`.
+- **Render**: ReviewCard shows a bordered rubric box above the rich_answer with user_said struck through, `actually` in bold ink, and `why_confused` in italics. Only renders when both `user_said` and `actually` are non-empty — an empty or partial correction would be worse than none.
+
+### P2.1 — Consistency check on sibling ML cards
+The bug was concrete: `ml_1776697189_7523` said Khomeini was 78 at the 1979 flight; `ml_1776697263_5906` said 76 on the same flight. Same voice capture, two Claude calls, contradictory specific numbers. P0's flag infrastructure let P2.1 be tiny — just detect the contradiction and flag the loser through the same channel.
+
+- **`ML_CONSISTENCY_PROMPT`**: asks Claude to find specific verifiable contradictions (incompatible names/dates/numbers/places) between sibling cards, identify a winner based on verifiable historical fact, or set `verdict: null` if ambiguous. BAD examples explicitly exclude tone differences, complementary detail, and different levels of specificity.
+- **`_run_consistency_check_after_capture(capture_id, card_ids)`**: background thread polls `microlearning_cards.status` every 15s until all cards reach `completed`/`failed`/`dismissed` or 5-min timeout (most ML cards complete in <90s so the poll interval amortizes over ~6 iterations). Runs one Claude pass over the siblings' titles + content + top-4 quizzes, flags losers via the same P0 infrastructure, logs `ml_consistency_flag` per auto-flag.
+- **Ambiguous handling**: when `verdict` is null or absent, the code skips — the user adjudicates via the manual flag button. Auto-flagging an arbitrary loser would destroy trust in the signal.
+- **Wiring**: `_kick_off_consistency_check` called at the end of both voice-capture paths. The entity path has a `fire_consistency_check=True` default but is gated to `False` when called as a curriculum-path fallback — otherwise the outer curriculum path (which extends `ml_triggered` with the entity path's cards) would double-run the pass.
+
+### Design principle
+The pipeline's job is to preserve the learner's epistemic map, not overwrite it with the LLM's confident voice. "I think Morocco" → "Morocco ↦ definitely" is a corruption, not a simplification. All four Session 90 changes are pinch-points where that corruption was happening, each fixed by making the uncertainty visible: to the user (uncertainty indicator), to the enrichment LLM (epistemic context block), to the client (correction block), and to the pipeline itself (auto-flagged contradictions).
+
+### Files
+- `scripts/db.py` — +3 columns in MIGRATIONS.
+- `scripts/research-server.py` — `_handle_ml_flag_inaccurate` + route.
+- `scripts/curriculum_db.py` — flagged filter on both ML queries + confidence/correction on review items.
+- `scripts/review_engine.py` — prompt changes, `_build_epistemic_context_block`, `ML_CONSISTENCY_PROMPT`, `_run_consistency_check_after_capture`, `_kick_off_consistency_check`, wiring.
+- `app/app/(tabs)/index.tsx` — UI additions (flag modal, uncertainty indicator, correction box, top-action button, menu item).
+- `app/data/types.ts` — `confidence`, `source_excerpt`, `correction` on `ResurfacingItem`.
+- `app/lib/book-api.ts` — `flagMicrolearningInaccurate`.
+
+### Commits (on main after squash-merge of PR #6 → `2a37cc8`)
+- `85e7758` — P0 flag-inaccurate
+- `7706b57` — P1.1 + P1.2 epistemic state preservation (shipped together: same `_key_fact_to_question` pinch-point)
+- `77f603e` — P2.1 consistency check
+
+Deployed via `bash ~/src/expo/scripts/deploy.sh petrarca` — Expo, research, content all OK on alif. Verification (user, not this session): record a voice capture with an explicit hedge ("I think…"); confirm the entity-path card shows the uncertainty indicator; test-flag an ML card and confirm it drops out of the stream.
+
+### Non-goals (deliberate)
+- No validator cross-checking ML cards against `knowledge_items`/`knowledge_entities` — requires entity-linkage for every ML card, own session.
+- No historical backfill — forward-only. Existing wrong cards (Khomeini 76 vs 78 pair) stay until the user flags them manually via P0.
+- Latency risk from Session 88's `_generate_follow_up_queries` + `create_targeted_quiz` still unmitigated — not Session 90's problem.
 
 ## Session 88: Gemini → Claude Migration (April 20–21, 2026)
 
