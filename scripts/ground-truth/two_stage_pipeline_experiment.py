@@ -31,6 +31,7 @@ sys.path.insert(0, '.')
 from dotenv import load_dotenv
 load_dotenv(os.path.expanduser('~/.env'))
 
+# TODO(session-88): migrate to claude_llm when this script gets revived
 from gemini_llm import call_llm
 from limbic.amygdala import EmbeddingModel
 

@@ -33,6 +33,7 @@ sys.path.insert(0, str(SCRIPT_DIR))
 from generate_syntheses import (
     load_data, build_synthesis_prompt, parse_llm_response
 )
+# TODO(session-88): migrate to claude_llm when this script gets revived
 from gemini_llm import call_llm
 
 # Models to compare — pricing from Polaris aiModelsData.ts (per 1M tokens)

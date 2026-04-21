@@ -18,6 +18,7 @@ load_dotenv(os.path.expanduser("~/.env"))
 os.chdir("/Users/stian/src/petrarca/scripts")
 sys.path.insert(0, ".")
 
+# TODO(session-88): migrate to claude_llm when this script gets revived
 from gemini_llm import call_llm
 
 from limbic.amygdala import EmbeddingModel

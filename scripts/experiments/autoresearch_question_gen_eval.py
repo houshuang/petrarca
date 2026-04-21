@@ -25,6 +25,7 @@ if env_file.exists():
             os.environ.setdefault(k.strip(), v.strip())
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+# TODO(session-88): migrate to claude_llm when this script gets revived
 from gemini_llm import call_llm
 
 FIXTURES = json.loads((Path(__file__).parent / 'fixtures_question_gen.json').read_text())

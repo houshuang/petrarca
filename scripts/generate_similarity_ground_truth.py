@@ -198,6 +198,7 @@ Return ONLY a JSON object: {{"score": N, "reason": "brief explanation"}}"""
 
 
 def rate_pair(pair, articles, retry_count=3):
+    # TODO(session-88): migrate to claude_llm when this script gets revived
     from gemini_llm import call_llm
     a = articles[pair["i"]]
     b = articles[pair["j"]]
