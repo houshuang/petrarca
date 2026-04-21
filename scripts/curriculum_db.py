@@ -1808,9 +1808,11 @@ def generate_review_stream(domain_filter: str | None = None, limit: int = 20,
 
             # 1. New ML cards — never had any quiz interaction
             # A card is "new" if it has no quizzes with review_count > 0
+            # Session 90: flagged_inaccurate cards drop out immediately.
             new_card_rows = conn.execute('''
                 SELECT mc.* FROM microlearning_cards mc
                 WHERE mc.status = 'completed'
+                  AND COALESCE(mc.flagged_inaccurate, 0) = 0
                   AND NOT EXISTS (
                     SELECT 1 FROM microlearning_quizzes mq
                     WHERE mq.card_id = mc.id AND mq.review_count > 0
@@ -1890,6 +1892,7 @@ def generate_review_stream(domain_filter: str | None = None, limit: int = 20,
                 JOIN microlearning_cards mc ON mc.id = mq.card_id
                 WHERE mq.status = 'active' AND mq.review_count > 0
                   AND mq.due_at <= ?
+                  AND COALESCE(mc.flagged_inaccurate, 0) = 0
                 ORDER BY mq.due_at ASC
                 LIMIT ?
             ''', (now_ms, ml_limit)).fetchall()
