@@ -496,6 +496,19 @@ export async function suspendFact(factId: string): Promise<{ count: number }> {
   return resp.json();
 }
 
+export async function flagMicrolearningInaccurate(
+  cardId: string,
+  reason: string = '',
+): Promise<{ ok: boolean; card_id: string }> {
+  const resp = await fetch(`${RESEARCH_BASE}/review/ml-flag-inaccurate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ card_id: cardId, reason }),
+  });
+  if (!resp.ok) throw new Error(`Flag inaccurate failed (${resp.status})`);
+  return resp.json();
+}
+
 // --- Follow-up Query API ---
 
 export async function triggerFollowUp(itemId: string, query: string): Promise<{ triggered: string[] }> {

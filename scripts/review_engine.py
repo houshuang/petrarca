@@ -499,13 +499,17 @@ Instructions:
    - "engaged": learner demonstrates real knowledge but with gaps or uncertainty
    - "mentioned": learner references the topic but with little substance
 4. ALWAYS extract wonderings, questions, uncertainties, "I think...", "I'm not sure if...", speculative statements — even if no nodes match. These are the most valuable signals. Rephrase as clear research questions.
-5. CONFIDENCE_TAGGED: For each key factual claim, tag the learner's apparent confidence: "certain" (stated as fact), "uncertain" (hedged, "I think...", "maybe..."), or "wrong" (stated confidently but incorrect).
+5. CONFIDENCE per-fact: Tag EACH fact with the learner's apparent confidence as an inline "confidence" field.
+   - "certain": stated as fact without hedge. GOOD: "Khomeini returned to Iran on February 1, 1979" (specific date, no hedging).
+   - "uncertain": learner explicitly hedges with "I think", "maybe", "something like", alternatives offered. GOOD: "The Shah went to Egypt, I think — Morocco or somewhere" (explicit hedge + alternative). BAD: marking a confidently-stated fact as uncertain just because it's complex — the signal is the learner's language, not the topic's difficulty.
+   - "wrong": stated confidently but verifiably incorrect. GOOD: "Khomeini was 78 when he returned" (confident assertion; actual age was 76). When in doubt between certain and wrong, prefer certain — "wrong" requires you to know the learner is mistaken.
+   Also keep the legacy confidence_tagged sibling field for backward compatibility.
 6. ALWAYS provide overall_summary and entities_mentioned, regardless of node matching.
 
 IMPORTANT: The transcript may cover topics NOT in the curriculum nodes list. That's fine — still extract all facts, wonderings, entities, and summary. The node matching is optional; fact extraction is mandatory.
 
 Output JSON:
-{{"facts": [{{"fact": "specific factual claim", "node_ids": ["node_id_1"], "source_excerpt": "relevant 1-2 sentences from transcript"}}],
+{{"facts": [{{"fact": "specific factual claim", "node_ids": ["node_id_1"], "source_excerpt": "relevant 1-2 sentences from transcript", "confidence": "certain|uncertain|wrong"}}],
 "node_assessments": [{{"node_id": "...", "node_title": "...", "knowledge_level": "anchored|engaged|mentioned", "fact_count": 3, "summary": "brief summary of what learner knows about this node"}}],
 "wonderings": ["research question 1", "research question 2"],
 "entities_mentioned": ["entity name 1", "entity name 2"],
@@ -532,7 +536,11 @@ Instructions:
    - "source_excerpt" is 1-2 sentences quoted from the transcript that support this fact
 3. Be thorough — include dates, names, causal claims, and connections. Aim for 3-8 facts per main entity.
 4. Extract ALL wonderings, speculative statements, "I think...", "I'm not sure if..." — rephrase as clear research questions.
-5. Tag each factual claim with confidence: "certain" (stated as fact), "uncertain" (hedged), "wrong" (stated confidently but incorrect).
+5. CONFIDENCE per-fact: Tag EACH entity fact with the learner's apparent confidence as an inline "confidence" field on the fact object.
+   - "certain": stated as fact without hedge. GOOD: "Khomeini returned to Iran on February 1, 1979" (specific date, no hedging).
+   - "uncertain": learner explicitly hedges ("I think", "maybe", "something like", alternatives offered). GOOD: "The Shah went to Egypt, I think — Morocco or somewhere" (explicit hedge + alternative). BAD: marking a confidently-stated fact as uncertain just because the topic is obscure — the signal is the learner's language, not the topic's difficulty.
+   - "wrong": stated confidently but verifiably incorrect. GOOD: "Khomeini was 78 when he returned" (confident assertion; actual age was 76). When in doubt between certain and wrong, prefer certain.
+   Also keep the legacy confidence_tagged sibling field (same three values) for backward compatibility.
 6. List all entities mentioned (even if they don't have associated facts).
 7. For each entity discussed OR mentioned, classify its type as one of: "person", "place", "event", "battle", "dynasty", "work", "organization", "concept". Include this in "entity_types".
 8. Provide an overall_summary (2-3 sentences).
@@ -546,8 +554,8 @@ CANONICAL NAMING — critical for downstream Wikidata resolution:
 
 Output JSON:
 {{"entity_facts": {{
-    "Entity Name 1": [{{"id": "f1", "question": "specific question", "answer": "concise answer", "type": "date|event|person|place|concept|cause|significance", "source_excerpt": "..."}}],
-    "Entity Name 2": [{{"id": "f2", "question": "...", "answer": "...", "type": "...", "source_excerpt": "..."}}]
+    "Entity Name 1": [{{"id": "f1", "question": "specific question", "answer": "concise answer", "type": "date|event|person|place|concept|cause|significance", "source_excerpt": "...", "confidence": "certain|uncertain|wrong"}}],
+    "Entity Name 2": [{{"id": "f2", "question": "...", "answer": "...", "type": "...", "source_excerpt": "...", "confidence": "certain|uncertain|wrong"}}]
   }},
   "entity_types": {{"Entity Name 1": "person|place|event|battle|dynasty|work|organization|concept", "Entity Name 2": "..."}},
   "wonderings": ["research question 1", "research question 2"],
@@ -1359,7 +1367,7 @@ Short answer: {answer}
 
 {learner_context}
 
-{entity_graph_context_block}If learner context is provided, personalize the memory hook using connections the
+{entity_graph_context_block}{epistemic_context}If learner context is provided, personalize the memory hook using connections the
 learner has already made. Reference their known temporal anchors rather than generic ones.
 
 Generate:
@@ -1372,6 +1380,14 @@ Generate:
    above, when present). Prefer same-moment connections ("the year Carter took office", "two
    years after the Suez crisis") over generic century markers. Empty string if no suitable
    anchor exists.
+4. correction: If the short answer contradicts verified knowledge on a specific, checkable point
+   (a name, date, number, place), output an object:
+     {{"user_said": "<their claim, verbatim>", "actually": "<verified fact with 1 concrete anchor>", "why_confused": "<1-sentence explanation of the plausible confusion>"}}
+   Otherwise output null.
+   BAD correction: used for vibes ("user was uncertain", "user showed hesitation") — the field is
+     for verifiable, named contradictions only, not tone.
+   BAD correction: {{"user_said": "Morocco", "actually": "Egypt"}} — missing why_confused.
+   GOOD correction: {{"user_said": "Morocco", "actually": "Egypt (Anwar Sadat received the Shah on Jan 16 1979)", "why_confused": "The Shah moved through several countries of exile — Egypt first, then Morocco briefly, then the Bahamas, Mexico, and finally Egypt again where he died. Confusion between stops is natural."}}
 
 BAD temporal_hook: "In the 20th century" (too vague)
 BAD temporal_hook: "Around the time of the Cold War" (span, not moment)
@@ -1385,7 +1401,7 @@ STRICT: do not invent dates or events not present in the provided context. If th
 no usable temporal anchor, return "".
 
 Output JSON only:
-{{"rich_answer":"...","memory_hook":"...","temporal_hook":"..."}}"""
+{{"rich_answer":"...","memory_hook":"...","temporal_hook":"...","correction":null}}"""
 
 
 # Wrapper block header used only when entity_graph_context is non-empty.
@@ -1407,6 +1423,32 @@ him?" — not as an assertion.
 """
 
 
+def _build_epistemic_context_block(fact: dict) -> str:
+    """Return an EPISTEMIC CONTEXT block for _ENRICH_PROMPT when the learner hedged or erred.
+
+    Session 90 P1.1: preserves the learner's own epistemic state through to the
+    rich_answer so enrichment can mirror the hedge or gently correct. Empty string
+    if the fact was captured as 'certain' — don't inject noise when none is needed.
+    The learner's epistemic map is the product; flattening "I think Morocco" to
+    "Morocco ↦ definitely" destroys it.
+    """
+    conf = (fact.get('confidence') or 'certain').lower()
+    if conf not in ('uncertain', 'wrong'):
+        return ''
+    excerpt = (fact.get('source_excerpt') or '').strip()
+    excerpt_line = f'Their own words: "{excerpt}"\n' if excerpt else ''
+    if conf == 'uncertain':
+        tone = ('The learner captured this fact with HEDGED confidence. Acknowledge their uncertainty '
+                'and confirm or correct the claim gently. Do NOT condescend — the learner\'s hedge was '
+                'epistemically sound.')
+    else:  # wrong
+        tone = ('The learner captured this fact CONFIDENTLY but it is factually incorrect. The '
+                'rich_answer should gently but clearly correct the error. Use the `correction` '
+                'output field below to surface the specific contradiction as a separate, '
+                'prominent block — do not bury the fix in the prose.')
+    return f"EPISTEMIC CONTEXT: {tone}\n{excerpt_line}\n"
+
+
 def _key_fact_to_question(fact: dict, node_title: str, node_description: str,
                           conn=None, node_id=None, domain_id=None,
                           entity_graph_context: str = '') -> dict:
@@ -1418,6 +1460,11 @@ def _key_fact_to_question(fact: dict, node_title: str, node_description: str,
     callers — the prompt block is omitted in that case, keeping behaviour
     identical to Phase 1.
     """
+    # Propagate the learner's captured confidence so the client can render an
+    # uncertainty indicator and so downstream enrichment can mirror the hedge.
+    fact_confidence = (fact.get('confidence') or 'certain').lower()
+    if fact_confidence not in ('certain', 'uncertain', 'wrong'):
+        fact_confidence = 'certain'
     result = {
         'question': fact['question'],
         'answer_guidance': fact['answer'],
@@ -1427,6 +1474,9 @@ def _key_fact_to_question(fact: dict, node_title: str, node_description: str,
         'curriculum_context': node_description[:200] if node_description else '',
         'fact_id': fact.get('id', ''),
         'entities': fact.get('entities', []),
+        'confidence': fact_confidence,
+        'source_excerpt': fact.get('source_excerpt', ''),
+        'correction': None,
     }
     # Learner context for enrichment personalization
     learner_ctx = ''
@@ -1438,6 +1488,7 @@ def _key_fact_to_question(fact: dict, node_title: str, node_description: str,
         if entity_graph_context.strip()
         else ''
     )
+    epistemic_block = _build_epistemic_context_block(fact)
 
     # Enrich bare answers with narrative + memory hook
     try:
@@ -1448,6 +1499,7 @@ def _key_fact_to_question(fact: dict, node_title: str, node_description: str,
             answer=fact['answer'],
             learner_context=learner_ctx,
             entity_graph_context_block=egc_block,
+            epistemic_context=epistemic_block,
         ), timeout=90, model='sonnet')
         if enriched and isinstance(enriched, dict):
             if enriched.get('rich_answer'):
@@ -1457,6 +1509,16 @@ def _key_fact_to_question(fact: dict, node_title: str, node_description: str,
             th = enriched.get('temporal_hook')
             if isinstance(th, str) and th.strip():
                 result['temporal_hook'] = th.strip()
+            # P1.2: the LLM returns a verifiable-contradiction block or null. Accept only
+            # the structured form — a string or malformed value is dropped rather than
+            # corrupting the cached_question.
+            corr = enriched.get('correction')
+            if isinstance(corr, dict) and corr.get('user_said') and corr.get('actually'):
+                result['correction'] = {
+                    'user_said': str(corr.get('user_said') or '').strip(),
+                    'actually': str(corr.get('actually') or '').strip(),
+                    'why_confused': str(corr.get('why_confused') or '').strip(),
+                }
     except Exception as e:
         print(f'[review] enrich failed for {node_title}: {e}', flush=True)
     return result
@@ -2893,6 +2955,181 @@ Requirements:
 - NO generic templates like "How does X connect to Y?"
 
 Output JSON array of 3 strings only: ["q1","q2","q3"]"""
+
+
+ML_CONSISTENCY_PROMPT = """You are auditing a batch of short educational cards generated from a single voice capture. Look for SPECIFIC, VERIFIABLE CONTRADICTIONS between cards — disagreements on names, dates, numbers, places, or sequences that cannot both be true.
+
+Cards (each labeled by ml_id):
+{cards_text}
+
+A contradiction is only real if two cards assert incompatible specific facts. Examples:
+- GOOD contradiction: card A says "Khomeini was 76 in 1979"; card B says "Khomeini was 78 in 1979" (same person, same year, different age).
+- GOOD contradiction: card A says "the Shah was exiled to Egypt"; card B says "the Shah was exiled to Morocco" (same event, different place).
+- BAD (not a contradiction): one card focuses on causes, another on consequences — complementary, not conflicting.
+- BAD (not a contradiction): different levels of detail on the same fact ("1979" vs "February 1979").
+- BAD (not a contradiction): different topics that happen to share vocabulary.
+
+For each contradiction, identify which card is correct (the winner) based on verifiable historical fact. If you cannot determine which is correct, set `verdict` to null — do NOT guess. The loser card will be auto-flagged as inaccurate, so precision matters.
+
+Output JSON only:
+{{"contradictions": [
+  {{"card_ids": ["ml_id_1", "ml_id_2"], "conflict": "1-sentence description of the incompatible claims", "verdict": "ml_id_X or null", "why": "1-sentence rationale citing the verifiable fact"}}
+]}}
+
+If there are no contradictions, output {{"contradictions": []}}."""
+
+
+def _run_consistency_check_after_capture(capture_id: str, card_ids: list) -> None:
+    """Poll sibling ML cards until completed/failed, then auto-flag contradictions.
+
+    Session 90 P2.1: after all ML cards from a single voice capture finish, run ONE
+    Claude pass over their titles + rich_answers + quizzes to detect specific,
+    verifiable contradictions (e.g. "Khomeini was 76" vs "78" from the same
+    transcript). The losing card in each contradiction is auto-flagged via the
+    same flagged_inaccurate channel the user uses manually.
+
+    Design notes:
+    - Fire-and-forget background thread; caller does not wait.
+    - Polls every 15s, times out at 5 min (most ML cards complete in <90s).
+    - At least two candidate cards are required for the pass to run — no
+      contradictions are possible with one card.
+    - Only flags the LOSER when `verdict` names a specific winner. Ambiguous
+      contradictions (verdict=null) are skipped so the user can adjudicate.
+    """
+    from db import get_connection
+
+    if not card_ids or len(card_ids) < 2:
+        return
+
+    deadline = time.time() + 300  # 5 min
+    poll_interval = 15
+    ready: dict[str, dict] = {}
+
+    while time.time() < deadline:
+        time.sleep(poll_interval)
+        try:
+            conn = get_connection(readonly=True)
+            placeholders = ','.join('?' for _ in card_ids)
+            rows = conn.execute(
+                f'''SELECT id, status, title, query, content
+                    FROM microlearning_cards
+                    WHERE id IN ({placeholders})''',
+                card_ids,
+            ).fetchall()
+            terminal = {'completed', 'failed', 'dismissed'}
+            all_done = all((r['status'] or '') in terminal for r in rows) and len(rows) == len(card_ids)
+            for r in rows:
+                if (r['status'] or '') == 'completed':
+                    ready[r['id']] = dict(r)
+            conn.close()
+            if all_done:
+                break
+        except Exception as e:
+            print(f'[consistency-check] poll failed: {e}', flush=True)
+
+    if len(ready) < 2:
+        print(f'[consistency-check] capture={capture_id}: only {len(ready)} completed cards — skipping', flush=True)
+        return
+
+    # Build a compact card summary for the LLM. Pull quizzes for added context.
+    card_summaries = []
+    try:
+        conn = get_connection(readonly=True)
+        for cid, card in ready.items():
+            quiz_rows = conn.execute(
+                '''SELECT question, answer FROM microlearning_quizzes
+                   WHERE card_id = ? ORDER BY rowid LIMIT 4''',
+                (cid,),
+            ).fetchall()
+            quiz_text = '\n'.join(f'    Q: {q["question"]}\n    A: {q["answer"]}' for q in quiz_rows)
+            title = card.get('title') or card.get('query') or cid
+            content = (card.get('content') or '')[:800]
+            card_summaries.append(
+                f'---\nml_id: {cid}\ntitle: {title}\ncontent: {content}\nquizzes:\n{quiz_text}'
+            )
+        conn.close()
+    except Exception as e:
+        print(f'[consistency-check] card load failed: {e}', flush=True)
+        return
+
+    prompt = ML_CONSISTENCY_PROMPT.format(cards_text='\n'.join(card_summaries))
+    try:
+        result = call_claude_json(prompt, timeout=120)
+    except Exception as e:
+        print(f'[consistency-check] LLM call failed: {e}', flush=True)
+        return
+
+    if not isinstance(result, dict):
+        return
+    contradictions = result.get('contradictions') or []
+    if not isinstance(contradictions, list):
+        return
+
+    flagged = 0
+    try:
+        conn = get_connection()
+        conn.execute('PRAGMA busy_timeout = 30000')
+        now_ms = int(time.time() * 1000)
+        for c in contradictions:
+            if not isinstance(c, dict):
+                continue
+            cids = c.get('card_ids') or []
+            verdict = (c.get('verdict') or '').strip() if isinstance(c.get('verdict'), str) else ''
+            conflict = (c.get('conflict') or '').strip()
+            why = (c.get('why') or '').strip()
+            if not verdict or not conflict or len(cids) < 2:
+                continue
+            # Flag every card that is NOT the verdict winner, but only cards in the batch.
+            losers = [cid for cid in cids if cid != verdict and cid in ready]
+            if not losers:
+                continue
+            reason = f'consistency check: contradicts {verdict} — {conflict}'
+            if why:
+                reason = f'{reason} ({why})'
+            reason = reason[:500]
+            for loser in losers:
+                conn.execute(
+                    '''UPDATE microlearning_cards
+                       SET flagged_inaccurate=1, flagged_reason=?, flagged_at=?
+                       WHERE id=? AND COALESCE(flagged_inaccurate, 0)=0''',
+                    (reason, now_ms, loser),
+                )
+                flagged += 1
+                try:
+                    from server_log import log_interaction
+                    log_interaction(
+                        'ml_consistency_flag', item_id=loser,
+                        extra=json.dumps({
+                            'capture_id': capture_id,
+                            'winner': verdict,
+                            'conflict': conflict,
+                        }),
+                    )
+                except Exception:
+                    pass
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f'[consistency-check] flag write failed: {e}', flush=True)
+        return
+
+    print(
+        f'[consistency-check] capture={capture_id}: '
+        f'{len(contradictions)} contradiction(s), {flagged} card(s) flagged',
+        flush=True,
+    )
+
+
+def _kick_off_consistency_check(capture_id: str, ml_triggered: list) -> None:
+    """Spawn the consistency-check background thread for a voice capture's ML cards."""
+    card_ids = [m.get('id') for m in (ml_triggered or []) if isinstance(m, dict) and m.get('id')]
+    if len(card_ids) < 2:
+        return
+    threading.Thread(
+        target=_run_consistency_check_after_capture,
+        args=(capture_id, card_ids),
+        daemon=True,
+    ).start()
 
 
 def _find_related_entities(entity_id: str, entity_name: str, entity_type: str,
@@ -5610,6 +5847,7 @@ def process_voice_capture(transcript: str, entity_id: str = None,
             detected_entity_ids=detected_entity_ids,
             sync=sync,
             input_mode=input_mode,
+            fire_consistency_check=False,
         )
         entity_path_triggered = True
         # Surface the entity-path outcome in the curriculum-path response
@@ -5729,6 +5967,14 @@ def process_voice_capture(transcript: str, entity_id: str = None,
 
     print(f'[voice-capture] Done: {len(facts)} facts → {len(knowledge_updates)} nodes, '
           f'{len(ml_triggered)} ML cards', flush=True)
+
+    # Session 90 P2.1: background consistency pass flags contradictions between
+    # sibling ML cards from the same capture (e.g. "Khomeini was 76" vs "78").
+    # Safe to fire regardless of which path produced the cards — losers are only
+    # flagged when a specific winner can be identified.
+    capture_vt_id = vt_row if isinstance(vt_row, str) else 'unknown'
+    _kick_off_consistency_check(capture_vt_id, ml_triggered)
+
     return result
 
 
@@ -5739,6 +5985,7 @@ def _process_voice_capture_entity_path(
     detected_entity_ids: list,
     sync: bool = False,
     input_mode: str = 'audio',
+    fire_consistency_check: bool = True,
 ) -> dict:
     """Process a voice capture via the entity-keyed path (no curriculum required).
 
@@ -5844,12 +6091,19 @@ def _process_voice_capture_entity_path(
                     a = (f.get('answer') or '').strip()
                     if not q or not a:
                         continue
+                    # Session 90 P1.1: per-fact confidence preserves the learner's epistemic state
+                    # through to enrichment + review rendering. Only accept the three canonical
+                    # values; anything else defaults to 'certain' (the safe non-hedge path).
+                    conf = (f.get('confidence') or '').strip().lower()
+                    if conf not in ('certain', 'uncertain', 'wrong'):
+                        conf = 'certain'
                     normalized_facts.append({
                         'id': f.get('id') or f'vc_{int(time.time())}_{i}',
                         'question': q,
                         'answer': a,
                         'type': f.get('type') or 'event',
                         'source_excerpt': f.get('source_excerpt') or '',
+                        'confidence': conf,
                     })
                 if not normalized_facts:
                     continue
@@ -6105,6 +6359,12 @@ def _process_voice_capture_entity_path(
             args=(entities_mentioned, transcript, vt_id, {}),
             daemon=True,
         ).start()
+
+    # Session 90 P2.1: pairwise consistency check across sibling ML cards.
+    # Skipped when invoked as a curriculum-path fallback — the outer path fires
+    # it once with the combined ml_triggered list so we don't double-run.
+    if fire_consistency_check:
+        _kick_off_consistency_check(vt_id, ml_triggered)
 
     return {
         'status': 'completed',

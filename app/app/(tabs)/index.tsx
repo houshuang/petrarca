@@ -10,6 +10,7 @@ import {
   fetchReviewStream, recordReviewResult, recordEntityTap,
   triggerMicrolearning, dismissMicrolearning,
   triggerFollowUp, suspendReviewItem, createFactualQuiz, suspendFact,
+  flagMicrolearningInaccurate,
   gradeStructuralCard,
 } from '../../lib/book-api';
 import { logEvent } from '../../data/logger';
@@ -628,6 +629,13 @@ function ReviewCard({
       {/* Question */}
       <Text style={cs.question}>{item.question}</Text>
 
+      {/* Uncertainty indicator — learner's captured confidence (Session 90 P1.1) */}
+      {item.confidence === 'uncertain' ? (
+        <Text style={cs.epistemicHedge}>{'\u223C'} you captured this with a hedge</Text>
+      ) : item.confidence === 'wrong' ? (
+        <Text style={cs.epistemicWrong}>{'\u26A0'} captured as a confident guess</Text>
+      ) : null}
+
       {/* Reveal / Answer */}
       {!revealed ? (
         <View style={cs.actionRow}>
@@ -640,6 +648,19 @@ function ReviewCard({
         </View>
       ) : (
         <View>
+          {/* Correction block — verifiable contradiction (Session 90 P1.2) */}
+          {item.correction && item.correction.user_said && item.correction.actually ? (
+            <View style={cs.correctionBox}>
+              <Text style={cs.correctionLabel}>You said</Text>
+              <Text style={cs.correctionUserSaid}>{item.correction.user_said}</Text>
+              <Text style={cs.correctionLabel}>Actually</Text>
+              <Text style={cs.correctionActually}>{item.correction.actually}</Text>
+              {item.correction.why_confused ? (
+                <Text style={cs.correctionWhy}>{item.correction.why_confused}</Text>
+              ) : null}
+            </View>
+          ) : null}
+
           {/* Short answer (succinct) + quick "Knew it" */}
           {showShortAnswer ? (
             <View style={cs.shortAnswerBox}>
@@ -809,6 +830,7 @@ function MicrolearningCard({
   onComplete,
   onDismissCard,
   onDismissQuiz,
+  onFlagInaccurate,
   onResult,
   onResearch,
   onEntityTap,
@@ -818,6 +840,7 @@ function MicrolearningCard({
   onComplete: () => void;
   onDismissCard: () => void;
   onDismissQuiz: (quizId: string) => void;
+  onFlagInaccurate?: (cardId: string) => void;
   onResult: (quizId: string, result: string) => void;
   onResearch: (query: string) => void;
   onEntityTap: (entityId: string) => void;
@@ -869,6 +892,13 @@ function MicrolearningCard({
           <Pressable style={ml.topActionBtn} onPress={onDismissCard} hitSlop={8}>
             <Text style={ml.topActionText}>Suspend</Text>
           </Pressable>
+          {onFlagInaccurate && item.question_id && (
+            <Pressable style={ml.topActionBtn}
+                       onPress={() => onFlagInaccurate(item.question_id!)}
+                       hitSlop={8}>
+              <Text style={[ml.topActionText, { color: colors.rubric }]}>Inaccurate</Text>
+            </Pressable>
+          )}
         </View>
       </View>
       <AboutCardModal item={item} visible={showAbout} onClose={() => setShowAbout(false)} />
@@ -995,6 +1025,7 @@ function MicrolearningQuizCard({
   onResult,
   onSkip,
   onSuspendFact,
+  onFlagInaccurate,
   onResearch,
   onEntityTap,
   onDateTap,
@@ -1003,6 +1034,7 @@ function MicrolearningQuizCard({
   onResult: (result: string, responseTimeMs?: number) => void;
   onSkip: () => void;
   onSuspendFact?: (factId: string) => void;
+  onFlagInaccurate?: (cardId: string) => void;
   onResearch: (query: string) => void;
   onEntityTap: (entityId: string) => void;
   onDateTap: (year: number) => void;
@@ -1061,6 +1093,14 @@ function MicrolearningQuizCard({
           {(item as any).fact_id && onSuspendFact && (
             <Pressable style={cs.menuDropdownItem} onPress={() => { setShowMenu(false); onSuspendFact((item as any).fact_id); }}>
               <Text style={cs.menuDropdownText}>Not interested in this fact</Text>
+            </Pressable>
+          )}
+          {onFlagInaccurate && ((item as any).card_id || item.question_id) && (
+            <Pressable style={cs.menuDropdownItem} onPress={() => {
+              setShowMenu(false);
+              onFlagInaccurate((item as any).card_id || item.question_id);
+            }}>
+              <Text style={[cs.menuDropdownText, { color: colors.rubric }]}>Inaccurate fact</Text>
             </Pressable>
           )}
         </View>
@@ -1254,6 +1294,8 @@ export default function ReviewScreen() {
   const [error, setError] = useState('');
   const [currentIndex, setCurrentIndex] = useState(0);
   const [activeEntityId, setActiveEntityId] = useState<string | null>(null);
+  const [flagTargetCardId, setFlagTargetCardId] = useState<string | null>(null);
+  const [flagReason, setFlagReason] = useState('');
   const offsetRef = useRef(0);
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const cardShownAtRef = useRef<number>(Date.now());
@@ -1437,6 +1479,27 @@ export default function ReviewScreen() {
     dismissMicrolearning({ quizId }).catch(e =>
       console.warn('[review] dismiss quiz failed:', e));
     logEvent('review_dismiss_quiz', { quiz_id: quizId });
+  };
+
+  const handleFlagInaccurate = (cardId: string) => {
+    setFlagTargetCardId(cardId);
+    setFlagReason('');
+  };
+
+  const confirmFlagInaccurate = () => {
+    const cardId = flagTargetCardId;
+    if (!cardId) return;
+    const reason = flagReason.trim();
+    gradedIdsRef.current.add(cardId);
+    flagMicrolearningInaccurate(cardId, reason).catch(e =>
+      console.warn('[review] flag inaccurate failed:', e));
+    logEvent('review_flag_inaccurate', { card_id: cardId, reason });
+    setFlagTargetCardId(null);
+    setFlagReason('');
+    animateTransition(() => {
+      setCurrentIndex(i => i + 1);
+      maybeLoadMore();
+    });
   };
 
   const handleQuizResult = (quizId: string, result: string, responseTimeMs?: number) => {
@@ -1670,6 +1733,7 @@ export default function ReviewScreen() {
                 onComplete={() => handleSkip(currentItem)}
                 onDismissCard={() => handleDismissCard(currentItem)}
                 onDismissQuiz={handleDismissQuiz}
+                onFlagInaccurate={handleFlagInaccurate}
                 onResearch={(q) => handleResearch(q, currentItem)}
                 onEntityTap={setActiveEntityId}
                 onDateTap={handleDateTap}
@@ -1681,6 +1745,7 @@ export default function ReviewScreen() {
                 onResult={(result, rtMs) => handleResult(currentItem, result, rtMs)}
                 onSkip={() => handleSkip(currentItem)}
                 onSuspendFact={handleSuspendFact}
+                onFlagInaccurate={handleFlagInaccurate}
                 onResearch={(q) => handleResearch(q, currentItem)}
                 onEntityTap={setActiveEntityId}
                 onDateTap={handleDateTap}
@@ -1735,6 +1800,44 @@ export default function ReviewScreen() {
 
       <EntitySheet entityId={activeEntityId} onClose={() => setActiveEntityId(null)}
         onExploreEntity={handleExploreEntity} />
+
+      <Modal
+        visible={flagTargetCardId !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFlagTargetCardId(null)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={fim.backdrop}
+        >
+          <Pressable style={fim.backdropTouch} onPress={() => setFlagTargetCardId(null)} />
+          <View style={fim.sheet}>
+            <Text style={fim.title}>Flag as inaccurate</Text>
+            <Text style={fim.subtitle}>
+              What's wrong? (optional — helps the pipeline learn)
+            </Text>
+            <TextInput
+              value={flagReason}
+              onChangeText={setFlagReason}
+              placeholder="e.g. date is off by 2 years"
+              placeholderTextColor="rgba(139,115,85,0.5)"
+              style={fim.input}
+              multiline
+              maxLength={300}
+              autoFocus
+            />
+            <View style={fim.actions}>
+              <Pressable style={fim.btnCancel} onPress={() => setFlagTargetCardId(null)}>
+                <Text style={fim.btnCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable style={fim.btnFlag} onPress={confirmFlagInaccurate}>
+                <Text style={fim.btnFlagText}>Flag</Text>
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -1779,6 +1882,23 @@ const cs = StyleSheet.create({
   hookBox: { backgroundColor: 'rgba(139,37,0,0.04)', borderLeftWidth: 2, borderLeftColor: colors.rubric, paddingLeft: 12, paddingVertical: 8, marginBottom: 12, borderRadius: 2 },
   hookLabel: { fontFamily: fonts.uiMedium, fontSize: 10, color: colors.rubric, letterSpacing: 0.3, marginBottom: 4, ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}) },
   hookText: { fontFamily: fonts.readingItalic, fontSize: 14, lineHeight: 20, color: colors.textBody, ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}) },
+  // Session 90 P1.1: small indicators near the question when the learner's capture was hedged
+  epistemicHedge: { fontFamily: fonts.ui, fontSize: 12, color: colors.textMuted, marginTop: -10, marginBottom: 14 },
+  epistemicWrong: { fontFamily: fonts.ui, fontSize: 12, color: colors.rubric, marginTop: -10, marginBottom: 14 },
+  // Session 90 P1.2: prominent correction block when the short answer contradicts ground truth
+  correctionBox: {
+    borderWidth: 1, borderColor: colors.rubric,
+    backgroundColor: 'rgba(139,37,0,0.04)',
+    borderRadius: 4, padding: 12, marginBottom: 14,
+  },
+  correctionLabel: {
+    fontFamily: fonts.uiMedium, fontSize: 10, color: colors.rubric,
+    letterSpacing: 0.5, textTransform: 'uppercase' as const, marginBottom: 2, marginTop: 2,
+    ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}),
+  },
+  correctionUserSaid: { fontFamily: fonts.reading, fontSize: 14, color: colors.textBody, marginBottom: 8, textDecorationLine: 'line-through' as const },
+  correctionActually: { fontFamily: fonts.reading, fontSize: 15, color: colors.ink, marginBottom: 8 },
+  correctionWhy: { fontFamily: fonts.readingItalic, fontSize: 13, lineHeight: 19, color: colors.textSecondary, ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}) },
   anchorBox: { marginBottom: 14 },
   anchorText: { fontFamily: fonts.ui, fontSize: 12, color: colors.textSecondary, lineHeight: 18, marginBottom: 2 },
   contextText: { fontFamily: fonts.readingItalic, fontSize: 12, lineHeight: 18, color: colors.textMuted, marginBottom: 14, ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}) },
@@ -1913,4 +2033,32 @@ const ab = StyleSheet.create({
   idRow: { flexDirection: 'row', alignItems: 'center', marginTop: 20, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.rule },
   idLabel: { fontFamily: fonts.ui, fontSize: 11, color: colors.textMuted },
   idCode: { fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 11, color: colors.textSecondary },
+});
+
+const fim = StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  backdropTouch: { ...StyleSheet.absoluteFillObject },
+  sheet: {
+    backgroundColor: colors.parchment,
+    borderTopLeftRadius: 12, borderTopRightRadius: 12,
+    padding: 20, paddingBottom: 28,
+  },
+  title: { fontFamily: fonts.displaySemiBold, fontSize: 18, color: colors.ink, marginBottom: 6,
+    ...(Platform.OS === 'web' ? { fontWeight: '600' as const } : {}) },
+  subtitle: { fontFamily: fonts.readingItalic, fontSize: 13, color: colors.textSecondary, marginBottom: 12,
+    ...(Platform.OS === 'web' ? { fontStyle: 'italic' as const } : {}) },
+  input: {
+    fontFamily: fonts.reading, fontSize: 15, color: colors.ink,
+    borderWidth: 1, borderColor: colors.rule, borderRadius: 6,
+    padding: 10, minHeight: 72, textAlignVertical: 'top',
+  },
+  actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12, marginTop: 16 },
+  btnCancel: { paddingVertical: 10, paddingHorizontal: 16 },
+  btnCancelText: { fontFamily: fonts.ui, fontSize: 14, color: colors.textSecondary },
+  btnFlag: {
+    paddingVertical: 10, paddingHorizontal: 20,
+    backgroundColor: colors.rubric, borderRadius: 6,
+  },
+  btnFlagText: { fontFamily: fonts.uiMedium, fontSize: 14, color: '#fff',
+    ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}) },
 });

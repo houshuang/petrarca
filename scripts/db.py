@@ -890,6 +890,10 @@ MIGRATIONS = [
     )""",
     "CREATE INDEX IF NOT EXISTS idx_sc_status ON suggested_cards(status)",
     "CREATE INDEX IF NOT EXISTS idx_sc_type ON suggested_cards(card_type)",
+    # Session 90: user-reported inaccuracy on ML cards (P0 flag button)
+    "ALTER TABLE microlearning_cards ADD COLUMN flagged_inaccurate INTEGER DEFAULT 0",
+    "ALTER TABLE microlearning_cards ADD COLUMN flagged_reason TEXT",
+    "ALTER TABLE microlearning_cards ADD COLUMN flagged_at INTEGER",
 ]
 
 

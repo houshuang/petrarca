@@ -4162,6 +4162,45 @@ JSON array only:"""
         finally:
             conn.close()
 
+    def _handle_ml_flag_inaccurate(self):
+        """POST /review/ml-flag-inaccurate — user reports a specific ML card as factually wrong.
+
+        Sets flagged_inaccurate=1 on the card so it drops out of the review stream, and logs
+        the reason for later triage / training-data mining. Session 90 P0: this is the canonical
+        error channel for the epistemic-fidelity workstream — every downstream accuracy effort
+        (validator, consistency checks) needs labeled bad cards as ground truth.
+        """
+        body = self._read_json_body()
+        if body is None:
+            return
+        card_id = (body.get('card_id') or '').strip()
+        reason = (body.get('reason') or '').strip()
+        if not card_id:
+            self._send_json_response(400, {'error': 'card_id required'})
+            return
+        from db import get_connection
+        conn = get_connection()
+        try:
+            now_ms = int(time.time() * 1000)
+            cursor = conn.execute(
+                '''UPDATE microlearning_cards
+                   SET flagged_inaccurate=1, flagged_reason=?, flagged_at=?
+                   WHERE id=?''',
+                (reason or None, now_ms, card_id))
+            if cursor.rowcount == 0:
+                self._send_json_response(404, {'error': f'card {card_id} not found'})
+                return
+            conn.commit()
+            print(f'[ml-flag] inaccurate card_id={card_id} reason={reason!r}', flush=True)
+            from server_log import log_interaction
+            log_interaction('ml_flag_inaccurate', item_id=card_id,
+                            extra=json.dumps({'reason': reason}))
+            self._send_json_response(200, {'ok': True, 'card_id': card_id})
+        except Exception as e:
+            self._send_json_response(500, {'error': str(e)})
+        finally:
+            conn.close()
+
     def _handle_microlearning_request(self):
         """POST /review/microlearning — trigger microlearning research for a query."""
         content_length = int(self.headers.get('Content-Length', 0))
@@ -6555,6 +6594,8 @@ JSON array only:"""
             return self._handle_review_suspend()
         if self.path == '/review/microlearning/dismiss':
             return self._handle_microlearning_dismiss()
+        if self.path == '/review/ml-flag-inaccurate':
+            return self._handle_ml_flag_inaccurate()
         if self.path == '/review/follow-up/trigger':
             return self._handle_follow_up_trigger()
         if self.path == '/review/follow-up/generate':
