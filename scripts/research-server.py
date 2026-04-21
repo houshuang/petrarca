@@ -1520,8 +1520,8 @@ def process_voice_note(note_id: str, audio_path: Path, article_id: str, topics: 
 
 
 def run_topic_research(request_id: str, topic: str, context: str, article_titles: list[str]):
-    """Background: use Gemini with search grounding to find articles on a topic, then ingest them."""
-    from gemini_llm import call_with_search
+    """Background: use Claude with web search to find articles on a topic, then ingest them."""
+    from claude_llm import call_claude_search
 
     result_path = RESULTS_DIR / f'{request_id}.json'
     result = {
@@ -1555,10 +1555,10 @@ Return ONLY valid JSON (no markdown fences):
 }}"""
 
     try:
-        output = call_with_search(prompt)
+        output = call_claude_search(prompt, timeout=300)
         if not output:
             result['status'] = 'failed'
-            result['error'] = 'No response from Gemini'
+            result['error'] = 'No response from Claude'
         else:
             json_start = output.find('{')
             json_end = output.rfind('}') + 1
@@ -1577,7 +1577,7 @@ Return ONLY valid JSON (no markdown fences):
                         run_ingest(url, art.get('title', ''), '', '', art.get('why', ''), f'research:{topic}')
             else:
                 result['status'] = 'failed'
-                result['error'] = 'Could not parse JSON from Gemini response'
+                result['error'] = 'Could not parse JSON from Claude response'
                 result['raw_output'] = output[:1000]
     except Exception as e:
         result['status'] = 'failed'
@@ -1703,8 +1703,9 @@ def handle_chat(question: str, context: str, conversation_id: str | None = None)
 # ---------------------------------------------------------------------------
 
 def process_book_identify(image_path: Path) -> dict:
-    """Identify a book from a cover/title page photo using Gemini Vision + web search."""
-    from gemini_llm import call_vision, call_with_search
+    """Identify a book from a cover/title page photo using Gemini Vision + Claude web search."""
+    from gemini_llm import call_vision
+    from claude_llm import call_claude_search
 
     image_data = image_path.read_bytes()
     mime_type = 'image/png' if str(image_path).endswith('.png') else 'image/jpeg'
@@ -1744,7 +1745,7 @@ Return ONLY valid JSON.""",
         return {'error': 'Could not extract title from image'}
 
     # Step 2: Web search for metadata and cover
-    search_result = call_with_search(
+    search_result = call_claude_search(
         f"""Find metadata for this book:
 Title: {title}
 Author: {author}
@@ -1761,6 +1762,7 @@ Return a JSON object with:
   "topics": ["3-5 topic tags for this book"]
 }}
 Return ONLY valid JSON.""",
+        timeout=180,
     )
 
     if search_result:
@@ -1886,10 +1888,10 @@ def _url_returns_image(url: str) -> bool:
 
 
 def _find_toc_online(title: str, author: str) -> list[dict] | None:
-    """Try to find a book's table of contents via Gemini + Google Search."""
-    from gemini_llm import call_with_search
+    """Try to find a book's table of contents via Claude + web search."""
+    from claude_llm import call_claude_search
 
-    result = call_with_search(
+    result = call_claude_search(
         f"""Find the table of contents / chapter list for this book:
 "{title}" by {author}
 
@@ -1899,6 +1901,7 @@ Return a JSON array of chapters:
 Only include actual chapter titles, not preface/index/bibliography.
 If you cannot find the chapter list, return an empty array [].
 Return ONLY the JSON array.""",
+        timeout=180,
     )
 
     if not result:

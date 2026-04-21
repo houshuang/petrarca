@@ -100,7 +100,7 @@ def research_book(book_id: str, title: str, author: str,
     Returns:
         Research dict (also saved to data/book_research/{book_id}.json)
     """
-    from gemini_llm import call_with_search, call_llm
+    from claude_llm import call_claude_search, call_claude_json
 
     print(f'[book-research] Researching "{title}" by {author}...', flush=True)
     t0 = time.time()
@@ -124,7 +124,7 @@ Return a JSON object:
 }}
 Return ONLY valid JSON."""
 
-    book_result = call_with_search(book_prompt, max_tokens=4096)
+    book_result = call_claude_search(book_prompt, timeout=300)
     book_data = _parse_json(book_result) if book_result else None
     if not book_data or not isinstance(book_data, dict):
         book_data = {'thesis': '', 'debates': [], 'key_terms': [], 'reception': ''}
@@ -163,7 +163,7 @@ Return a JSON object where keys are chapter numbers (as strings):
 }}
 Return ONLY valid JSON."""
 
-        chapter_result = call_with_search(chapter_prompt, max_tokens=8192)
+        chapter_result = call_claude_search(chapter_prompt, timeout=600)
         parsed_chapters = _parse_json(chapter_result) if chapter_result else None
         if parsed_chapters and isinstance(parsed_chapters, dict):
             chapter_research = parsed_chapters
@@ -210,9 +210,7 @@ Return a JSON array:
 }}]
 Return ONLY valid JSON."""
 
-            classify_result = call_llm(classify_prompt, response_mime_type="application/json",
-                                       max_tokens=4096)
-            parsed_connections = _parse_json(classify_result) if classify_result else None
+            parsed_connections = call_claude_json(classify_prompt, timeout=180, model='sonnet')
             if parsed_connections and isinstance(parsed_connections, list):
                 enriched_connections = parsed_connections
 
@@ -290,7 +288,7 @@ def get_chapter_insights(book_id: str, chapter_number: int,
     If research exists, returns cached chapter data + article connections.
     If not, researches just this chapter.
     """
-    from gemini_llm import call_with_search
+    from claude_llm import call_claude_search
 
     research_path = BOOK_RESEARCH_DIR / f'{book_id}.json'
     if research_path.exists():
@@ -322,7 +320,7 @@ Return JSON:
 }}
 Return ONLY valid JSON."""
 
-        result = call_with_search(prompt, max_tokens=4096)
+        result = call_claude_search(prompt, timeout=300)
         ch_data = _parse_json(result) if result else None
         if not ch_data or not isinstance(ch_data, dict):
             ch_data = {'summary': '', 'claims': [], 'key_terms': []}
@@ -361,7 +359,7 @@ def generate_story_so_far(book_id: str, title: str, author: str,
 
     Combines server research with user captures to create context restoration.
     """
-    from gemini_llm import call_llm
+    from claude_llm import call_claude_json
 
     research_path = BOOK_RESEARCH_DIR / f'{book_id}.json'
     research = {}
@@ -425,8 +423,7 @@ Return JSON:
 }}
 Return ONLY valid JSON."""
 
-    result = call_llm(prompt, response_mime_type="application/json", max_tokens=2048)
-    parsed = _parse_json(result) if result else None
+    parsed = call_claude_json(prompt, timeout=120, model='sonnet')
     if not parsed or not isinstance(parsed, dict):
         # Fallback: construct basic briefing from research
         parsed = {
