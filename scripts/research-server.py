@@ -45,7 +45,10 @@ def _run_claude_p(prompt: str, timeout: int, purpose: str) -> tuple[str | None, 
     (None, "<human-readable error>"). Always logs usage when we get a parseable
     response, even on error.
     """
-    clean_env = {k: v for k, v in os.environ.items() if k != 'CLAUDECODE'}
+    # Strip CLAUDECODE (nested-session safety) + ANTHROPIC_* (force Max/OAuth auth
+    # so the CLI doesn't silently bill an API key that may be set for the SDK path).
+    _strip = ('CLAUDECODE', 'ANTHROPIC_API_KEY', 'ANTHROPIC_KEY', 'ANTHROPIC_AUTH_TOKEN')
+    clean_env = {k: v for k, v in os.environ.items() if k not in _strip}
     try:
         proc = subprocess.run(
             ['claude', '-p', '--output-format', 'json', prompt],

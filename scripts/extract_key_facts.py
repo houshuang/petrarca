@@ -227,10 +227,14 @@ def build_prompt(curriculum: dict, area: dict, entities: list[dict]) -> str:
 
 def call_claude(prompt: str, timeout: int = 600) -> str | None:
     """Call Claude via claude -p for Opus quality."""
+    # Strip CLAUDECODE + ANTHROPIC_* so the CLI uses Max/OAuth auth (not API-key
+    # billing) — matches the pattern in research-server.py + curriculum.py.
+    _strip = ('CLAUDECODE', 'ANTHROPIC_API_KEY', 'ANTHROPIC_KEY', 'ANTHROPIC_AUTH_TOKEN')
+    cli_env = {k: v for k, v in os.environ.items() if k not in _strip}
     try:
         result = subprocess.run(
             ['claude', '-p', '--output-format', 'text', prompt],
-            capture_output=True, text=True, timeout=timeout,
+            capture_output=True, text=True, timeout=timeout, env=cli_env,
         )
         if result.returncode == 0 and result.stdout.strip():
             return result.stdout.strip()
