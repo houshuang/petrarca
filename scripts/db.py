@@ -511,9 +511,7 @@ CREATE TABLE IF NOT EXISTS shared_entities (
     date_end INTEGER,
     wikidata_qid TEXT
 );
--- Unique where non-null: multiple NULLs allowed, but each QID at most once.
-CREATE UNIQUE INDEX IF NOT EXISTS idx_shared_entities_qid
-    ON shared_entities(wikidata_qid) WHERE wikidata_qid IS NOT NULL;
+-- idx_shared_entities_qid: created in MIGRATIONS after ALTER so existing DBs get the column first.
 
 CREATE TABLE IF NOT EXISTS entity_curriculum_links (
     entity_id TEXT NOT NULL REFERENCES shared_entities(entity_id),
@@ -765,6 +763,9 @@ MIGRATIONS = [
     "ALTER TABLE shared_entities ADD COLUMN aliases TEXT DEFAULT '[]'",
     "ALTER TABLE shared_entities ADD COLUMN date_start INTEGER",
     "ALTER TABLE shared_entities ADD COLUMN date_end INTEGER",
+    "ALTER TABLE shared_entities ADD COLUMN wikidata_qid TEXT",
+    # Unique where non-null — must run after wikidata_qid exists on upgraded DBs
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_shared_entities_qid ON shared_entities(wikidata_qid) WHERE wikidata_qid IS NOT NULL",
     # key_facts: structured testable facts per curriculum node
     "ALTER TABLE curriculum_nodes ADD COLUMN key_facts TEXT DEFAULT '[]'",
     # Durable tracking of triggered follow-up queries

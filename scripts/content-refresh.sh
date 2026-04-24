@@ -15,8 +15,9 @@ pipeline_log() {
     local details="${2:-}"
     local ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
     local today=$(date -u +"%Y-%m-%d")
-    mkdir -p /opt/petrarca/data/logs
-    echo "{\"ts\":\"$ts\",\"event\":\"$event\",\"source\":\"pipeline\"${details:+,$details}}" >> "/opt/petrarca/data/logs/interactions_$today.jsonl"
+    local _plog="${PETRARCA_PIPELINE_LOG_DIR:-/opt/petrarca/data/logs}"
+    mkdir -p "$_plog"
+    echo "{\"ts\":\"$ts\",\"event\":\"$event\",\"source\":\"pipeline\"${details:+,$details}}" >> "$_plog/interactions_$today.jsonl"
 }
 
 log "=== Petrarca content refresh starting ==="
