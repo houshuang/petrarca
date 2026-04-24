@@ -44,7 +44,13 @@ def _call_opus(prompt: str, max_tokens: int = 32768, timeout: int = 300) -> str 
     try:
         cmd = ['claude', '-p', '--tools', '', '--output-format', 'json',
                '--model', 'opus', '--no-session-persistence']
-        proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True, timeout=timeout)
+        # Strip CLAUDECODE + ANTHROPIC_* so the CLI uses Max/OAuth auth, not the
+        # API key the SDK path just tried (and may have exhausted).
+        _strip = ('CLAUDECODE', 'ANTHROPIC_API_KEY', 'ANTHROPIC_KEY', 'ANTHROPIC_AUTH_TOKEN')
+        cli_env = {k: v for k, v in os.environ.items() if k not in _strip}
+        proc = subprocess.run(
+            cmd, input=prompt, capture_output=True, text=True, timeout=timeout, env=cli_env,
+        )
         if proc.returncode == 0 and proc.stdout.strip():
             resp = json.loads(proc.stdout)
             if not resp.get('is_error'):
