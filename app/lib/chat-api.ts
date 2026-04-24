@@ -1,8 +1,7 @@
 import { Platform } from 'react-native';
+import { getResearchServerUrl } from './server-urls';
 
-export const RESEARCH_BASE = Platform.OS === 'web'
-  ? `${window.location.protocol}//${window.location.hostname}:8090`
-  : 'http://alifstian.duckdns.org:8090';
+export const RESEARCH_BASE = getResearchServerUrl();
 
 /**
  * Fetch with timeout. Rejects if the request takes longer than `ms` milliseconds.

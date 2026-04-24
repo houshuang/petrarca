@@ -1,9 +1,9 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getLogEventsUrl } from '../lib/server-urls';
 
 const LOG_DIR_NAME = 'logs';
 const LOG_STORAGE_PREFIX = '@petrarca/log_';
-const LOG_SERVER_URL = 'http://alifstian.duckdns.org:8090/log/events';
 const PENDING_LOGS_KEY = '@petrarca/pending_logs';
 
 let sessionId: string | null = null;
@@ -142,7 +142,7 @@ async function flushPendingLogs(): Promise<boolean> {
     if (pending.length === 0) return true;
 
     const combined = pending.join('');
-    const res = await fetch(LOG_SERVER_URL, {
+    const res = await fetch(getLogEventsUrl(), {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
       body: combined,
@@ -162,7 +162,7 @@ function flushServerBuffer() {
   const payload = serverBuffer.join('');
   serverBuffer = [];
 
-  fetch(LOG_SERVER_URL, {
+  fetch(getLogEventsUrl(), {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain' },
     body: payload,

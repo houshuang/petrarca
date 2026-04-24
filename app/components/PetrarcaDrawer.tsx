@@ -6,6 +6,7 @@ import { getReadArticles } from '../data/store';
 import { getQueuedArticleIds } from '../data/queue';
 import { colors, fonts } from '../design/tokens';
 import { showFeedbackButton } from './FeedbackCapture';
+import { getGuideUrl, getStatsDashboardUrl } from '../lib/server-urls';
 
 interface PetrarcaDrawerProps {
   visible: boolean;
@@ -138,7 +139,7 @@ export default function PetrarcaDrawer({ visible, onClose }: PetrarcaDrawerProps
               onPress={() => {
                 logEvent('drawer_item_tap', { item: 'statistics' });
                 onClose();
-                Linking.openURL('http://alifstian.duckdns.org:8090/stats/dashboard');
+                Linking.openURL(getStatsDashboardUrl());
               }}
             />
             <NavItem
@@ -152,8 +153,7 @@ export default function PetrarcaDrawer({ visible, onClose }: PetrarcaDrawerProps
               onPress={() => {
                 logEvent('drawer_item_tap', { item: 'user_guide' });
                 onClose();
-                const url = Platform.OS === 'web' ? '/guide/' : 'https://alifstian.duckdns.org:8084/guide/';
-                Linking.openURL(url);
+                Linking.openURL(getGuideUrl());
               }}
             />
             <NavItem
