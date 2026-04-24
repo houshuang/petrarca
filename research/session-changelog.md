@@ -1,6 +1,62 @@
 # Knowledge System Implementation Status
 
-**Date**: April 21, 2026 (last updated — session 90: epistemic fidelity — flag-inaccurate button, per-fact confidence, correction field, sibling-ML consistency check)
+**Date**: April 24, 2026 (last updated — session 91: fork triage + env-strip hardening across limbic)
+
+## Session 91: Fork Triage + ANTHROPIC_* Env-Strip Across Claude CLI Callers (April 24, 2026)
+
+### Why
+Two stalled PRs (#1 from April 6, #5 from April 15) had accumulated ~3 weeks of drift. Reviewing them surfaced (a) my own PR was already on main from Session 56 and could close, (b) mmccray's 36-file PR held four real infrastructure gifts — Python 3.13 `cgi` removal, `idx_shared_entities_qid` migration ordering, URL-centralization, and `ANTHROPIC_*` env-strip before `claude -p` — plus four pieces that fought the codebase direction (Gemini/OpenAI fallback, curriculum-fallback-model). Unbundling cleanly let each useful piece land on main without the conflicts a whole-PR merge would have hit.
+
+The `ANTHROPIC_*` env-strip pattern was the most architecturally interesting find: propagated from a one-site fix to a system-wide property across four layers.
+
+### Fork review — 5 forks triaged
+- **mmccray** — four-PR split applied (see below).
+- **Lorehouse** — 9 ahead, all local-setup personalization + Readwise re-enable. Readwise is a deliberately-disabled subsystem. Nothing pulled.
+- **lukaskawerau** — 10 ahead, wholesale rewrite to pi-codex/GPT-5.4 + docker self-host. Directly contradicts Claude-only directive. Nothing pulled.
+- **TJ-Frederick** — 1 ahead, adds a `PRODUCT_ONE_PAGER.md`. Nothing pulled.
+- **noahsl-et** — 0 ahead, pure mirror.
+
+Runbook captured in `research/periodic-fork-review.md` (commit `c41d80f`) with procedure + triage rules + hygiene notes.
+
+### PR #7 — `sh/url-centralization` → `935906c`
+New `app/lib/server-urls.ts` with `getResearchServerUrl` / `getContentBaseUrl` / `getWebAppOrigin` / `getLogEventsUrl` / `getStatsDashboardUrl` / `getMapHtmlUrl` / `getGuideUrl`. Replaces 11 scattered hardcoded `alifstian.duckdns.org` references. `EXPO_PUBLIC_RESEARCH_SERVER_URL` / `EXPO_PUBLIC_CONTENT_BASE_URL` / `EXPO_PUBLIC_WEB_APP_ORIGIN` override the alif defaults when set. `app/data/content-sync.ts` also gets request timeouts (manifest 20s, articles 90s, JSON 60s) so a stuck research-server doesn't hang the root layout. Extended beyond mmccray's original to cover `stats.tsx` and `more.tsx` (added post-April 15).
+
+### PR #8 — `sh/python313-compat` → `788a396`
+Python 3.13 removed stdlib `cgi`. Eight multipart handlers in `research-server.py` used `cgi.FieldStorage`. New `scripts/multipart_compat.py` implements a minimal `FormField` / `MultipartForm` shape (`__getitem__`, `__contains__`, `getvalue`, `.file.read()`) and a staticmethod `_multipart_parse_bytes(body, content_type)` routes all handlers through it. Python 3.12 (current alif) behaves identically; next Python upgrade would have broken every file-upload handler without this. Also: `VENV_PYTHON` reads from `PETRARCA_PYTHON` env with `sys.executable` fallback (was hardcoded `/opt/petrarca/.venv/bin/python3`); removed a redundant `from curriculum_db import list_curricula` re-import inside `/knowledge/sweep/domains`.
+
+Functionally tested the parser before shipping with a realistic body (audio filename, binary bytes including null and high-byte, empty value for `keep_blank_values=True` semantics, `in` check, default fallback) — all patterns match the old `cgi.FieldStorage` surface.
+
+### PR #9 — `sh/env-paths-db-migrate` → `36cb915`
+Three defensive pieces from mmccray's bundle, all forward-compatible:
+- **`scripts/db.py`** — moved `CREATE UNIQUE INDEX idx_shared_entities_qid` out of the initial schema into the MIGRATIONS list. Existing DBs upgrading to the wikidata schema would have had the inline CREATE run *before* the ALTER that adds `wikidata_qid`, failing `init_db()`. MIGRATIONS has per-statement try/except so fresh installs still end up with the index (one step later).
+- **`scripts/server_log.py`** + **`scripts/content-refresh.sh`** — log directory reads from `LOG_DIR` / `PETRARCA_PIPELINE_LOG_DIR` env with the same `/opt/petrarca/data/logs` default. Was hardcoded.
+- **`scripts/curriculum.py`** — strips `ANTHROPIC_API_KEY` / `ANTHROPIC_KEY` / `ANTHROPIC_AUTH_TOKEN` from the `claude -p` child env so the CLI uses Max/OAuth auth instead of the API key the SDK just exhausted. Deliberately NOT pulled: `PETRARCA_CURRICULUM_FALLBACK_MODEL=gpt-4o-mini` — contradicts the Opus-only curriculum generation rule.
+
+### PR #10 — `sh/strip-anthropic-env-direct-spawns` → `131cdf2`
+Audit follow-up: three Petrarca scripts spawn `claude -p` directly via `subprocess.run` rather than through `scripts/claude_llm.py` → limbic. All three needed the same strip:
+- `scripts/research-server.py` `_run_claude_p` — stripped `CLAUDECODE` only, leaked `ANTHROPIC_*`.
+- `scripts/curriculum_db.py` — no `env=` param at all, full parent env.
+- `scripts/extract_key_facts.py` — same, no `env=` param.
+
+### limbic PR #1 — `sh/strip-anthropic-env-in-cli` → `da4c2d4` (in `houshuang/limbic`)
+Root-cause fix at the source: `limbic/cerebellum/claude_cli.py` module-level `_ENV` was stripping only `CLAUDECODE` for nested-session safety. Extended to `_STRIPPED_ENV_KEYS = frozenset({CLAUDECODE, ANTHROPIC_API_KEY, ANTHROPIC_KEY, ANTHROPIC_AUTH_TOKEN})`. Added `test_anthropic_env_vars_stripped` that reloads the module with the vars set on the parent env, invokes `generate()` under a patched `subprocess.run`, and asserts the child env has none of them. CI passed; all 19 tests pass.
+
+The design rationale matters: the limbic `cost_log` dashboard explicitly distinguishes API-key billing from Max-subscription value (`CHANGELOG § "Cost dashboard surfaces CLI subscription value"`). An API-key-billed CLI call appears as "0 subscription usage" while Anthropic quietly meters the account — the ~\$272/wk subscription-value figure the dashboard surfaces would under-count. Stripping enforces the cost-attribution invariant.
+
+### Deployment
+`bash ~/src/petrarca/scripts/deploy.sh` rsynced `~/src/limbic/` → `alif:/opt/limbic/` + `git pull` on `/opt/petrarca` + service restarts. Smoke-tested on alif:
+```
+strip keys: ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_KEY', 'CLAUDECODE']
+child _ENV has ANTHROPIC_API_KEY: False
+```
+`/opt/limbic` is a single shared install on the VM, so any other project on that host (alif included) picks up the fix automatically. New `MIGRATIONS` items ran silently through `init_db()`'s per-statement try/except (no-op on current alif DB since the idx already exists).
+
+### Housekeeping
+- PR #1 closed (superseded by Session 56's knowledge profile work).
+- PR #5 closed with detailed acceptance note to @mmccray — what was accepted and why, what was rejected and why, two gifts from his PR called out by name ("ticking time bombs nobody on main had tripped over because we only run one deployment"), and a standing invite for continued contact (issues / draft PRs / email).
+
+### What's defended by the fix now
+Four independent layers catch an `ANTHROPIC_API_KEY`-in-parent-env → `claude -p` child: `scripts/curriculum.py`, three direct-spawn scripts (PR #10), and limbic itself (affects every `claude_llm.py` caller). If any one layer is reverted or skipped, the others still protect. That's belt-and-suspenders at the system level, not premature complexity — each layer is the same 4-line set and the layers don't assume each other works.
 
 ## Session 90: Epistemic Fidelity — Accuracy Flags + Uncertainty Preservation (April 21, 2026)
 
