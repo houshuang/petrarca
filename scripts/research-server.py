@@ -86,7 +86,10 @@ INGEST_TOKEN = os.environ.get('PETRARCA_INGEST_TOKEN', '')
 BOOKS_OUTPUT_DIR = Path(os.environ.get('BOOKS_OUTPUT_DIR', '/opt/petrarca/data/books'))
 CROSS_MATCH_DIR = Path(os.environ.get('CROSS_MATCH_DIR', '/opt/petrarca/data'))
 SCRIPTS_DIR = Path(__file__).parent
-VENV_PYTHON = '/opt/petrarca/.venv/bin/python3'
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+# Subprocess helper for import_url.py etc. Defaults to this server's interpreter.
+VENV_PYTHON = os.environ.get('PETRARCA_PYTHON', sys.executable)
 
 EMAILS_DIR = INGEST_DIR / 'emails'
 
@@ -2115,17 +2118,24 @@ class ResearchHandler(BaseHTTPRequestHandler):
 
     def _handle_note(self):
         """Receive audio file + metadata, transcribe in background, store note."""
-        import cgi
         content_type = self.headers.get('Content-Type', '')
 
-        if 'multipart/form-data' in content_type:
-            # Parse multipart form data
-            environ = {
-                'REQUEST_METHOD': 'POST',
-                'CONTENT_TYPE': content_type,
-                'CONTENT_LENGTH': self.headers.get('Content-Length', '0'),
-            }
-            form = cgi.FieldStorage(fp=self.rfile, headers=self.headers, environ=environ)
+        if 'multipart' in content_type.lower():
+            try:
+                length = int(self.headers.get('Content-Length', '0'))
+            except ValueError:
+                length = 0
+            body = self.rfile.read(length) if length > 0 else b''
+            try:
+                form = self._multipart_parse_bytes(body, content_type)
+            except Exception as e:
+                print(f'[note] multipart parse: {e}', flush=True)
+                self.send_response(400)
+                self._send_cors_headers()
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': str(e)}).encode())
+                return
 
             article_id = form.getvalue('article_id', '')
             topics_raw = form.getvalue('topics', '[]')
@@ -2592,14 +2602,17 @@ class ResearchHandler(BaseHTTPRequestHandler):
         """POST /projects/note — add a note to a project (multipart/form-data or JSON)."""
         content_type = self.headers.get('Content-Type', '')
 
-        if 'multipart/form-data' in content_type:
-            import cgi
-            environ = {
-                'REQUEST_METHOD': 'POST',
-                'CONTENT_TYPE': content_type,
-                'CONTENT_LENGTH': self.headers.get('Content-Length', '0'),
-            }
-            form = cgi.FieldStorage(fp=self.rfile, headers=self.headers, environ=environ)
+        if 'multipart' in content_type.lower():
+            try:
+                length = int(self.headers.get('Content-Length', '0'))
+            except ValueError:
+                length = 0
+            body = self.rfile.read(length) if length > 0 else b''
+            try:
+                form = self._multipart_parse_bytes(body, content_type)
+            except Exception as e:
+                self._send_json_response(400, {'error': f'multipart parse failed: {e}'})
+                return
             project_id = form.getvalue('project_id', '')
             text = form.getvalue('text', '')
             source_raw = form.getvalue('source', '')
@@ -2681,19 +2694,22 @@ class ResearchHandler(BaseHTTPRequestHandler):
 
     def _handle_feedback(self):
         """Receive feedback with optional screenshot, audio, text, and context."""
-        import cgi
         content_type = self.headers.get('Content-Type', '')
 
-        if 'multipart/form-data' not in content_type:
+        if 'multipart' not in content_type.lower():
             self._send_json_response(400, {'error': 'Expected multipart/form-data'})
             return
 
-        environ = {
-            'REQUEST_METHOD': 'POST',
-            'CONTENT_TYPE': content_type,
-            'CONTENT_LENGTH': self.headers.get('Content-Length', '0'),
-        }
-        form = cgi.FieldStorage(fp=self.rfile, headers=self.headers, environ=environ)
+        try:
+            length = int(self.headers.get('Content-Length', '0'))
+        except ValueError:
+            length = 0
+        body = self.rfile.read(length) if length > 0 else b''
+        try:
+            form = self._multipart_parse_bytes(body, content_type)
+        except Exception as e:
+            self._send_json_response(400, {'error': f'multipart parse failed: {e}'})
+            return
 
         context_raw = form.getvalue('context', '')
         if not context_raw:
@@ -2783,19 +2799,30 @@ class ResearchHandler(BaseHTTPRequestHandler):
 
     # --- Physical book handlers ---
 
+    @staticmethod
+    def _multipart_parse_bytes(body: bytes, content_type: str):
+        """Parse multipart body (stdlib `cgi` removed in Python 3.13+)."""
+        from multipart_compat import parse_multipart
+
+        return parse_multipart(body, content_type)
+
     def _parse_multipart_form(self):
         """Parse multipart form data, returning (form, error_response_sent)."""
-        import cgi
         content_type = self.headers.get('Content-Type', '')
-        if 'multipart/form-data' not in content_type:
+        if 'multipart' not in content_type.lower():
             self._send_json_response(400, {'error': 'Expected multipart/form-data'})
             return None, True
-        environ = {
-            'REQUEST_METHOD': 'POST',
-            'CONTENT_TYPE': content_type,
-            'CONTENT_LENGTH': self.headers.get('Content-Length', '0'),
-        }
-        form = cgi.FieldStorage(fp=self.rfile, headers=self.headers, environ=environ)
+        try:
+            length = int(self.headers.get('Content-Length', '0'))
+        except ValueError:
+            length = 0
+        body = self.rfile.read(length) if length > 0 else b''
+        try:
+            form = self._multipart_parse_bytes(body, content_type)
+        except Exception as e:
+            print(f'[multipart] parse error: {e}', flush=True)
+            self._send_json_response(400, {'error': f'multipart parse failed: {e}'})
+            return None, True
         return form, False
 
     def _save_upload_photo(self, form, field_name: str, prefix: str) -> Path | None:
@@ -4634,8 +4661,6 @@ JSON array only:"""
         Supports idempotent retries via request_id (24h cache, same pattern as voice-elicit).
         Pipeline: transcribe (if audio) → analyze → save notes → trigger research → return results.
         """
-        import cgi
-        import io
         content_type = self.headers.get('Content-Type', '')
 
         entity_id = None
@@ -4647,11 +4672,14 @@ JSON array only:"""
         request_id = ''
 
         # Parse request — read body once, buffer for multipart (same as voice-elicit)
-        if 'multipart/form-data' in content_type:
+        if 'multipart' in content_type.lower():
             length = int(self.headers.get('Content-Length', 0))
             raw_data = self.rfile.read(length)
-            environ = {'REQUEST_METHOD': 'POST', 'CONTENT_TYPE': content_type, 'CONTENT_LENGTH': str(length)}
-            form = cgi.FieldStorage(fp=io.BytesIO(raw_data), environ=environ, keep_blank_values=True)
+            try:
+                form = self._multipart_parse_bytes(raw_data, content_type)
+            except Exception as e:
+                self._send_json_response(400, {'error': f'multipart parse failed: {e}'})
+                return
             entity_id = form.getvalue('entity_id', None)
             entity_name = form.getvalue('entity_name', None)
             mode = form.getvalue('mode', 'general')
@@ -5842,16 +5870,17 @@ JSON array only:"""
 
     def _handle_review_voice_memo(self):
         """POST /review/voice-memo — transcribe + extract signals."""
-        import cgi
         content_type = self.headers.get('Content-Type', '')
         if 'multipart' not in content_type:
             self._send_json_response(400, {'error': 'Expected multipart'})
             return
         length = int(self.headers.get('Content-Length', 0))
         data = self.rfile.read(length)
-        environ = {'REQUEST_METHOD': 'POST', 'CONTENT_TYPE': content_type, 'CONTENT_LENGTH': str(length)}
-        import io
-        fs = cgi.FieldStorage(fp=io.BytesIO(data), environ=environ, keep_blank_values=True)
+        try:
+            fs = self._multipart_parse_bytes(data, content_type)
+        except Exception as e:
+            self._send_json_response(400, {'error': f'multipart parse failed: {e}'})
+            return
         item_id = fs.getvalue('item_id', '')
         audio_field = fs['audio'] if 'audio' in fs else None
         if not item_id or not audio_field:
@@ -5919,7 +5948,6 @@ JSON array only:"""
                 else:
                     cache_path.unlink(missing_ok=True)
 
-        import cgi
         content_type = self.headers.get('Content-Type', '')
         if 'multipart' not in content_type:
             self._send_json_response(400, {'error': 'Expected multipart'})
@@ -5933,9 +5961,11 @@ JSON array only:"""
                              request_id=header_request_id or 'unknown')
             print(f'[voice-elicit] Client disconnected during upload ({e})', flush=True)
             return
-        environ = {'REQUEST_METHOD': 'POST', 'CONTENT_TYPE': content_type, 'CONTENT_LENGTH': str(length)}
-        import io
-        fs = cgi.FieldStorage(fp=io.BytesIO(data), environ=environ, keep_blank_values=True)
+        try:
+            fs = self._multipart_parse_bytes(data, content_type)
+        except Exception as e:
+            self._send_json_response(400, {'error': f'multipart parse failed: {e}'})
+            return
         node_id = fs.getvalue('node_id', '')
         domain_id = fs.getvalue('domain_id', '')
         request_id = fs.getvalue('request_id', '') or header_request_id
@@ -6122,7 +6152,6 @@ JSON array only:"""
         Accepts multipart with 'audio' field. Returns {transcript, duration_s}.
         Lightweight wrapper around Soniox transcription.
         """
-        import cgi, io
         content_type = self.headers.get('Content-Type', '')
         if 'multipart' not in content_type:
             return self._send_json_response(400, {'error': 'Expected multipart'})
@@ -6133,8 +6162,10 @@ JSON array only:"""
             log_server_event('sweep_transcribe_upload_drop', error=str(e), content_length=length)
             print(f'[sweep-transcribe] Client disconnected: {e}', flush=True)
             return
-        environ = {'REQUEST_METHOD': 'POST', 'CONTENT_TYPE': content_type, 'CONTENT_LENGTH': str(length)}
-        fs = cgi.FieldStorage(fp=io.BytesIO(data), environ=environ, keep_blank_values=True)
+        try:
+            fs = self._multipart_parse_bytes(data, content_type)
+        except Exception as e:
+            return self._send_json_response(400, {'error': f'multipart parse failed: {e}'})
         audio_field = fs['audio'] if 'audio' in fs else None
         era_id = fs.getvalue('era_id', '')
         if audio_field is None:
@@ -7341,7 +7372,7 @@ JSON array only:"""
             history = get_sweep_history(domain_id)
             return self._send_json_response(200, {'sweeps': history, 'domain_id': domain_id})
         if self.path == '/knowledge/sweep/domains':
-            from curriculum_db import list_curricula
+            # list_curricula imported at module top — do not re-import here (would shadow and break /curriculum/list).
             curricula = list_curricula()
             # Add last sweep info for each domain
             conn = get_connection(readonly=True)
