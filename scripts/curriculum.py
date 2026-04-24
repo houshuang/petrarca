@@ -44,11 +44,16 @@ def _call_opus(prompt: str, max_tokens: int = 32768, timeout: int = 1200) -> str
         except Exception as e:
             print(f'[curriculum] Anthropic SDK failed: {e}', flush=True)
 
-    # Fallback: claude -p CLI (free with Max plan, local only)
+    # Fallback: claude -p CLI — strip ANTHROPIC_* from env so the CLI uses Max/subscription
+    # auth instead of billing the same (often-exhausted) API key that the SDK just tried.
     try:
         cmd = ['claude', '-p', '--tools', '', '--output-format', 'text',
                '--model', 'opus', '--no-session-persistence']
-        proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True, timeout=timeout)
+        _strip = ('ANTHROPIC_API_KEY', 'ANTHROPIC_KEY', 'ANTHROPIC_AUTH_TOKEN')
+        cli_env = {k: v for k, v in os.environ.items() if k not in _strip}
+        proc = subprocess.run(
+            cmd, input=prompt, capture_output=True, text=True, timeout=timeout, env=cli_env,
+        )
         if proc.returncode == 0 and proc.stdout.strip():
             return proc.stdout.strip()
     except Exception as e:
