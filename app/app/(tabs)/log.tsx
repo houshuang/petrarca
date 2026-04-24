@@ -5,8 +5,7 @@ import {
 import { useRouter } from 'expo-router';
 import { logEvent } from '../../data/logger';
 import { colors, fonts, type, spacing, layout } from '../../design/tokens';
-
-const API_BASE = 'http://alifstian.duckdns.org:8090';
+import { getResearchServerUrl } from '../../lib/server-urls';
 
 type ActivityEvent = {
   id: string;
@@ -192,7 +191,7 @@ export default function LogScreen() {
 
   const fetchEvents = useCallback(async (days: number, replace = false) => {
     try {
-      const res = await fetch(`${API_BASE}/activity/feed?days=${days}`);
+      const res = await fetch(`${getResearchServerUrl()}/activity/feed?days=${days}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const fetched: ActivityEvent[] = data.events || [];

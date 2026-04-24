@@ -8,6 +8,7 @@ import { colors, fonts, type, layout } from '../../design/tokens';
 import { logEvent } from '../../data/logger';
 import { setFeedbackContext } from '../../lib/feedback-context';
 import { RESEARCH_BASE, fetchWithTimeout } from '../../lib/chat-api';
+import { getStatsDashboardUrl } from '../../lib/server-urls';
 import DoubleRule from '../../components/DoubleRule';
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -179,7 +180,7 @@ export default function StatsTab() {
         style={styles.dashboardLink}
         onPress={() => {
           logEvent('stats_full_dashboard_tap');
-          Linking.openURL('http://alifstian.duckdns.org:8090/stats/dashboard');
+          Linking.openURL(getStatsDashboardUrl());
         }}
       >
         <Text style={styles.dashboardText}>Open Full Dashboard {'\u203A'}</Text>

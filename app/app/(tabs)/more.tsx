@@ -8,6 +8,7 @@ import { logEvent } from '../../data/logger';
 import { setFeedbackContext } from '../../lib/feedback-context';
 import { showFeedbackButton } from '../../components/FeedbackCapture';
 import DoubleRule from '../../components/DoubleRule';
+import { getGuideUrl } from '../../lib/server-urls';
 
 export default function MoreTab() {
   const router = useRouter();
@@ -73,8 +74,7 @@ export default function MoreTab() {
         subtitle="How everything works"
         onPress={() => {
           logEvent('more_item_tap', { item: 'user_guide' });
-          const url = Platform.OS === 'web' ? '/guide/' : 'https://alifstian.duckdns.org:8084/guide/';
-          Linking.openURL(url);
+          Linking.openURL(getGuideUrl());
         }}
       />
       <NavItem

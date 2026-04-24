@@ -1,15 +1,13 @@
 import { Platform } from 'react-native';
 import type { ArticleMeta, KnowledgeIndex } from './types';
 import { logEvent } from './logger';
+import { getContentBaseUrl, getResearchServerUrl } from '../lib/server-urls';
+import { fetchWithTimeout } from '../lib/chat-api';
 
-const API_BASE = Platform.OS === 'web'
-  ? `${window.location.protocol}//${window.location.hostname}:8090`
-  : 'http://alifstian.duckdns.org:8090';
-
-// Fallback to nginx-served JSON if API is unavailable
-const CONTENT_BASE = Platform.OS === 'web'
-  ? '/content'
-  : 'https://alifstian.duckdns.org/content';
+/** Avoid hanging forever on unreachable research server (blocks root layout). */
+const T_MANIFEST_MS = 20_000;
+const T_ARTICLES_MS = 90_000;
+const T_JSON_MS = 60_000;
 
 const CONTENT_DIR_NAME = 'content';
 const WEB_CACHE_PREFIX = '@petrarca/cache_';
@@ -102,7 +100,10 @@ function getLocalManifest(): Manifest | null {
 
 export async function checkForUpdates(): Promise<boolean> {
   try {
-    const resp = await fetch(`${API_BASE}/api/manifest`, { cache: 'no-store' });
+    const resp = await fetchWithTimeout(`${getResearchServerUrl()}/api/manifest`, {
+      cache: 'no-store',
+      timeout: T_MANIFEST_MS,
+    });
     if (!resp.ok) return false;
     const remote: Manifest = await resp.json();
 
@@ -138,7 +139,10 @@ export async function downloadContent(): Promise<DownloadedContent | null> {
     const canIncremental = localManifest?.last_updated && cachedArticlesRaw;
 
     // Fetch manifest first to know what changed
-    const manifestResp = await fetch(`${API_BASE}/api/manifest`, { cache: 'no-store' });
+    const manifestResp = await fetchWithTimeout(`${getResearchServerUrl()}/api/manifest`, {
+      cache: 'no-store',
+      timeout: T_MANIFEST_MS,
+    });
     if (!manifestResp.ok) return downloadContentFallback();
     const manifestText = await manifestResp.text();
     const remoteManifest: Manifest = JSON.parse(manifestText);
@@ -159,7 +163,10 @@ export async function downloadContent(): Promise<DownloadedContent | null> {
     } else if (canIncremental && articlesChanged) {
       // Try incremental: fetch only articles since last sync
       const since = localManifest!.last_updated;
-      const incResp = await fetch(`${API_BASE}/api/articles-meta?since=${encodeURIComponent(since)}`);
+      const incResp = await fetchWithTimeout(
+        `${getResearchServerUrl()}/api/articles-meta?since=${encodeURIComponent(since)}`,
+        { timeout: T_ARTICLES_MS },
+      );
       if (incResp.ok) {
         const incData = await incResp.json();
         const newArticles: ArticleMeta[] = incData.articles || incData;
@@ -174,7 +181,9 @@ export async function downloadContent(): Promise<DownloadedContent | null> {
           syncMode = 'incremental';
         } else {
           // Count mismatch (deletions or missed articles) — full download
-          const fullResp = await fetch(`${API_BASE}/api/articles-meta`);
+          const fullResp = await fetchWithTimeout(`${getResearchServerUrl()}/api/articles-meta`, {
+            timeout: T_ARTICLES_MS,
+          });
           if (!fullResp.ok) return downloadContentFallback();
           const fullData = await fullResp.json();
           articles = fullData.articles || fullData;
@@ -182,7 +191,9 @@ export async function downloadContent(): Promise<DownloadedContent | null> {
         }
       } else {
         // Incremental endpoint failed — full download
-        const fullResp = await fetch(`${API_BASE}/api/articles-meta`);
+        const fullResp = await fetchWithTimeout(`${getResearchServerUrl()}/api/articles-meta`, {
+          timeout: T_ARTICLES_MS,
+        });
         if (!fullResp.ok) return downloadContentFallback();
         const fullData = await fullResp.json();
         articles = fullData.articles || fullData;
@@ -190,7 +201,9 @@ export async function downloadContent(): Promise<DownloadedContent | null> {
       }
     } else {
       // No cache or first launch — full download
-      const fullResp = await fetch(`${API_BASE}/api/articles-meta`);
+      const fullResp = await fetchWithTimeout(`${getResearchServerUrl()}/api/articles-meta`, {
+        timeout: T_ARTICLES_MS,
+      });
       if (!fullResp.ok) return downloadContentFallback();
       const fullData = await fullResp.json();
       articles = fullData.articles || fullData;
@@ -199,9 +212,15 @@ export async function downloadContent(): Promise<DownloadedContent | null> {
 
     // --- Knowledge index, clusters, syntheses: fetch only if changed ---
     const [knowledgeResp, clustersResp, synthesesResp] = await Promise.all([
-      knowledgeChanged ? fetch(`${API_BASE}/api/knowledge-index`).catch(() => null) : null,
-      clustersChanged ? fetch(`${API_BASE}/api/clusters`).catch(() => null) : null,
-      synthesesChanged ? fetch(`${API_BASE}/api/syntheses`).catch(() => null) : null,
+      knowledgeChanged
+        ? fetchWithTimeout(`${getResearchServerUrl()}/api/knowledge-index`, { timeout: T_JSON_MS }).catch(() => null)
+        : null,
+      clustersChanged
+        ? fetchWithTimeout(`${getResearchServerUrl()}/api/clusters`, { timeout: T_JSON_MS }).catch(() => null)
+        : null,
+      synthesesChanged
+        ? fetchWithTimeout(`${getResearchServerUrl()}/api/syntheses`, { timeout: T_JSON_MS }).catch(() => null)
+        : null,
     ]);
 
     let knowledgeIndex: KnowledgeIndex | null = null;
@@ -263,11 +282,11 @@ async function downloadContentFallback(): Promise<DownloadedContent | null> {
     if (Platform.OS !== 'web') ensureContentDir();
 
     const [articlesResp, manifestResp, knowledgeResp, clustersResp, synthesesResp] = await Promise.all([
-      fetch(`${CONTENT_BASE}/articles.json`),
-      fetch(`${CONTENT_BASE}/manifest.json`),
-      fetch(`${CONTENT_BASE}/knowledge_index.json`).catch(() => null),
-      fetch(`${CONTENT_BASE}/concept_clusters.json`).catch(() => null),
-      fetch(`${CONTENT_BASE}/syntheses.json`).catch(() => null),
+      fetchWithTimeout(`${getContentBaseUrl()}/articles.json`, { timeout: T_ARTICLES_MS }),
+      fetchWithTimeout(`${getContentBaseUrl()}/manifest.json`, { timeout: T_MANIFEST_MS }),
+      fetchWithTimeout(`${getContentBaseUrl()}/knowledge_index.json`, { timeout: T_JSON_MS }).catch(() => null),
+      fetchWithTimeout(`${getContentBaseUrl()}/concept_clusters.json`, { timeout: T_JSON_MS }).catch(() => null),
+      fetchWithTimeout(`${getContentBaseUrl()}/syntheses.json`, { timeout: T_JSON_MS }).catch(() => null),
     ]);
 
     if (!articlesResp.ok) return null;

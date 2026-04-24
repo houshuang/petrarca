@@ -1,10 +1,7 @@
 import { Platform } from 'react-native';
 import type { ArticleContent, ArticleSection } from './types';
 import { logEvent } from './logger';
-
-const API_BASE = Platform.OS === 'web'
-  ? `${window.location.protocol}//${window.location.hostname}:8090`
-  : 'http://alifstian.duckdns.org:8090';
+import { getResearchServerUrl } from '../lib/server-urls';
 
 const CONTENT_DIR_NAME = 'content';
 const WEB_CACHE_PREFIX = '@petrarca/content_';
@@ -48,7 +45,7 @@ export async function getArticleContent(articleId: string): Promise<ArticleConte
 
   // Fetch from API
   try {
-    const resp = await fetch(`${API_BASE}/api/articles/${encodeURIComponent(articleId)}/content`);
+    const resp = await fetch(`${getResearchServerUrl()}/api/articles/${encodeURIComponent(articleId)}/content`);
     if (!resp.ok) return null;
     const data: ArticleContent = await resp.json();
     contentCache.set(articleId, data);
