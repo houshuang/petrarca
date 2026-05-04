@@ -24,7 +24,7 @@ The following code is **preserved but disabled**. Do NOT build features on top o
 - **Topics tab** (`app/(tabs)/topics.tsx`) — article topics
 - **Standalone HTML visualizations** (`scripts/knowledge_atlas.html`, `knowledge_growth.html`, etc.) — moving to native app
 
-**Active subsystems**: Review stream, voice elicitation/capture, physical books + curriculum mapping, curriculum generation, entity system + Wikidata resolution, microlearning cards, FSRS scheduling, interaction logging.
+**Active subsystems**: Review stream, voice elicitation/capture, physical books + curriculum mapping, curriculum generation, entity system + Wikidata resolution, microlearning cards, FSRS scheduling, interaction logging, defender mode (Session 92, Pearl 4 — adversarial retrieval), commonplace-resurfacing (Session 92, Pearl 8 — Locke + Bjornstad).
 
 ## Design Principles & North Star
 
@@ -70,6 +70,8 @@ These principles are the intellectual foundation of the project. They override i
 | **Synthesis** | `research/synthesis-pipeline-design.md`, `memory/feedback_synthesis_design.md` |
 | **Books** | `research/book-companion-handoff.md`, `research/book-companion-experiments.md` |
 | **Voice recall** | `voice-elicitation.tsx` — Know Nothing + Skip, book/chapter/curriculum recall, auto-loads more. Server: `review_engine.py` `run_voice_elicitation()`. Voice capture: domain routing (Gemini) + background Wikidata entity resolution |
+| **Defender mode (Pearl 4)** | `app/app/defender.tsx` (UI: thesis compose with optional domain picker → angled objections → defense with text/audio → grade + follow-up → concluded). Server: `scripts/defender_engine.py` (`start_session`, `respond`, `_persist_response_to_knowledge`, `_reinforce_scoped_knowledge`). Writes to `defender_sessions` + `voice_transcripts` (`source='defender_response'`) + `transcript_chunks` (embedded). Light recency-touch on scoped `knowledge_items`/`knowledge_entities` only when `engagement=engaged + evidence=specific\|general`. **Never** downgrades — deflection in debate ≠ ignorance. NO FSRS — Pearl 4 is explicit: metabolisation, not retention. See `research/srs-humanities/04-tibetan-debate.md`. |
+| **Commonplace-resurfacing (Pearl 8)** | `app/app/commonplace.tsx` (UI: text or audio prompt → top-N old transcript_chunks above similarity threshold). Server: `scripts/commonplace_engine.py` (`find_resurface`, `log_event`, `list_recent_events`). One-echo-per-transcript dedup. Default min_age=30d, threshold=0.55. Logged to `commonplace_events` for tuning. **Pull-only** — no automatic push into review stream (Pearl 8 is explicit: don't pressure the user). See `research/srs-humanities/08-locke-commonplace.md`. |
 | **Historiographic/insights** | `research/historiographic-knowledge-design.md` (theories, debates, attributed claims — layered proposal). Voice capture `source='insight'` in `review_engine.py`. |
 | **Knowledge atlas** | `scripts/knowledge_atlas.html` (standalone D3 web viz), `curriculum_db.py` `get_knowledge_atlas_data()`, served at `/knowledge/atlas` |
 | **Knowledge growth** | `scripts/knowledge_growth.html` (D3 viz), `curriculum_db.py` (`compute_network_metrics`, `get_knowledge_growth_data`), `research/knowledge-growth-measurement-proposal.html` |

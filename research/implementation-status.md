@@ -79,6 +79,8 @@
 | Curriculum Scan | `curriculum-scan.tsx` | v2 card-based self-assessment (3-level) |
 | Hamarquizen | `hamarquizen.tsx` | Book-specific PRIME→READ→TEST review |
 | Voice Elicitation | `voice-elicitation.tsx` | Free recall voice prompts for curriculum nodes + chapter/book recall + era sweeps (SWEEP badge). "Know nothing" vs "Skip" buttons. Auto-loads more prompts when batch exhausted. Fire-and-forget uploads with `request_id` caching. |
+| Defender | `defender.tsx` | Adversarial-retrieval debate (Pearl 4, Tibetan monastic debate). Thesis (text or audio) → 2-3 angled objections (empirical/methodological/contextual/contrarian/counterfactual) → defense (text or audio) → grade + follow-up → concluded. Optional domain scope chip-picker pulls from `/curriculum/list`. Session history. Server: `defender_engine.py`. |
+| Commonplace | `commonplace.tsx` | Locke + Bjornstad resurfacing. Type or speak a prompt → top-N old `transcript_chunks` above similarity threshold, filtered by min_age_days. Age chips (>1mo/>3mo/>6mo/none) + threshold chips (loose/default/tight). Tap echo to expand surrounding context. Server: `commonplace_engine.py`. |
 | Knowledge Sweep | `knowledge-sweep.tsx` | Full-domain voice recall assessment. Domain select → 7-era recording → parallel transcription → LLM scoring (Opus) → results with coverage/accuracy/connectivity/organization. System-vs-self comparison. |
 | Voice Notes | `voice-notes.tsx` | Voice note list + playback |
 | Kindle Browse | `kindle-browse.tsx` | Full Kindle library browser — search, filter (status/category/tracked), sort, pagination, include books, EPUB badge |
@@ -101,6 +103,7 @@
 | `FeedFilterPills` | Mobile: topic + source filter pills |
 | `ArticlePopover` | Web: hover popover for article links |
 | `MarkdownLink` | Cross-platform link handling (web `<a>`, native `onPress`) |
+| `MicButton` | Reusable record-stop button with timer. Used by Defender + Commonplace screens. Web-aware (hides itself). |
 | `PetrarcaDrawer` | ✦ navigation drawer (must be added per tab screen). Includes Knowledge Sweep in Explore section. |
 | `FeedbackCapture` | Global ✦ feedback button (voice + text + screenshot) |
 | `VoiceUploadToast` | Global toast for background voice upload success/failure |
@@ -315,6 +318,22 @@
 | GET | `/admin/entity/<qid>` | Consolidated entity view |
 | POST | `/admin/entity/resolve` | Manual QID commit (409 on conflict) |
 
+### Defender (Pearl 4 — adversarial retrieval)
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/defender/start` | Begin a debate session. Body: `{thesis, domain_id?, node_id?, entity_name?}` → `{session_id, objections[], context_summary}` |
+| POST | `/defender/respond` | Submit defense; receive grade + follow-up. Body: `{session_id, response_text, objection_index?}` → `{grade, next_move, follow_up?, conclusion?, status, knowledge_writes}` |
+| POST | `/defender/transcribe` | Multipart audio → `{transcript}`. Used by both Defender + Commonplace screens; user edits transcript before submitting on Defender side. |
+| GET  | `/defender/sessions[?limit]` | List recent sessions for history view |
+| GET  | `/defender/sessions/{id}` | Full session detail with all rounds |
+
+### Commonplace (Pearl 8 — Locke's commonplace book)
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/commonplace/resurface` | Find old `transcript_chunks` matching query. Body: `{query_text, min_age_days?, threshold?, max_results?, exclude_transcript_ids?}` → `{echoes[], meta, event_id}` |
+| POST | `/commonplace/resurface-audio` | Multipart audio → record-transcribe-search round-trip in one request |
+| GET  | `/commonplace/events[?limit]` | Recent resurfacing queries (for tuning thresholds) |
+
 ### Other
 | POST | `/chat` | Research chat |
 | POST | `/research/topic` | Topic research |
@@ -335,7 +354,7 @@
 
 ## SQLite Schema (petrarca.db)
 
-37 tables organized into 8 areas:
+39 tables organized into 9 areas:
 
 **Content pipeline**: `articles`, `article_sections`, `atomic_claims`, `claim_similarities`, `nli_verdicts`, `article_similarities`, `article_novelty_matrix`, `paragraph_claim_map`, `article_curriculum_nodes`, `delta_reports`, `concept_clusters`, `near_duplicates`, `syntheses`, `pipeline_meta`, `cluster_meta`
 
@@ -353,7 +372,9 @@
 
 **Interaction Logging**: `interaction_log` (dual-layer with JSONL — event, item_id, score, session_id, response_ms, card_type, domain, node_title, extra)
 
-**Other**: `projects`, `project_notes`, `voice_transcripts`
+**Defender + Commonplace** (Session 92): `defender_sessions` (one row per debate, JSON `rounds` log, optional domain/node/entity scope, status active/concluded), `commonplace_events` (every resurfacing query: text, source manual/audio, audio_bytes, returned chunk_ids, count) — tuning data, not load-bearing.
+
+**Other**: `projects`, `project_notes`, `voice_transcripts` (now includes `source='defender_response'` rows from Session 92, embedded into `transcript_chunks` and findable by commonplace queries — defender writes feed back into the same retrieval substrate as voice elicitation/capture)
 
 **Key relationships**: `atomic_claims` uses composite PK `(article_id, id)`. `knowledge_items` is the review data source. `microlearning_quizzes` holds individual quiz questions from ML cards, each independently FSRS-scheduled — the ML card is a content container, quizzes are the review atoms. All scheduling tables have `fsrs_card_json TEXT` for py-fsrs Card state. Voice uploads use `request_id` for idempotent retry caching. `curriculum_db.py` reads from SQLite; `curriculum.py` reads from JSON.
 

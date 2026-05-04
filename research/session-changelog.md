@@ -1,6 +1,76 @@
 # Knowledge System Implementation Status
 
-**Date**: April 24, 2026 (last updated — session 91: fork triage + env-strip hardening across limbic)
+**Date**: May 4, 2026 (last updated — session 92: defender mode + commonplace-resurfacing prototypes)
+
+## Session 92: Defender Mode + Commonplace-Resurfacing Prototypes (May 4, 2026)
+
+### Why
+Two new SRS-for-humanities surveys landed (`research/srs-humanities/` 10 pearls + `research/historian-factual-knowledge/` 5 regional reports). The clearest unbuilt territory across both: adversarial-retrieval debate (Pearl 4, Tibetan monastic debate) and commonplace-book resurfacing (Pearl 8, Locke + Bjornstad). Pearl 7 (Big Picture Problem) independently confirmed structural cards as the right humanities differentiator. The pearls explicitly distinguish *retention* (FSRS handles) from *metabolisation* (needs separate machinery) — both new prototypes target the metabolisation gap.
+
+### Defender mode — adversarial retrieval
+Assert a thesis (text or audio); the system surfaces 2-3 angled objections (empirical / methodological / contextual / contrarian / counterfactual) drawn from your scoped curriculum + voice corpus + entity neighborhood. You defend (text or audio); the LLM grades engagement+evidence+concession and surfaces a follow-up objection until concluded.
+
+**Three writes-to-knowledge layers**, all gated by Pearl 4's "metabolisation not retention" rule:
+1. `voice_transcripts` row with `source='defender_response'` (durable, browseable via existing voice-notes UI).
+2. `transcript_chunks` with float32 embeddings via limbic.amygdala — found by commonplace queries AND by `_get_learner_context_for_node()` so future review-stream questions on the same domain see your defenses as evidence.
+3. Light recency-touch on scoped `knowledge_items`/`knowledge_entities` ONLY when `engagement=engaged + evidence=specific|general`. Never downgrades — deflection in debate is often strategic, not ignorance. Touch updates `last_reviewed_at` (so the recency-boost picks it up) and appends to `question_history` with `{source:'defender', score, ts}` so the audit trail is preserved.
+
+Domain picker on the compose screen pulls from `/curriculum/list` (13 curricula). No-scope is the default and falls back to general historical reasoning.
+
+Files: `scripts/defender_engine.py` (510 lines: prompts + start/respond/list/get + 3 knowledge-write helpers), `scripts/research-server.py` (4 handlers + transcribe endpoint + 4 routes), `app/app/defender.tsx` (full UI, ~430 lines), `app/lib/defender-api.ts`, `app/components/MicButton.tsx`.
+
+### Commonplace-resurfacing — Locke's commonplace book + Bjornstad's design-for-forgetting
+Type or speak a prompt; the system finds old `transcript_chunks` whose embedding semantically matches, filtered by `min_age_days` (default 30, configurable to 1mo/3mo/6mo/none) and similarity threshold (0.50/0.55/0.65). One-echo-per-transcript dedup so a single long capture doesn't dominate. Each query logged to `commonplace_events` for tuning.
+
+The audio path is one-shot record→transcribe→search (different from defender, where the user edits the transcript before submission) — the act of speaking a thought IS the framing prompt; editing breaks the associative pull.
+
+Round-trip verified live: a defender response from 1 day ago about Khosrow's sack of Antioch was the #1 echo (sim 0.78) for a thematically related commonplace query, with three real older captures filling slots 2-4. 218 candidate matches above 0.45 across 699 chunks confirms there's plenty of semantic mass in 31 days of past captures to make resurfacing useful.
+
+Files: `scripts/commonplace_engine.py` (175 lines), `app/app/commonplace.tsx`, `app/lib/commonplace-api.ts`.
+
+### Endpoint inventory (all live on alif)
+- `POST /defender/start` — body `{thesis, domain_id?, node_id?, entity_name?}` → `{session_id, objections[], context_summary}`
+- `POST /defender/respond` — body `{session_id, response_text, objection_index?}` → `{grade, next_move, follow_up?, conclusion?, status, knowledge_writes}`
+- `POST /defender/transcribe` — multipart audio → `{transcript}` (used by both screens; user edits before submitting)
+- `GET /defender/sessions[?limit]` — list past sessions
+- `GET /defender/sessions/{id}` — full session detail with all rounds
+- `POST /commonplace/resurface` — body `{query_text, min_age_days?, threshold?, max_results?}` → echoes
+- `POST /commonplace/resurface-audio` — multipart audio → record-transcribe-search round-trip
+- `GET /commonplace/events[?limit]` — recent resurface queries
+
+### DB additions
+```sql
+CREATE TABLE defender_sessions (
+  id TEXT PRIMARY KEY, thesis TEXT NOT NULL, domain_id TEXT, node_id TEXT,
+  entity_name TEXT, rounds TEXT NOT NULL DEFAULT '[]', context_used TEXT,
+  status TEXT NOT NULL DEFAULT 'active', created_at INTEGER NOT NULL,
+  concluded_at INTEGER
+);
+CREATE TABLE commonplace_events (
+  id TEXT PRIMARY KEY, query_text TEXT NOT NULL,
+  query_source TEXT NOT NULL DEFAULT 'manual', audio_bytes INTEGER DEFAULT 0,
+  echo_chunk_ids TEXT NOT NULL DEFAULT '[]',
+  echo_count INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL
+);
+```
+
+Auto-applied on every research-server restart via `init_db()`.
+
+### Tests
+- `test_defender.py` — 5 invariants (start, respond grading, list, get, prompt format)
+- `test_defender_v2.py` — 7 invariants (domain context loading, transcript persistence, chunk embedding, scoped reinforcement, deflection-doesn't-downgrade, unscoped fallback, multi-round)
+- `test_commonplace.py` — 4 invariants (cosine math, age filter, topical match, exclusion + event log)
+
+All three suites pass against in-memory SQLite with mocked LLM/embeddings; live endpoints additionally verified end-to-end against alif's prod DB.
+
+### Carve-outs (deliberately out of scope for v0)
+- **Defender FSRS**: cards are not added to FSRS schedules. Pearl 4 is explicit: metabolisation, not retention.
+- **Defender LLM-extracted facts**: response chunks are embedded but NOT run through `process_voice_capture()` — that would generate ML cards from debate moves, which is the wrong frame. The chunks ARE searchable by commonplace + learner context, which is the right level of integration.
+- **Commonplace push**: pure pull-only — no auto-resurfacing card injected into the review stream. Pearl 8 is explicit that capture should not pressure the user. Add push only if the pull view proves useful enough to want it automated.
+- **Audio-only commonplace echoes** (audio playback of the original capture): chunks are text. Audio is on the original `voice_transcripts` row; could surface a play button later.
+
+### Commit
+`c9ec59b` (10 files, +2446 lines). Deployed via `~/src/expo/scripts/deploy.sh petrarca`. Both new tables auto-migrated. Health check + 4 endpoint smoke tests pass live.
 
 ## Session 91: Fork Triage + ANTHROPIC_* Env-Strip Across Claude CLI Callers (April 24, 2026)
 
