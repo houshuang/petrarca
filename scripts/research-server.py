@@ -5871,6 +5871,244 @@ JSON array only:"""
         finally:
             conn.close()
 
+    # ── Defender mode (prototype) ──────────────────────────────────────────
+    def _handle_defender_start(self):
+        """POST /defender/start — begin a debate session.
+        Body: {thesis: str, domain_id?: str, node_id?: str, entity_name?: str}
+        """
+        body = self._read_json_body()
+        if body is None:
+            return
+        thesis = (body.get('thesis') or '').strip()
+        if not thesis:
+            self._send_json_response(400, {'error': 'Missing thesis'})
+            return
+        from db import get_connection
+        from defender_engine import start_session
+        conn = get_connection()
+        try:
+            result = start_session(
+                thesis=thesis,
+                domain_id=body.get('domain_id'),
+                node_id=body.get('node_id'),
+                entity_name=body.get('entity_name'),
+                conn=conn,
+            )
+            status = 400 if result.get('error') else 200
+            self._send_json_response(status, result)
+        except Exception as e:
+            import traceback; traceback.print_exc()
+            self._send_json_response(500, {'error': str(e)})
+        finally:
+            conn.close()
+
+    def _handle_defender_respond(self):
+        """POST /defender/respond — submit a defense, get grade + follow-up.
+        Body: {session_id: str, response_text: str, objection_index?: int}
+        """
+        body = self._read_json_body()
+        if body is None:
+            return
+        session_id = (body.get('session_id') or '').strip()
+        response_text = (body.get('response_text') or '').strip()
+        if not session_id or not response_text:
+            self._send_json_response(400, {'error': 'Missing session_id or response_text'})
+            return
+        objection_index = int(body.get('objection_index') or 0)
+        from db import get_connection
+        from defender_engine import respond
+        conn = get_connection()
+        try:
+            result = respond(session_id, response_text, objection_index, conn)
+            status = 400 if result.get('error') else 200
+            self._send_json_response(status, result)
+        except Exception as e:
+            import traceback; traceback.print_exc()
+            self._send_json_response(500, {'error': str(e)})
+        finally:
+            conn.close()
+
+    def _handle_defender_sessions_list(self):
+        """GET /defender/sessions — list recent sessions."""
+        from db import get_connection
+        from defender_engine import list_sessions
+        qs = parse_qs(urlparse(self.path).query)
+        limit = int(qs.get('limit', ['20'])[0])
+        conn = get_connection(readonly=True)
+        try:
+            sessions = list_sessions(conn, limit=limit)
+            self._send_json_response(200, {'sessions': sessions})
+        finally:
+            conn.close()
+
+    def _handle_defender_session_detail(self, session_id: str):
+        """GET /defender/sessions/{id} — full session detail."""
+        from db import get_connection
+        from defender_engine import get_session
+        conn = get_connection(readonly=True)
+        try:
+            sess = get_session(session_id, conn)
+            if not sess:
+                self._send_json_response(404, {'error': 'Session not found'})
+                return
+            self._send_json_response(200, sess)
+        finally:
+            conn.close()
+
+    def _handle_defender_transcribe(self):
+        """POST /defender/transcribe — multipart audio → transcript text.
+
+        Generic transcription endpoint for the defender screen. The client
+        records, posts the audio, gets back text, and lets the user edit it
+        before submitting via /defender/start or /defender/respond.
+        """
+        content_type = self.headers.get('Content-Type', '')
+        if 'multipart' not in content_type:
+            self._send_json_response(400, {'error': 'Expected multipart'})
+            return
+        length = int(self.headers.get('Content-Length', 0))
+        try:
+            data = self.rfile.read(length)
+        except (ConnectionResetError, BrokenPipeError, OSError) as e:
+            print(f'[defender-transcribe] upload drop: {e}', flush=True)
+            return
+        try:
+            fs = self._multipart_parse_bytes(data, content_type)
+        except Exception as e:
+            self._send_json_response(400, {'error': f'multipart parse failed: {e}'})
+            return
+        audio_field = fs['audio'] if 'audio' in fs else None
+        if not audio_field:
+            self._send_json_response(400, {'error': 'Missing audio'})
+            return
+        with tempfile.NamedTemporaryFile(suffix='.m4a', delete=False) as tmp:
+            tmp.write(audio_field.file.read())
+            audio_path = Path(tmp.name)
+        try:
+            transcript = transcribe_on_server(audio_path)
+            if not transcript or len(transcript.split()) < 2:
+                self._send_json_response(422, {'error': 'too_short',
+                                               'transcript': transcript or ''})
+                return
+            self._send_json_response(200, {'transcript': transcript})
+        except Exception as e:
+            import traceback; traceback.print_exc()
+            self._send_json_response(500, {'error': str(e)})
+        finally:
+            audio_path.unlink(missing_ok=True)
+
+    # ── Commonplace-resurfacing (prototype) ────────────────────────────────
+    def _handle_commonplace_resurface(self):
+        """POST /commonplace/resurface — find old chunks that match query text.
+
+        JSON body: {query_text: str, min_age_days?: int, threshold?: float,
+                    max_results?: int, exclude_transcript_ids?: [str]}
+        """
+        body = self._read_json_body()
+        if body is None:
+            return
+        query_text = (body.get('query_text') or '').strip()
+        if not query_text:
+            self._send_json_response(400, {'error': 'Missing query_text'})
+            return
+        from db import get_connection
+        from commonplace_engine import find_resurface, log_event
+        conn = get_connection()
+        try:
+            result = find_resurface(
+                query_text=query_text,
+                conn=conn,
+                min_age_days=int(body.get('min_age_days', 30)),
+                sim_threshold=float(body.get('threshold', 0.55)),
+                max_results=int(body.get('max_results', 5)),
+                exclude_transcript_ids=body.get('exclude_transcript_ids') or [],
+            )
+            event_id = log_event(query_text, result['echoes'], conn,
+                                 query_source=body.get('source', 'manual'))
+            result['event_id'] = event_id
+            self._send_json_response(200, result)
+        except Exception as e:
+            import traceback; traceback.print_exc()
+            self._send_json_response(500, {'error': str(e)})
+        finally:
+            conn.close()
+
+    def _handle_commonplace_resurface_audio(self):
+        """POST /commonplace/resurface-audio — multipart audio → transcribe → resurface.
+
+        Convenience endpoint: lets the client record a thought, get back both
+        the transcript AND the matching echoes in one round-trip.
+        """
+        content_type = self.headers.get('Content-Type', '')
+        if 'multipart' not in content_type:
+            self._send_json_response(400, {'error': 'Expected multipart'})
+            return
+        length = int(self.headers.get('Content-Length', 0))
+        try:
+            data = self.rfile.read(length)
+        except (ConnectionResetError, BrokenPipeError, OSError) as e:
+            print(f'[commonplace] upload drop: {e}', flush=True)
+            return
+        try:
+            fs = self._multipart_parse_bytes(data, content_type)
+        except Exception as e:
+            self._send_json_response(400, {'error': f'multipart parse failed: {e}'})
+            return
+        audio_field = fs['audio'] if 'audio' in fs else None
+        if not audio_field:
+            self._send_json_response(400, {'error': 'Missing audio'})
+            return
+        min_age_days = int(fs.getvalue('min_age_days', '30'))
+        threshold = float(fs.getvalue('threshold', '0.55'))
+        max_results = int(fs.getvalue('max_results', '5'))
+        with tempfile.NamedTemporaryFile(suffix='.m4a', delete=False) as tmp:
+            tmp.write(audio_field.file.read())
+            audio_path = Path(tmp.name)
+        audio_size = audio_path.stat().st_size
+        try:
+            transcript = transcribe_on_server(audio_path)
+            if not transcript or len(transcript.split()) < 4:
+                self._send_json_response(422, {'error': 'too_short',
+                                               'transcript': transcript or ''})
+                return
+            from db import get_connection
+            from commonplace_engine import find_resurface, log_event
+            conn = get_connection()
+            try:
+                result = find_resurface(
+                    query_text=transcript,
+                    conn=conn,
+                    min_age_days=min_age_days,
+                    sim_threshold=threshold,
+                    max_results=max_results,
+                )
+                event_id = log_event(transcript, result['echoes'], conn,
+                                     query_source='audio',
+                                     audio_bytes=audio_size)
+                result['event_id'] = event_id
+                result['transcript'] = transcript
+                self._send_json_response(200, result)
+            finally:
+                conn.close()
+        except Exception as e:
+            import traceback; traceback.print_exc()
+            self._send_json_response(500, {'error': str(e)})
+        finally:
+            audio_path.unlink(missing_ok=True)
+
+    def _handle_commonplace_events_list(self):
+        """GET /commonplace/events — recent resurfacing events."""
+        from db import get_connection
+        from commonplace_engine import list_recent_events
+        qs = parse_qs(urlparse(self.path).query)
+        limit = int(qs.get('limit', ['30'])[0])
+        conn = get_connection(readonly=True)
+        try:
+            events = list_recent_events(conn, limit=limit)
+            self._send_json_response(200, {'events': events})
+        finally:
+            conn.close()
+
     def _handle_review_voice_memo(self):
         """POST /review/voice-memo — transcribe + extract signals."""
         content_type = self.headers.get('Content-Type', '')
@@ -6732,6 +6970,16 @@ JSON array only:"""
             return self._handle_admin_suggested_cards_update()
         if self.path == '/review/explore':
             return self._handle_review_explore()
+        if self.path == '/defender/start':
+            return self._handle_defender_start()
+        if self.path == '/defender/respond':
+            return self._handle_defender_respond()
+        if self.path == '/defender/transcribe':
+            return self._handle_defender_transcribe()
+        if self.path == '/commonplace/resurface':
+            return self._handle_commonplace_resurface()
+        if self.path == '/commonplace/resurface-audio':
+            return self._handle_commonplace_resurface_audio()
         if self.path == '/review/voice-memo':
             return self._handle_review_voice_memo()
         if self.path == '/review/voice-elicit':
@@ -7287,6 +7535,13 @@ JSON array only:"""
             return self._handle_elicit_candidates()
         if self.path.startswith('/review/voice-elicit-check'):
             return self._handle_voice_elicit_check()
+        if self.path == '/defender/sessions' or self.path.startswith('/defender/sessions?'):
+            return self._handle_defender_sessions_list()
+        if self.path.startswith('/defender/sessions/'):
+            session_id = self.path.split('/defender/sessions/')[1].split('?')[0]
+            return self._handle_defender_session_detail(session_id)
+        if self.path == '/commonplace/events' or self.path.startswith('/commonplace/events?'):
+            return self._handle_commonplace_events_list()
         if self.path == '/media/log':
             media_log_path = Path(os.environ.get('MEDIA_LOG_PATH', '/opt/petrarca/data/media_log.json'))
             try:

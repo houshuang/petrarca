@@ -895,6 +895,33 @@ MIGRATIONS = [
     "ALTER TABLE microlearning_cards ADD COLUMN flagged_inaccurate INTEGER DEFAULT 0",
     "ALTER TABLE microlearning_cards ADD COLUMN flagged_reason TEXT",
     "ALTER TABLE microlearning_cards ADD COLUMN flagged_at INTEGER",
+    # Defender mode (Session 92, prototype) — adversarial-retrieval debate sessions.
+    """CREATE TABLE IF NOT EXISTS defender_sessions (
+        id TEXT PRIMARY KEY,
+        thesis TEXT NOT NULL,
+        domain_id TEXT,
+        node_id TEXT,
+        entity_name TEXT,
+        rounds TEXT NOT NULL DEFAULT '[]',
+        context_used TEXT,
+        status TEXT NOT NULL DEFAULT 'active',
+        created_at INTEGER NOT NULL,
+        concluded_at INTEGER
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_def_status ON defender_sessions(status)",
+    "CREATE INDEX IF NOT EXISTS idx_def_created ON defender_sessions(created_at)",
+    # Commonplace-resurfacing event log (Session 92, prototype) — what was
+    # surfaced when, so we can study which echoes felt useful.
+    """CREATE TABLE IF NOT EXISTS commonplace_events (
+        id TEXT PRIMARY KEY,
+        query_text TEXT NOT NULL,
+        query_source TEXT NOT NULL DEFAULT 'manual',
+        audio_bytes INTEGER DEFAULT 0,
+        echo_chunk_ids TEXT NOT NULL DEFAULT '[]',
+        echo_count INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_cp_created ON commonplace_events(created_at)",
 ]
 
 

@@ -73,6 +73,38 @@ export default function VoiceTab() {
         <Text style={styles.cardHint}>Domain-wide assessment</Text>
       </Pressable>
 
+      {/* Defender mode — adversarial retrieval */}
+      <Pressable
+        style={styles.card}
+        onPress={() => {
+          logEvent('voice_tab_defender_tap');
+          router.push('/defender' as any);
+        }}
+      >
+        <Text style={styles.cardTitle}>Defender Mode</Text>
+        <Text style={styles.cardDescription}>
+          Assert a thesis. The system surfaces sharp objections drawn from your
+          curriculum and voice corpus; you defend. Geluk-style adversarial recall.
+        </Text>
+        <Text style={styles.cardHint}>Voice or text · Tibetan-debate pearl</Text>
+      </Pressable>
+
+      {/* Commonplace — what you said before */}
+      <Pressable
+        style={styles.card}
+        onPress={() => {
+          logEvent('voice_tab_commonplace_tap');
+          router.push('/commonplace' as any);
+        }}
+      >
+        <Text style={styles.cardTitle}>What You Said Before</Text>
+        <Text style={styles.cardDescription}>
+          Resurface old voice captures that rhyme with what you're thinking now.
+          Type or speak a prompt; the system finds echoes from months ago.
+        </Text>
+        <Text style={styles.cardHint}>Locke's commonplace book · associative pull</Text>
+      </Pressable>
+
       {/* Voice notes history */}
       <Pressable
         style={styles.card}
