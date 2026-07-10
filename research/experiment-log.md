@@ -4,6 +4,29 @@
 
 ---
 
+## 2026-07-10 — Session 93: Bounded Koigen Capture Adapter
+
+**What**: Harden the small Koigen bridge hosted by Petrarca's research server. Add
+strict, route-specific request framing before any body allocation (1 MiB browser JSON,
+5 MiB raw email, 16 KiB approval form), wire the new state-changing approval POST,
+and pass the authenticated-mail assertion through to Koigen's handler.
+
+**Hypothesis**: A narrow adapter can preserve the existing research server while
+making malformed, chunked, missing-length, and oversized capture requests fail closed.
+The browser clipper and confirmation flow should remain usable without importing
+Koigen into Petrarca's test process or reviving Petrarca's disabled generic email
+ingestion path.
+
+**Verification plan**: Exercise the standalone request-framing helper with in-memory
+streams, syntax-compile the server, and test the Koigen dispatch against a lightweight
+fake handler so no production database, server process, or user capture state is
+touched.
+
+**Result**: Implemented the boundary as `scripts/koigen_adapter.py`; 39 focused tests
+cover framing, route limits, raw-byte/header forwarding, approval dispatch, safe
+targets, response headers, and backend response validation. The research server
+syntax-compiles and the focused suite passes without importing the full server.
+
 ## 2026-04-16 — Session 81: FSRS Optimizer Baseline
 
 **What**: Ran py-fsrs Optimizer on 195 review events across 106 cards (56 with 2+ reviews).

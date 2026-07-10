@@ -91,6 +91,7 @@ CROSS_MATCH_DIR = Path(os.environ.get('CROSS_MATCH_DIR', '/opt/petrarca/data'))
 SCRIPTS_DIR = Path(__file__).parent
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
+import koigen_adapter
 # Subprocess helper for import_url.py etc. Defaults to this server's interpreter.
 VENV_PYTHON = os.environ.get('PETRARCA_PYTHON', sys.executable)
 
@@ -2032,7 +2033,45 @@ class ResearchHandler(BaseHTTPRequestHandler):
     def _send_cors_headers(self):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type, X-Petrarca-Token')
+        self.send_header(
+            'Access-Control-Allow-Headers',
+            'Content-Type, X-Petrarca-Token, X-Koigen-Token',
+        )
+
+    def _send_koigen_response(self, response):
+        """Send a capture response without caching capabilities or result bodies."""
+        self.send_response(response.status)
+        self._send_cors_headers()
+        for name, value in koigen_adapter.response_headers(response):
+            self.send_header(name, value)
+        if response.close_connection:
+            # A framing error leaves unread bytes in rfile. Never let the HTTP parser
+            # reinterpret those bytes as a pipelined request.
+            self.close_connection = True
+        self.end_headers()
+        self.wfile.write(response.body)
+
+    def _handle_koigen_post(self):
+        try:
+            response = koigen_adapter.dispatch_post(
+                self.path, self.headers, self.rfile,
+            )
+        except Exception as exc:
+            print(f'[koigen] POST adapter failed: {exc}', flush=True)
+            response = koigen_adapter.unavailable_response(self.path, close=True)
+        if response is None:  # guarded by post_route(), but fail closed if changed
+            return self._send_json_response(404, {'error': 'Unknown API endpoint'})
+        return self._send_koigen_response(response)
+
+    def _handle_koigen_get(self):
+        try:
+            response = koigen_adapter.dispatch_get(self.path)
+        except Exception as exc:
+            print(f'[koigen] GET adapter failed: {exc}', flush=True)
+            response = koigen_adapter.unavailable_response(self.path)
+        if response is None:  # guarded by is_approve_get(), but fail closed if changed
+            return self._send_json_response(404, {'error': 'Unknown API endpoint'})
+        return self._send_koigen_response(response)
 
     def _read_json_body(self) -> dict | None:
         """Read and parse JSON from request body. Sends 400 on failure, returns None."""
@@ -6798,6 +6837,8 @@ JSON array only:"""
         self._serve_html_file('curriculum_timeline.html')
 
     def do_POST(self):
+        if koigen_adapter.post_route(self.path):
+            return self._handle_koigen_post()
         if self.path == '/admin/entity/resolve':
             return self._handle_admin_entity_resolve()
         if self.path == '/admin/entity/merge':
@@ -7519,6 +7560,8 @@ JSON array only:"""
         return self._send_json_response(404, {'error': 'Unknown API endpoint'})
 
     def do_GET(self):
+        if koigen_adapter.is_approve_get(self.path):
+            return self._handle_koigen_get()
         # Content API endpoints (SQLite Phase 4)
         if self.path.startswith('/api/'):
             return self._handle_content_api()
