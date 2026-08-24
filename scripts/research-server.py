@@ -7863,7 +7863,15 @@ JSON array only:"""
             self.send_error(404)
 
     def log_message(self, format, *args):
-        print(f'[http] {args[0]}')
+        # BaseHTTPRequestHandler includes the full query string in args[0].
+        # Signed one-time capabilities (for example Koigen approvals) must not
+        # be persisted in journald, so retain the route but redact all queries.
+        request_line = str(args[0])
+        parts = request_line.split(' ', 2)
+        if len(parts) == 3 and '?' in parts[1]:
+            parts[1] = f"{parts[1].split('?', 1)[0]}?[redacted]"
+            request_line = ' '.join(parts)
+        print(f'[http] {request_line}')
 
 
 class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
