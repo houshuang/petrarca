@@ -7866,12 +7866,12 @@ JSON array only:"""
         # BaseHTTPRequestHandler includes the full query string in args[0].
         # Signed one-time capabilities (for example Koigen approvals) must not
         # be persisted in journald, so retain the route but redact all queries.
-        request_line = str(args[0])
+        request_line = str(args[0]) if args else ''
         parts = request_line.split(' ', 2)
         if len(parts) == 3 and '?' in parts[1]:
             parts[1] = f"{parts[1].split('?', 1)[0]}?[redacted]"
             request_line = ' '.join(parts)
-        print(f'[http] {request_line}')
+        print(f'[http] {request_line}', flush=True)
 
 
 class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
