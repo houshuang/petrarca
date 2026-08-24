@@ -1,0 +1,1302 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <title>Petrarca Companion</title>
+  <style>
+    :root {
+      --parchment: #f7f4ec;
+      --parchment-dark: #f0ece2;
+      --ink: #2a2420;
+      --body: #39342f;
+      --muted: #746d62;
+      --faint: #a79f92;
+      --rule: #ddd6c9;
+      --rubric: #8b2500;
+      --success: #2a6a3a;
+    }
+    * { box-sizing: border-box; }
+    html { background: var(--parchment); }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--body);
+      background: var(--parchment);
+      font-family: Georgia, "Times New Roman", serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    main {
+      width: min(720px, 100%);
+      margin: 0 auto;
+      padding: max(30px, env(safe-area-inset-top)) 24px max(54px, env(safe-area-inset-bottom));
+    }
+    .wordmark {
+      margin: 0;
+      color: var(--ink);
+      font-size: 25px;
+      font-weight: 600;
+      letter-spacing: .14em;
+    }
+    .subtitle {
+      margin: 4px 0 20px;
+      color: var(--faint);
+      font-size: 14px;
+      font-style: italic;
+    }
+    .double-rule {
+      height: 7px;
+      border-top: 2px solid var(--ink);
+      border-bottom: 1px solid var(--ink);
+      margin-bottom: 34px;
+    }
+    .rubric {
+      margin: 0 0 16px;
+      color: var(--rubric);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 11px;
+      font-weight: 650;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    .memory {
+      min-height: 190px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      border-bottom: 1px solid var(--rule);
+      padding: 0 0 28px;
+    }
+    blockquote {
+      margin: 0;
+      color: var(--ink);
+      font-size: clamp(23px, 4.4vw, 31px);
+      line-height: 1.42;
+      letter-spacing: -.012em;
+    }
+    blockquote::before { content: "“"; color: var(--rubric); }
+    blockquote::after { content: "”"; color: var(--rubric); }
+    .meta {
+      margin: 18px 0 0;
+      color: var(--muted);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .context {
+      display: none;
+      margin-top: 20px;
+      padding: 17px 0 0 18px;
+      border-left: 2px solid var(--rubric);
+      color: var(--body);
+      font-size: 17px;
+      line-height: 1.62;
+      white-space: pre-wrap;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 20px 0 4px;
+    }
+    button {
+      appearance: none;
+      min-height: 44px;
+      border: 1px solid var(--ink);
+      border-radius: 3px;
+      padding: 10px 18px;
+      color: var(--ink);
+      background: transparent;
+      font: 16px Georgia, "Times New Roman", serif;
+      cursor: pointer;
+    }
+    button:hover { border-color: var(--rubric); color: var(--rubric); }
+    button:focus-visible { outline: 3px solid rgba(139, 37, 0, .24); outline-offset: 2px; }
+    button:disabled { opacity: .42; cursor: wait; }
+    .primary { color: var(--parchment); background: var(--rubric); border-color: var(--rubric); }
+    .primary:hover { color: white; background: #751f00; }
+    .quiet { border-color: var(--rule); }
+    .recording { color: var(--parchment); background: var(--ink); border-color: var(--ink); }
+    .recorder {
+      margin-top: 42px;
+      padding-top: 26px;
+      border-top: 1px solid var(--rule);
+    }
+    .recorder-intro {
+      margin: -6px 0 18px;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    .status {
+      min-height: 22px;
+      margin: 14px 0 0;
+      color: var(--muted);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 12px;
+    }
+    .status.error { color: var(--rubric); }
+    .status.success { color: var(--success); }
+    .recovery-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .recovery-actions[hidden] { display: none; }
+    .capture-result { display: none; margin-top: 28px; }
+    .said {
+      margin: 0;
+      padding-left: 18px;
+      border-left: 2px solid var(--rubric);
+      color: var(--ink);
+      font-size: 18px;
+      line-height: 1.62;
+      white-space: pre-wrap;
+    }
+    .echoes { margin-top: 30px; }
+    .echo {
+      padding: 18px 0;
+      border-top: 1px solid var(--rule);
+    }
+    .echo-text { margin: 0; color: var(--ink); font-size: 18px; line-height: 1.55; }
+    .echo-meta {
+      margin: 8px 0 0;
+      color: var(--faint);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 11px;
+    }
+    .principle {
+      margin: 44px 0 0;
+      color: var(--faint);
+      font-size: 13px;
+      font-style: italic;
+      text-align: center;
+    }
+    .skeleton { color: var(--faint); animation: pulse 1.4s ease-in-out infinite; }
+    @keyframes pulse { 50% { opacity: .45; } }
+    @media (max-width: 520px) {
+      main { padding-left: 19px; padding-right: 19px; }
+      .actions button { flex: 1 1 auto; }
+      blockquote { font-size: 24px; }
+    }
+    @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1 class="wordmark">PETRARCA</h1>
+      <p class="subtitle">a companion for things worth remembering</p>
+      <div class="double-rule"></div>
+    </header>
+
+    <section aria-labelledby="old-thought-label">
+      <h2 id="old-thought-label" class="rubric">✦ One old thought</h2>
+      <div class="memory" id="memory" aria-live="polite">
+        <blockquote id="memory-text" class="skeleton">Opening your commonplace book…</blockquote>
+        <p class="meta" id="memory-meta"></p>
+        <div class="context" id="memory-context"></div>
+      </div>
+      <div class="actions">
+        <button type="button" id="another" disabled>Another</button>
+        <button type="button" id="context" class="quiet" disabled>Context</button>
+      </div>
+    </section>
+
+    <section class="recorder" aria-labelledby="record-label">
+      <h2 id="record-label" class="rubric">✦ Add to the commonplace</h2>
+      <p class="recorder-intro">Say what you have just learnt, what surprised you, or what you want to hold onto. Recordings stop after 8 minutes; a local recovery copy is kept until the server confirms it is saved.</p>
+      <button type="button" id="record" class="primary">Record a thought</button>
+      <p class="status" id="record-status" role="status" aria-live="polite"></p>
+      <div class="recovery-actions" id="recovery-actions" hidden>
+        <button type="button" id="retry-upload">Retry upload</button>
+        <button type="button" id="download-recording" class="quiet">Download recording</button>
+      </div>
+      <div class="capture-result" id="capture-result">
+        <h3 class="rubric">You said</h3>
+        <p class="said" id="said"></p>
+        <div class="echoes" id="echoes"></div>
+      </div>
+    </section>
+
+    <p class="principle">Nothing here is due. Nothing becomes a quiz.</p>
+  </main>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const rootPath = window.location.pathname.replace(/\/companion\/?$/, '/');
+      const endpoint = (path) => `${rootPath}${path}`;
+      const textEl = document.getElementById('memory-text');
+      const metaEl = document.getElementById('memory-meta');
+      const contextEl = document.getElementById('memory-context');
+      const anotherButton = document.getElementById('another');
+      const contextButton = document.getElementById('context');
+      const recordButton = document.getElementById('record');
+      const statusEl = document.getElementById('record-status');
+      const recoveryActionsEl = document.getElementById('recovery-actions');
+      const retryUploadButton = document.getElementById('retry-upload');
+      const downloadRecordingButton = document.getElementById('download-recording');
+      const resultEl = document.getElementById('capture-result');
+      const saidEl = document.getElementById('said');
+      const echoesEl = document.getElementById('echoes');
+
+      let current = null;
+      let shownItemIds = [];
+      let recorder = null;
+      let mediaStream = null;
+      let audioParts = [];
+      let audioBytes = 0;
+      let recordingStartedAt = 0;
+      let statusTimer = null;
+      let pendingRecording = null;
+      let startingRecording = false;
+      let finishingRecording = false;
+      let uploadInFlight = false;
+      let recoveryRestoreBlocked = false;
+      let pageExitRequested = false;
+      let recoveryKeyPromise = null;
+      let activeRecordingSession = null;
+      let activeChunkSequence = 0;
+      let activeChunksPersisted = 0;
+      let activeChunkWriteChain = Promise.resolve();
+      let activeChunkPersistenceError = null;
+
+      // The server caps the entire multipart request at 25 MiB. Keep five MiB
+      // for multipart/browser overhead and stop gathering data earlier still.
+      const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
+      const AUTO_STOP_BYTES = 18 * 1024 * 1024;
+      const MAX_RECORDING_SECONDS = 8 * 60;
+      const RECORDING_DB = 'petrarca-companion';
+      const RECORDING_STORE = 'pending-recordings';
+      const PENDING_RECORDING_ID = 'latest';
+      const ACTIVE_SESSION_RECORD_ID = 'active-session';
+      const ACTIVE_CHUNK_PREFIX = 'active-chunk:';
+      const RECOVERY_VERSION = 2;
+      const RECOVERY_KEY_CONTEXT = 'petrarca-companion/idb-audio/v2';
+      const RECOVERY_AAD = new TextEncoder().encode('petrarca-companion/pending-recording/v2');
+
+      const openRecordingDb = () => new Promise((resolve, reject) => {
+        if (!window.indexedDB) {
+          reject(new Error('Local recovery storage is not available'));
+          return;
+        }
+        const request = indexedDB.open(RECORDING_DB, 1);
+        request.addEventListener('upgradeneeded', () => {
+          const db = request.result;
+          if (!db.objectStoreNames.contains(RECORDING_STORE)) {
+            db.createObjectStore(RECORDING_STORE, { keyPath: 'id' });
+          }
+        });
+        request.addEventListener('success', () => resolve(request.result));
+        request.addEventListener('error', () => reject(request.error || new Error('Could not open recovery storage')));
+        request.addEventListener('blocked', () => reject(new Error('Recovery storage is blocked by another page')));
+      });
+
+      const runRecordingTransaction = async (mode, operation) => {
+        const db = await openRecordingDb();
+        try {
+          return await new Promise((resolve, reject) => {
+            const transaction = db.transaction(RECORDING_STORE, mode);
+            const store = transaction.objectStore(RECORDING_STORE);
+            let result;
+            try {
+              result = operation(store);
+            } catch (error) {
+              reject(error);
+              return;
+            }
+            transaction.addEventListener('complete', () => resolve(result?.result));
+            transaction.addEventListener('abort', () => reject(transaction.error || new Error('Recovery storage transaction was aborted')));
+            transaction.addEventListener('error', () => reject(transaction.error || new Error('Recovery storage transaction failed')));
+          });
+        } finally {
+          db.close();
+        }
+      };
+
+      const capabilitySegment = () => {
+        const segment = window.location.pathname.split('/').find(
+          (part) => /^petrarca-private-[0-9a-f]{64}$/.test(part),
+        );
+        if (!segment) throw new Error('Private companion capability is unavailable');
+        return segment;
+      };
+
+      const recoveryKey = async () => {
+        if (!window.crypto?.subtle || !window.crypto?.getRandomValues) {
+          throw new Error('Encrypted browser recovery is not supported');
+        }
+        if (!recoveryKeyPromise) {
+          recoveryKeyPromise = (async () => {
+            const material = new TextEncoder().encode(
+              `${RECOVERY_KEY_CONTEXT}\u0000${capabilitySegment()}`,
+            );
+            const digest = await window.crypto.subtle.digest('SHA-256', material);
+            return window.crypto.subtle.importKey(
+              'raw', digest, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt'],
+            );
+          })();
+        }
+        return recoveryKeyPromise;
+      };
+
+      const encryptPendingRecording = async (recording) => {
+        if (!recording?.blob) throw new Error('No recording is available to encrypt');
+        const key = await recoveryKey();
+        const iv = window.crypto.getRandomValues(new Uint8Array(12));
+        const plaintext = await recording.blob.arrayBuffer();
+        const ciphertext = await window.crypto.subtle.encrypt(
+          { name: 'AES-GCM', iv, additionalData: RECOVERY_AAD },
+          key,
+          plaintext,
+        );
+        // IndexedDB receives ciphertext only. The capability-derived key is
+        // non-extractable and is never written to browser storage.
+        return {
+          id: recording.id,
+          version: RECOVERY_VERSION,
+          ciphertext,
+          iv: iv.buffer,
+          mimeType: recording.mimeType,
+          createdAt: recording.createdAt,
+          serverConfirmed: Boolean(recording.serverConfirmed),
+          captureId: recording.captureId || null,
+        };
+      };
+
+      const decryptPendingRecording = async (stored) => {
+        if (!stored || stored.version !== RECOVERY_VERSION
+            || !stored.ciphertext || !stored.iv) {
+          throw new Error('Browser recovery data has an unsupported format');
+        }
+        const key = await recoveryKey();
+        const plaintext = await window.crypto.subtle.decrypt(
+          {
+            name: 'AES-GCM',
+            iv: new Uint8Array(stored.iv),
+            additionalData: RECOVERY_AAD,
+          },
+          key,
+          stored.ciphertext,
+        );
+        return {
+          id: stored.id,
+          blob: new Blob([plaintext], { type: stored.mimeType || 'audio/mp4' }),
+          mimeType: stored.mimeType || 'audio/mp4',
+          createdAt: stored.createdAt,
+          serverConfirmed: Boolean(stored.serverConfirmed),
+          captureId: stored.captureId || null,
+          persisted: true,
+          downloaded: false,
+        };
+      };
+
+      const savePendingRecording = async (recording) => {
+        const encrypted = await encryptPendingRecording(recording);
+        await runRecordingTransaction('readwrite', (store) => store.put(encrypted));
+      };
+
+      const activeChunkAdditionalData = (sessionId, sequence) => new TextEncoder().encode(
+        `petrarca-companion/active-chunk/v2\u0000${sessionId}\u0000${sequence}`,
+      );
+
+      const encryptActiveChunk = async (chunk, sessionId, sequence, mimeType, createdAt) => {
+        const key = await recoveryKey();
+        const iv = window.crypto.getRandomValues(new Uint8Array(12));
+        const plaintext = await chunk.arrayBuffer();
+        const ciphertext = await window.crypto.subtle.encrypt(
+          {
+            name: 'AES-GCM',
+            iv,
+            additionalData: activeChunkAdditionalData(sessionId, sequence),
+          },
+          key,
+          plaintext,
+        );
+        return {
+          id: `${ACTIVE_CHUNK_PREFIX}${sessionId}:${String(sequence).padStart(6, '0')}`,
+          kind: 'active_chunk',
+          version: RECOVERY_VERSION,
+          sessionId,
+          sequence,
+          ciphertext,
+          iv: iv.buffer,
+          mimeType,
+          createdAt,
+        };
+      };
+
+      const decryptActiveChunk = async (stored, sessionId, sequence) => {
+        if (!stored || stored.kind !== 'active_chunk'
+            || stored.version !== RECOVERY_VERSION
+            || stored.sessionId !== sessionId || stored.sequence !== sequence
+            || !stored.ciphertext || !stored.iv) {
+          throw new Error('Encrypted active recording chunks are incomplete');
+        }
+        const key = await recoveryKey();
+        return window.crypto.subtle.decrypt(
+          {
+            name: 'AES-GCM',
+            iv: new Uint8Array(stored.iv),
+            additionalData: activeChunkAdditionalData(sessionId, sequence),
+          },
+          key,
+          stored.ciphertext,
+        );
+      };
+
+      const loadStoredRecording = async () => {
+        const db = await openRecordingDb();
+        try {
+          return await new Promise((resolve, reject) => {
+            const transaction = db.transaction(RECORDING_STORE, 'readonly');
+            const request = transaction.objectStore(RECORDING_STORE).get(PENDING_RECORDING_ID);
+            request.addEventListener('success', () => resolve(request.result || null));
+            request.addEventListener('error', () => reject(request.error || new Error('Could not read recovery storage')));
+          });
+        } finally {
+          db.close();
+        }
+      };
+
+      const loadAllRecoveryRecords = async () => {
+        const db = await openRecordingDb();
+        try {
+          return await new Promise((resolve, reject) => {
+            const transaction = db.transaction(RECORDING_STORE, 'readonly');
+            const request = transaction.objectStore(RECORDING_STORE).getAll();
+            request.addEventListener('success', () => resolve(request.result || []));
+            request.addEventListener('error', () => reject(request.error || new Error('Could not inspect recovery storage')));
+          });
+        } finally {
+          db.close();
+        }
+      };
+
+      const beginActiveChunkRecovery = async (mimeType) => {
+        await recoveryKey();
+        const existing = await loadAllRecoveryRecords();
+        if (existing.some((record) => record.id === ACTIVE_SESSION_RECORD_ID
+            || String(record.id || '').startsWith(ACTIVE_CHUNK_PREFIX))) {
+          throw new Error('An interrupted recording is already in recovery storage');
+        }
+        const random = window.crypto.getRandomValues(new Uint8Array(16));
+        const sessionId = Array.from(random, (value) => value.toString(16).padStart(2, '0')).join('');
+        const session = {
+          id: ACTIVE_SESSION_RECORD_ID,
+          kind: 'active_session',
+          version: RECOVERY_VERSION,
+          sessionId,
+          mimeType,
+          createdAt: Date.now(),
+          chunkCount: 0,
+          audioBytes: 0,
+        };
+        await runRecordingTransaction('readwrite', (store) => store.put(session));
+        activeRecordingSession = session;
+        activeChunkSequence = 0;
+        activeChunksPersisted = 0;
+        activeChunkPersistenceError = null;
+        activeChunkWriteChain = Promise.resolve();
+      };
+
+      const enqueueActiveChunkPersistence = (chunk, cumulativeBytes) => {
+        const session = activeRecordingSession;
+        const sequence = activeChunkSequence;
+        activeChunkSequence += 1;
+        if (!session) return;
+        activeChunkWriteChain = activeChunkWriteChain.then(async () => {
+          // Preserve a contiguous prefix. Once a write fails, later chunks stay
+          // memory-only so boot never mistakes a gapped sequence for full audio.
+          if (activeChunkPersistenceError) return;
+          const encrypted = await encryptActiveChunk(
+            chunk, session.sessionId, sequence, session.mimeType, session.createdAt,
+          );
+          const updatedSession = {
+            ...session,
+            chunkCount: sequence + 1,
+            audioBytes: cumulativeBytes,
+          };
+          await runRecordingTransaction('readwrite', (store) => {
+            store.put(encrypted);
+            return store.put(updatedSession);
+          });
+          if (activeRecordingSession?.sessionId === session.sessionId) {
+            activeRecordingSession = updatedSession;
+            activeChunksPersisted = sequence + 1;
+          }
+        }).catch((error) => {
+          activeChunkPersistenceError = error;
+        });
+      };
+
+      const loadActiveChunkRecording = async () => {
+        const records = await loadAllRecoveryRecords();
+        const session = records.find((record) => record.id === ACTIVE_SESSION_RECORD_ID);
+        const chunks = records.filter((record) => record.kind === 'active_chunk');
+        if (!session && chunks.length === 0) return null;
+        if (!session || session.kind !== 'active_session'
+            || session.version !== RECOVERY_VERSION || !session.sessionId) {
+          throw new Error('Active recording recovery metadata is incomplete');
+        }
+        if (chunks.some((chunk) => chunk.sessionId !== session.sessionId)) {
+          throw new Error('Active recording recovery contains conflicting sessions');
+        }
+        const sessionChunks = chunks
+          .filter((chunk) => chunk.sessionId === session.sessionId)
+          .sort((left, right) => left.sequence - right.sequence);
+        if (sessionChunks.length === 0) {
+          return { empty: true, session };
+        }
+        if (sessionChunks.length !== Number(session.chunkCount)) {
+          throw new Error('Active recording recovery is missing an emitted chunk');
+        }
+        const plaintextChunks = [];
+        for (let sequence = 0; sequence < sessionChunks.length; sequence += 1) {
+          if (sessionChunks[sequence].sequence !== sequence) {
+            throw new Error('Active recording recovery chunks are out of order');
+          }
+          plaintextChunks.push(await decryptActiveChunk(
+            sessionChunks[sequence], session.sessionId, sequence,
+          ));
+        }
+        return {
+          empty: false,
+          blob: new Blob(plaintextChunks, { type: session.mimeType || 'audio/mp4' }),
+          mimeType: session.mimeType || 'audio/mp4',
+          createdAt: session.createdAt,
+          chunkCount: sessionChunks.length,
+        };
+      };
+
+      const clearActiveChunkRecovery = async () => {
+        const records = await loadAllRecoveryRecords();
+        const ids = records
+          .filter((record) => record.id === ACTIVE_SESSION_RECORD_ID
+            || String(record.id || '').startsWith(ACTIVE_CHUNK_PREFIX))
+          .map((record) => record.id);
+        if (ids.length === 0) return;
+        await runRecordingTransaction('readwrite', (store) => {
+          ids.forEach((id) => store.delete(id));
+        });
+      };
+
+      const clearEmptyActiveSession = async () => {
+        // This removes metadata only; it can never delete emitted audio.
+        await runRecordingTransaction(
+          'readwrite', (store) => store.delete(ACTIVE_SESSION_RECORD_ID),
+        );
+      };
+
+      const loadPendingRecording = async () => {
+        const stored = await loadStoredRecording();
+        if (!stored) return null;
+        return decryptPendingRecording(stored);
+      };
+
+      const clearPendingRecording = async () => {
+        await runRecordingTransaction('readwrite', (store) => store.delete(PENDING_RECORDING_ID));
+      };
+
+      const persistCompletedRecording = async (recording) => {
+        // The completed ciphertext becomes durable first. Active per-second
+        // chunks are redundant only after that transaction has committed.
+        await savePendingRecording(recording);
+        recording.persisted = true;
+        recording.completedPersisted = true;
+        try {
+          await clearActiveChunkRecovery();
+          recording.activeRecovery = false;
+          return true;
+        } catch (error) {
+          recording.activeRecovery = true;
+          return false;
+        }
+      };
+
+      const clearDurableLocalRecovery = async (recording) => {
+        const hasBrowserRecovery = recording.persisted
+          || recording.completedPersisted || recording.activeRecovery;
+        if (!hasBrowserRecovery) return;
+
+        if (recording.completedPersisted) {
+          // Best-effort refresh of serverConfirmed/captureId metadata. The
+          // previously committed completed ciphertext already makes cleanup safe.
+          try {
+            await savePendingRecording(recording);
+          } catch (markerError) {
+            // Server confirmation is authoritative; retain no audio solely for
+            // a metadata refresh failure.
+          }
+        } else {
+          // Active chunks must not be deleted unless this completed ciphertext
+          // has first committed successfully.
+          await savePendingRecording(recording);
+          recording.persisted = true;
+          recording.completedPersisted = true;
+        }
+        await clearActiveChunkRecovery();
+        recording.activeRecovery = false;
+        await clearPendingRecording();
+      };
+
+      const postJson = async (path, body) => {
+        const response = await fetch(endpoint(path), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          cache: 'no-store',
+          body: JSON.stringify(body),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
+        return data;
+      };
+
+      const localDate = () => {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+
+      const recordEvent = (event, metadata = {}) => {
+        if (!current) return Promise.resolve();
+        return postJson('resurfacing/event', {
+          run_id: current.run_id,
+          item_id: current.item.item_id,
+          event,
+          metadata,
+        }).catch(() => {});
+      };
+
+      const formatDate = (value) => {
+        if (!value) return '';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return '';
+        return new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'long', day: 'numeric' }).format(date);
+      };
+
+      const renderMemory = (selection) => {
+        current = selection;
+        const item = selection.item;
+        if (!shownItemIds.includes(item.item_id)) shownItemIds.push(item.item_id);
+        textEl.classList.remove('skeleton');
+        textEl.textContent = item.text;
+        const parts = [item.source_label || 'Your recording', formatDate(item.date)];
+        if (item.node_title) parts.push(item.node_title);
+        metaEl.textContent = parts.filter(Boolean).join(' · ');
+        contextEl.style.display = 'none';
+        contextEl.textContent = '';
+        contextButton.textContent = 'Context';
+        anotherButton.disabled = false;
+        contextButton.disabled = false;
+        recordEvent('opened');
+      };
+
+      const loadMemory = async (mode) => {
+        anotherButton.disabled = true;
+        contextButton.disabled = true;
+        if (mode === 'daily') {
+          textEl.textContent = 'Opening your commonplace book…';
+          textEl.classList.add('skeleton');
+        }
+        try {
+          const selection = await postJson('resurfacing/select', {
+            mode,
+            local_date: localDate(),
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Oslo',
+            exclude_item_ids: shownItemIds,
+          });
+          renderMemory(selection);
+        } catch (error) {
+          textEl.classList.remove('skeleton');
+          textEl.textContent = error.message || 'The commonplace book could not be opened.';
+          metaEl.textContent = '';
+        }
+      };
+
+      anotherButton.addEventListener('click', async () => {
+        await recordEvent('another');
+        await loadMemory('pull');
+      });
+
+      contextButton.addEventListener('click', async () => {
+        if (!current) return;
+        if (contextEl.style.display === 'block') {
+          contextEl.style.display = 'none';
+          contextButton.textContent = 'Context';
+          return;
+        }
+        contextButton.disabled = true;
+        try {
+          const context = await postJson('resurfacing/context', {
+            run_id: current.run_id,
+            item_id: current.item.item_id,
+          });
+          contextEl.textContent = context.text;
+          contextEl.style.display = 'block';
+          contextButton.textContent = 'Hide context';
+          recordEvent('expanded');
+        } catch (error) {
+          contextEl.textContent = error.message;
+          contextEl.style.display = 'block';
+        } finally {
+          contextButton.disabled = false;
+        }
+      });
+
+      const setRecordStatus = (message, kind = '') => {
+        statusEl.className = `status ${kind}`.trim();
+        statusEl.textContent = message;
+      };
+
+      const formatBytes = (bytes) => {
+        if (!Number.isFinite(bytes) || bytes <= 0) return '0 MB';
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+      };
+
+      const showPendingControls = (busy = false) => {
+        const hasPending = Boolean(pendingRecording?.blob);
+        const isOversize = hasPending && pendingRecording.blob.size > MAX_UPLOAD_BYTES;
+        const needsDownloadedCopy = hasPending && !pendingRecording.serverConfirmed
+          && (isOversize || pendingRecording.persistenceUnavailable);
+        recoveryActionsEl.hidden = !hasPending;
+        retryUploadButton.textContent = pendingRecording?.serverConfirmed
+          ? 'Clear local copy'
+          : isOversize
+          ? 'Clear after download'
+          : pendingRecording?.persistenceUnavailable
+          ? 'Upload after download'
+          : 'Retry upload';
+        retryUploadButton.disabled = (
+          !hasPending || busy
+          || (needsDownloadedCopy && !pendingRecording.downloaded)
+        );
+        downloadRecordingButton.disabled = !hasPending || busy;
+        recordButton.disabled = hasPending || busy || startingRecording
+          || finishingRecording || uploadInFlight || recoveryRestoreBlocked;
+        if (hasPending && !busy) {
+          recordButton.textContent = 'Resolve saved recording first';
+        } else if (!recorder || recorder.state !== 'recording') {
+          recordButton.textContent = 'Record a thought';
+        }
+      };
+
+      const downloadPendingRecording = () => {
+        if (!pendingRecording?.blob) return;
+        const extension = pendingRecording.mimeType.includes('webm') ? 'webm' : 'm4a';
+        const url = URL.createObjectURL(pendingRecording.blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = `petrarca-thought-${new Date(pendingRecording.createdAt).toISOString().replace(/[:.]/g, '-')}.${extension}`;
+        anchor.style.display = 'none';
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 30000);
+        pendingRecording.downloaded = true;
+        showPendingControls();
+        if (!pendingRecording.serverConfirmed && pendingRecording.blob.size > MAX_UPLOAD_BYTES) {
+          setRecordStatus('Download started. Once the file is safely in Downloads, use “Clear after download”.', 'success');
+        } else if (pendingRecording.persistenceUnavailable) {
+          setRecordStatus('Download started. Once the file is safely in Downloads, you can upload this in-memory copy.', 'success');
+        }
+      };
+
+      const restorePendingRecording = async () => {
+        recordButton.disabled = true;
+        try {
+          const recovered = await loadPendingRecording();
+          if (recovered?.blob) {
+            pendingRecording = {
+              ...recovered,
+              persisted: true,
+              completedPersisted: true,
+              activeRecovery: false,
+              downloaded: false,
+            };
+            try {
+              // A completed pending ciphertext is already durable, so any
+              // interrupted-session chunks are now safe to remove.
+              await clearActiveChunkRecovery();
+            } catch (clearError) {
+              pendingRecording.activeRecovery = true;
+            }
+            showPendingControls();
+            const tooLarge = recovered.blob.size > MAX_UPLOAD_BYTES;
+            setRecordStatus(
+              recovered.serverConfirmed
+                ? 'This recording was already saved on the server. Download it if wanted, then clear the local recovery copy.'
+                : tooLarge
+                ? `Recovered ${formatBytes(recovered.blob.size)} recording. It is too large to upload safely; download it now.`
+                : `Recovered an unsent ${formatBytes(recovered.blob.size)} recording. Retry or download it.`,
+              recovered.serverConfirmed ? 'success' : 'error',
+            );
+            return;
+          }
+
+          const active = await loadActiveChunkRecording();
+          if (active?.empty) {
+            // No emitted audio exists; only an abandoned metadata marker.
+            await clearEmptyActiveSession();
+          } else if (active?.blob) {
+            pendingRecording = {
+              id: PENDING_RECORDING_ID,
+              blob: active.blob,
+              mimeType: active.mimeType,
+              createdAt: active.createdAt,
+              persisted: true,
+              completedPersisted: false,
+              activeRecovery: true,
+              downloaded: false,
+              persistenceUnavailable: false,
+            };
+            const consolidated = await persistCompletedRecording(pendingRecording)
+              .catch(() => false);
+            showPendingControls();
+            setRecordStatus(
+              consolidated
+                ? `Recovered ${active.chunkCount} encrypted chunks from an interrupted recording. Retry or download it.`
+                : `Recovered ${active.chunkCount} encrypted chunks. They remain safely stored; retry or download the recording.`,
+              'error',
+            );
+            return;
+          }
+        } catch (error) {
+          const stored = await loadAllRecoveryRecords().catch(() => []);
+          if (stored.length > 0) {
+            recoveryRestoreBlocked = true;
+            setRecordStatus('An encrypted recovery recording exists but cannot be opened in this browser. Recording another thought here is blocked to protect it.', 'error');
+            showPendingControls();
+            return;
+          }
+          setRecordStatus('Encrypted browser recovery is unavailable. A new recording will remain in memory and must be downloaded before upload.', 'error');
+        }
+        recordButton.disabled = false;
+      };
+
+      const supportedMime = () => {
+        const candidates = [
+          'audio/mp4;codecs=mp4a.40.2',
+          'audio/mp4',
+          'audio/webm;codecs=opus',
+          'audio/webm',
+        ];
+        return candidates.find((type) => MediaRecorder.isTypeSupported(type)) || '';
+      };
+
+      const stopTracks = () => {
+        if (mediaStream) mediaStream.getTracks().forEach((track) => track.stop());
+        mediaStream = null;
+      };
+
+      const renderEchoes = (echoes) => {
+        echoesEl.replaceChildren();
+        if (!echoes || echoes.length === 0) return;
+        const heading = document.createElement('h3');
+        heading.className = 'rubric';
+        heading.textContent = 'An older echo';
+        echoesEl.appendChild(heading);
+        echoes.forEach((echo) => {
+          const article = document.createElement('article');
+          article.className = 'echo';
+          const text = document.createElement('p');
+          text.className = 'echo-text';
+          text.textContent = `“${echo.chunk_text}”`;
+          const meta = document.createElement('p');
+          meta.className = 'echo-meta';
+          meta.textContent = [formatDate(echo.transcript_date), echo.transcript_node_title].filter(Boolean).join(' · ');
+          article.append(text, meta);
+          echoesEl.appendChild(article);
+        });
+      };
+
+      const uploadRecording = async (blob, mimeType) => {
+        const extension = mimeType.includes('webm') ? 'webm' : 'm4a';
+        const form = new FormData();
+        form.append('audio', blob, `thought.${extension}`);
+        const response = await fetch(endpoint('commonplace/capture'), {
+          method: 'POST',
+          credentials: 'same-origin',
+          cache: 'no-store',
+          body: form,
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const preserved = data.audio_preserved ? ' The recording was preserved.' : '';
+          const error = new Error((data.error || `Upload failed (${response.status})`) + preserved);
+          error.serverPreserved = Boolean(data.audio_preserved);
+          error.captureId = data.capture_id || null;
+          error.status = response.status;
+          throw error;
+        }
+        return data;
+      };
+
+      const renderCaptureSuccess = (result) => {
+        saidEl.textContent = result.transcript;
+        renderEchoes(result.echoes);
+        resultEl.style.display = 'block';
+      };
+
+      const attemptPendingUpload = async () => {
+        if (!pendingRecording?.blob || pendingRecording.serverConfirmed || uploadInFlight) return;
+        if (pendingRecording.blob.size > MAX_UPLOAD_BYTES) {
+          showPendingControls();
+          setRecordStatus(
+            `This ${formatBytes(pendingRecording.blob.size)} recording exceeds the safe 20 MB upload limit. Download it, then explicitly clear the encrypted browser copy.`,
+            'error',
+          );
+          return;
+        }
+        if (pendingRecording.persistenceUnavailable && !pendingRecording.downloaded) {
+          showPendingControls();
+          setRecordStatus('Encrypted recovery is unavailable. Download this in-memory recording before uploading it.', 'error');
+          return;
+        }
+        uploadInFlight = true;
+        showPendingControls(true);
+        setRecordStatus('Uploading the locally secured recording…');
+        try {
+          // A memory-only recovery must be made durable before any network
+          // retry. A loaded IndexedDB record already has persisted=true.
+          if (!pendingRecording.persisted) {
+            if (!pendingRecording.persistenceUnavailable) {
+              try {
+                await persistCompletedRecording(pendingRecording);
+              } catch (recoveryError) {
+                pendingRecording.persistenceUnavailable = true;
+                if (!pendingRecording.downloaded) {
+                  showPendingControls();
+                  setRecordStatus(
+                    'Could not create encrypted browser recovery. Download this in-memory recording before upload.',
+                    'error',
+                  );
+                  return;
+                }
+              }
+            }
+          }
+          const result = await uploadRecording(pendingRecording.blob, pendingRecording.mimeType);
+          renderCaptureSuccess(result);
+          pendingRecording.serverConfirmed = true;
+          pendingRecording.captureId = result.capture_id || null;
+          try {
+            // This is the only normal deletion path, and it runs only after a
+            // confirmed successful server response.
+            await clearDurableLocalRecovery(pendingRecording);
+            pendingRecording = null;
+            showPendingControls();
+            setRecordStatus('Saved. The local recovery copy was cleared. No cards or quizzes were created.', 'success');
+          } catch (clearError) {
+            // Do not invite a duplicate upload if the server succeeded but
+            // IndexedDB deletion failed. Keep the Blob downloadable in memory.
+            showPendingControls();
+            setRecordStatus('Saved on the server. The browser recovery copy could not be cleared; you may download it, but do not retry the upload.', 'error');
+          }
+        } catch (error) {
+          if (error.serverPreserved) {
+            // The original bytes are durable. A too-short transcript is a
+            // terminal result; other downstream failures can be retried safely
+            // because the server keys both audio and transcript by content.
+            pendingRecording.captureId = error.captureId;
+            pendingRecording.serverConfirmed = error.status === 422;
+            if (pendingRecording.persisted && pendingRecording.serverConfirmed) {
+              try {
+                await savePendingRecording(pendingRecording);
+              } catch (markerError) {
+                // The in-memory copy remains available for download.
+              }
+            }
+            showPendingControls();
+            setRecordStatus(
+              pendingRecording.serverConfirmed
+                ? `${error.message} The browser copy remains downloadable; clear it when ready.`
+                : `${error.message} Retrying is safe and will not duplicate the retained audio.`,
+              'error',
+            );
+            return;
+          }
+          showPendingControls();
+          setRecordStatus(
+            `${error.message || 'Upload failed.'} The local recovery copy is still available to retry or download.`,
+            'error',
+          );
+        } finally {
+          uploadInFlight = false;
+          showPendingControls();
+        }
+      };
+
+      const retryOrClearPendingRecording = async () => {
+        if (!pendingRecording?.blob || uploadInFlight || finishingRecording) return;
+        if (!pendingRecording.serverConfirmed
+            && pendingRecording.blob.size > MAX_UPLOAD_BYTES) {
+          if (!pendingRecording.downloaded) {
+            setRecordStatus('Download the recording before clearing the browser recovery copy.', 'error');
+            return;
+          }
+          showPendingControls(true);
+          try {
+            await clearDurableLocalRecovery(pendingRecording);
+            pendingRecording = null;
+            setRecordStatus('The oversized recording was downloaded and its encrypted browser copy was cleared.', 'success');
+          } catch (error) {
+            setRecordStatus('The downloaded file is safe, but browser recovery storage could not be cleared.', 'error');
+          } finally {
+            showPendingControls();
+          }
+          return;
+        }
+        if (!pendingRecording?.serverConfirmed) {
+          await attemptPendingUpload();
+          return;
+        }
+        showPendingControls(true);
+        try {
+          await clearDurableLocalRecovery(pendingRecording);
+          pendingRecording = null;
+          showPendingControls();
+          setRecordStatus('The already-saved local recovery copy was cleared.', 'success');
+        } catch (error) {
+          showPendingControls();
+          setRecordStatus('The server copy is safe, but browser recovery storage could not be cleared.', 'error');
+        }
+      };
+
+      const finishRecording = async () => {
+        finishingRecording = true;
+        clearInterval(statusTimer);
+        statusTimer = null;
+        stopTracks();
+        recordButton.disabled = true;
+        recordButton.className = 'primary';
+        recordButton.textContent = 'Record a thought';
+        setRecordStatus('Finishing encrypted chunk recovery…');
+        // The stop event is dispatched after the final dataavailable event.
+        // Await every queued AES-GCM/IndexedDB transaction so the completed
+        // Blob and its incremental recovery contain the same ordered chunks.
+        await activeChunkWriteChain;
+        const mimeType = recorder?.mimeType || audioParts[0]?.type || 'audio/mp4';
+        const blob = new Blob(audioParts, { type: mimeType });
+        const allActiveChunksDurable = Boolean(activeRecordingSession)
+          && !activeChunkPersistenceError
+          && activeChunksPersisted === activeChunkSequence;
+        pendingRecording = {
+          id: PENDING_RECORDING_ID,
+          blob,
+          mimeType,
+          createdAt: Date.now(),
+          persisted: allActiveChunksDurable,
+          completedPersisted: false,
+          activeRecovery: allActiveChunksDurable,
+          downloaded: false,
+          persistenceUnavailable: false,
+        };
+        try {
+          // Persist the completed ciphertext first; only that committed write
+          // permits deletion of the incremental active chunks.
+          await persistCompletedRecording(pendingRecording);
+          showPendingControls();
+          await attemptPendingUpload();
+        } catch (error) {
+          if (allActiveChunksDurable) {
+            // The ordered chunk ciphertext is still a complete durable copy.
+            // It remains in IndexedDB because completed persistence failed.
+            pendingRecording.persisted = true;
+            pendingRecording.activeRecovery = true;
+            showPendingControls();
+            setRecordStatus('The recording is safe as encrypted chunks. Uploading without clearing them…');
+            await attemptPendingUpload();
+          } else {
+            // The Blob remains referenced in memory, and Download remains
+            // available even if both encrypted recovery paths failed.
+            pendingRecording.persisted = false;
+            pendingRecording.activeRecovery = activeChunksPersisted > 0;
+            pendingRecording.persistenceUnavailable = true;
+            showPendingControls();
+            setRecordStatus(
+              `Could not secure complete encrypted browser recovery: ${error.message || 'unknown error'}. Download the in-memory recording before upload.`,
+              'error',
+            );
+          }
+        } finally {
+          recorder = null;
+          audioParts = [];
+          audioBytes = 0;
+          activeRecordingSession = null;
+          activeChunkSequence = 0;
+          activeChunksPersisted = 0;
+          activeChunkWriteChain = Promise.resolve();
+          activeChunkPersistenceError = null;
+          finishingRecording = false;
+          showPendingControls();
+        }
+      };
+
+      const requestStopRecording = (message = 'Securing the recording…') => {
+        if (!recorder || recorder.state !== 'recording' || finishingRecording) return false;
+        finishingRecording = true;
+        clearInterval(statusTimer);
+        statusTimer = null;
+        recordButton.disabled = true;
+        setRecordStatus(message);
+        recorder.stop();
+        return true;
+      };
+
+      const startRecording = async () => {
+        if (startingRecording || finishingRecording || uploadInFlight || recoveryRestoreBlocked) return;
+        if (pendingRecording?.blob) {
+          setRecordStatus('Retry or download the saved recording before starting another.', 'error');
+          showPendingControls();
+          return;
+        }
+        if (!window.MediaRecorder || !navigator.mediaDevices?.getUserMedia) {
+          setRecordStatus('This browser does not offer microphone recording here.', 'error');
+          return;
+        }
+        startingRecording = true;
+        pageExitRequested = false;
+        showPendingControls(true);
+        setRecordStatus('Requesting microphone access…');
+        try {
+          mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          if (pageExitRequested || document.visibilityState === 'hidden') {
+            stopTracks();
+            setRecordStatus('Recording did not start because the page was hidden.', 'error');
+            return;
+          }
+          const mimeType = supportedMime();
+          recorder = mimeType ? new MediaRecorder(mediaStream, { mimeType }) : new MediaRecorder(mediaStream);
+          try {
+            await beginActiveChunkRecovery(recorder.mimeType || mimeType || 'audio/mp4');
+          } catch (recoveryError) {
+            activeRecordingSession = null;
+            activeChunkPersistenceError = recoveryError;
+            const stored = await loadAllRecoveryRecords().catch(() => []);
+            if (stored.some((record) => record.id === ACTIVE_SESSION_RECORD_ID
+                || String(record.id || '').startsWith(ACTIVE_CHUNK_PREFIX))) {
+              recoveryRestoreBlocked = true;
+              stopTracks();
+              recorder = null;
+              setRecordStatus('An interrupted encrypted recording must be recovered before starting another.', 'error');
+              return;
+            }
+          }
+          if (pageExitRequested || document.visibilityState === 'hidden') {
+            stopTracks();
+            recorder = null;
+            if (activeRecordingSession?.chunkCount === 0) {
+              await clearEmptyActiveSession().catch(() => {});
+            }
+            activeRecordingSession = null;
+            setRecordStatus('Recording did not start because the page was hidden.', 'error');
+            return;
+          }
+          audioParts = [];
+          audioBytes = 0;
+          recorder.addEventListener('dataavailable', (event) => {
+            if (event.data && event.data.size > 0) {
+              audioParts.push(event.data);
+              audioBytes += event.data.size;
+              enqueueActiveChunkPersistence(event.data, audioBytes);
+              if (audioBytes >= AUTO_STOP_BYTES && recorder?.state === 'recording') {
+                requestStopRecording('Approaching the safe upload size; securing the recording now…');
+              }
+            }
+          });
+          recorder.addEventListener('stop', () => {
+            finishRecording().catch((error) => {
+              setRecordStatus(`Could not finish the recording: ${error.message || 'unknown error'}`, 'error');
+            });
+          }, { once: true });
+          // Periodic chunks let us enforce the conservative size ceiling and
+          // preserve everything emitted when the guarded stop path runs.
+          recorder.start(1000);
+          recordingStartedAt = Date.now();
+          recordButton.className = 'recording';
+          recordButton.textContent = 'Stop recording';
+          resultEl.style.display = 'none';
+          setRecordStatus(activeRecordingSession
+            ? 'Recording · 0:00 · encrypted recovery active'
+            : 'Recording · 0:00 · memory only; download after stopping');
+          recordEvent('record_started');
+          statusTimer = setInterval(() => {
+            const seconds = Math.floor((Date.now() - recordingStartedAt) / 1000);
+            const recoveryState = activeRecordingSession && !activeChunkPersistenceError
+              ? ' · encrypted recovery active'
+              : ' · memory only';
+            setRecordStatus(`Recording · ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}${recoveryState}`);
+            if (seconds >= MAX_RECORDING_SECONDS && recorder?.state === 'recording') {
+              requestStopRecording('8-minute limit reached; securing the recording now…');
+            }
+          }, 1000);
+        } catch (error) {
+          stopTracks();
+          if (activeRecordingSession && activeChunkSequence === 0) {
+            await clearEmptyActiveSession().catch(() => {});
+          }
+          activeRecordingSession = null;
+          setRecordStatus('Microphone access was not available.', 'error');
+        } finally {
+          startingRecording = false;
+          showPendingControls();
+        }
+      };
+
+      recordButton.addEventListener('click', () => {
+        if (startingRecording || finishingRecording || uploadInFlight) return;
+        if (recorder && recorder.state === 'recording') {
+          requestStopRecording('Securing the recording…');
+        }
+        else void startRecording();
+      });
+
+      retryUploadButton.addEventListener('click', retryOrClearPendingRecording);
+      downloadRecordingButton.addEventListener('click', downloadPendingRecording);
+
+      const hasUnsafeActiveCapture = () => (
+        startingRecording || finishingRecording || recorder?.state === 'recording'
+        || (pendingRecording?.blob && !pendingRecording.persisted
+          && !pendingRecording.serverConfirmed && !pendingRecording.downloaded)
+      );
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden' && recorder?.state === 'recording') {
+          requestStopRecording('Page hidden; securing the recording now…');
+        }
+      });
+      window.addEventListener('pagehide', () => {
+        pageExitRequested = true;
+        if (recorder?.state === 'recording') {
+          requestStopRecording('Page closing; securing the recording now…');
+        } else if (!finishingRecording) {
+          stopTracks();
+        }
+      });
+      window.addEventListener('pageshow', () => {
+        pageExitRequested = false;
+      });
+      window.addEventListener('beforeunload', (event) => {
+        if (hasUnsafeActiveCapture()) {
+          event.preventDefault();
+          event.returnValue = '';
+        }
+      });
+
+      const boot = async () => {
+        await restorePendingRecording();
+        await loadMemory('daily');
+      };
+      boot();
+    })();
+  </script>
+</body>
+</html>

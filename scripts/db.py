@@ -631,7 +631,8 @@ CREATE TABLE IF NOT EXISTS voice_transcripts (
     llm_result TEXT,                   -- full JSON from LLM analysis
     microlearning_triggered TEXT DEFAULT '[]',
     created_at INTEGER NOT NULL,
-    input_mode TEXT                    -- 'audio' | 'text_json' | 'test' | NULL (pre-migration)
+    input_mode TEXT,                   -- 'audio' | 'text_json' | 'test' | NULL (pre-migration)
+    audio_path TEXT                    -- durable relative path for captures retained on server
 );
 CREATE INDEX IF NOT EXISTS idx_vt_source ON voice_transcripts(source);
 CREATE INDEX IF NOT EXISTS idx_vt_created ON voice_transcripts(created_at);
@@ -922,6 +923,49 @@ MIGRATIONS = [
         created_at INTEGER NOT NULL
     )""",
     "CREATE INDEX IF NOT EXISTS idx_cp_created ON commonplace_events(created_at)",
+    # Session 94: provenance-first, channel-neutral resurfacing. Run and event
+    # tables contain identifiers and hashes only; authored text remains in its
+    # canonical source table.
+    "ALTER TABLE voice_transcripts ADD COLUMN audio_path TEXT",
+    """CREATE TABLE IF NOT EXISTS resurfacing_runs (
+        id TEXT PRIMARY KEY,
+        run_key TEXT NOT NULL UNIQUE,
+        mode TEXT NOT NULL CHECK (mode IN ('daily', 'pull')),
+        local_date TEXT,
+        timezone TEXT NOT NULL DEFAULT 'Europe/Oslo',
+        context_hash TEXT,
+        algorithm_version TEXT NOT NULL,
+        seed TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_rr_created ON resurfacing_runs(created_at)",
+    """CREATE TABLE IF NOT EXISTS resurfacing_run_items (
+        run_id TEXT NOT NULL REFERENCES resurfacing_runs(id) ON DELETE CASCADE,
+        position INTEGER NOT NULL,
+        item_id TEXT NOT NULL,
+        source_table TEXT NOT NULL,
+        source_id TEXT NOT NULL,
+        source_subkey TEXT NOT NULL,
+        content_hash TEXT NOT NULL,
+        provenance_json TEXT NOT NULL DEFAULT '{}',
+        score REAL NOT NULL,
+        score_breakdown_json TEXT NOT NULL DEFAULT '{}',
+        PRIMARY KEY (run_id, position),
+        UNIQUE (run_id, item_id)
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_rri_item ON resurfacing_run_items(item_id)",
+    """CREATE TABLE IF NOT EXISTS resurfacing_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id TEXT REFERENCES resurfacing_runs(id) ON DELETE SET NULL,
+        item_id TEXT,
+        channel TEXT NOT NULL DEFAULT 'web',
+        event TEXT NOT NULL,
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        created_at INTEGER NOT NULL
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_re_item_created ON resurfacing_events(item_id, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_re_run ON resurfacing_events(run_id)",
 ]
 
 

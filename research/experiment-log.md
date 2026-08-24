@@ -4,6 +4,39 @@
 
 ---
 
+## 2026-08-24 — Session 94: Petrarca Companion, Capture Without a Queue
+
+**What**: Restart Petrarca as a private, same-origin web companion around two
+behaviours that the production history shows were genuinely used: recording a
+thought and encountering an older thought again. The existing Expo app,
+structural-card interfaces, generated curricula, cards, quizzes, and review state
+remain preserved, but they are not part of this experiment.
+
+**Hypothesis**: Petrarca became overwhelming because capture fed a large generated
+review queue and the product became a destination that demanded a session. A page
+that offers one exact excerpt from the user's own speech, plus a recording button
+that stores audio and transcript without generating scheduled work, will be easier
+to use in ordinary life. Returning semantically related old excerpts immediately
+after a recording should make capture rewarding without turning it into a test.
+
+**Guardrails**:
+
+- pull-only: no notifications, streaks, due counts, grades, or automatic review;
+- firsthand wording first: daily excerpts are exact slices of eligible canonical
+  transcripts, not LLM-derived chunks or feedback;
+- recording creates only durable audio, a `voice_transcripts` row, and embedded
+  `raw_speech` chunks; it creates no knowledge items, cards, quizzes, or curricula;
+- all interactions are provenance-logged so usage can be assessed without inferring
+  engagement from generated system activity;
+- the page and API remain behind a private HTTPS capability while the research
+  server stays bound to loopback.
+
+**Measurement plan**: For the first two weeks, count distinct days the companion is
+opened, excerpts intentionally advanced, context expansions, recordings completed,
+and semantic echoes returned (without treating visibility as proof of usefulness).
+Inspect qualitative feedback before adding any new delivery medium. Success is
+voluntary reuse and useful recollection, not queue completion.
+
 ## 2026-07-10 — Session 93: Bounded Koigen Capture Adapter
 
 **What**: Harden the small Koigen bridge hosted by Petrarca's research server. Add
