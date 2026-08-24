@@ -1,6 +1,77 @@
 # Knowledge System Implementation Status
 
-**Date**: May 4, 2026 (last updated — session 92: defender mode + commonplace-resurfacing prototypes)
+**Date**: August 24, 2026 (last updated — session 94: private queue-free Companion)
+
+## Session 94: Preserve Petrarca, Restart as a Companion (August 24, 2026)
+
+### Why
+
+The production-history audit separated the project's genuine behavioural signal
+from its generated inventory. Voice was the strongest real practice: about 30
+substantial elicitation recordings during the active period. Generation then
+outpaced attention by orders of magnitude: 590 structural cards / 2,434
+positions, 1,279 microlearning rows, and 4,849 quizzes received very little use.
+The thesis survived; the product contract became an implicit daily obligation.
+
+The restart contract is therefore: **Petrarca may keep something alive, but it
+may not turn a thought into homework.** All existing data, schedules, curricula,
+cards, quizzes, interfaces, logs, and research remain preserved.
+
+### Private Companion
+
+Added one private, bookmarkable HTTPS page with two voluntary actions:
+
+- show one exact excerpt from an eligible firsthand transcript, with
+  **Another** and **Context** but no question, grade, due date, streak, or queue;
+- record a thought in the browser, retain the raw audio first, transcribe it,
+  create exact `raw_speech` chunks, and return up to three associative echoes.
+
+Companion capture writes only the recording, its `voice_transcripts` row, and
+exact authored chunks. It never invokes curriculum assessment, entity linking,
+knowledge-state updates, card/quiz generation, microlearning, or FSRS.
+
+### Preservation and failure handling
+
+- Browser audio is AES-GCM encrypted before entering IndexedDB. While recording,
+  each emitted one-second chunk is committed in sequence; an interrupted page
+  reconstructs the fully committed prefix. Plaintext audio is never stored in
+  IndexedDB.
+- The server derives a content ID from the audio bytes. Per-capture thread and
+  process locks recheck SQLite under the lock and hold it through Soniox and the
+  transcript commit, so a lost-response retry cannot transcribe or store twice.
+- Audio files and status sidecars are fsynced and mode 0600. The daily verified
+  backup includes both the canonical DB and `data/audio/**`.
+- New resurfacing run/event tables contain keyed identifiers, hashes, scores,
+  and typed metadata only—not authored excerpts or plaintext prompts.
+
+### Private deployment
+
+The research server remains on `127.0.0.1:8090`. nginx exposes exactly one GET
+page and four POST endpoints beneath a root-only capability path; every other
+path in that capability namespace returns 404 and access logging is disabled.
+The dedicated Soniox/resurfacing environment and capability are root:root 0600,
+with a mode-0600 off-host recovery copy. Installation is transactional across
+systemd and nginx and rolls both layers back on failed verification.
+
+PR #14 merged as `aa671c9` and was deployed through the unified Git-based
+deployment path. `petrarca-expo` was returned to its dormant state afterward.
+Read-only production probes verified the private page, security headers,
+closed fallback, method restrictions, loopback bind, and unchanged public
+content boundary without selecting an excerpt or creating a synthetic capture.
+
+### Verification
+
+- 35 focused Companion/storage/installer/deadline tests pass;
+- Python, JavaScript, shell, ShellCheck, and diff checks pass;
+- two independent failure-mode reviews found no P0/P1 blocker;
+- a fresh 45.8 MB production snapshot preserved full-row fingerprints across
+  16 learner/card/quiz/scheduling/source tables, stored no authored text in new
+  state tables, and returned `PRAGMA quick_check = ok`;
+- verified pre-deployment and post-migration DB + durable-audio backups pass all
+  manifests and gzip checks.
+
+The first real browser open and recording are deliberately left to the user, so
+the experiment begins with genuine interaction rather than agent smoke-test data.
 
 ## Session 92: Defender Mode + Commonplace-Resurfacing Prototypes (May 4, 2026)
 
