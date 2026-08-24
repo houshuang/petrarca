@@ -1,7 +1,7 @@
 # Petrarca Restart Plan: Companion, Not Queue
 
 **Date:** 2026-08-24
-**Status:** Phase 1 implementation in progress
+**Status:** Phase 1 live behind a private capability; first real use pending
 **Scope:** Preserve the full project and its data while testing a much smaller
 way for Petrarca to earn a place in ordinary life.
 
