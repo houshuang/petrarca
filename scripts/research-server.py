@@ -85,6 +85,7 @@ def _run_claude_p(prompt: str, timeout: int, purpose: str) -> tuple[str | None, 
 RESULTS_DIR = Path(os.environ.get('RESEARCH_RESULTS_DIR', '/opt/petrarca/research-results'))
 INGEST_DIR = Path(os.environ.get('INGEST_DIR', '/opt/petrarca/ingest'))
 PORT = int(os.environ.get('RESEARCH_PORT', '8090'))
+HOST = os.environ.get('RESEARCH_HOST', '127.0.0.1')
 INGEST_TOKEN = os.environ.get('PETRARCA_INGEST_TOKEN', '')
 BOOKS_OUTPUT_DIR = Path(os.environ.get('BOOKS_OUTPUT_DIR', '/opt/petrarca/data/books'))
 CROSS_MATCH_DIR = Path(os.environ.get('CROSS_MATCH_DIR', '/opt/petrarca/data'))
@@ -145,7 +146,7 @@ from review_engine import (
     generate_cross_book_hamarquizen, notify_article_read_curriculum,
 )
 
-SONIOX_API_KEY = os.environ.get('SONIOX_API_KEY', '557c7c5a86a2f5b8fa734ddbbe179f0f21fd342c762768c9af4f4ffff8c58e1f')
+SONIOX_API_KEY = os.environ.get('SONIOX_API_KEY')
 SONIOX_BASE_URL = 'https://api.soniox.com/v1'
 
 TWIKIT_COOKIES_DIR = Path.home() / '.config' / 'twikit'
@@ -1396,6 +1397,9 @@ def run_explore_batch(request_id: str, concepts: list[dict]):
 def transcribe_on_server(audio_path: Path) -> str:
     """Upload audio to Soniox, transcribe, return text."""
     import requests as req
+
+    if not SONIOX_API_KEY:
+        raise RuntimeError('SONIOX_API_KEY is not configured')
 
     headers = {'Authorization': f'Bearer {SONIOX_API_KEY}'}
 
@@ -7910,7 +7914,7 @@ if __name__ == '__main__':
     init_db()
     migrate_kindle_json_to_sqlite()
     threading.Thread(target=_retry_failed_ml_cards, daemon=True).start()
-    server = ThreadingHTTPServer(('0.0.0.0', PORT), ResearchHandler)
-    print(f'Research server listening on port {PORT}')
+    server = ThreadingHTTPServer((HOST, PORT), ResearchHandler)
+    print(f'Research server listening on {HOST}:{PORT}')
     print(f'Results directory: {RESULTS_DIR}')
     server.serve_forever()

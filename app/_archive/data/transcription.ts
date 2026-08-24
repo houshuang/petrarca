@@ -2,7 +2,8 @@ import { VoiceNote } from './types';
 import { updateVoiceNoteTranscript, updateVoiceNoteStatus, processTranscriptForConcepts } from './store';
 import { logEvent } from './logger';
 
-const SONIOX_API_KEY = '557c7c5a86a2f5b8fa734ddbbe179f0f21fd342c762768c9af4f4ffff8c58e1f';
+// Archived client-side transcription must never contain a provider credential.
+const SONIOX_API_KEY = '';
 const SONIOX_BASE_URL = 'https://api.soniox.com/v1';
 const MODEL = 'stt-async-v4';
 const POLL_INTERVAL_MS = 3000;
