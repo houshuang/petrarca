@@ -14,23 +14,61 @@ echo "=== Setting up Petrarca content refresh ==="
 sudo mkdir -p "$CONTENT_DIR" "$SOURCES_DIR"
 sudo chown -R stian:stian "$PETRARCA_DIR"
 
-# nginx config for content serving on port 8083
+# nginx config for loopback-only content serving on port 8083. Never alias the
+# whole data directory: it also contains the canonical DB, recordings, logs,
+# feedback, and caches.
 sudo tee /etc/nginx/sites-available/petrarca-content > /dev/null <<'NGINX'
 server {
-    listen 8083;
+    listen 127.0.0.1:8083;
     server_name alifstian.duckdns.org;
 
-    location /content/ {
-        alias /opt/petrarca/data/;
-        add_header Access-Control-Allow-Origin "*";
-        add_header Cache-Control "public, max-age=300";
-        types { application/json json; }
-    }
-
-    location /content/manifest.json {
+    location = /content/manifest.json {
         alias /opt/petrarca/data/manifest.json;
+        default_type application/json;
+        limit_except GET { deny all; }
         add_header Access-Control-Allow-Origin "*";
         add_header Cache-Control "no-cache";
+        add_header X-Content-Type-Options "nosniff";
+    }
+
+    location = /content/articles.json {
+        alias /opt/petrarca/data/articles.json;
+        default_type application/json;
+        limit_except GET { deny all; }
+        add_header Access-Control-Allow-Origin "*";
+        add_header Cache-Control "public, max-age=300";
+        add_header X-Content-Type-Options "nosniff";
+    }
+
+    location = /content/knowledge_index.json {
+        alias /opt/petrarca/data/knowledge_index.json;
+        default_type application/json;
+        limit_except GET { deny all; }
+        add_header Access-Control-Allow-Origin "*";
+        add_header Cache-Control "public, max-age=300";
+        add_header X-Content-Type-Options "nosniff";
+    }
+
+    location = /content/concept_clusters.json {
+        alias /opt/petrarca/data/concept_clusters.json;
+        default_type application/json;
+        limit_except GET { deny all; }
+        add_header Access-Control-Allow-Origin "*";
+        add_header Cache-Control "public, max-age=300";
+        add_header X-Content-Type-Options "nosniff";
+    }
+
+    location = /content/syntheses.json {
+        alias /opt/petrarca/data/syntheses.json;
+        default_type application/json;
+        limit_except GET { deny all; }
+        add_header Access-Control-Allow-Origin "*";
+        add_header Cache-Control "public, max-age=300";
+        add_header X-Content-Type-Options "nosniff";
+    }
+
+    location /content/ {
+        return 404;
     }
 }
 NGINX
@@ -45,7 +83,7 @@ PETRARCA_SOURCES=/opt/petrarca/data/sources
 CRON
 
 echo "=== Done ==="
-echo "Content will be served at http://alifstian.duckdns.org:8083/content/"
+echo "Content is loopback-only on :8083; expose only the allowlisted files through HTTPS nginx."
 echo "Pipeline runs daily at 7 AM UTC"
 echo ""
 echo "To sync source data from Mac, run:"
