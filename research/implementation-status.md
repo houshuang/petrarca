@@ -1,16 +1,23 @@
 # Petrarca: Current System State
 
 **Last rewritten**: April 4, 2026 (session 45)
-**Last updated**: April 16, 2026 (session 82: transcript reprocessing + card suggestions)
+**Last updated**: August 24, 2026 (session 94: preserved-system restart + private Companion)
 **For session-by-session history**: see `research/session-changelog.md`
+
+> **Current product posture (Session 94).** The system below is preserved, not
+> reset, but its generated review queue is no longer the default product
+> contract. The active restart surface is a private HTTPS Companion: one exact
+> old excerpt from firsthand speech, an intentional **Another/Context** action,
+> and a browser recorder that retains raw audio and creates no cards, quizzes,
+> or FSRS work. See [restart-plan-2026-08-24.md](restart-plan-2026-08-24.md).
 
 ## Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ CLIENT (Expo SDK 54, React Native)                          │
-│ native: exp://alifstian.duckdns.org:8082                    │
-│ web:    http://alifstian.duckdns.org:8084                   │
+│ PRESERVED CLIENT (Expo SDK 54, React Native)                │
+│ Old native/review UI remains in source and production data. │
+│ Private Companion is a bookmarkable HTTPS page.             │
 │                                                             │
 │ 4 tabs: Review | Voice | Stats | More                       │
 │ Review: landing screen, card stream + floating mic FAB      │
@@ -22,36 +29,54 @@
 │ Sync:  content-sync.ts (manifest hash comparison + ?since=)  │
 │ Lazy:  article-content.ts (in-memory + disk cache)           │
 └────────────────┬────────────────────────────────────────────┘
-                 │ HTTP
+                 │ HTTPS capability (exact routes only)
 ┌────────────────▼────────────────────────────────────────────┐
 │ HETZNER VM                                                   │
 │                                                             │
-│ nginx :8083 — static content (JSON fallback)                 │
-│ nginx :8084 — web app (static dist/)                         │
-│ research-server.py :8090 — API + LLM orchestration + logging │
-│ log_server.py :8091 — legacy (replaced by /log/events)       │
+│ nginx :443 — public static/read-only allowlist + private      │
+│              Companion exact-route proxy                     │
+│ nginx :8083/:8084 — legacy public read-only/static surfaces  │
+│ research-server.py 127.0.0.1:8090 — loopback API only        │
+│ log_server.py :8091 — disabled legacy service                │
 │                                                             │
 │ petrarca.db (SQLite, WAL) — canonical data store             │
 │ /opt/petrarca/data/ — JSON fallback + cache files            │
 │   voice_elicit_cache/ — idempotent retry cache (24h TTL)     │
-│ /opt/petrarca/.env — GEMINI_KEY, ANTHROPIC_KEY               │
-│                                                             │
-│ Cron: /etc/cron.d/petrarca-refresh (every 4 hours)           │
-│   → content-refresh.sh                                       │
-│     → fetch_twitter_bookmarks.py                             │
-│     → fetch_readwise_reader.py                               │
-│     → build_articles.py (Gemini extraction)                  │
-│     → build_claim_embeddings.py (MiniLM via amygdala)        │
-│     → build_knowledge_index.py (similarities + delta)        │
-│     → build_concept_clusters.py                              │
-│     → generate_syntheses.py                                  │
-│     → build_curriculum_embeddings.py                         │
+│ Root-only env files — no secrets in Git or public bundles    │
+│ Daily verified DB + durable-audio backup; off-host point copy│
+│ Content-refresh cron is disabled.                            │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## Content Numbers (as of Apr 16, 2026)
+## Content Numbers (production audit, Aug 24, 2026)
 
-~261 articles, ~4,764 claims, 20 clusters, 27 syntheses, 9,392 article similarity pairs, 13 curricula (1,119 nodes), 1,672 key_facts (across all domains), 616 shared_entities (568 with Wikidata QIDs, 92.2%). 266 knowledge_items (116 reviewed). 1,429 entity_resolutions (94 voice, 1,301 backfill). 590 structural_cards (523 aspect, 25 cast, 18 sequence, 14 causal, 10 synchronic), 2,434 structural_positions (6 reviewed). 1,240 microlearning_cards. 4,724 microlearning_quizzes (2,224 causal, 1,394 legacy, 427 role, 414 date_reverse, 249 location, 16 order). 2 suggested_cards (1 generated, 1 rejected). 42 voice_transcripts (30 elicitation, 8 capture, 2 entity_capture, 1 explore, 1 insight). 3,123 interaction_log events.
+The canonical DB contains 36 transcript rows (about 35 distinct firsthand
+records after duplicate handling), 895 transcript chunks, 265 knowledge items,
+17 knowledge entities, 1,119 curriculum nodes, 590 structural cards / 2,434
+positions, 1,279 microlearning-card rows, 4,849 quizzes, and 3,528 interaction
+events. Only 11 structural cards, one microlearning card, and 25 distinct
+microlearning quizzes were ever reviewed. These generated inventories are
+preserved as archive/research material, not presented as a debt to clear.
+
+## Private Companion (Session 94)
+
+- `GET /companion` — standalone private page, served only through an unlogged
+  nginx capability path;
+- `POST /resurfacing/select` — one channel-neutral exact firsthand excerpt;
+- `POST /resurfacing/context` — full canonical transcript on demand;
+- `POST /resurfacing/event` — typed identifiers/metrics only, never transcript
+  or free-text query content;
+- `POST /commonplace/capture` — browser audio retained first, then Soniox
+  transcription, `voice_transcripts(source='commonplace_capture')`, exact
+  `raw_speech` chunks, and optional old-speech echoes.
+
+`resurfacing_runs`, `resurfacing_run_items`, and `resurfacing_events` store
+selection/delivery provenance without duplicating authored text. New capture
+audio is mode 0600 under `data/audio/commonplace/`; the DB stores its durable
+relative path. Browser recovery is capability-keyed AES-GCM ciphertext, and
+audio-content IDs make upload retries idempotent. The route performs no
+curriculum/entity learner-state updates, card generation, quiz generation, or
+scheduling.
 
 ## App Screens
 

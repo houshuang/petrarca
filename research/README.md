@@ -7,6 +7,7 @@ Master index of all research documents. **Always update this file when adding ne
 | When | Document | Why |
 |------|----------|-----|
 | **Every session** | [implementation-status.md](implementation-status.md) | Current system snapshot — architecture, all screens/scripts/endpoints, algorithm parameters |
+| **Current restart** | [restart-plan-2026-08-24.md](restart-plan-2026-08-24.md) | Production-history survey, preservation boundary, private Companion experiment, research-library bridge, and delivery gates |
 | **Design decisions** | [design-vision.md](design-vision.md) | Master "why" — "hooks not facts", Mode A vs B, three layers |
 | **Retention/review** | [review-system-architecture.md](review-system-architecture.md) | Knowledge-centric (not source-centric) review design |
 | **Retention/review** | [reading-companion-process-design.md](reading-companion-process-design.md) | How reading companion flows during active reading |

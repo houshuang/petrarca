@@ -9,8 +9,10 @@ WorkingDirectory=/opt/petrarca
 ExecStart=/opt/petrarca/.venv/bin/python3 /opt/petrarca/scripts/research-server.py
 Restart=always
 RestartSec=5
+UMask=0077
 Environment=RESEARCH_RESULTS_DIR=/opt/petrarca/research-results
 Environment=RESEARCH_PORT=8090
+Environment=RESEARCH_HOST=127.0.0.1
 
 [Install]
 WantedBy=multi-user.target

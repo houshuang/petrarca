@@ -101,6 +101,8 @@ EMAILS_DIR = INGEST_DIR / 'emails'
 CHAT_DIR = Path(os.environ.get('CHAT_DIR', '/opt/petrarca/data/chats'))
 NOTES_DIR = Path(os.environ.get('NOTES_DIR', '/opt/petrarca/data/notes'))
 AUDIO_DIR = Path(os.environ.get('AUDIO_DIR', '/opt/petrarca/data/audio'))
+CAPTURE_LOCK_DIR = Path(os.environ.get(
+    'PETRARCA_CAPTURE_LOCK_DIR', '/run/lock/petrarca-companion'))
 BOOK_UPLOADS_DIR = Path(os.environ.get('BOOK_UPLOADS_DIR', '/opt/petrarca/data/book-uploads'))
 PHYSICAL_BOOKS_PATH = Path(os.environ.get('PHYSICAL_BOOKS_PATH', '/opt/petrarca/data/physical_books.json'))
 LOG_DIR = Path(os.environ.get('LOG_DIR', '/opt/petrarca/data/logs'))
@@ -148,6 +150,8 @@ from review_engine import (
 
 SONIOX_API_KEY = os.environ.get('SONIOX_API_KEY')
 SONIOX_BASE_URL = 'https://api.soniox.com/v1'
+SONIOX_TRANSCRIPTION_DEADLINE_SECONDS = 190.0
+SONIOX_CLEANUP_RESERVE_SECONDS = 15.0
 
 TWIKIT_COOKIES_DIR = Path.home() / '.config' / 'twikit'
 TWIKIT_COOKIES_PATH = TWIKIT_COOKIES_DIR / 'cookies.json'
@@ -1394,58 +1398,131 @@ def run_explore_batch(request_id: str, concepts: list[dict]):
 
 # --- Voice notes: backend transcription + storage ---
 
+def _soniox_request_timeout(
+    deadline: float,
+    *,
+    connect_cap: float,
+    read_cap: float,
+) -> tuple[float, float]:
+    """Return a requests timeout tuple that fits inside a monotonic deadline.
+
+    ``requests`` has no whole-operation timeout. Keeping the connect and read
+    budgets inside the remaining wall-clock budget, and checking the same
+    monotonic deadline between calls, prevents the polling loop from quietly
+    outliving the nginx request that owns it.
+    """
+    remaining = deadline - time.monotonic()
+    if remaining <= 0.5:
+        raise TimeoutError('Soniox transcription deadline expired')
+
+    # Leave a small scheduling margin so the next deadline check runs before
+    # the nominal boundary. Both phases are at least 100 ms when a request is
+    # still viable; their combined budget never exceeds the remaining time.
+    budget = remaining - 0.25
+    connect_timeout = min(connect_cap, max(0.1, budget * 0.2))
+    read_timeout = min(read_cap, max(0.1, budget - connect_timeout))
+    if connect_timeout + read_timeout > budget:
+        read_timeout = max(0.1, budget - connect_timeout)
+    return connect_timeout, read_timeout
+
 def transcribe_on_server(audio_path: Path) -> str:
-    """Upload audio to Soniox, transcribe, return text."""
+    """Upload audio to Soniox and return text within one wall-clock budget."""
     import requests as req
+    from commonplace_capture import audio_file_details
 
     if not SONIOX_API_KEY:
         raise RuntimeError('SONIOX_API_KEY is not configured')
 
     headers = {'Authorization': f'Bearer {SONIOX_API_KEY}'}
+    deadline = time.monotonic() + SONIOX_TRANSCRIPTION_DEADLINE_SECONDS
+    work_deadline = deadline - SONIOX_CLEANUP_RESERVE_SECONDS
 
-    # Upload file
-    with open(audio_path, 'rb') as f:
-        resp = req.post(f'{SONIOX_BASE_URL}/files', headers=headers,
-                        files={'file': ('note.m4a', f, 'audio/m4a')})
-    resp.raise_for_status()
-    file_id = resp.json()['id']
+    file_id = None
+    txn_id = None
+    try:
+        # Every network operation is bounded. The nginx request can therefore
+        # finish with a definite response instead of leaving the browser unsure
+        # whether retrying would duplicate a retained recording.
+        _suffix, mime_type = audio_file_details(audio_path.name)
+        with open(audio_path, 'rb') as f:
+            resp = req.post(
+                f'{SONIOX_BASE_URL}/files', headers=headers,
+                files={'file': (audio_path.name, f, mime_type)},
+                timeout=_soniox_request_timeout(
+                    work_deadline, connect_cap=10, read_cap=80,
+                ),
+            )
+        resp.raise_for_status()
+        file_id = resp.json()['id']
 
-    # Create transcription
-    resp = req.post(f'{SONIOX_BASE_URL}/transcriptions', headers=headers,
-                    json={'model': 'stt-async-v4', 'file_id': file_id,
-                          'language_hints': ['en', 'no', 'sv', 'da', 'it', 'de', 'es', 'fr', 'zh', 'id']})
-    resp.raise_for_status()
-    txn_id = resp.json()['id']
+        resp = req.post(
+            f'{SONIOX_BASE_URL}/transcriptions', headers=headers,
+            json={
+                'model': 'stt-async-v4',
+                'file_id': file_id,
+                'language_hints': ['en', 'no', 'sv', 'da', 'it', 'de', 'es', 'fr', 'zh', 'id'],
+            },
+            timeout=_soniox_request_timeout(
+                work_deadline, connect_cap=10, read_cap=30,
+            ),
+        )
+        resp.raise_for_status()
+        txn_id = resp.json()['id']
 
-    # Poll
-    for _ in range(90):  # 3 min max
-        time.sleep(2)
-        resp = req.get(f'{SONIOX_BASE_URL}/transcriptions/{txn_id}', headers=headers)
+        while True:
+            remaining = work_deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError('Soniox transcription did not complete in time')
+            time.sleep(min(2.0, remaining))
+            if time.monotonic() >= work_deadline:
+                raise TimeoutError('Soniox transcription did not complete in time')
+            resp = req.get(
+                f'{SONIOX_BASE_URL}/transcriptions/{txn_id}',
+                headers=headers,
+                timeout=_soniox_request_timeout(
+                    work_deadline, connect_cap=5, read_cap=20,
+                ),
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if data['status'] == 'completed':
+                break
+            if data['status'] == 'error':
+                raise RuntimeError(f'Soniox error: {data.get("error_message", "unknown")}')
+
+        resp = req.get(
+            f'{SONIOX_BASE_URL}/transcriptions/{txn_id}/transcript',
+            headers=headers,
+            timeout=_soniox_request_timeout(
+                work_deadline, connect_cap=5, read_cap=45,
+            ),
+        )
         resp.raise_for_status()
         data = resp.json()
-        if data['status'] == 'completed':
-            break
-        if data['status'] == 'error':
-            raise RuntimeError(f'Soniox error: {data.get("error_message", "unknown")}')
-
-    # Get transcript
-    resp = req.get(f'{SONIOX_BASE_URL}/transcriptions/{txn_id}/transcript', headers=headers)
-    resp.raise_for_status()
-    data = resp.json()
-    text = ''
-    if data.get('tokens'):
-        text = ''.join(t['text'] for t in data['tokens']).strip()
-    elif data.get('text'):
-        text = data['text'].strip()
-
-    # Cleanup
-    try:
-        req.delete(f'{SONIOX_BASE_URL}/transcriptions/{txn_id}', headers=headers)
-        req.delete(f'{SONIOX_BASE_URL}/files/{file_id}', headers=headers)
-    except Exception:
-        pass
-
-    return text
+        if data.get('tokens'):
+            return ''.join(t['text'] for t in data['tokens']).strip()
+        return (data.get('text') or '').strip()
+    finally:
+        # Best-effort provider cleanup applies to every exit path, including
+        # timeouts and malformed responses after a remote object was created.
+        for resource in (
+            f'transcriptions/{txn_id}' if txn_id else None,
+            f'files/{file_id}' if file_id else None,
+        ):
+            if not resource:
+                continue
+            try:
+                if deadline - time.monotonic() <= 0.5:
+                    break
+                req.delete(
+                    f'{SONIOX_BASE_URL}/{resource}',
+                    headers=headers,
+                    timeout=_soniox_request_timeout(
+                        deadline, connect_cap=2, read_cap=4,
+                    ),
+                )
+            except Exception:
+                pass
 
 
 def extract_note_actions(transcript: str, article_title: str, topics: list[str]) -> list[dict]:
@@ -2089,12 +2166,67 @@ class ResearchHandler(BaseHTTPRequestHandler):
             self._send_json_response(400, {'error': f'Invalid JSON: {e}'})
             return None
 
+    def _read_bounded_json_body(self, maximum: int = 16 * 1024) -> dict | None:
+        """Strict request framing for the private companion's small JSON calls."""
+        try:
+            body = koigen_adapter.read_bounded_body(self.headers, self.rfile, maximum)
+        except koigen_adapter.RequestBodyError as exc:
+            self.close_connection = True
+            self._send_private_json_response(exc.status, {'error': exc.message})
+            return None
+        try:
+            parsed = json.loads(body)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            self._send_private_json_response(400, {'error': 'Invalid JSON body'})
+            return None
+        if not isinstance(parsed, dict):
+            self._send_private_json_response(400, {'error': 'JSON body must be an object'})
+            return None
+        return parsed
+
     def _send_json_response(self, status: int, data: dict):
         self.send_response(status)
         self._send_cors_headers()
         self.send_header('Content-Type', 'application/json')
         self.end_headers()
         self.wfile.write(json.dumps(data).encode())
+
+    def _send_private_json_response(self, status: int, data: dict):
+        """Send a non-cacheable, same-origin response for private user material."""
+        content = (json.dumps(data, ensure_ascii=False, separators=(',', ':')) + '\n').encode()
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Content-Length', str(len(content)))
+        self.send_header('Cache-Control', 'no-store')
+        self.send_header('Pragma', 'no-cache')
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.send_header('Referrer-Policy', 'no-referrer')
+        self.send_header('X-Frame-Options', 'DENY')
+        self.end_headers()
+        self.wfile.write(content)
+
+    def _serve_companion_html(self):
+        html_path = SCRIPTS_DIR / 'commonplace_companion.html'
+        if not html_path.exists():
+            return self._send_private_json_response(404, {'error': 'Companion page not found'})
+        content = html_path.read_bytes()
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html; charset=utf-8')
+        self.send_header('Content-Length', str(len(content)))
+        self.send_header('Cache-Control', 'no-store')
+        self.send_header('Pragma', 'no-cache')
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.send_header('Referrer-Policy', 'no-referrer')
+        self.send_header('X-Frame-Options', 'DENY')
+        self.send_header('Permissions-Policy', 'microphone=(self), camera=(), geolocation=()')
+        self.send_header(
+            'Content-Security-Policy',
+            "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; "
+            "connect-src 'self'; media-src 'self' blob:; img-src 'self' data:; "
+            "base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+        )
+        self.end_headers()
+        self.wfile.write(content)
 
     def do_OPTIONS(self):
         self.send_response(204)
@@ -6152,6 +6284,297 @@ JSON array only:"""
         finally:
             conn.close()
 
+    # ── Petrarca Companion (Session 94) ───────────────────────────────────
+    def _handle_resurfacing_select(self):
+        """POST /resurfacing/select — return one firsthand excerpt, never a quiz."""
+        body = self._read_bounded_json_body()
+        if body is None:
+            return
+        mode = body.get('mode', 'daily')
+        if mode not in ('daily', 'pull'):
+            return self._send_private_json_response(400, {'error': 'mode must be daily or pull'})
+        excluded = body.get('exclude_item_ids') or []
+        if not isinstance(excluded, list) or len(excluded) > 100:
+            return self._send_private_json_response(400, {'error': 'exclude_item_ids is invalid'})
+        from commonplace_engine import select_resurfacing
+        conn = get_connection()
+        try:
+            result = select_resurfacing(
+                conn,
+                mode=mode,
+                local_date=body.get('local_date'),
+                timezone=body.get('timezone', 'Europe/Oslo'),
+                exclude_item_ids=[str(value) for value in excluded],
+                context_hash=body.get('context_hash'),
+            )
+            if not result or not result.get('item'):
+                return self._send_private_json_response(404, {'error': 'No authored excerpts available'})
+            self._send_private_json_response(200, result)
+        except ValueError as exc:
+            self._send_private_json_response(400, {'error': str(exc)})
+        except Exception:
+            import traceback; traceback.print_exc()
+            self._send_private_json_response(500, {'error': 'Could not select an excerpt'})
+        finally:
+            conn.close()
+
+    def _handle_resurfacing_event(self):
+        """POST /resurfacing/event — ID-only interaction provenance."""
+        body = self._read_bounded_json_body()
+        if body is None:
+            return
+        from commonplace_engine import record_resurfacing_event
+        conn = get_connection()
+        try:
+            event_id = record_resurfacing_event(
+                conn,
+                run_id=body.get('run_id'),
+                item_id=body.get('item_id'),
+                channel='web',
+                event=body.get('event', ''),
+                metadata=body.get('metadata') or {},
+            )
+            conn.commit()
+            self._send_private_json_response(200, {'status': 'recorded', 'id': event_id})
+        except ValueError as exc:
+            self._send_private_json_response(400, {'error': str(exc)})
+        finally:
+            conn.close()
+
+    def _handle_resurfacing_context(self):
+        """POST /resurfacing/context — resolve the canonical source on demand."""
+        body = self._read_bounded_json_body()
+        if body is None:
+            return
+        from commonplace_engine import get_resurfacing_context
+        conn = get_connection(readonly=True)
+        try:
+            context = get_resurfacing_context(
+                conn, body.get('run_id', ''), body.get('item_id', ''))
+            if context is None:
+                return self._send_private_json_response(404, {'error': 'Excerpt not found'})
+            self._send_private_json_response(200, context)
+        finally:
+            conn.close()
+
+    def _handle_commonplace_capture(self):
+        """POST /commonplace/capture — retain audio + transcript, create no queue."""
+        content_type = self.headers.get('Content-Type', '')
+        if 'multipart/form-data' not in content_type.casefold():
+            return self._send_private_json_response(400, {'error': 'Expected multipart audio'})
+
+        from commonplace_capture import (
+            MAX_CAPTURE_BYTES, capture_id_for_audio, capture_processing_lock,
+            create_authored_chunks, insert_capture_transcript, persist_audio,
+            relative_audio_path, write_capture_status,
+        )
+        try:
+            raw_data = koigen_adapter.read_bounded_body(
+                self.headers, self.rfile, MAX_CAPTURE_BYTES)
+        except koigen_adapter.RequestBodyError as exc:
+            self.close_connection = True
+            return self._send_private_json_response(exc.status, {'error': exc.message})
+        try:
+            form = self._multipart_parse_bytes(raw_data, content_type)
+        except Exception:
+            return self._send_private_json_response(400, {'error': 'Invalid multipart body'})
+        audio_field = form['audio'] if 'audio' in form else None
+        if audio_field is None or audio_field.file is None:
+            return self._send_private_json_response(400, {'error': 'Missing audio'})
+        audio_data = audio_field.file.read()
+        if len(audio_data) < 256:
+            return self._send_private_json_response(422, {'error': 'Recording is empty or too short'})
+
+        # Identity comes from the audio bytes, not request timing. Retrying the
+        # same durable browser Blob after a lost HTTPS response therefore
+        # reaches the same file and transcript row.
+        capture_id = capture_id_for_audio(audio_data)
+        try:
+            audio_path, mime_type = persist_audio(
+                AUDIO_DIR, capture_id, audio_data, audio_field.filename)
+        except (OSError, ValueError) as exc:
+            return self._send_private_json_response(500, {'error': f'Could not retain recording: {exc}'})
+
+        created_at = int(time.time() * 1000)
+        base_status = {
+            'capture_id': capture_id,
+            'status': 'audio_retained',
+            'audio_bytes': len(audio_data),
+            'mime_type': mime_type,
+            'created_at': created_at,
+        }
+        def write_status(payload):
+            try:
+                write_capture_status(audio_path, payload)
+            except OSError as exc:
+                # The audio itself is already fsynced. A recovery sidecar must
+                # never turn a retained recording into a failed request.
+                print(f'[companion] status sidecar failed for {capture_id}: {exc}', flush=True)
+
+        write_status(base_status)
+        stored_audio_path = relative_audio_path(audio_path, AUDIO_DIR)
+
+        # Content-addressing makes retries converge on one ID; the keyed lock
+        # makes that guarantee cover the paid side effect too. Every contender
+        # rechecks SQLite after acquiring the lock, and the winner holds it
+        # until the firsthand transcript commit is durable.
+        try:
+            with capture_processing_lock(CAPTURE_LOCK_DIR, capture_id):
+                transcript_conn = get_connection()
+                try:
+                    existing_row = transcript_conn.execute(
+                        'SELECT transcript, created_at FROM voice_transcripts WHERE id = ?',
+                        (capture_id,),
+                    ).fetchone()
+                    if existing_row:
+                        transcript = existing_row['transcript']
+                        created_at = existing_row['created_at']
+                        base_status['created_at'] = created_at
+                        inserted = False
+                    else:
+                        try:
+                            transcript = transcribe_on_server(audio_path)
+                        except Exception as exc:
+                            write_status({
+                                **base_status,
+                                'status': 'transcription_failed',
+                                'error': f'{type(exc).__name__}: {str(exc)[:300]}',
+                            })
+                            return self._send_private_json_response(502, {
+                                'error': 'Transcription failed, but the recording was preserved',
+                                'capture_id': capture_id,
+                                'audio_preserved': True,
+                            })
+                        if not transcript or len(transcript.split()) < 2:
+                            write_status({
+                                **base_status,
+                                'status': 'transcript_too_short',
+                                'transcript_length': len(transcript or ''),
+                            })
+                            return self._send_private_json_response(422, {
+                                'error': 'I could not hear enough speech; the recording was preserved',
+                                'capture_id': capture_id,
+                                'audio_preserved': True,
+                            })
+                        inserted = insert_capture_transcript(
+                            transcript_conn,
+                            capture_id=capture_id,
+                            transcript=transcript,
+                            audio_bytes=len(audio_data),
+                            audio_path=stored_audio_path,
+                            created_at=created_at,
+                        )
+                        transcript_conn.commit()
+                        stored_row = transcript_conn.execute(
+                            'SELECT transcript, created_at FROM voice_transcripts WHERE id = ?',
+                            (capture_id,),
+                        ).fetchone()
+                        if stored_row is None:
+                            raise RuntimeError('capture transcript was not retained')
+                        transcript = stored_row['transcript']
+                        created_at = stored_row['created_at']
+                        base_status['created_at'] = created_at
+                except Exception:
+                    transcript_conn.rollback()
+                    raise
+                finally:
+                    transcript_conn.close()
+        except Exception:
+            import traceback; traceback.print_exc()
+            write_status({
+                **base_status,
+                'status': 'transcript_storage_failed',
+            })
+            return self._send_private_json_response(500, {
+                'error': 'The recording was preserved, but its transcript could not be stored',
+                'capture_id': capture_id,
+                'audio_preserved': True,
+            })
+
+        conn = get_connection()
+        chunks_created = 0
+        chunk_warning = None
+        try:
+            try:
+                chunks_created = create_authored_chunks(
+                    conn, transcript_id=capture_id, transcript=transcript)
+                conn.commit()
+            except Exception as exc:
+                conn.rollback()
+                chunk_warning = f'capture saved; indexing deferred ({type(exc).__name__})'
+                print(f'[companion] chunk indexing failed for {capture_id}: {exc}', flush=True)
+
+            from commonplace_engine import find_resurface, log_event, record_resurfacing_event
+            try:
+                result = find_resurface(
+                    query_text=transcript,
+                    conn=conn,
+                    min_age_days=30,
+                    sim_threshold=0.50,
+                    max_results=3,
+                    exclude_transcript_ids=[capture_id],
+                )
+            except Exception as exc:
+                result = {'echoes': [], 'meta': {'error': 'resurfacing unavailable'}}
+                chunk_warning = chunk_warning or (
+                    f'capture saved; resurfacing deferred ({type(exc).__name__})')
+                print(f'[companion] resurfacing failed for {capture_id}: {exc}', flush=True)
+            event_id = None
+            if inserted:
+                try:
+                    event_id = log_event(
+                        transcript, result['echoes'], conn,
+                        query_source='companion_capture', audio_bytes=len(audio_data),
+                    )
+                    record_resurfacing_event(
+                        conn,
+                        run_id=None,
+                        item_id=capture_id,
+                        channel='web',
+                        event='record_completed',
+                        metadata={'echo_count': len(result['echoes'])},
+                    )
+                except Exception as exc:
+                    # Capture state is authoritative; analytics are best-effort.
+                    print(f'[companion] interaction logging failed for {capture_id}: {exc}', flush=True)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            import traceback; traceback.print_exc()
+            write_status({
+                **base_status,
+                'status': 'transcript_storage_failed',
+                'transcript_length': len(transcript),
+            })
+            return self._send_private_json_response(500, {
+                'error': 'The recording was preserved, but its transcript could not be stored',
+                'capture_id': capture_id,
+                'audio_preserved': True,
+            })
+        finally:
+            conn.close()
+
+        write_status({
+            **base_status,
+            'status': 'completed',
+            'transcript_id': capture_id,
+            'transcript_length': len(transcript),
+            'chunks_created': chunks_created,
+            'echo_count': len(result['echoes']),
+        })
+        response = {
+            'capture_id': capture_id,
+            'audio_preserved': True,
+            'transcript': transcript,
+            'echoes': result['echoes'],
+            'idempotent_replay': not inserted,
+        }
+        if event_id:
+            response['event_id'] = event_id
+        if chunk_warning:
+            response['warning'] = chunk_warning
+        self._send_private_json_response(200, response)
+
     def _handle_review_voice_memo(self):
         """POST /review/voice-memo — transcribe + extract signals."""
         content_type = self.headers.get('Content-Type', '')
@@ -6843,6 +7266,14 @@ JSON array only:"""
     def do_POST(self):
         if koigen_adapter.post_route(self.path):
             return self._handle_koigen_post()
+        if self.path == '/resurfacing/select':
+            return self._handle_resurfacing_select()
+        if self.path == '/resurfacing/event':
+            return self._handle_resurfacing_event()
+        if self.path == '/resurfacing/context':
+            return self._handle_resurfacing_context()
+        if self.path == '/commonplace/capture':
+            return self._handle_commonplace_capture()
         if self.path == '/admin/entity/resolve':
             return self._handle_admin_entity_resolve()
         if self.path == '/admin/entity/merge':
@@ -7566,6 +7997,8 @@ JSON array only:"""
     def do_GET(self):
         if koigen_adapter.is_approve_get(self.path):
             return self._handle_koigen_get()
+        if self.path in ('/companion', '/companion/'):
+            return self._serve_companion_html()
         # Content API endpoints (SQLite Phase 4)
         if self.path.startswith('/api/'):
             return self._handle_content_api()
