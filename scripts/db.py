@@ -606,6 +606,7 @@ CREATE TABLE IF NOT EXISTS microlearning_quizzes (
     answer TEXT NOT NULL,
     fact_id TEXT,                         -- links all cue-questions for the same key_fact
     rich_answer TEXT,                     -- shared detail card content for all cues of a fact
+    quiz_type TEXT,                       -- date_reverse, order, role, causal, etc.
     status TEXT DEFAULT 'active',         -- active, dismissed
     stability_days REAL DEFAULT 1.0,
     due_at INTEGER DEFAULT 0,
@@ -966,6 +967,69 @@ MIGRATIONS = [
     )""",
     "CREATE INDEX IF NOT EXISTS idx_re_item_created ON resurfacing_events(item_id, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_re_run ON resurfacing_events(run_id)",
+    # Present in production quiz rows but missing from the declarative schema.
+    "ALTER TABLE microlearning_quizzes ADD COLUMN quiz_type TEXT",
+    # Session 95: desktop recall. The run item snapshots generated question
+    # text so quality feedback remains auditable if a canonical cue is later
+    # regenerated. User-authored free text lives only in recall_notes.
+    """CREATE TABLE IF NOT EXISTS recall_runs (
+        id TEXT PRIMARY KEY,
+        run_key TEXT NOT NULL UNIQUE,
+        mode TEXT NOT NULL CHECK (mode IN ('daily', 'pull')),
+        local_date TEXT NOT NULL,
+        timezone TEXT NOT NULL DEFAULT 'Europe/Oslo',
+        algorithm_version TEXT NOT NULL,
+        seed TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_recall_runs_created ON recall_runs(created_at)",
+    """CREATE TABLE IF NOT EXISTS recall_run_items (
+        run_id TEXT NOT NULL REFERENCES recall_runs(id) ON DELETE CASCADE,
+        position INTEGER NOT NULL,
+        item_id TEXT NOT NULL,
+        source_table TEXT NOT NULL,
+        source_id TEXT NOT NULL,
+        question_text TEXT NOT NULL,
+        answer_text TEXT NOT NULL,
+        question_hash TEXT NOT NULL,
+        answer_hash TEXT NOT NULL,
+        provenance_json TEXT NOT NULL DEFAULT '{}',
+        score REAL NOT NULL,
+        PRIMARY KEY (run_id, position),
+        UNIQUE (run_id, item_id)
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_recall_items_item ON recall_run_items(item_id)",
+    "CREATE INDEX IF NOT EXISTS idx_recall_items_source ON recall_run_items(source_table, source_id)",
+    """CREATE TABLE IF NOT EXISTS recall_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_key TEXT NOT NULL UNIQUE,
+        run_id TEXT NOT NULL REFERENCES recall_runs(id) ON DELETE CASCADE,
+        item_id TEXT NOT NULL,
+        event TEXT NOT NULL,
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        created_at INTEGER NOT NULL
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_recall_events_item_created ON recall_events(item_id, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_recall_events_run ON recall_events(run_id)",
+    "CREATE INDEX IF NOT EXISTS idx_recall_events_event ON recall_events(event)",
+    """CREATE TABLE IF NOT EXISTS recall_notes (
+        id TEXT PRIMARY KEY,
+        note_key TEXT NOT NULL UNIQUE,
+        run_id TEXT NOT NULL REFERENCES recall_runs(id) ON DELETE CASCADE,
+        item_id TEXT NOT NULL,
+        kind TEXT NOT NULL CHECK (kind IN ('thought','inquiry','question_feedback','correction')),
+        note_text TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_recall_notes_item_created ON recall_notes(item_id, created_at)",
+    # Idempotency receipts are committed atomically with canonical FSRS writes.
+    """CREATE TABLE IF NOT EXISTS review_answer_receipts (
+        idempotency_key TEXT PRIMARY KEY,
+        item_id TEXT NOT NULL,
+        score TEXT NOT NULL,
+        result_json TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+    )""",
 ]
 
 

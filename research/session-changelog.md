@@ -1,6 +1,72 @@
 # Knowledge System Implementation Status
 
-**Date**: August 24, 2026 (last updated — session 94: private queue-free Companion)
+**Date**: August 31, 2026 (last updated — session 95: desktop recall Companion)
+
+## Session 95: Desktop Recall, One Question at a Time (August 31, 2026)
+
+### Why
+
+The first Session 94 use surfaced old voice excerpts correctly, but the user
+expected questions and retrieval. Petrarca is now most likely to be used on a
+desktop during work, where voice input is normally unavailable. The revised
+minimum contract is therefore: ask one thing worth remembering, wait for recall,
+show the answer, let the user record success/failure, and make it easy to explain
+when the question itself is good or bad.
+
+### Interaction and preservation
+
+`scripts/commonplace_companion.html` is now recall-first. It shows exactly one
+question, an unhurried think state, explicit reveal, large **I remembered** / **I
+didn't remember** actions, quick **Good** / **Bad** question votes, and an optional
+text note classified as thought, inquiry, question feedback, or correction.
+Keyboard shortcuts are Space (reveal), 1/2 (grade), T (note), and N (another).
+There is deliberately no due count, queue size, streak, timer, or required next
+action. The prior exact-excerpt and encrypted recorder interface is preserved
+unchanged beneath a collapsed secondary disclosure and is loaded only when opened.
+
+### Selection and writes
+
+New `scripts/recall_engine.py` selects only demonstrably encountered material:
+active quizzes with `review_count > 0` whose parent microlearning card completed,
+or knowledge items with `review_count > 0` and a substantive cached question.
+Known generic “What was historically significant about…” shells are excluded.
+Selection is deterministic per client selection ID, applies a 30-day opened-item
+cooldown when the pool permits, and snapshots the exact cue and answer. It never
+calls an LLM, generates material, clears the backlog, or interprets unreviewed
+inventory as knowledge.
+
+Four bounded capability-only POST routes were added: `/recall/select`,
+`/recall/event`, `/recall/grade`, and `/recall/note`. New SQLite tables are
+`recall_runs`, `recall_run_items`, `recall_events`, `recall_notes`, and
+`review_answer_receipts`. Analytics events contain typed IDs and bounded metrics,
+not authored note text. Notes retain their text only in `recall_notes`. Grading
+delegates to `review_engine.record_answer()`; a response idempotency receipt is
+committed atomically with FSRS changes, so a lost-response retry cannot grade the
+same question twice. Microlearning quizzes no longer enter the inapplicable
+knowledge-question regeneration branch after grading. Companion grading also
+explicitly disables the legacy question-regeneration and multi-cue background
+jobs for knowledge items, preserving the existing cue while still applying the
+canonical FSRS and knowledge-state writes.
+
+### Verification before deployment
+
+- 47 focused recall, Companion, capture, transcription-deadline,
+  nginx-boundary, installer, and JavaScript tests
+  pass; Python compile, JavaScript parse, shell syntax, diff, and SQLite integrity
+  checks pass;
+- a SQLite-consistent copy of the 44 MB production database migrated cleanly;
+- the selector returned real previously reviewed questions from that copy;
+- real canonical FSRS grading advanced one copied quiz exactly once, and replaying
+  the response left its review count and schedule unchanged;
+- note retry produced one note, grade retry produced one event and one receipt,
+  and `PRAGMA quick_check` remained `ok`;
+- desktop browser QA covered initial question, reveal, remembered/missed, bad
+  question → feedback note, another question, and the preserved secondary tools.
+  The flow exposed a genuine dubious Carthage answer, demonstrating why question
+  quality must be tracked independently from recall success.
+
+No synthetic capture, note, question vote, or grade was written to production
+during verification.
 
 ## Session 94: Preserve Petrarca, Restart as a Companion (August 24, 2026)
 

@@ -6284,7 +6284,132 @@ JSON array only:"""
         finally:
             conn.close()
 
-    # ── Petrarca Companion (Session 94) ───────────────────────────────────
+    # ── Petrarca Companion desktop recall (Session 95) ────────────────────
+    def _handle_recall_select(self):
+        """POST /recall/select — one encountered question, never a due queue."""
+        body = self._read_bounded_json_body()
+        if body is None:
+            return
+        excluded = body.get('exclude_item_ids') or []
+        if not isinstance(excluded, list) or len(excluded) > 100:
+            return self._send_private_json_response(400, {'error': 'exclude_item_ids is invalid'})
+        from recall_engine import select_question
+        conn = get_connection()
+        try:
+            result = select_question(
+                conn,
+                selection_id=body.get('selection_id', ''),
+                mode=body.get('mode', 'daily'),
+                local_date=body.get('local_date'),
+                timezone=body.get('timezone', 'Europe/Oslo'),
+                exclude_item_ids=[str(value) for value in excluded],
+            )
+            self._send_private_json_response(200, result)
+        except ValueError as exc:
+            self._send_private_json_response(400, {'error': str(exc)})
+        except LookupError as exc:
+            self._send_private_json_response(404, {'error': str(exc)})
+        except Exception:
+            import traceback; traceback.print_exc()
+            self._send_private_json_response(500, {'error': 'Could not select a question'})
+        finally:
+            conn.close()
+
+    def _handle_recall_event(self):
+        """POST /recall/event — append-only, text-free interaction analytics."""
+        body = self._read_bounded_json_body()
+        if body is None:
+            return
+        from recall_engine import record_event
+        conn = get_connection()
+        try:
+            event_id = record_event(
+                conn,
+                event_id=body.get('event_id', ''),
+                run_id=body.get('run_id', ''),
+                item_id=body.get('item_id', ''),
+                event=body.get('event', ''),
+                metadata=body.get('metadata') or {},
+            )
+            log_server_event(
+                'desktop_recall_event', recall_event=body.get('event', ''),
+                run_id=body.get('run_id', ''), item_id=body.get('item_id', ''),
+                event_id=event_id,
+            )
+            self._send_private_json_response(200, {'status': 'recorded', 'id': event_id})
+        except ValueError as exc:
+            self._send_private_json_response(400, {'error': str(exc)})
+        except Exception:
+            import traceback; traceback.print_exc()
+            self._send_private_json_response(500, {'error': 'Could not record recall event'})
+        finally:
+            conn.close()
+
+    def _handle_recall_grade(self):
+        """POST /recall/grade — idempotent canonical FSRS grading."""
+        body = self._read_bounded_json_body()
+        if body is None:
+            return
+        from recall_engine import record_grade
+        conn = get_connection()
+        try:
+            result = record_grade(
+                conn,
+                response_id=body.get('response_id', ''),
+                run_id=body.get('run_id', ''),
+                item_id=body.get('item_id', ''),
+                score=body.get('score', ''),
+                response_ms=body.get('response_ms'),
+                reveal_ms=body.get('reveal_ms'),
+            )
+            log_server_event(
+                'desktop_recall_graded', run_id=body.get('run_id', ''),
+                item_id=body.get('item_id', ''), score=body.get('score', ''),
+                idempotent_replay=bool(result.get('idempotent_replay')),
+            )
+            self._send_private_json_response(200, {'status': 'recorded', **result})
+        except ValueError as exc:
+            self._send_private_json_response(400, {'error': str(exc)})
+        except LookupError as exc:
+            self._send_private_json_response(404, {'error': str(exc)})
+        except Exception:
+            import traceback; traceback.print_exc()
+            self._send_private_json_response(500, {'error': 'Could not record recall result'})
+        finally:
+            conn.close()
+
+    def _handle_recall_note(self):
+        """POST /recall/note — persist linked thought, inquiry, correction, or feedback."""
+        body = self._read_bounded_json_body()
+        if body is None:
+            return
+        from recall_engine import save_note
+        conn = get_connection()
+        try:
+            result = save_note(
+                conn,
+                note_id=body.get('note_id', ''),
+                run_id=body.get('run_id', ''),
+                item_id=body.get('item_id', ''),
+                kind=body.get('kind', ''),
+                text=body.get('text', ''),
+            )
+            log_server_event(
+                'desktop_recall_note_saved', run_id=body.get('run_id', ''),
+                item_id=body.get('item_id', ''), kind=body.get('kind', ''),
+                char_count=len(str(body.get('text', ''))),
+                idempotent_replay=bool(result.get('idempotent_replay')),
+            )
+            self._send_private_json_response(200, {'status': 'saved', **result})
+        except ValueError as exc:
+            self._send_private_json_response(400, {'error': str(exc)})
+        except Exception:
+            import traceback; traceback.print_exc()
+            self._send_private_json_response(500, {'error': 'Could not save recall note'})
+        finally:
+            conn.close()
+
+    # ── Preserved commonplace and recording tools (Session 94) ───────────
     def _handle_resurfacing_select(self):
         """POST /resurfacing/select — return one firsthand excerpt, never a quiz."""
         body = self._read_bounded_json_body()
@@ -7266,6 +7391,14 @@ JSON array only:"""
     def do_POST(self):
         if koigen_adapter.post_route(self.path):
             return self._handle_koigen_post()
+        if self.path == '/recall/select':
+            return self._handle_recall_select()
+        if self.path == '/recall/event':
+            return self._handle_recall_event()
+        if self.path == '/recall/grade':
+            return self._handle_recall_grade()
+        if self.path == '/recall/note':
+            return self._handle_recall_note()
         if self.path == '/resurfacing/select':
             return self._handle_resurfacing_select()
         if self.path == '/resurfacing/event':
