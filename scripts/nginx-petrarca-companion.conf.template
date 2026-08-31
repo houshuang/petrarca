@@ -12,6 +12,46 @@ location = /__CAPABILITY_PATH__/companion {
     proxy_pass http://127.0.0.1:8090/companion;
 }
 
+location = /__CAPABILITY_PATH__/recall/select {
+    access_log off;
+    error_log /dev/null crit;
+    limit_except POST { deny all; }
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_pass http://127.0.0.1:8090/recall/select;
+}
+
+location = /__CAPABILITY_PATH__/recall/event {
+    access_log off;
+    error_log /dev/null crit;
+    limit_except POST { deny all; }
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_pass http://127.0.0.1:8090/recall/event;
+}
+
+location = /__CAPABILITY_PATH__/recall/grade {
+    access_log off;
+    error_log /dev/null crit;
+    limit_except POST { deny all; }
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_pass http://127.0.0.1:8090/recall/grade;
+}
+
+location = /__CAPABILITY_PATH__/recall/note {
+    access_log off;
+    error_log /dev/null crit;
+    limit_except POST { deny all; }
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_pass http://127.0.0.1:8090/recall/note;
+}
+
 location = /__CAPABILITY_PATH__/resurfacing/select {
     access_log off;
     error_log /dev/null crit;

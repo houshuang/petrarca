@@ -1,7 +1,9 @@
 # Petrarca Restart Plan: Companion, Not Queue
 
 **Date:** 2026-08-24
-**Status:** Phase 1 live behind a private capability; first real use pending
+**Status:** Session 95 revision implemented: desktop recall is the primary
+Companion interaction; exact excerpts and recording remain preserved as
+secondary tools
 **Scope:** Preserve the full project and its data while testing a much smaller
 way for Petrarca to earn a place in ordinary life.
 
@@ -73,7 +75,33 @@ snapshot. Recurring verified server backups include the Petrarca database and
 durable data tree. A recurring off-host pull still needs to be added once the Mac
 has adequate free space.
 
-## Phase 1 — The private Companion
+## Session 95 revision — recall first on desktop
+
+First use of the Session 94 page established that an exact old excerpt is
+interesting but does not, by itself, enact Petrarca's central promise. The
+ordinary context is a desktop during work, where a microphone is usually not
+available. The primary interaction is therefore now one question at a time:
+
+1. show one question that is backed by a review the user previously made;
+2. leave unhurried space to recall before revealing anything;
+3. reveal the answer;
+4. record **I remembered** or **I didn't remember** through canonical FSRS;
+5. optionally mark the question **Good** or **Bad** and attach a thought,
+   inquiry, correction, or explanation of why the question is weak;
+6. stop, or deliberately ask for another question.
+
+There is no due count, backlog, target, session size, streak, or timer. A skip is
+neutral. Selection does not generate or repair questions: it draws only from
+active reviewed quizzes whose parent research completed, plus previously reviewed
+knowledge items with a non-generic cached question. Each run snapshots the exact
+question, answer, source, type, and selection version so question quality can be
+analysed even if the source cue later changes.
+
+The Session 94 exact-excerpt and encrypted recorder paths remain intact beneath
+a collapsed **Commonplace excerpts & recording** section. This is a change in
+default interaction, not deletion or migration of the earlier work.
+
+## Preserved Session 94 Companion tools
 
 The first experiment is a private, bookmarkable HTTPS page with two actions.
 
@@ -193,14 +221,15 @@ previous one.
 
 ## Measurement
 
-For the first two weeks, measure only behaviour that actually occurred:
+For the first two weeks after the Session 95 revision, measure only behaviour
+that actually occurred:
 
-- distinct days the page was opened;
-- old excerpts opened and deliberately advanced;
-- context expansions;
-- recordings completed;
-- semantic echoes returned (without inferring that a visible echo was useful);
-- explicit qualitative feedback.
+- distinct voluntary-use days and questions actually opened;
+- answer reveals, neutral skips, and explicit recall marks;
+- good/bad question ratios by source and question type;
+- time to reveal and time to grade as descriptive—not normative—signals;
+- linked thoughts, inquiries, corrections, and question feedback;
+- use of the preserved excerpt/context/recording tools.
 
 Do not count generated items, selector runs, background jobs, app launches, or an
 unopened delivery as engagement. Success is repeated voluntary use and reports
@@ -218,14 +247,19 @@ that later reading/travel became richer—not queue completion.
 
 ## Decision gates
 
-After two weeks:
+After two weeks of the recall-first page:
 
-- If recording is reused but random resurfacing is not, keep capture and test
-  retrieval only after a new recording.
-- If old excerpts are opened but recording is rare, test a workday email link to
-  the same daily run.
-- If both are reused, add the separate book-source search and one on-demand recap.
-- If neither is reused, preserve the experiment and stop. Do not respond by
+- If questions are voluntarily opened and mostly rated good, tune the mix from
+  observed recall/quality data before adding content.
+- If use recurs but bad-question feedback clusters by source or question type,
+  repair or suppress that class explicitly; do not hide the evidence by silently
+  regenerating it.
+- If the interaction is useful but the existing encountered pool is too narrow,
+  add a deliberate path from new reading notes to reviewed questions, starting
+  with the Sumer/Tvedt material the user actually wants to retain.
+- Only then test a workday email link or on-demand recap against the same
+  canonical run. Do not create independent delivery queues.
+- If the page is not reused, preserve the experiment and stop. Do not respond by
   increasing reminders or content volume.
 
 The sophisticated Petrarca remains the archive and laboratory. The Companion is

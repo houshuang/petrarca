@@ -1,15 +1,16 @@
 # Petrarca: Current System State
 
 **Last rewritten**: April 4, 2026 (session 45)
-**Last updated**: August 24, 2026 (session 94: preserved-system restart + private Companion)
+**Last updated**: August 31, 2026 (session 95: desktop recall Companion)
 **For session-by-session history**: see `research/session-changelog.md`
 
-> **Current product posture (Session 94).** The system below is preserved, not
-> reset, but its generated review queue is no longer the default product
-> contract. The active restart surface is a private HTTPS Companion: one exact
-> old excerpt from firsthand speech, an intentional **Another/Context** action,
-> and a browser recorder that retains raw audio and creates no cards, quizzes,
-> or FSRS work. See [restart-plan-2026-08-24.md](restart-plan-2026-08-24.md).
+> **Current product posture (Session 95).** The system below is preserved, not
+> reset, and its generated backlog is not presented as an obligation. The active
+> private HTTPS Companion now opens with one previously encountered question:
+> think, reveal, mark remembered/not remembered, and optionally rate or annotate
+> the question. Session 94's exact excerpts and encrypted browser recorder remain
+> available as secondary tools. See
+> [restart-plan-2026-08-24.md](restart-plan-2026-08-24.md).
 
 ## Architecture Overview
 
@@ -17,7 +18,7 @@
 ┌─────────────────────────────────────────────────────────────┐
 │ PRESERVED CLIENT (Expo SDK 54, React Native)                │
 │ Old native/review UI remains in source and production data. │
-│ Private Companion is a bookmarkable HTTPS page.             │
+│ Private Companion: one desktop recall question at a time.   │
 │                                                             │
 │ 4 tabs: Review | Voice | Stats | More                       │
 │ Review: landing screen, card stream + floating mic FAB      │
@@ -58,7 +59,30 @@ events. Only 11 structural cards, one microlearning card, and 25 distinct
 microlearning quizzes were ever reviewed. These generated inventories are
 preserved as archive/research material, not presented as a debt to clear.
 
-## Private Companion (Session 94)
+## Private Companion (Sessions 94–95)
+
+Session 95 makes recall the landing interaction without reviving the old queue:
+
+- `POST /recall/select` — snapshot and return one demonstrably encountered
+  question; no generation and no due-count semantics;
+- `POST /recall/event` — append-only, text-free opened/revealed/skipped,
+  good/bad-quality, note-opened, graded, and client-error analytics;
+- `POST /recall/grade` — idempotent **knew/missed** grading through the canonical
+  `record_answer()` FSRS path;
+- `POST /recall/note` — linked thought, inquiry, correction, or question feedback;
+  authored text is stored only in `recall_notes`.
+
+`recall_runs` and `recall_run_items` preserve the exact question/answer snapshot,
+source, question kind, score, and algorithm version. `recall_events` stores typed
+metadata without note text. `review_answer_receipts` makes browser retries safe
+against duplicate schedule updates. The selector currently admits only reviewed,
+active quizzes from completed microlearning cards and reviewed knowledge items
+with a substantive cached question. Companion grading disables the legacy
+post-grade LLM regeneration/multi-cue jobs and preserves the cached cue while
+still using canonical FSRS. The page shows no backlog, due count, target, timer,
+or streak; a skip has no scheduling consequence.
+
+Session 94 remains available beneath **Commonplace excerpts & recording**:
 
 - `GET /companion` — standalone private page, served only through an unlogged
   nginx capability path;

@@ -4,6 +4,67 @@
 
 ---
 
+## 2026-08-31 — Session 95: Desktop Recall, One Question at a Time
+
+**What**: Replace the private Companion's excerpt-first landing interaction with
+a desktop-first retrieval loop: one curated question, unhurried recall, explicit
+answer reveal, a binary remembered/did-not-remember mark, and an optional linked
+thought or inquiry. Preserve the existing commonplace excerpts, recordings,
+generated corpus, sophisticated interfaces, and scheduling history; none is
+deleted or reset.
+
+**Why this revises Session 94**: Actual first use showed that exact old voice
+excerpts were interesting but did not satisfy the expected Petrarca contract.
+The intended everyday surface is usually a desktop during work, where voice input
+is generally unavailable. The smallest useful contract is therefore retrieval,
+not capture: ask something worth remembering and take responsibility for bringing
+it back.
+
+**Hypothesis**: A single desktop question with no due count, queue, timer, streak,
+or required session will be easier to revisit than the old review application
+while still delivering Petrarca's core memory benefit. An optional text note will
+capture connections and research questions without turning every answer into a
+knowledge-production task.
+
+**Question-quality loop**:
+
+- every rendered question retains its exact source item, source domain, question
+  type, and provenance;
+- the user can mark a question good or bad independently of recall success;
+- free text may describe a bad prompt, correction, connection, or desired inquiry;
+- question impressions, reveals, grades, skips, quality votes, notes, failures,
+  and elapsed times are append-only analytics events;
+- quality votes do not rewrite, dismiss, or regenerate source questions during
+  this experiment, so later analysis can distinguish selection problems from
+  content problems.
+
+**Selection guardrails**:
+
+- do not expose the 4,849-item generated backlog as a queue or obligation;
+- initially select only active, non-empty questions tied to completed material
+  the user has demonstrably encountered or reviewed;
+- prefer load-bearing factual anchors, temporal scaffolds, and conceptual
+  distinctions over obscure details;
+- a skip is neutral and never recorded as failure;
+- all grading continues through the canonical review scheduling path rather than
+  direct interval arithmetic.
+
+**Measurement plan**: For two weeks, inspect distinct voluntary-use days,
+questions revealed, recall marks, skips, notes/inquiries, good/bad ratios by source
+and question type, time-to-reveal, and time-to-grade. Read the free-text feedback
+before changing selection weights or generating new material. Success is repeated
+voluntary retrieval and evidence that the questions feel worth knowing, not the
+number of cards cleared.
+
+**Implementation result**: The recall-first private page, encountered-only
+selector, exact question snapshots, canonical idempotent grading, quality votes,
+and linked notes are implemented. A copied-production integration advanced one
+real quiz exactly once across a repeated grade request and passed SQLite integrity
+checks. Browser QA exercised the complete desktop interaction and recorded a real
+question-quality concern in the copied database. Session 94 excerpt and recording
+tools remain intact as a secondary disclosure. Production verification is kept
+read-only/invalid-request-only until the user's first genuine interaction.
+
 ## 2026-08-24 — Session 94: Petrarca Companion, Capture Without a Queue
 
 **What**: Restart Petrarca as a private, same-origin web companion around two

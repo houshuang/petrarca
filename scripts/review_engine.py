@@ -2515,7 +2515,9 @@ def generate_multicue_quizzes(node_id: str, domain_id: str):
 
 # ── Record answer ─────────────────────────────────────────────────────────────
 
-def record_answer(item_id: str, score: str, conn) -> dict:
+def record_answer(item_id: str, score: str, conn,
+                  idempotency_key: str | None = None,
+                  allow_background_generation: bool = True) -> dict:
     # Look up in knowledge_items first; fall back to review_items,
     # then microlearning_quizzes, then knowledge_entities, then microlearning_cards
     row = conn.execute('SELECT * FROM knowledge_items WHERE id=?', (item_id,)).fetchone()
@@ -2543,6 +2545,21 @@ def record_answer(item_id: str, score: str, conn) -> dict:
     if not row:
         return {}
     item = dict(row)
+
+    if idempotency_key:
+        if not isinstance(idempotency_key, str) or not (8 <= len(idempotency_key) <= 128):
+            raise ValueError('idempotency_key is invalid')
+        existing_receipt = conn.execute(
+            '''SELECT item_id, score, result_json FROM review_answer_receipts
+               WHERE idempotency_key=?''',
+            (idempotency_key,),
+        ).fetchone()
+        if existing_receipt:
+            if existing_receipt['item_id'] != item_id or existing_receipt['score'] != score:
+                raise ValueError('idempotency_key was already used for another answer')
+            result = json.loads(existing_receipt['result_json'])
+            result['idempotent_replay'] = True
+            return result
 
     now = int(time.time() * 1000)
 
@@ -2597,9 +2614,10 @@ def record_answer(item_id: str, score: str, conn) -> dict:
                              source=f"microlearning:{item_id}", conn=conn)
     else:
         # Regular knowledge_items / review_items
+        cached_question_update = ', cached_question=NULL' if allow_background_generation else ''
         conn.execute(f"""
             UPDATE {table} SET stability_days=?, due_at=?, last_reviewed_at=?,
-              last_score=?, review_count=review_count+1, cached_question=NULL, fsrs_card_json=?
+              last_score=?, review_count=review_count+1{cached_question_update}, fsrs_card_json=?
             WHERE id=?
         """, (new_stability, next_due, now, score, fsrs_json, item_id))
 
@@ -2640,6 +2658,14 @@ def record_answer(item_id: str, score: str, conn) -> dict:
                     [soon] + dep_ids,
                 )
 
+    result = {'next_due_at': next_due, 'new_stability_days': new_stability}
+    if idempotency_key:
+        conn.execute(
+            '''INSERT INTO review_answer_receipts
+               (idempotency_key, item_id, score, result_json, created_at)
+               VALUES (?,?,?,?,?)''',
+            (idempotency_key, item_id, score, json.dumps(result), now),
+        )
     conn.commit()
 
     # ── Leech detection: auto-suspend items with 7+ consecutive misses ───
@@ -2678,7 +2704,9 @@ def record_answer(item_id: str, score: str, conn) -> dict:
 
     # Background re-generation — pre-cache question for next session (not for microlearning)
     # For leeches, regeneration happens on unsuspend
-    if table != 'microlearning_cards' and not leech_suspended:
+    if (allow_background_generation
+            and table not in ('microlearning_cards', 'microlearning_quizzes')
+            and not leech_suspended):
         def _regen():
             try:
                 from db import get_connection as _conn
@@ -2694,15 +2722,22 @@ def record_answer(item_id: str, score: str, conn) -> dict:
         threading.Thread(target=_regen, daemon=True).start()
 
     # Background multi-cue quiz generation for knowledge_items with key_facts
-    if table == 'knowledge_items' and item.get('curriculum_node_id') and item.get('curriculum_domain'):
+    if (allow_background_generation and table == 'knowledge_items'
+            and item.get('curriculum_node_id') and item.get('curriculum_domain')):
         _node_id = item['curriculum_node_id']
         _domain_id = item['curriculum_domain']
         threading.Thread(target=generate_multicue_quizzes,
                          args=(_node_id, _domain_id), daemon=True).start()
 
-    result = {'next_due_at': next_due, 'new_stability_days': new_stability}
     if leech_suspended:
         result['leech_suspended'] = True
+        if idempotency_key:
+            conn.execute(
+                '''UPDATE review_answer_receipts SET result_json=?
+                   WHERE idempotency_key=?''',
+                (json.dumps(result), idempotency_key),
+            )
+            conn.commit()
     return result
 
 
