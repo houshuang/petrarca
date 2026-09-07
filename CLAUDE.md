@@ -133,11 +133,12 @@ Background: Session 86 (2026-04-20) cleaned up 9 synthetic `voice_capture` rows 
 - **Server-first**: All data lives on server. Local storage is cache only.
 
 ### Deploy
-- **Commit + push first**, then `bash ~/src/expo/scripts/deploy.sh petrarca`
-- **After ANY `app/` change**: deploy mobile immediately
-- **Web**: `bash app/deploy-web.sh` (optional, for cache busting)
-- **NEVER**: rsync to server, `git clean` on server, skip `deploy.sh`
-- See `memory/feedback_rules.md` for full deploy details and anti-patterns
+- **Mobile (standalone iPhone app, September 2026)**: embeds its bundle and uses `expo-updates`, with no Metro dependency. Commit + push to main, then from a clean owned checkout matching main run `bash app/deploy-mobile.sh "<what changed>"`.
+- **After ANY `app/` change**: deploy mobile immediately. JS/assets ship to EAS channel `preview`; new native dependencies, permissions, or native config require bumping `expo.version` in `app/app.json`, then `cd app && eas build --platform ios --profile preview` and installing the replacement from the build link. Initial OTA-enabled build uses version 1.0.0.
+- **Update behavior**: cold launch runs cached code immediately and checks/downloads in the background; the next cold launch applies the downloaded update. Leave the app open long enough to download between quits. Do not add forced reloads during use. Runtime compatibility uses `appVersion`, as in Alif.
+- **Server changes**: commit + push first, then `bash ~/src/expo/scripts/deploy.sh petrarca`. This deploys Hetzner services/legacy Metro; it does **not** publish mobile OTA updates.
+- **Web**: `bash app/deploy-web.sh` (optional, for cache busting).
+- **NEVER**: rsync app code to server or `git clean` on server. Keep production-data safeguards intact.
 
 ### Interaction Logging
 - ALL user interactions via `logEvent()` from `app/data/logger.ts`

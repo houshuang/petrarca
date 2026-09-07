@@ -476,16 +476,27 @@ scheduling.
 ## Deployment
 
 ### Commands
+As of September 2026, iPhone deployment follows Alif: a standalone EAS `preview`
+app embeds its code and receives background updates. The first cold launch checks
+and downloads; the following cold launch applies the download, without delaying
+startup or interrupting a session. The initial standalone build must be installed
+once from its Expo build page; the old development client cannot receive it OTA.
+
 ```bash
-# Mobile + server (the ONLY correct deploy):
-git add . && git commit && git push origin main
+# Commit + push to main first; run from a clean owned checkout matching main.
+# Mobile JS/assets:
+bash app/deploy-mobile.sh "Describe the update"
+
+# Initial standalone install; also used after native changes:
+cd app && eas build --platform ios --profile preview
+# Before subsequent native changes, bump expo.version in app/app.json:
+# appVersion is the runtime compatibility boundary for OTA updates.
+
+# Server / legacy Metro (does not publish OTA):
 bash ~/src/expo/scripts/deploy.sh petrarca
 
 # Web (optional, for cache busting):
 bash app/deploy-web.sh
-
-# Native rebuild (only for new native modules):
-cd app && eas build --profile development --platform ios
 ```
 
 ### Infrastructure
