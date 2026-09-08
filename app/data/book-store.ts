@@ -47,32 +47,8 @@ export async function initBookStore(): Promise<void> {
     if (booksRaw) books = JSON.parse(booksRaw);
     if (capturesRaw) captures = JSON.parse(capturesRaw);
 
-    // Then merge with server data (authoritative)
-    try {
-      const serverData = await loadBooksFromServer();
-      if (serverData.books.length > 0 || serverData.captures.length > 0) {
-        // Merge: server data wins for same ID, local-only items are kept
-        const serverBookIds = new Set(serverData.books.map((b: PhysicalBook) => b.id));
-        const serverCapIds = new Set(serverData.captures.map((c: BookCapture) => c.id));
-
-        // Keep local-only books (not on server yet), add all server books
-        const localOnlyBooks = books.filter(b => !serverBookIds.has(b.id));
-        books = [...serverData.books, ...localOnlyBooks];
-
-        const localOnlyCaptures = captures.filter(c => !serverCapIds.has(c.id));
-        captures = [...serverData.captures, ...localOnlyCaptures];
-
-        // Save merged result locally
-        await Promise.all([saveBooks(), saveCaptures()]);
-
-        // If we had local-only items, push them to server too
-        if (localOnlyBooks.length > 0 || localOnlyCaptures.length > 0) {
-          syncBooksToServer(books, captures);
-        }
-      }
-    } catch {
-      // Server unavailable — local data is fine
-    }
+    // Network reconciliation must never hold the native splash screen open.
+    void refreshBooksFromServer();
 
     logEvent('book_store_loaded', {
       books: books.length,
@@ -80,6 +56,37 @@ export async function initBookStore(): Promise<void> {
     });
   } catch (e) {
     logEvent('warning', { message: '[book-store] failed to load', error: String(e) });
+  }
+}
+
+async function refreshBooksFromServer(): Promise<void> {
+  try {
+    const serverData = await loadBooksFromServer();
+    if (serverData.books.length > 0 || serverData.captures.length > 0) {
+      // Merge: server data wins for same ID, local-only items are kept
+      const serverBookIds = new Set(serverData.books.map((b: PhysicalBook) => b.id));
+      const serverCapIds = new Set(serverData.captures.map((c: BookCapture) => c.id));
+
+      // Keep local-only books (not on server yet), add all server books
+      const localOnlyBooks = books.filter(b => !serverBookIds.has(b.id));
+      books = [...serverData.books, ...localOnlyBooks];
+
+      const localOnlyCaptures = captures.filter(c => !serverCapIds.has(c.id));
+      captures = [...serverData.captures, ...localOnlyCaptures];
+
+      bookStoreVersion++;
+      notifyListeners();
+
+      // Save merged result locally
+      await Promise.all([saveBooks(), saveCaptures()]);
+
+      // If we had local-only items, push them to server too
+      if (localOnlyBooks.length > 0 || localOnlyCaptures.length > 0) {
+        syncBooksToServer(books, captures);
+      }
+    }
+  } catch {
+    // Server unavailable — local data is fine
   }
 }
 

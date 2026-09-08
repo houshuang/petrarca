@@ -1,6 +1,8 @@
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
-const DEFAULT_RESEARCH = 'http://alifstian.duckdns.org:8090';
+// Release publishing requires the private HTTPS URL in Expo config.
+const DEFAULT_RESEARCH = 'https://alifstian.duckdns.org/petrarca-api-not-configured';
 const DEFAULT_CONTENT = 'https://alifstian.duckdns.org/content';
 const DEFAULT_WEB_ORIGIN = 'https://alifstian.duckdns.org:8084';
 
@@ -20,7 +22,10 @@ export function getResearchServerUrl(): string {
       `${window.location.protocol}//${window.location.hostname}:8090`,
     );
   }
-  return DEFAULT_RESEARCH;
+  const configured = Constants.expoConfig?.extra?.researchServerUrl;
+  return typeof configured === 'string' && configured.trim()
+    ? trimTrailingSlash(configured.trim())
+    : DEFAULT_RESEARCH;
 }
 
 /**

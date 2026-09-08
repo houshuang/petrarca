@@ -20,7 +20,8 @@ fi
 
 cd "$APP_DIR"
 npx tsc --noEmit --skipLibCheck
-eas update --channel preview --platform ios --environment preview --message "$MESSAGE" --non-interactive
+python3 "$REPO_DIR/scripts/mobile_api_preflight.py" --check
+python3 "$REPO_DIR/scripts/mobile_api_preflight.py" eas update --channel preview --platform ios --environment preview --message "$MESSAGE" --non-interactive
 
 echo "Published. Reopen Petrarca to download, leave it open briefly, then quit and reopen to apply."
 echo "Native dependency/config changes require a version bump and a new preview build instead."

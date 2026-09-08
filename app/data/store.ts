@@ -122,53 +122,57 @@ export async function initStore(): Promise<void> {
       loaded_dismissed: dismissedArticles.size,
     });
 
-    // If no cached articles, download immediately (first launch)
-    // Otherwise check for updates in background
-    if (articles.length === 0) {
-      const fresh = await downloadContent();
-      if (fresh) {
-        articles = fresh.articles;
-        articles.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-        if (fresh.knowledgeIndex) {
-          await initKnowledgeEngine(fresh.knowledgeIndex);
+    // First-launch downloads also run after local initialization: the review
+    // screen reads its own API and must not wait for article exports.
+    void (async () => {
+      if (articles.length === 0) {
+        const fresh = await downloadContent();
+        if (fresh) {
+          articles = fresh.articles;
+          articles.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+          if (fresh.knowledgeIndex) {
+            await initKnowledgeEngine(fresh.knowledgeIndex);
+          }
+          if (fresh.syntheses && Array.isArray(fresh.syntheses)) {
+            syntheses = fresh.syntheses;
+          }
+          if (fresh.conceptClusters) {
+            conceptClusters = fresh.conceptClusters;
+          }
+          logEvent('content_downloaded_first_launch', {
+            article_count: fresh.articles.length,
+            knowledge_index: !!fresh.knowledgeIndex,
+            syntheses_count: syntheses.length,
+          });
         }
-        if (fresh.syntheses && Array.isArray(fresh.syntheses)) {
-          syntheses = fresh.syntheses;
-        }
-        if (fresh.conceptClusters) {
-          conceptClusters = fresh.conceptClusters;
-        }
-        logEvent('content_downloaded_first_launch', {
-          article_count: fresh.articles.length,
-          knowledge_index: !!fresh.knowledgeIndex,
-          syntheses_count: syntheses.length,
+      } else {
+        await checkForUpdates().then(async (hasUpdates) => {
+          if (hasUpdates) {
+            const fresh = await downloadContent();
+            if (fresh) {
+              articles = fresh.articles;
+              articles.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+              if (fresh.knowledgeIndex) {
+                await initKnowledgeEngine(fresh.knowledgeIndex);
+              }
+              if (fresh.syntheses && Array.isArray(fresh.syntheses)) {
+                syntheses = fresh.syntheses;
+              }
+              if (fresh.conceptClusters) {
+                conceptClusters = fresh.conceptClusters;
+              }
+              logEvent('content_refreshed', {
+                article_count: fresh.articles.length,
+                knowledge_index_updated: !!fresh.knowledgeIndex,
+                syntheses_count: syntheses.length,
+              });
+            }
+          }
         });
       }
-    } else {
-      checkForUpdates().then(async (hasUpdates) => {
-        if (hasUpdates) {
-          const fresh = await downloadContent();
-          if (fresh) {
-            articles = fresh.articles;
-            articles.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-            if (fresh.knowledgeIndex) {
-              await initKnowledgeEngine(fresh.knowledgeIndex);
-            }
-            if (fresh.syntheses && Array.isArray(fresh.syntheses)) {
-              syntheses = fresh.syntheses;
-            }
-            if (fresh.conceptClusters) {
-              conceptClusters = fresh.conceptClusters;
-            }
-            logEvent('content_refreshed', {
-              article_count: fresh.articles.length,
-              knowledge_index_updated: !!fresh.knowledgeIndex,
-              syntheses_count: syntheses.length,
-            });
-          }
-        }
-      });
-    }
+    })().catch((error: unknown) => {
+      console.warn('[store] Background content sync failed:', error);
+    });
   })();
 
   return initPromise;
