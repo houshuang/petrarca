@@ -1,0 +1,8 @@
+{
+  "general": [
+    {"key": "domain", "value": "Norwegian archaeology and history"},
+    {"key": "source", "value": "Aschehougs Norgeshistorie, volume 1, Fra jeger til bonde"},
+    {"key": "setting", "value": "One reader records continuously while reading a physical book, speaking Norwegian and sometimes English. Includes pauses, quotations, questions, uncertainty and self-corrections."}
+  ],
+  "terms": ["Aschehougs Norgeshistorie", "mammutknokler", "støttenner", "rein", "reinen", "reinsjakt", "reinrose", "Ra-trinnet", "morenejord", "marin grense", "Dryas", "Norskerenna", "Fosna", "Komsa", "Nøstvet", "Nøstvetkulturen", "mikrolitter", "mikroflekker", "Hardangervidda", "tamdyr", "heller", "veideristninger", "Bøla", "Snåsavatnet", "Hjemmeluft", "båndkeramikere", "Ertebøllekulturen", "Traktbegerkulturen", "megalittmonumenter", "jættestuer", "Stridsøkskulturen", "snorkeramiske", "ryolitt", "årekvarts", "flateretusjering", "avdrått", "ard", "åkerrein", "Wessex-kulturen", "Úněticekulturen", "asbestmagring", "kamkeramikk", "Savolax", "Fennoskandia"]
+}

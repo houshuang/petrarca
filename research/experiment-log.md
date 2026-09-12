@@ -4,6 +4,22 @@
 
 ---
 
+## 2026-09-12 — Norway reading study: first-batch results and method clarification
+
+**Clarification:** Stian confirms continuous recording while reading and speaking notes with the book open. Chapter-end recall was abandoned because too much detail was lost. Preserve this method; later unaided recall is a separate observation.
+**Observed:** Three complete Norwegian recordings total 1:49:03.360 of recorded reading plus spoken notes; the separate English baseline is 8:50.100. The new ASR outputs contain 5,190 words and 189 timed segments. Page checkpoints advance from 13 to 146, with overlap and unspecified skips.
+**Result:** Vocabulary hints recovered plausible terms but also produced regressions. Eleven explicit editorial interventions and fifteen flagged passages remain auditable; no gold-transcript accuracy claim is justified. Twelve initial learning targets were selected with timestamped sources; none has been graded or imported as demonstrated knowledge.
+**Validation:** Four offline integrity tests pass. Completed-batch replay reuses saved ASR without new API calls; provider cleanup succeeded. Local reader search and timestamp playback were exercised in a browser. Original audio and speech remain in the private research archive.
+**Next boundary:** Verify selected core claims and introduce them explicitly before delayed recall. Current Companion only selects previously reviewed material, and the Norway curricula begin at 800 CE. The batch does not change production behavior. [First-batch findings](norway-reading-study/first-batch.md).
+
+## 2026-09-12 — Norway reading study: transcription and measurement baseline
+
+**Question:** Can a complete 12-volume reading project preserve a compact, useful historical scaffold without turning every captured detail into a memory obligation?
+**Before intervention:** Four Tana #journal captures on 12 September: one English pre-reading baseline and three Norwegian reading captures for volume 1 through page 146. Original transcripts contain probable lexical and numerical ASR errors. A six-minute Soniox pilot improved some words but left errors. No transcript is an audio-verified gold standard.
+**Authorized intervention:** Archive originals; transcribe the three Norwegian recordings with `stt-async-v5`, Norwegian/English hints and versioned archaeological vocabulary; retain timestamps, uncertainty, alternatives and source provenance. Produce an auditable, repeatable research batch and first selection of high-value learning targets. No automatic grading from reading notes.
+**Measurements:** File duration is observed; active reading time and capture mode are initially unknown. Pages mentioned are checkpoints, not proof every intervening page was read. Preserve speech, reading, breaks and review as distinct time categories. Compare transcription versions; do not score word error rate without an independently checked reference.
+**Protocol and current state:** [Norway reading study](norway-reading-study/README.md). This is a prospective single-person observational study; any randomized comparison requires a separately recorded intervention design. Register changes before applying them.
+
 ## 2026-08-31 — Session 95: Desktop Recall, One Question at a Time
 
 **What**: Replace the private Companion's excerpt-first landing interaction with
