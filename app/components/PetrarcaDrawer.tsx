@@ -1,9 +1,7 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, Modal, Platform, Linking, ScrollView } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 import { logEvent } from '../data/logger';
-import { getReadArticles } from '../data/store';
-import { getQueuedArticleIds } from '../data/queue';
 import { colors, fonts } from '../design/tokens';
 import { showFeedbackButton } from './FeedbackCapture';
 import { getGuideUrl, getStatsDashboardUrl } from '../lib/server-urls';
@@ -16,25 +14,16 @@ interface PetrarcaDrawerProps {
 export default function PetrarcaDrawer({ visible, onClose }: PetrarcaDrawerProps) {
   const router = useRouter();
 
-  const readCount = useMemo(
-    () => (visible ? getReadArticles().length : 0),
-    [visible],
-  );
-  const queueCount = useMemo(
-    () => (visible ? getQueuedArticleIds().length : 0),
-    [visible],
-  );
-
   const close = useCallback(() => {
     logEvent('drawer_close');
     onClose();
   }, [onClose]);
 
   const navigate = useCallback(
-    (item: string, path: string) => {
+    (item: string, path: Href) => {
       logEvent('drawer_item_tap', { item });
       onClose();
-      router.push(path as any);
+      router.push(path);
     },
     [onClose, router],
   );
@@ -43,10 +32,10 @@ export default function PetrarcaDrawer({ visible, onClose }: PetrarcaDrawerProps
     (item: string) => {
       logEvent('drawer_item_tap', { item });
       onClose();
-      if (item === 'triage') {
-        router.push('/' as any);
+      if (item === 'review') {
+        router.push('/');
       } else if (item === 'voice_capture') {
-        router.push('/voice-capture' as any);
+        router.push('/voice-capture');
       }
     },
     [onClose, router],
@@ -70,72 +59,59 @@ export default function PetrarcaDrawer({ visible, onClose }: PetrarcaDrawerProps
 
             {/* Quick actions */}
             <View style={styles.quickActions}>
-              <Pressable style={styles.quickBox} onPress={() => quickAction('voice_capture')}>
-                <Text style={styles.quickTitle}>Capture Voice</Text>
-                <Text style={styles.quickSubtitle}>Record what you learned</Text>
+              <Pressable accessibilityRole="button" style={({pressed}) => [styles.quickBox, pressed && styles.pressed]} onPress={() => quickAction('review')}>
+                <Text style={styles.quickTitle}>Dagens økt</Text>
+                <Text style={styles.quickSubtitle}>Fortsett der du slapp</Text>
               </Pressable>
-              <Pressable style={styles.quickBox} onPress={() => navigate('queue', '/queue')}>
-                <Text style={styles.quickTitle}>Queue</Text>
-                <Text style={styles.quickSubtitle}>{queueCount} articles</Text>
+              <Pressable accessibilityRole="button" style={({pressed}) => [styles.quickBox, pressed && styles.pressed]} onPress={() => quickAction('voice_capture')}>
+                <Text style={styles.quickTitle}>Ta opp en tanke</Text>
+                <Text style={styles.quickSubtitle}>Lagre det du nettopp lærte</Text>
               </Pressable>
             </View>
 
-            {/* Explore */}
-            <Text style={styles.sectionLabel}>Explore</Text>
+            <Text style={styles.sectionLabel}>Forstå sammenhenger</Text>
             <NavItem
-              title="Knowledge Map"
-              subtitle="Your learning progress & gaps"
+              title="Kunnskapskart"
+              subtitle="Se hva du har møtt og hvordan stoffet henger sammen"
               onPress={() => navigate('knowledge_map', '/knowledge-map')}
             />
             <NavItem
-              title="Knowledge Sweep"
-              subtitle="Test your recall across a domain"
+              title="Kunnskapssveip"
+              subtitle="Fortell hva du husker på tvers av et tema"
               onPress={() => navigate('knowledge_sweep', '/knowledge-sweep')}
             />
             <NavItem
-              title="Knowledge Explorer"
-              subtitle="Timeline, persons & places"
+              title="Tidslinje og personer"
+              subtitle="Utforsk tid, personer og steder"
               onPress={() => navigate('timeline', '/timeline')}
             />
             <NavItem
-              title="Your Landscape"
-              subtitle={`${readCount} articles · topics & connections`}
-              onPress={() => navigate('landscape', '/landscape')}
-            />
-            <NavItem
-              title="Ancient Map"
-              subtitle="Places from your curriculum"
+              title="Kart"
+              subtitle="Finn steder fra læringsstoffet"
               onPress={() => navigate('map', '/map')}
             />
 
-            {/* Reading */}
-            <Text style={styles.sectionLabel}>Reading</Text>
+            <Text style={styles.sectionLabel}>Lesing</Text>
             <NavItem
-              title="Kindle Library"
-              subtitle="Browse & manage your full Kindle library"
+              title="Kindle-bibliotek"
+              subtitle="Se og organiser Kindle-bøkene dine"
               onPress={() => navigate('kindle_browse', '/kindle-browse')}
             />
             <NavItem
-              title="Reading Trails"
-              subtitle="Follow threads of ideas"
-              onPress={() => navigate('trails', '/trails')}
-            />
-            <NavItem
-              title="Voice Notes"
-              subtitle="Your recorded thoughts"
+              title="Stemmeopptak"
+              subtitle="Tanker du har spilt inn"
               onPress={() => navigate('voice_notes', '/voice-notes')}
             />
             <NavItem
-              title="Projects"
-              subtitle="Collect notes around a theme"
+              title="Prosjekter"
+              subtitle="Samle notater rundt et tema"
               onPress={() => navigate('projects', '/projects')}
             />
 
-            {/* System */}
-            <Text style={styles.sectionLabel}>System</Text>
+            <Text style={styles.sectionLabel}>Hjelp og oversikt</Text>
             <NavItem
-              title="Statistics"
-              subtitle="Knowledge progress & review stats"
+              title="Statistikk"
+              subtitle="Fremgang og repetisjoner"
               onPress={() => {
                 logEvent('drawer_item_tap', { item: 'statistics' });
                 onClose();
@@ -143,13 +119,13 @@ export default function PetrarcaDrawer({ visible, onClose }: PetrarcaDrawerProps
               }}
             />
             <NavItem
-              title="Activity Log"
-              subtitle="Pipeline activity & events"
+              title="Aktivitetslogg"
+              subtitle="Nylige hendelser og behandling"
               onPress={() => navigate('activity_log', '/log')}
             />
             <NavItem
-              title="User Guide"
-              subtitle="How everything works"
+              title="Slik virker Petrarca"
+              subtitle="Kort forklaring av appen"
               onPress={() => {
                 logEvent('drawer_item_tap', { item: 'user_guide' });
                 onClose();
@@ -157,8 +133,8 @@ export default function PetrarcaDrawer({ visible, onClose }: PetrarcaDrawerProps
               }}
             />
             <NavItem
-              title="Show Feedback Button"
-              subtitle="Re-enable the \u2726 feedback capture"
+              title="Vis tilbakemeldingsknappen"
+              subtitle="Slå på \u2726-knappen igjen"
               onPress={() => {
                 logEvent('drawer_item_tap', { item: 'show_feedback' });
                 showFeedbackButton();
@@ -184,7 +160,7 @@ function NavItem({
   onPress: () => void;
 }) {
   return (
-    <Pressable style={styles.navItem} onPress={onPress}>
+    <Pressable accessibilityRole="button" style={({pressed}) => [styles.navItem, pressed && styles.pressed]} onPress={onPress}>
       <View style={styles.navLeft}>
         <View style={styles.navTitleRow}>
           <Text style={styles.navTitle}>{title}</Text>
@@ -258,6 +234,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(247, 244, 236, 0.08)',
     padding: 14,
     borderRadius: 8,
+  },
+  pressed: {
+    opacity: 0.68,
   },
   quickTitle: {
     fontFamily: fonts.body,

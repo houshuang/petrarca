@@ -5,6 +5,32 @@
 ---
 
 
+## 2026-09-13 — Study interaction and hierarchy redesign, registered before implementation
+
+**User observation:** the Norway study screen is overwhelming, does not make the
+expected action or relevant information clear, and controls such as “Kjenner igjen
+ordet” appear unclickable. Physical-iPhone screenshots show the full prompt, multiple
+equal-weight controls, reflection feedback and sources in one long scroll. Preserved
+runtime events confirm the recognition taps arrived repeatedly while the UI gave no
+visible acknowledgement.
+
+**Authorized intervention:** make the study workflow explicit and progressive:
+choose open/closed-book session context once, show one primary retrieval action,
+give recognition and quality feedback visible selected states, distinguish the main
+answer from optional detail, and collapse reflections/provenance/sources. Add pressed,
+selected, disabled and accessibility states to the shared study control. Remove
+disabled article-pipeline destinations from the drawer, improve tab contrast, and
+add component interaction tests. Preserve item payloads, prior events, grading,
+FSRS policy, audio durability and all source provenance.
+
+**Hypothesis:** fewer simultaneous controls and immediate acknowledgement will make
+the intended loop self-explanatory and eliminate repeated taps without reducing
+optional feedback or source access. Alternatives include extra friction from the
+session-mode choice or useful secondary actions becoming too hidden. Inspect genuine
+usage and qualitative feedback after deployment; do not interpret smoother completion
+as improved retention by itself.
+
+
 ## 2026-09-13 — Continuation handoff frozen at user request
 
 [handoff.md](norway-reading-study/handoff.md) consolidates live intensive v2,

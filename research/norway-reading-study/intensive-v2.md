@@ -32,12 +32,17 @@ are explicit; imported objects do not prove direct travel or a particular langua
 
 ## Phone workflow
 
-Open Review, mark the book closed when that is true, think before revealing, and
-self-assess the main idea. Six items form a batch, not a daily limit. Use “Neste
-runde” to continue. “Velg øving og tema” selects a theme or “Jeg vil øve mer nå”.
-Extra practice remains available when no scheduled review is due, with a one-minute
-item cooldown. Return to scheduled practice through the same menu. Voice has the
-same theme/mode controls; unseen supporting concepts can appear first there too.
+Open **I dag** and choose the response context once for the session: “Fra
+hukommelsen · boken lukket” allows the answer to affect later scheduling, while
+“Med støtte · boken åpen” records practice without moving the schedule. Each card
+then states the response type, asks for one attempt, exposes one dominant reveal
+action, labels the concise answer “Det viktigste”, and ends with “Jeg hadde
+hovedideen” or “Jeg trengte svaret”. Six items form a batch, not a daily limit.
+
+Session type and topic are summarized in one compact row under “Denne økten”; use
+“Bytt” to change them. Extra practice remains available when no scheduled review is
+due, with a one-minute item cooldown. Voice has the same theme/mode controls; unseen
+supporting concepts can appear first there too.
 
 A rough planning estimate is 40–80 minutes for an initial traversal including
 introductions and voice, spread over sessions. This is not measured and does not
@@ -46,10 +51,13 @@ several further sessions over the coming days. Actual useful duration depends on
 thinking time, familiar material, dependency exposure, voluntary elaboration and
 feedback. Card count is not an outcome or a retention target.
 
-Use “For lett”, “For detaljert”, “Uklart” or “Nyttig” to identify what earns its place.
-“Jeg lurer på …”, “Noe er feil”, and “Tanken min har endret seg” preserve spoken
-qualitative feedback against the exact item/run. Stop or change topic when practice
-becomes automatic. The purpose is useful historical hooks, not accumulating taps.
+Optional feedback, source links and recording actions live under “Mer om dette
+kortet” so they do not compete with the answer loop. Use “For lett”, “For
+detaljert”, “Uklart” or “Nyttig” there to identify what earns its place. Each choice
+now shows a persistent selected state and a confirmation. “Jeg lurer på …”, “Noe er
+feil”, and “Tanken min har endret seg” preserve spoken qualitative feedback against
+the exact item/run. Stop or change topic when practice becomes automatic. The
+purpose is useful historical hooks, not accumulating taps.
 
 ## Scheduling and dependencies
 

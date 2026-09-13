@@ -19,6 +19,8 @@ export default function StudyReview({mode}: {mode: 'review' | 'voice'}) {
   const [pending, setPending] = useState<PendingAudio[]>([]);
   const [bookState, setBookState] = useState('unknown');
   const [audioSaved, setAudioSaved] = useState<Set<string>>(new Set());
+  const [moreExpanded, setMoreExpanded] = useState(false);
+  const [qualityFeedback, setQualityFeedback] = useState<Set<string>>(new Set());
   const appeared = useRef(0);
   const visible = useRef(false);
   const current = useRef({run: '', item: '', bookState: 'unknown'});
@@ -57,6 +59,11 @@ export default function StudyReview({mode}: {mode: 'review' | 'voice'}) {
     scroll.current?.scrollTo({y: 0, animated:false});
   }, [item?.id, focused, log]);
   useEffect(() => {
+    setMoreExpanded(false);
+    setQualityFeedback(new Set());
+    setCapture(null);
+  }, [item?.id]);
+  useEffect(() => {
     const subscription = AppState.addEventListener('change', state => {
       if (!visible.current) return;
       if (state === 'active') { appeared.current = performance.now(); log('foregrounded',{reason:'app_state'}); void pendingAudio().then(setPending); }
@@ -82,10 +89,21 @@ export default function StudyReview({mode}: {mode: 'review' | 'voice'}) {
     } catch (e) { setError(String(e)); }
     finally { setBusy(false); }
   }
+
+  function recordQuality(value: string) {
+    if (qualityFeedback.has(value)) return;
+    setQualityFeedback(old => new Set([...old, value]));
+    log('feedback', {dimension: 'card_quality', value});
+  }
+
   return <ScrollView ref={scroll} style={styles.page} contentContainerStyle={styles.content}
+    contentInsetAdjustmentBehavior="automatic"
     onScrollEndDrag={e => log('scroll',{offset_y:e.nativeEvent.contentOffset.y,viewport_height:e.nativeEvent.layoutMeasurement.height,content_height:e.nativeEvent.contentSize.height})}>
-    <Text style={styles.title}>Norgeshistorie</Text>
-    <Text style={styles.caption}>Bind 1 · {mode==='voice' ? 'Fortell fra hukommelsen' : 'Begreper og sammenhenger'} · andre kort er satt på pause</Text>
+    <View style={styles.screenHeader}>
+      <Text accessibilityRole="header" style={styles.title}>Norgeshistorie</Text>
+      <Text style={styles.caption}>Bind 1 · {mode==='voice' ? 'Fortell fra hukommelsen' : 'Begreper og sammenhenger'}</Text>
+      <Text style={styles.caption}>Ett kort om gangen. Tenk først, vis svaret og vurder deretter om du hadde hovedideen.</Text>
+    </View>
     {!!error && <View style={styles.panel}><Text style={styles.error}>{error}</Text><StudyButton disabled={busy} onPress={() => void load()}>Prøv igjen</StudyButton></View>}
     {pending.length > 0 && <View style={styles.panel}><Text style={styles.caption}>Opptak som venter på lagring</Text>
       {pending.map(p => <StudyButton key={p.id} disabled={busy} onPress={() => void retryAudio(p)}>Lagre {p.kind} · {p.item.replace('no-p1-','')}</StudyButton>)}
@@ -94,47 +112,72 @@ export default function StudyReview({mode}: {mode: 'review' | 'voice'}) {
     {run && <StudyPracticeOptions run={run} disabled={busy || recording}
       onChoose={(practice,topic)=>{log('feedback',{dimension:'practice_selection',practice,topic});void load(true,practice,topic);}} />}
     {item && run ? <>
-      <Text style={styles.caption}>{index + 1} av {run.items.length} · du kan stoppe når du vil</Text>
-      <View style={styles.row}>
-        <StudyButton disabled={busy} onPress={() => {setBookState('closed'); log('feedback',{dimension:'book_state',value:'closed'});}}>Boken lukket {bookState==='closed'?'✓':''}</StudyButton>
-        <StudyButton disabled={busy} onPress={() => {setBookState('open'); log('feedback',{dimension:'book_state',value:'open'});}}>Boken åpen {bookState==='open'?'✓':''}</StudyButton>
-      </View>
-      <View pointerEvents={busy ? 'none' : 'auto'}>
-        <StudyCard key={`${run.run_id}-${item.id}-${audioSaved.has(item.id)}`} item={item} run={run.run_id} onEvent={log}
-          onComplete={results => void finish('complete',results)} onIntroduce={() => void finish('introduced')}
-          onBusy={setRecording} recording={recording} audioSaved={audioSaved.has(item.id)} />
-      </View>
-      <StudyButton disabled={busy || recording} onPress={() => void finish('skip')}>Hopp over</StudyButton>
-      <View style={styles.panel}>
-        <Text style={styles.caption}>Noe du vil ta vare på?</Text>
-        <View style={styles.row}>{(['wondering','correction','reflection'] as CaptureKind[]).map(k =>
-          <StudyButton key={k} disabled={recording || busy} onPress={() => {setCapture(k);log('feedback',{dimension:'capture_intent',value:k});}}>
-            {k==='wondering'?'Jeg lurer på …':k==='correction'?'Noe er feil':'Tanken min har endret seg'}
-          </StudyButton>)}</View>
-        {capture && focused && <StudyRecorder key={`${item.id}-${capture}`} run={run.run_id} item={item.id} kind={capture}
-          disabled={recording} onBusy={setRecording} onSaved={() => {setCapture(null); void pendingAudio().then(setPending);}} />}
-        <View style={styles.row}>
-          <StudyButton onPress={() => log('feedback',{dimension:'card_quality',value:'useful'})}>Nyttig</StudyButton>
-          <StudyButton onPress={() => log('feedback',{dimension:'card_quality',value:'confusing'})}>Uklart</StudyButton>
-          <StudyButton onPress={() => log('feedback',{dimension:'card_quality',value:'too_detailed'})}>For detaljert</StudyButton>
-          <StudyButton onPress={() => log('feedback',{dimension:'card_quality',value:'too_easy'})}>For lett</StudyButton>
+      <Text style={styles.progressText}>Kort {index + 1} av {run.items.length} · stopp når du vil</Text>
+      {bookState === 'unknown' ? <View style={styles.setupPanel}>
+        <Text style={styles.eyebrow}>Før du begynner</Text>
+        <Text style={styles.heading}>Hvordan øver du nå?</Text>
+        <Text style={styles.caption}>Velg én gang for denne økten. Det avgjør om svaret planlegger en senere repetisjon.</Text>
+        <StudyButton variant="primary" disabled={busy} onPress={() => {setBookState('closed'); log('feedback',{dimension:'book_state',value:'closed'});}}>Fra hukommelsen · boken lukket</StudyButton>
+        <Text style={styles.caption}>Svarene kan brukes til å planlegge neste repetisjon.</Text>
+        <StudyButton disabled={busy} onPress={() => {setBookState('open'); log('feedback',{dimension:'book_state',value:'open'});}}>Med støtte · boken åpen</StudyButton>
+        <Text style={styles.caption}>Du får øving, men dette flytter ikke neste repetisjon.</Text>
+      </View> : <>
+        <View style={styles.modeSummary}>
+          <View style={{flex:1}}>
+            <Text style={styles.eyebrow}>Svarmåte</Text>
+            <Text style={styles.caption}>{bookState === 'closed' ? 'Fra hukommelsen · svar kan planlegges' : 'Med boken · øving uten ny planlegging'}</Text>
+          </View>
+          <StudyButton variant="quiet" compact disabled={busy || recording} onPress={() => setBookState('unknown')}>Endre</StudyButton>
         </View>
-      </View>
-      <View style={{gap:8}}>
-        <Text style={styles.caption}>Fra lesingen din · opplest tekst kan være sitater</Text>
-        {item.evidence_note && <Text style={styles.caption}>{item.evidence_note}</Text>}
-        {item.sources.map((source,i) => <StudyButton key={i} onPress={() => {
-          log('source_opened',{recording:source.recording,segment:source.segment});
-          void Linking.openURL(source.tana_link).catch(() => setError('Kunne ikke åpne Tana.'));
-        }}>{source.recording} {source.start_ms != null ? `· ${Math.floor(source.start_ms/60000)}:${String(Math.floor(source.start_ms/1000)%60).padStart(2,'0')}` : ''}</StudyButton>)}
-        {item.references.map(ref => <StudyButton key={ref.url} onPress={() => {log('source_opened',{reference_url:ref.url}); void Linking.openURL(ref.url).catch(() => setError('Kunne ikke åpne kilden.'));}}>{ref.title}</StudyButton>)}
-      </View>
+        <View pointerEvents={busy ? 'none' : 'auto'}>
+          <StudyCard key={`${run.run_id}-${item.id}-${audioSaved.has(item.id)}`} item={item} run={run.run_id} onEvent={log}
+            onComplete={results => void finish('complete',results)} onIntroduce={() => void finish('introduced')}
+            onBusy={setRecording} recording={recording} audioSaved={audioSaved.has(item.id)} />
+        </View>
+        <StudyButton variant="quiet" disabled={busy || recording} onPress={() => void finish('skip')}>Hopp over dette kortet</StudyButton>
+        <StudyButton
+          variant="quiet"
+          selected={moreExpanded}
+          disabled={busy || recording}
+          onPress={() => setMoreExpanded(value => !value)}
+        >
+          {moreExpanded ? 'Skjul mer om kortet' : 'Mer om dette kortet'}
+        </StudyButton>
+        {moreExpanded && <View style={styles.detailsPanel}>
+          <Text style={styles.eyebrow}>Ta vare på en tanke</Text>
+          <Text style={styles.caption}>Valgfritt: spill inn noe kortet vekket eller noe som bør rettes.</Text>
+          <View style={styles.row}>{(['wondering','correction','reflection'] as CaptureKind[]).map(k =>
+            <StudyButton variant="choice" selected={capture === k} key={k} disabled={recording || busy} onPress={() => {setCapture(k);log('feedback',{dimension:'capture_intent',value:k});}}>
+              {k==='wondering'?'Jeg lurer på …':k==='correction'?'Noe er feil':'Tanken min har endret seg'}
+            </StudyButton>)}</View>
+          {capture && focused && <StudyRecorder key={`${item.id}-${capture}`} run={run.run_id} item={item.id} kind={capture}
+            disabled={recording} onBusy={setRecording} onSaved={() => {setCapture(null); void pendingAudio().then(setPending);}} />}
+          <Text style={styles.eyebrow}>Hvordan var kortet?</Text>
+          <View style={styles.row}>
+            <StudyButton compact variant="choice" selected={qualityFeedback.has('useful')} onPress={() => recordQuality('useful')}>Nyttig</StudyButton>
+            <StudyButton compact variant="choice" selected={qualityFeedback.has('confusing')} onPress={() => recordQuality('confusing')}>Uklart</StudyButton>
+            <StudyButton compact variant="choice" selected={qualityFeedback.has('too_detailed')} onPress={() => recordQuality('too_detailed')}>For detaljert</StudyButton>
+            <StudyButton compact variant="choice" selected={qualityFeedback.has('too_easy')} onPress={() => recordQuality('too_easy')}>For lett</StudyButton>
+          </View>
+          {qualityFeedback.size > 0 && <Text accessibilityLiveRegion="polite" style={styles.caption}>Takk — tilbakemeldingen er registrert.</Text>}
+          {(item.evidence_note || item.sources.length > 0 || item.references.length > 0) && <>
+            <Text style={styles.eyebrow}>Kilder og opphav</Text>
+            <Text style={styles.caption}>Fra lesingen din · opplest tekst kan være sitater.</Text>
+            {item.evidence_note && <Text style={styles.caption}>{item.evidence_note}</Text>}
+            {item.sources.map((source,i) => <StudyButton variant="link" key={i} onPress={() => {
+              log('source_opened',{recording:source.recording,segment:source.segment});
+              void Linking.openURL(source.tana_link).catch(() => setError('Kunne ikke åpne Tana.'));
+            }}>{source.recording} {source.start_ms != null ? `· ${Math.floor(source.start_ms/60000)}:${String(Math.floor(source.start_ms/1000)%60).padStart(2,'0')}` : ''}</StudyButton>)}
+            {item.references.map(ref => <StudyButton variant="link" key={ref.url} onPress={() => {log('source_opened',{reference_url:ref.url}); void Linking.openURL(ref.url).catch(() => setError('Kunne ikke åpne kilden.'));}}>{ref.title}</StudyButton>)}
+          </>}
+        </View>}
+      </>}
     </> : !busy && run && <View style={styles.panel}>
       <Text style={styles.heading}>Fint sted å stoppe</Text>
       <Text style={styles.body}>Du kan stoppe her eller fortsette med flere oppgaver.</Text>
       {run.availability?.next_due_at && <Text style={styles.caption}>Neste planlagte repetisjon: {new Date(run.availability.next_due_at).toLocaleString('nb-NO',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</Text>}
       {!run.items.length && <Text style={styles.caption}>Ingen oppgaver klare i dette utvalget akkurat nå. Velg et annet tema eller prøv igjen litt senere.</Text>}
-      <StudyButton onPress={() => void load(true)}>Neste runde</StudyButton>
+      <StudyButton variant="primary" onPress={() => void load(true)}>Neste runde</StudyButton>
       {run.practice !== 'extra' && <StudyButton onPress={()=>void load(true,'extra')}>Øv videre selv om ingenting er forfalt</StudyButton>}
     </View>}
   </ScrollView>;

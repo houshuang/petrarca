@@ -82,10 +82,10 @@ export default function StudyRecorder({run, item, kind, onSaved, onBusy, disable
     } catch { setError('Kunne ikke spille av. Opptaket er fortsatt lagret.'); }
   }
   return <View style={{gap: 10}}>
-    {active ? <StudyButton disabled={busy} onPress={() => void stop()}>Stopp opptak · {seconds} s</StudyButton>
+    {active ? <StudyButton variant="primary" disabled={busy} onPress={() => void stop()}>Stopp opptak · {seconds} s</StudyButton>
       : pending ? <><StudyButton disabled={busy || disabled} onPress={() => void play()}>Lytt til opptaket</StudyButton>
-        <StudyButton disabled={busy || disabled} onPress={() => void upload()}>Lagre opptaket</StudyButton></>
-      : <StudyButton disabled={busy || disabled} onPress={() => void start()}>Start opptak</StudyButton>}
+        <StudyButton variant="primary" disabled={busy || disabled} onPress={() => void upload()}>Lagre opptaket</StudyButton></>
+      : <StudyButton variant="primary" disabled={busy || disabled} onPress={() => void start()}>Start opptak</StudyButton>}
     {!!error && <Text style={styles.error}>{error}</Text>}
   </View>;
 }

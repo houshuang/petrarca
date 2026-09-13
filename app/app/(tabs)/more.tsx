@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Platform, Linking,
 } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, type Href } from 'expo-router';
 import { colors, fonts, type, layout } from '../../design/tokens';
 import { logEvent } from '../../data/logger';
 import { setFeedbackContext } from '../../lib/feedback-context';
@@ -21,9 +21,9 @@ export default function MoreTab() {
   );
 
   const navigate = useCallback(
-    (item: string, path: string) => {
+    (item: string, path: Href) => {
       logEvent('more_item_tap', { item });
-      router.push(path as any);
+      router.push(path);
     },
     [router],
   );
@@ -31,55 +31,53 @@ export default function MoreTab() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.header}>
-        <Text style={styles.title}>More</Text>
+        <Text accessibilityRole="header" style={styles.title}>Mer</Text>
+        <Text style={styles.subtitle}>Verktøy du ikke trenger i den daglige økten.</Text>
       </View>
 
       <DoubleRule />
 
-      {/* Explore */}
-      <Text style={styles.sectionLabel}>Explore</Text>
+      <Text style={styles.sectionLabel}>Forstå sammenhenger</Text>
       <NavItem
-        title="Knowledge Map"
-        subtitle="Your learning progress & gaps"
+        title="Kunnskapskart"
+        subtitle="Se hva du har møtt og hvordan stoffet henger sammen"
         onPress={() => navigate('knowledge_map', '/knowledge-map')}
       />
       <NavItem
-        title="Knowledge Explorer"
-        subtitle="Timeline, persons & places"
+        title="Tidslinje og personer"
+        subtitle="Utforsk tid, personer og steder"
         onPress={() => navigate('timeline', '/timeline')}
       />
       <NavItem
-        title="Ancient Map"
-        subtitle="Places from your curriculum"
+        title="Kart"
+        subtitle="Finn steder fra læringsstoffet"
         onPress={() => navigate('map', '/map')}
       />
 
-      {/* Tools */}
-      <Text style={styles.sectionLabel}>Tools</Text>
+      <Text style={styles.sectionLabel}>Arbeid med stoffet</Text>
       <NavItem
-        title="Projects"
-        subtitle="Collect notes around a theme"
+        title="Prosjekter"
+        subtitle="Samle notater rundt et tema"
         onPress={() => navigate('projects', '/projects')}
       />
       <NavItem
-        title="Activity Log"
-        subtitle="Pipeline activity & events"
+        title="Aktivitetslogg"
+        subtitle="Se nylige hendelser og behandling"
         onPress={() => navigate('activity_log', '/(tabs)/log')}
       />
 
-      {/* System */}
-      <Text style={styles.sectionLabel}>System</Text>
+      <Text style={styles.sectionLabel}>Hjelp</Text>
       <NavItem
-        title="User Guide"
-        subtitle="How everything works"
+        title="Slik virker Petrarca"
+        subtitle="Kort forklaring av appen"
         onPress={() => {
           logEvent('more_item_tap', { item: 'user_guide' });
           Linking.openURL(getGuideUrl());
         }}
       />
       <NavItem
-        title="Show Feedback Button"
-        subtitle="Re-enable the \u2726 feedback capture"
+        title="Vis tilbakemeldingsknappen"
+        subtitle="Slå på \u2726-knappen igjen"
         onPress={() => {
           logEvent('more_item_tap', { item: 'show_feedback' });
           showFeedbackButton();
@@ -99,7 +97,7 @@ function NavItem({
   onPress: () => void;
 }) {
   return (
-    <Pressable style={styles.navItem} onPress={onPress}>
+    <Pressable accessibilityRole="button" style={({pressed}) => [styles.navItem, pressed && styles.navItemPressed]} onPress={onPress}>
       <View style={styles.navLeft}>
         <Text style={styles.navTitle}>{title}</Text>
         <Text style={styles.navSubtitle}>{subtitle}</Text>
@@ -126,6 +124,11 @@ const styles = StyleSheet.create({
     ...type.screenTitle,
     color: colors.ink,
   },
+  subtitle: {
+    ...type.screenSubtitle,
+    color: colors.textSecondary,
+    marginTop: 4,
+  },
   sectionLabel: {
     ...type.sectionHead,
     color: colors.textMuted,
@@ -141,6 +144,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: layout.screenPadding,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.rule,
+  },
+  navItemPressed: {
+    backgroundColor: colors.parchmentDark,
   },
   navLeft: {
     flex: 1,

@@ -1,5 +1,14 @@
 # Petrarca: Current System State
 
+**Study interface redesign (13 September 2026):** The active Norway experience now
+uses an explicit session-level open/closed-book choice, one dominant action per card
+state, visible selected/pressed/disabled states, concise “Det viktigste” answers and
+a collapsed “Mer om dette kortet” area for capture, quality feedback and provenance.
+The five tab labels and secondary navigation are consistently Norwegian; disabled
+article-pipeline destinations have been removed from the drawer. The underlying
+item payloads, grading, study scheduling, source links and durable event/audio paths
+are unchanged.
+
 **Norway intensive practice (13 September 2026):** [v2 phase](norway-reading-study/intensive-v2.md) expands to 76 source-linked items, themes, exposure dependencies and extra practice. Canonical study-only FSRS learning steps replace long first intervals for new scheduled encounters; old frozen runs retain v1.
 
 **Last rewritten**: April 4, 2026 (session 45)

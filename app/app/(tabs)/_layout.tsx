@@ -11,8 +11,8 @@ export default function TabsLayout() {
         tabBarStyle: tabStyles.tabBar,
         tabBarShowLabel: true,
         tabBarLabelStyle: tabStyles.label,
-        tabBarActiveTintColor: colors.ink,
-        tabBarInactiveTintColor: colors.textMuted,
+        tabBarActiveTintColor: colors.rubric,
+        tabBarInactiveTintColor: colors.textSecondary,
         tabBarIconStyle: { display: 'none' },
       }}
       screenListeners={{
@@ -23,19 +23,19 @@ export default function TabsLayout() {
     >
       {/* ── Visible tabs (5-tab layout) ── */}
       <Tabs.Screen name="index" options={{
-        title: 'Review',
+        title: 'I dag',
       }} />
       <Tabs.Screen name="voice" options={{
-        title: 'Voice',
+        title: 'Fortell',
       }} />
       <Tabs.Screen name="stats" options={{
-        title: 'Stats',
+        title: 'Fremgang',
       }} />
       <Tabs.Screen name="library" options={{
-        title: 'Library',
+        title: 'Bøker',
       }} />
       <Tabs.Screen name="more" options={{
-        title: 'More',
+        title: 'Mer',
       }} />
 
       {/* ── Hidden tabs (accessible via navigation, not in tab bar) ── */}

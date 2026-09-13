@@ -13,6 +13,14 @@ practice over the next few days, with little new reading. The immediate learning
 gap is grounding concrete terms visually and comparatively: the user could not
 picture an **ard** or distinguish it from a plow, and also looked up **åkerrein**.
 
+On 13 September the study interface was redesigned after the user supplied physical
+iPhone screenshots and described the screen as overwhelming. The core loop is now
+session context → attempt → reveal → main-idea judgment; recognition and feedback
+choices acknowledge taps visibly, while capture and provenance are collapsed under
+“Mer om dette kortet”. This is an interface intervention only: content payloads,
+events, grading and schedules were preserved. See the newest experiment-log entry
+and the release identifiers below.
+
 Read in this order:
 
 1. [Decisions and corrections](decisions.md), especially D014–D015 and O001–O002/C003.
