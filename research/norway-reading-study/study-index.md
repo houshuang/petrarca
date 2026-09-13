@@ -42,9 +42,10 @@ session. This is bounded discovery, not proof that no other discussion exists.
 Claude web, other devices, other task histories and forum publication are not
 verified as covered. Do not claim that every historical or future chat is saved.
 
-Snapshot `da1ec4633b9271b1` contains 91 user/assistant message records (38 Claude,
-53 Codex), including the September 13 authorization to pause other cards and the
-requirement for detailed analytics and versioned research designs.
+Snapshot `5728e782011cefc9` contains 94 user/assistant message records
+from the two registered sessions, through the deployment progress messages on
+13 September. It includes `codex-20260912-L920` (isolate the pilot) and
+`codex-20260912-L974` (detailed analytics and versioned research design).
 It preserves the earlier analysis at `codex-20260912-L653` and the correction
 request at `codex-20260912-L663`. Original log timestamps are UTC; audio offsets
 and local dates are distinct. Source-line IDs refer to registered append-only

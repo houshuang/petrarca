@@ -138,3 +138,30 @@ Production activation and release identifiers are recorded separately after depl
 
 Pre-activation SQLite backup: `/opt/petrarca/data/backups/norway-pilot-before-20260913T062235Z.db`
 (46,645,248 bytes; SHA-256 `6c56d5f4013a53a571d963ccf564cd150d0baad4cc84eebbe0503561d56248ff`).
+
+### Activation — 13 September 2026, 06:25 UTC
+
+- Backend/content release: `c6db8f317bcf16eee3343aea658610be9a6da4a7`.
+- Study revision: `9c9a656aaa2a85f5da0b4e1b5631969f3f1a40875e1ff7f2f06053223347b38e`.
+- Design: `norway-phone-pilot-v1`; 13 active items and four source recordings.
+- iOS preview update: `01a09970-8e48-74db-938d-76a5ac8cb74f`, runtime `1.0.0`.
+- EAS group: `7aee4185-7bcb-489c-8e6d-d11a0efcf0cc`; published 06:24:45 UTC.
+- Unified backend deployment, private mobile allowlist and iOS OTA succeeded.
+  Private HTTPS `/health`, `/study/status`, `/study/summary` returned 200; active
+  focus confirmed. Soniox credential presence checked without reading it into the
+  research archive. No microphone recording or synthetic ingest was made in prod.
+- All rows in eight legacy tables matched the pre-deploy backup exactly:
+  knowledge_items, knowledge_entities, structural_cards, structural_positions,
+  microlearning_cards, microlearning_quizzes, review_items and voice_transcripts.
+  Paused source-table counts are 265, 17, 590, 1,279, 4,849 and 82 respectively
+  (excluding structural positions and voice transcripts). These counts overlap
+  conceptually and include previously hidden items; do not call their sum unique
+  active cards or lost practice obligations.
+- At verification there were zero study runs/events. This is the clean baseline,
+  not a claim that future sessions remain unobserved. Actual iPhone microphone,
+  upload and update adoption await the first real session. The published app
+  requires up to two full quit/reopen cycles to download and apply the update.
+
+Release evidence and UI captures are indexed privately at
+`/Users/stian/.agents/research/petrarca-norway-study/phone-pilot-v1/`.
+This documentation completion does not alter the deployed content or study design.
