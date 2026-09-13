@@ -158,6 +158,8 @@ Background: Session 86 (2026-04-20) cleaned up 9 synthetic `voice_capture` rows 
 - Always run relevant fixtures before AND after changes
 
 ### Research Organization
+- **Norway twelve-volume study:** start with `research/norway-reading-study/study-index.md` and `decisions.md`. At study handoffs, refresh the registered conversation archive and record new user decisions/corrections with source references. Do not infer reader synthesis from open-book speech: it often quotes the book's own summaries. Concept/term familiarity (recognition and rough meaning for future reading) is an explicit goal alongside chronology. The private evidence hub is `/Users/stian/.agents/research/petrarca-norway-study/README.md`. Archive coverage is bounded; do not claim future or unregistered chats are automatically captured.
+
 - ALL research in `research/`, linked from `research/README.md`
 - `research/experiment-log.md` is **append-only** — new entries at top, log BEFORE making changes
 

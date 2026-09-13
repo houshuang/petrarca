@@ -5,6 +5,14 @@ original English baseline preserved; initial source index and 12 selected learni
 targets prepared. None of these captures has been represented as successful recall
 or automatically scheduled in production.
 
+**13 September interpretation update:** Stian often reads book sentences verbatim,
+including its summaries. The captured prose cannot establish reader synthesis.
+Use the versioned `source-annotations-v2.json` and `reader-signals-v2.json` in the
+private batch for current interpretation; earlier artifacts remain preserved.
+Concept/term familiarity is now an explicit core goal, superseding the initial
+treatment of definitions solely as enrichment. See [decisions.md](decisions.md).
+
+
 ## Observed sessions
 
 Stian confirms that recording runs continuously while he reads and speaks notes

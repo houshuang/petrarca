@@ -4,6 +4,14 @@
 
 ---
 
+## 2026-09-13 — Provenance correction, concept familiarity and conversation audit
+
+**User clarification before revision:** Spoken notes often read book sentences verbatim, including the book's own summaries. Summary-like wording does not establish reader synthesis. The user also explicitly values loose familiarity with concepts and specific terms to support future reading with less effort and more connections.
+**Correction:** Withdraw the September 12 assistant attribution of farming s009 as demonstrated reader compression/integration. Preserve the original analysis with a linked correction. Default unverified open-book content to quotation/paraphrase of unresolved authorship; require separate evidence for understanding and retention.
+**Authorized documentation work:** Archive available user/assistant conversation text from the identified Claude and Codex sessions, preserving source IDs, dates and hashes; add a study index, decision/correction ledger, evidence policy and concept-familiarity plan. Version source classifications without rewriting original transcripts or old analyses. No knowledge grades or production writes.
+**Coverage boundary:** Snapshot explicitly identified local sessions; record what was included and omitted. Future or inaccessible chats are not automatically captured. Update this record at study handoffs; no scheduled collection daemon is implied.
+**Completed:** Conversation snapshot `d18f4c30d8690197` preserves 73 message records, including the original analysis and user correction. Added 189 source annotations with unresolved authorship, 21 revised candidate signals and 20 unassessed concept/term candidates. Export exclusions, repeatability, message hashes and correction/source references were checked offline. Original speech and earlier versions remain unchanged.
+
 ## 2026-09-12 — Norway reading study: first-batch results and method clarification
 
 **Clarification:** Stian confirms continuous recording while reading and speaking notes with the book open. Chapter-end recall was abandoned because too much detail was lost. Preserve this method; later unaided recall is a separate observation.

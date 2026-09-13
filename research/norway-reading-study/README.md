@@ -4,6 +4,11 @@ Started 12 September 2026. Owner/participant: Stian. Current phase: volume 1,
 *Fra jeger til bonde*. This is an active project protocol and handoff, not an
 assertion that the study pipeline is already integrated into the app.
 
+Start with the [study index](study-index.md) for conversations, sources and coverage.
+The [decision/correction ledger](decisions.md) records changes in user goals and
+interpretation. Latest clarification: 13 September, verbatim book reading
+(including summaries) and concept/term familiarity as a core outcome.
+
 ## The question
 
 Can rapid reading of all twelve volumes of *Aschehougs Norgeshistorie*, supported
@@ -18,6 +23,8 @@ Stian's priorities, recorded explicitly in this conversation:
 - How and why things change: settlement, subsistence, institutions, power.
 - Languages: origins, spread, contact and the formation of Norwegian/Swedish identity.
 - Trade and networks, including the supply of copper and tin.
+- Familiarity with concepts and specific terms: recognize a later occurrence and
+  have a rough idea of its meaning, making other historical texts easier to read.
 - What everyday life was like at different moments.
 - A few major interpretations where they earn their attention (for example,
   competing accounts of Rome's fall), without memorizing every speculative
@@ -32,13 +39,22 @@ speaks notes while reading with the book open.** Norwegian is the main language;
 some passages and baseline reflections are English. Do not try to force the old
 protocol back onto this project.
 
+On 13 September he clarified that he often reads sentences verbatim, including
+summaries written by the book's author. Default open-book passages to
+`text_origin=unresolved_book_or_reader`. Neither a summary, a causal explanation
+nor first-person wording by itself establishes reader synthesis. Quotation versus
+paraphrase requires evidence; no mandatory verbal labeling convention is imposed.
+Even confirmed original open-book interpretation is not unaided delayed recall.
+See correction C001 in [decisions.md](decisions.md).
+
 This produces several different evidence types. Keep them separate:
 
 | Evidence | What it can support | What it cannot establish |
 |---|---|---|
-| Open-book quotation/paraphrase | Exposure, source claims, page progress, salience | Independent recall or mastered knowledge |
+| Unattributed open-book passage | Recorded encounter with content; explicit page markers | Authorship of the formulation, independent synthesis, comprehension or recall |
+| Verified book quotation/paraphrase | Source claims and exposure | Reader-authored interpretation or mastered knowledge |
 | Reader question or uncertainty | Curiosity, an unresolved interpretation, need for explanation | An error or a knowledge downgrade |
-| Spontaneous connection | A connection the reader made at this moment | Long-term retention without another observation |
+| Confirmed reader-authored connection | An interpretation expressed at this moment, under recorded assistance conditions | Long-term retention without another observation |
 | Closed-book baseline/recall | Accessible knowledge under the stated cue conditions | Everything the reader knows; omission is not ignorance |
 | Revealed answer | Exposure to an answer | Successful retrieval |
 | Explicit recall grade | A scheduling signal for that target | Understanding of the entire topic |
@@ -101,6 +117,9 @@ are confounders, so faster reading alone is not better learning.
 5. **Index the full source.** Preserve the searchable, timestamped archive even
    for facts excluded from review. Assign each extracted item to quotation,
    paraphrase, reader inference, question, connection, timing marker, or recall.
+   These are candidate functions unless authorship is verified. A summary-shaped
+   passage is not automatically a reader synthesis. Keep assistance conditions,
+   textual origin and demonstrated learning as separate fields.
    Every interpretation points back to a recording/version/segment, and to a page
    when explicitly stated. An inferred page span is marked inferred.
 6. **Select a compact scaffold.** Cluster repeated claims into targets. Use the
@@ -161,13 +180,16 @@ Use four questions: Is it load-bearing for understanding later reading? Does it
 serve Stian's stated interests? Does it connect several observations? Is it
 sufficiently clear and well-supported for the kind of retrieval proposed?
 
-Three outcomes:
+Selection outcomes (revised 13 September):
 
 - **Core scaffold:** approximate period boundaries, major transitions and durable
   explanatory relationships. First-batch hypothesis: roughly 10–15 targets for
   pages 13–146, to be reduced if their review becomes burdensome.
 - **Chosen enrichment:** a memorable example, language question, object or trade
   connection that makes the scaffold useful. Do not promote all vivid details.
+- **Concept familiarity:** terms that will help future reading, even when peripheral
+  to this narrative. Rough meaning or recognition in context can be sufficient;
+  do not require precise definition recall. See [concepts.md](concepts.md).
 - **Archive/reference:** lists of sites and artifacts, variants of the same
   explanation, low-impact disputed reconstructions and things deliberately
   skipped. Searchable and available sideways; no scheduled memory obligation.
