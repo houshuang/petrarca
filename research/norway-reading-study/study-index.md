@@ -137,3 +137,5 @@ task follows it. Private evidence currently lives on this Mac; off-device backup
 has not been verified. Git commits preserve the protocol/tools, not raw speech.
 
 - [Phone assessment v1](assessment-release-v1.md): frozen unaided-first form, original questions, audio identity and descriptive comparison.
+
+- [Visual grounding v1](learning-aids-v1.md): sourced diagrams, on-demand shared-axis timeline and separately recorded application attempts.

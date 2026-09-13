@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="340" viewBox="0 0 600 340">
+<rect width="600" height="340" fill="#f7f4ec"/>
+<path d="M40 258 L510 100 V300 H40Z" fill="#e0d6c3"/>
+<path d="M40 258 L67 167 Q246 166 510 100" fill="#b8a278" stroke="#75664e" stroke-width="4"/>
+<path d="M40 258 L510 100" stroke="#6a6458" stroke-width="3" stroke-dasharray="9 7"/>
+<text x="80" y="118" font-family="sans-serif" font-size="30" fill="#8b2500">A</text><text x="411" y="73" font-family="sans-serif" font-size="30" fill="#8b2500">B</text>
+<text x="30" y="330" font-family="sans-serif" font-size="20" fill="#6a6458">Nytt tenkt snitt · motsatt helling</text>
+</svg>

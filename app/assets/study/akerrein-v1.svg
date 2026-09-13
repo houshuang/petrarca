@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400">
+<rect width="600" height="400" fill="#f7f4ec"/>
+<path d="M30 130 L495 320 L570 338 V390 H30Z" fill="#e0d6c3"/>
+<path d="M30 130 Q270 208 435 214 L480 244 L495 320" fill="#b8a278" stroke="#75664e" stroke-width="4"/>
+<path d="M30 130 L495 320" stroke="#6a6458" stroke-width="3" stroke-dasharray="9 7"/>
+<path d="M180 122 L285 166 M285 166 L272 143 M285 166 L258 172" fill="none" stroke="#8b2500" stroke-width="5"/>
+<path d="M485 105 L454 224" stroke="#8b2500" stroke-width="3"/>
+<g font-family="sans-serif" fill="#2a2420" font-size="26"><text x="25" y="55">Jord flyttes nedover over tid</text><text x="394" y="92">Åkerrein</text><text x="35" y="306">Tidligere skråning</text><text x="35" y="335">(stiplet)</text></g>
+<text x="30" y="385" font-family="sans-serif" font-size="19" fill="#6a6458">Prinsippskisse · snitt, ikke et datert funn</text>
+</svg>

@@ -23,3 +23,5 @@ Reading recordings may include verbatim book text: keep them and their source ex
 Still separate work: fresh-context application, independent backup destination/restore, visual grounding and the incremental intake loop. No reminder is activated by this document.
 
 Validation before release: 28 isolated Python study checks, 11 focused client checks and TypeScript passed. At 390×844, local browser verified narrative-first navigation, explicit missingness, confidence before recording and no answer reveal. Real iPhone microphone/upload remains to be verified by a genuine recording.
+
+Published release: code `57acd381241b0852911a9de07e670472926c3901`, iOS preview update `01a09b7b-4534-784e-aec5-2e161882cc9d`, EAS group `bcbcfe53-f3dd-4e93-95b7-dd8019be7ecf`, runtime `1.0.0`. Live health/status/summary returned HTTPS 200 with assessment-v1 reported and 76 items. No synthetic production assessment or audio was posted.

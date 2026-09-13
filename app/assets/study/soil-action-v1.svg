@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="430" viewBox="0 0 600 430">
+<rect width="600" height="430" fill="#f7f4ec"/>
+<g font-family="sans-serif" font-size="28" fill="#2a2420"><text x="30" y="42">Ard: løsner til begge sider</text><text x="30" y="244">Plog: vender til én side</text></g>
+<g fill="#d5c2a0" stroke="#95836b" stroke-width="3"><path d="M30 143 H224 L280 181 L335 143 H570 V193 H30Z"/><path d="M30 347 H195 V392 H298 V347 H570 V402 H30Z"/></g>
+<path d="M277 100 L255 148 L280 170 L305 148Z" fill="#2a2420"/>
+<g fill="none" stroke="#8b2500" stroke-width="5"><path d="M250 127 L196 108 M196 108 L207 123 M196 108 L214 106"/><path d="M307 127 L362 108 M362 108 L347 105 M362 108 L351 123"/><path d="M244 339 Q301 274 348 307 M348 307 L343 286 M348 307 L327 308"/></g>
+<path d="M310 337 Q335 302 373 337 L366 347 L329 347Z" fill="#b1986b" stroke="#95836b" stroke-width="3"/>
+<text x="31" y="215" font-family="sans-serif" font-size="19" fill="#6a6458">Skjematisk snitt gjennom jorda</text>
+</svg>

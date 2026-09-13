@@ -1,0 +1,123 @@
+{
+  "version": "norway-learning-aids-v1",
+  "rights": "Original explanatory SVG drawings authored for Petrarca, not copies of source photographs; PNGs rendered with rsvg-convert. No claim to reproduce a specific historical find.",
+  "sources": [
+    {
+      "id": "ard",
+      "title": "Ard — Audun Dybdahl, SNL",
+      "url": "https://snl.no/ard",
+      "supports": "Symmetric share; soil goes to both sides; moldboard plow turns the furrow to one side. Historical forms vary; ard and plow coexist."
+    },
+    {
+      "id": "field",
+      "title": "Arkeologiske kulturminnetyper — Vestfold fylkeskommune",
+      "url": "https://www.vestfoldfylke.no/no/meny/tjenester/kultur/kulturarv/arkeologi/arkeologiske-kulturminnetyper/",
+      "supports": "Field-edge bank forms over time at the lower edge of a sloping field."
+    },
+    {
+      "id": "hesthag",
+      "title": "Hesthag excavation — Jessica Leigh McGraw / Norark",
+      "url": "https://www.norark.no/prosjekter/e18-tvedestrand-arendal/ferdsel-haugbrott-og-dyrkning/",
+      "supports": "Soil accumulated downslope by erosion; cultivation layers below later burial monuments. Archaeological example, not source of the drawing geometry."
+    },
+    {
+      "id": "periods",
+      "title": "Steinalderen på Vestlandet — Universitetsmuseet i Bergen",
+      "url": "https://steinalder.w.uib.no/",
+      "supports": "Main period boundaries; farming adoption differs by region. Do not copy the apparent late-Neolithic 3500 typo."
+    },
+    {
+      "id": "holocene",
+      "title": "Holocen — Inge Bryhni, SNL",
+      "url": "https://snl.no/holocen",
+      "supports": "Geological epoch begins around 11,700 years ago and continues today; rounded to about 9700 BCE for comparison."
+    },
+    {
+      "id": "bronze",
+      "title": "Bronsealderen i Norge — Frans-Arne Stylegar, SNL",
+      "url": "https://snl.no/bronsealderen_i_Norge",
+      "supports": "South/mid-Norway 1700–500 BCE; northern early metal age about 2000 BCE–300 CE. Regional vocabulary is not uniform."
+    }
+  ],
+  "items": [
+    {
+      "id": "ard",
+      "title": "Ard og plog",
+      "kind": "reference",
+      "version": "norway-learning-aids-v1",
+      "sources": [
+        "ard"
+      ],
+      "text": "Ardens symmetriske spiss løsner jord til begge sider. En plog med veltefjøl snur en jordstripe til én side. Formen varierer; dette er prinsippskisser. Ard og plog kunne brukes ved siden av hverandre.",
+      "application": "Tenk på et redskap som snur en sammenhengende jordstripe til én side. Hvilken egenskap skiller det fra arden? Forklar før du ser sammenligningen igjen."
+    },
+    {
+      "id": "akerrein",
+      "title": "Åkerrein i landskapet",
+      "kind": "reference",
+      "version": "norway-learning-aids-v1",
+      "sources": [
+        "field",
+        "hesthag"
+      ],
+      "text": "I en skrånende åker kan jord flyttes nedover og hope seg opp ved nedkanten. Over tid blir kanten en liten voll eller terrasse: en åkerrein. Dette er et landskapsspor, ikke selve furen etter et redskap. Formen alene daterer ikke åkeren.",
+      "application": "Dette nye snittet heller motsatt vei. Ved A eller B forventer du mest oppsamlet jord? Forklar hvorfor. Hva kan du ikke avgjøre om alder fra tegningen alene?"
+    },
+    {
+      "id": "timeline",
+      "title": "Flere klokker på samme tidslinje",
+      "kind": "reference",
+      "version": "norway-learning-aids-v1",
+      "sources": [
+        "periods",
+        "holocene",
+        "bronze"
+      ],
+      "text": "Periodebetegnelser, klima og levevis følger ulike grenser. Samme år kan høre til yngre steinalder, holocen og et samfunn som fortsatt lever mest av jakt og fiske. Omtrentlige intervaller — særlig regionale overganger varierer.",
+      "application": "Hvorfor trenger ikke yngre steinalder bety at alle allerede er bønder?"
+    }
+  ],
+  "assets": {
+    "app/assets/study/soil-action-v1.svg": "1d76684a5e3505eea7fccae71a8ae7f1600ab5ee288f070b7c1512e38832fb91",
+    "app/assets/study/ard-v1.svg": "dfe9d9c225054500caa30fd2df56e5cc0c5cfea9665beee9cd69f9bbd7ebfc53",
+    "app/assets/study/ard-v1.png": "436132a437b4d1ce83718e9ebba5ebb1535fc31922f61b40debd8ad2436e1312",
+    "app/assets/study/soil-action-v1.png": "fff4d5ee90ee99259e84aba70daf2ea8cd1db902563d1173e50a4f9ae273ff30",
+    "app/assets/study/akerrein-transfer-v1.png": "de9f513193fd1a4d2f35985922af01d892d9cc4eb0f09d83ff36df2a45a75900",
+    "app/assets/study/akerrein-v1.svg": "dd414d2c96c7bf2f53a64d8a7b027631f49ef7eeca642e4ae31918a8cf511cdd",
+    "app/assets/study/akerrein-v1.png": "250bbafb63ced4c632728f37f5f936b6b11a1ef8f378a3302077b5be282efe74",
+    "app/assets/study/akerrein-transfer-v1.svg": "0606bd33cb00c00a0fc1ba4593a9478b5cea6220f2af3c43a9b7c05332180cdf"
+  },
+  "timeline": {
+    "scale": [
+      -10000,
+      500
+    ],
+    "archaeology_south_west": [
+      [
+        -9300,
+        -4000
+      ],
+      [
+        -4000,
+        -1700
+      ],
+      [
+        -1700,
+        -500
+      ]
+    ],
+    "holocene": [
+      -9700,
+      "present"
+    ],
+    "oslofjord_farming": [
+      -4000,
+      "later"
+    ],
+    "north_early_metal": [
+      -2000,
+      300
+    ],
+    "western_farming": "important toward end of Neolithic, no invented exact date"
+  }
+}

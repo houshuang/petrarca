@@ -200,3 +200,5 @@ Master index of all research documents. **Always update this file when adding ne
 | [user-guide.md](user-guide.md) | **User guide** — capture flows, reading modes, integrations, non-obvious features, hypotheses to test | Done |
 
 - [Phone assessment v1](norway-reading-study/assessment-release-v1.md): frozen unaided-first form, original questions, audio identity and descriptive comparison.
+
+- [Visual grounding v1](norway-reading-study/learning-aids-v1.md): sourced diagrams, on-demand shared-axis timeline and separately recorded application attempts.

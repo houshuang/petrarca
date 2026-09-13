@@ -127,6 +127,9 @@ def _session(conn, body):
     if not re.fullmatch(r'[A-Za-z0-9_-]{12,100}', run_id):
         raise ValueError('A stable session request_id is required')
     mode = body.get('mode', 'review')
+    if mode == 'reference':
+        from study_reference import start
+        return start(conn,body)
     if mode == 'assessment':
         from study_assessment import start
         return start(conn,body)
@@ -213,6 +216,8 @@ def event(conn, body):
         item = bound_item(conn, body.get('run_id'), body.get('item_id'))
         action = body.get('event')
         snapshot = json.loads(conn.execute('SELECT snapshot FROM study_runs WHERE id=?',(body['run_id'],)).fetchone()[0])
+        if 'reference' in snapshot and action not in ('shown','revealed','feedback','source_opened','session_left'):
+            raise ValueError('References are exposure only')
         if 'assessment' in snapshot:
             from study_assessment import handle_event
             result = handle_event(conn,body,item,snapshot)
