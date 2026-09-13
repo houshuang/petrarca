@@ -79,3 +79,22 @@ events and purpose-labelled original audio. Keep changes prospective in the
 experiment log and interpretations revisable. The measurement contract and
 limitations are in [analytics-v1.md](analytics-v1.md). No randomized comparison or
 automatic evaluation of comprehension has been authorized by these observations.
+
+### D010 — Longitudinal outcomes and a reviewable public account (13 September)
+
+User source `codex-20260912-L1438`: aim for a confident, connected overview of
+Norwegian history and a comprehensive blog like the original Petrarca essay.
+Preserve detailed time, pre/post knowledge dumps, later retention/integration,
+conversations and transcript links so another agent can review the design.
+
+**P005 — Proposed design dossier, not activated:**
+[Experimental-design review](experimental-design-review.md) supplies outcome axes,
+comparable assessment proposals, delayed follow-up options, burden tradeoffs,
+measurement limitations, analysis and publication-evidence requirements. Writing
+this proposal does not activate assessments, reminders, an RCT or publication.
+
+**Status annotation to Q004:** superseded by the 13-item production pilot deployed
+13 September. Its content and activation are recorded in analytics-v1; Q004's
+“no production import yet” describes an earlier state. **Qualification to D009:**
+immutable selection snapshots and client update IDs are implemented, but execution
+backend/policy stamps and some capture/timing joins remain incomplete (M02–M05).

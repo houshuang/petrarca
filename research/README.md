@@ -7,6 +7,7 @@ Master index of all research documents. **Always update this file when adding ne
 | When | Document | Why |
 |------|----------|-----|
 | **Every session** | [implementation-status.md](implementation-status.md) | Current system snapshot — architecture, all screens/scripts/endpoints, algorithm parameters |
+| **Norway design review** | [experimental design](norway-reading-study/experimental-design-review.md), [evidence index](norway-reading-study/evidence-index.md), [measurement gaps](norway-reading-study/measurement-gaps.md), [reviewer brief](norway-reading-study/reviewer-brief.md) | Complete longitudinal study proposal, conversation/transcript packet and independent-review questions |
 | **Norway phone experiment** | [norway-reading-study/analytics-v1.md](norway-reading-study/analytics-v1.md) | Source-linked phone pilot, detailed event/audio provenance, immutable versions and rapid iteration |
 | **Norway reading study** | [norway-reading-study/study-index.md](norway-reading-study/study-index.md) | 12-volume self-study: continuous audio capture, transcription provenance, timing, selective retention and delayed recall |
 | **Current restart** | [restart-plan-2026-08-24.md](restart-plan-2026-08-24.md) | Production-history survey, preservation boundary, private Companion experiment, research-library bridge, and delivery gates |

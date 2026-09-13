@@ -4,6 +4,27 @@
 
 ---
 
+
+## 2026-09-13 — Comprehensive design-review proposal; no intervention change
+
+**User source:** `codex-20260912-L1438`: connected historical overview, detailed
+reading/app time, comparable pre/post and months-later knowledge observations,
+full conversation/transcript evidence and a future blog account.
+**Before any activation:** [Design dossier](norway-reading-study/experimental-design-review.md)
+proposes outcome axes, fixed assessment core, delayed follow-up options, analysis,
+missingness rules and a publication evidence trail. These are review proposals;
+no assessment schedule, reminders, new grading or app behavior is activated.
+**Frozen observations:** 06:51:08.313 UTC runtime export has 13 items, 20 positions
+and zero runs/events/audio/transcriptions. Conversation snapshot `0d97c5839fe5d55f`
+has 97 user/assistant messages from two registered sessions, with explicit exclusions.
+**Gaps recorded:** exact active reading/app attention cannot be reconstructed from
+current data; baseline scope/exposure, capture joins, execution versions, follow-up
+comparability, independent scoring and backup verification need review.
+**Artifacts:** [Evidence index](norway-reading-study/evidence-index.md),
+[gap register](norway-reading-study/measurement-gaps.md),
+[reviewer assignment](norway-reading-study/reviewer-brief.md). Original observations
+and earlier interpretations remain preserved, including the quotation correction.
+
 ## 2026-09-13 — Phone pilot v1 measurement contract, before production activation
 
 **User sources:** `codex-20260912-L920` (implement and suspend other cards), `codex-20260912-L974` (rapid iteration, detailed analytics, source/response/design correlation).

@@ -4,6 +4,10 @@ Updated 13 September 2026. Start here when resuming this project. The latest use
 clarifications are in [decisions.md](decisions.md); historical assistant analyses
 are evidence of the conversation, not authoritative descriptions of the learner.
 
+## Independent design review
+
+[Full experimental design](experimental-design-review.md) · [evidence and transcript links](evidence-index.md) · [measurement gaps](measurement-gaps.md) · [reviewer brief](reviewer-brief.md). This dossier adds proposed longitudinal assessments and a blog evidence plan; it does not activate them.
+
 ## Current understanding
 
 Read all twelve volumes for connected historical understanding, chronological
@@ -42,8 +46,8 @@ session. This is bounded discovery, not proof that no other discussion exists.
 Claude web, other devices, other task histories and forum publication are not
 verified as covered. Do not claim that every historical or future chat is saved.
 
-Snapshot `5728e782011cefc9` contains 94 user/assistant message records
-from the two registered sessions, through the deployment progress messages on
+Snapshot `0d97c5839fe5d55f` contains 97 user/assistant message records
+from the two registered sessions, through the latest full-design review request and its initial acknowledgment on
 13 September. It includes `codex-20260912-L920` (isolate the pilot) and
 `codex-20260912-L974` (detailed analytics and versioned research design).
 It preserves the earlier analysis at `codex-20260912-L653` and the correction

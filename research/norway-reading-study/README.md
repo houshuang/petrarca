@@ -1,5 +1,8 @@
 # Norway history: a twelve-volume reading study
 
+> Current status, 13 September: the 13-item phone pilot is deployed. Earlier “not imported/deployed” statements below describe historical stages. The comprehensive design review and its measurement gaps supersede broad promises of exact time or complete analytics; proposed follow-ups are not active.
+
+
 Started 12 September 2026. Owner/participant: Stian. Current phase: volume 1,
 *Fra jeger til bonde*. The phone implementation and measurement contract are in
 [analytics-v1.md](analytics-v1.md); see its release record for deployment status.
