@@ -5,6 +5,20 @@
 ---
 
 
+## 2026-09-13 — Retention criteria, natural-reading connections and marker proposal
+
+**User source:** `codex-20260912-L1749`, preserved in snapshot `460adc66f7162632` (118 messages).
+**Recorded before any new implementation:** [Working specification](norway-reading-study/retention-and-connections-v1.md)
+retains the prior proposed three-month outcome/rubric/thresholds and adds meaningful
+connections to earlier reading as evidence of use. Optional personal-thought/question/
+connection/return-to-book markers help future attribution; actual adoption remains to
+be observed. Marker use is itself a protocol change that can increase recorded signal
+without increasing knowledge. Unmarked and ambiguous material stays unresolved.
+**Status:** Documentation only. No parser, app assessment, schedule, historical
+reclassification or knowledge-state update. Criteria remain revisable with versioned
+change records; no retroactive claim that the new thresholds were set before all exposure.
+
+
 ## 2026-09-13 — Explicit pilot hypotheses and participant workflow
 
 **User request:** Explain exactly how to engage, expected outcomes, hypotheses and

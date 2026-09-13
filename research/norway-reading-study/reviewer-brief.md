@@ -10,6 +10,8 @@ The reviewer has access to the Petrarca repository and local evidence. Read the
 files directly; no ZIP or extraction is needed. The evidence index links to the
 private archive outside Git, including conversations, transcripts and recordings.
 
+Also review the latest [retention standard, connection evidence and spoken-marker proposal](retention-and-connections-v1.md). It adds provisional thresholds and attribution rules; no new assessment or parser is implemented.
+
 ## Read in this order
 
 1. [Experimental design](experimental-design-review.md): goals, current behavior,

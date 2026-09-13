@@ -7,6 +7,7 @@ Master index of all research documents. **Always update this file when adding ne
 | When | Document | Why |
 |------|----------|-----|
 | **Every session** | [implementation-status.md](implementation-status.md) | Current system snapshot — architecture, all screens/scripts/endpoints, algorithm parameters |
+| **Norway retention criteria** | [Retention, connections and markers v1](norway-reading-study/retention-and-connections-v1.md) | Working three-month standard, assessment, links to previous reading and speech attribution |
 | **Norway pilot hypotheses** | [Engagement, hypotheses and decision rules](norway-reading-study/pilot-hypotheses.md) | Exact current phone workflow, competing predictions and interpretation of interaction/qualitative/outcome evidence |
 | **Norway design review** | [experimental design](norway-reading-study/experimental-design-review.md), [evidence index](norway-reading-study/evidence-index.md), [measurement gaps](norway-reading-study/measurement-gaps.md), [reviewer brief](norway-reading-study/reviewer-brief.md) | Complete longitudinal study proposal, conversation/transcript packet and independent-review questions |
 | **Norway phone experiment** | [norway-reading-study/analytics-v1.md](norway-reading-study/analytics-v1.md) | Source-linked phone pilot, detailed event/audio provenance, immutable versions and rapid iteration |

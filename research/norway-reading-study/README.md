@@ -20,6 +20,8 @@ Start with [reviewer-brief.md](reviewer-brief.md), then the [full experimental d
 
 For the current interaction loop and competing predictions, read [pilot hypotheses](pilot-hypotheses.md).
 
+[Retention and connections working specification](retention-and-connections-v1.md) records the three-month candidate standard, assessment method, connections during later reading and optional spoken markers.
+
 ## The question
 
 Can rapid reading of all twelve volumes of *Aschehougs Norgeshistorie*, supported

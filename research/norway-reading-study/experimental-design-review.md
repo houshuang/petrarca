@@ -15,6 +15,8 @@ The private packet includes complete exported conversations, transcripts and a
 consistent runtime-data snapshot. No further research intervention, app change,
 assessment schedule or publication is enacted by writing this dossier.
 
+**Later working specification (13 September):** [Retention and connections v1](retention-and-connections-v1.md) records the concrete three-month candidate standard, assessment rubric, connections while continuing to read, and optional spoken markers. Earlier proposals remain preserved; these additions are not runtime implementation.
+
 ## 1. The two outcomes we want
 
 **For the reader:** a good, confident overview across all twelve volumes of

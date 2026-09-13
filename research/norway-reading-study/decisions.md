@@ -102,3 +102,21 @@ backend/policy stamps and some capture/timing joins remain incomplete (M02–M05
 ### D011 — Explain and examine the pilot hypotheses (13 September)
 
 User source `codex-20260912-L1664`: specify actual engagement, expected outcomes, competing hypotheses, and how interaction/qualitative feedback can challenge the design. [Pilot hypotheses](pilot-hypotheses.md) documents the current loop and proposed H1–H6 interpretation rules. Predictions are not findings; formal outcome probes and automatic monitoring remain unimplemented. Conversation snapshot `dd4ad3dfc1727e4d` preserves this request.
+
+### D012 — Preserve an editable retention standard (13 September)
+
+User source `codex-20260912-L1749`: write down the preceding retention/measurement proposal and
+refine it as we go. [Working specification](retention-and-connections-v1.md) preserves
+five substantive areas plus terms, proposed 0–3 rubric, level-2/8-of-10/2-of-3 candidate
+thresholds and assessment sequence. These remain revisable practical proposals; no
+fixed assessment has been deployed or threshold empirically validated.
+
+### D013 and P006 — Connections and optional speech markers (13 September)
+
+Same user source: connections to earlier reading while continuing to read are another
+indicator of success. Adopt this outcome; distinguish personal/source-supplied/prompted
+connections and preserve what they help explain. No connection quota or automatic
+mastery upgrade. User tentatively suggests “I think” / “I wonder” markers. P006 records
+optional distinctive start/return phrases and bounded, uncertain attribution; it does
+not assume consistent adoption. Markers identify intended contribution, not independent
+recall or correctness. Unmarked recordings retain unresolved authorship.
