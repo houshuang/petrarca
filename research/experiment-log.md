@@ -5,6 +5,32 @@
 ---
 
 
+## 2026-09-13 — Study interaction and hierarchy redesign released
+
+Implemented the registered intervention in code `e985e4e`: the response context is
+chosen once per session, every card state has one dominant action, recognition and
+quality choices retain a selected state, answers identify “Det viktigste”, and
+capture/provenance moved under “Mer om dette kortet”. The navigation labels are now
+consistently Norwegian and disabled article destinations were removed from the
+drawer. Item payloads, grading, FSRS scheduling, audio durability and provenance
+were not changed.
+
+The exact reported failure now has a component regression test: tapping “Kjenner
+igjen ordet” produces a checked filled state and confirmation, and a repeated tap
+does not duplicate the event. TypeScript and 12 focused client tests pass. A
+390 × 844 isolated browser fixture verified session selection, card hierarchy,
+recognition acknowledgement, answer reveal and judgment; no production study event
+was created. The general Jest suite is not wholly green: six failures remain in the
+unrelated audio-queue reachability and disabled article-data fixtures. Local Python
+study tests could not start because the checkout environment lacks `fsrs`; server
+code was not changed. Physical-iPhone adoption and microphone behavior are not
+claimed.
+
+iOS preview update `01a09b5e-2f11-7e6c-85ff-0c0a01392206`, group
+`3db534d1-7702-4b48-9f1d-994784c53847`, runtime `1.0.0`. Reopen Petrarca, leave it
+open briefly to download, then quit and reopen to apply.
+
+
 ## 2026-09-13 — Study interaction and hierarchy redesign, registered before implementation
 
 **User observation:** the Norway study screen is overwhelming, does not make the

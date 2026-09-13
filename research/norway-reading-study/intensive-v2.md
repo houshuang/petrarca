@@ -174,3 +174,14 @@ dependents without creating a live run.
 Private verification evidence and phone-sized screenshots:
 [phone-practice-v2](/Users/stian/.agents/research/petrarca-norway-study/phone-practice-v2).
 The local browser and fixture servers were stopped after checks.
+
+## Interface release — 13 September 2026
+
+The usability intervention registered after the physical-iPhone review was released
+from code `e985e4ec47143186b497d3efabaf40d5a610c2d8` as iOS preview update
+`01a09b5e-2f11-7e6c-85ff-0c0a01392206`, group
+`3db534d1-7702-4b48-9f1d-994784c53847`, runtime `1.0.0`. It changes presentation and
+interaction state only; the active content revision and scheduling policy above are
+unchanged. TypeScript, 12 focused client tests and the isolated 390 × 844 journey
+passed. Apply it by opening Petrarca briefly, then quitting and reopening. Device
+adoption and physical-iPhone microphone behavior remain unverified.

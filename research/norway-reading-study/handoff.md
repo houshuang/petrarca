@@ -62,18 +62,22 @@ this conversation.
 
 ## Exact live state
 
-- Deployed server/client code: `d21ba9f0e5d239ac2e6047fa51540ada5e282b67`.
+- Deployed server study code: `d21ba9f0e5d239ac2e6047fa51540ada5e282b67`.
+- Deployed mobile interface code: `e985e4ec47143186b497d3efabaf40d5a610c2d8`.
 - Design: `norway-intensive-v2`; seed: [intensive-v2.json](intensive-v2.json).
 - Study revision: `7cd0fa3244e5613db93a5480e38ff2559feea4aa03f350dc5f6d1f2143bcb698`.
-- iOS preview update: `01a09a19-423a-7eb7-b8e5-1870f756e28a`, runtime `1.0.0`.
-- EAS group: `d077bbb0-01a4-41a2-958e-93a598483049`, published 09:29:01.754 UTC.
+- Current iOS preview update: `01a09b5e-2f11-7e6c-85ff-0c0a01392206`, runtime `1.0.0`.
+- Current EAS group: `3db534d1-7702-4b48-9f1d-994784c53847`.
+- Previous v2 content release update: `01a09a19-423a-7eb7-b8e5-1870f756e28a`.
 - Health, study status and summary returned HTTPS 200; manifest private API
   configuration matched. The device's adoption of v2 has not been confirmed.
-- 24 isolated Python and six client tests, TypeScript and 390 × 844 browser checks
-  of native components passed for the release. Not a physical-iPhone microphone test.
+- The v2 content release retained its 24 isolated Python and six client checks. For
+  the interface release, TypeScript, 12 focused client tests and a 390 × 844 isolated
+  browser journey passed. It is not a physical-iPhone microphone test.
 - Original thirteen item payloads and previous runs/events preserved. Eight legacy
   tables matched the pre-activation DB backup. Details and hash in intensive-v2.md.
-- Repository commits after d21ba9f are documentation only, including this handoff.
+- Repository commit `e985e4e` after the v2 server release changes only the mobile
+  interface, client test support and documentation.
 
 Scheduled new closed-book answers use the canonical study-only FSRS policy: Good
 for knew, Again for missed; 10m/20m/1d learning steps. First correct → 20m, first miss
@@ -188,8 +192,9 @@ on origin/main even if that shared working directory looks stale.
 Commit/push before deployment. Use `bash scripts/deploy-study.sh` from the clean
 owned checkout for combined changes (unchanged unified deploy with an owned-root
 configuration, private API install, mobile publish); its message currently describes
-v2 and must be revised for a new release. Use `app/deploy-mobile.sh` for app-only
-updates. Check Expo skills and compatibility. Never print the private API capability.
+v2 and must be revised for a new combined release. Use `app/deploy-mobile.sh` for
+app-only updates; the interface release above used this path. Check Expo skills and
+compatibility. Never print the private API capability.
 Do not POST synthetic captures or grades to production. Test in isolated SQLite.
 Tana access must use installed authenticated tana-cli or the appropriate MCP,
 never browser automation. No dev servers or browser sessions are left running.
