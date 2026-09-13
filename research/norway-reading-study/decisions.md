@@ -129,3 +129,44 @@ prerequisites, short initial FSRS steps, and optional extra practice recorded wi
 postponing scheduled reviews. These choices are an observational design revision,
 not user evidence of mastery. Original recordings, items and events remain intact.
 “Too easy” feedback supports pruning and improving the expanded set.
+
+## D015 / O001 — Original cards welcomed; independent term lookups (13 September 2026)
+
+**User report:** “i've already gone through all the cards that were there before
+this expansion. I like them all. I did separately look up some of the terms like
+ard to get a better idea.” Source: `codex-20260912-L2217`,
+2026-09-13T09:32:02.783Z; conversation freeze `d0d5698b87862347`
+(135 messages: 38 Claude, 97 Codex).
+
+**Telemetry check at 09:32:41Z:** all ten original non-voice Review items have at
+least one introduction or completion. Six terms were introduced; marin grense and
+ard also had completed recall encounters. The period sequence has two completions,
+bronze aspect and landheving causal cards one each; the synchronic card has an
+introduction. The three original voice prompts have no logged encounters at this
+cutoff. This is consistent with having traversed the available Review material;
+visited/introduction/completed recall remain different measures. Do not recode the
+user's report as thirteen tested items or universal correct recall.
+
+**Interpretation:** explicit positive feedback supports retaining the original set
+and its level of relevance. It does not yet measure delayed retention. Looking up
+ard and unspecified other terms is self-reported external learning exposure and
+may express curiosity, insufficient explanatory detail, or both. The user sought a
+better idea of the term, not necessarily a more exact verbal definition. Background
+events cannot establish what site was visited, lookup duration, or its effect.
+
+**Research record:** ard is the only named lookup. Other terms, sources, times,
+modalities and sequence relative to recall are unknown. Do not fabricate in-app
+lookup events or adjust FSRS/knowledge state from this message. Later ard recall
+must be interpreted in the presence of reported outside exposure, with unknown lag.
+Documentation and the source conversation retain the observation; it is not yet a
+structured external-exposure table or mobile logging feature.
+
+**Proposed next experiment, not deployed:** optional image or concrete use example
+for object terms, followed later by contextual recognition/application. Preserve
+the short card flow. Compare user-reported clarification and voluntary enrichment
+with subsequent application, without attributing causality from one lookup.
+
+Read-only telemetry evidence:
+[original-feedback-check.json](/Users/stian/.agents/research/petrarca-norway-study/phone-practice-v2/original-feedback-check.json).
+This archive cutoff includes the report and initial acknowledgment, not this turn's
+eventual final response. No content, scheduling or production data changed.

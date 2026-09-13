@@ -8,6 +8,13 @@ are evidence of the conversation, not authoritative descriptions of the learner.
 
 [Full experimental design](experimental-design-review.md) · [evidence and transcript links](evidence-index.md) · [measurement gaps](measurement-gaps.md) · [reviewer brief](reviewer-brief.md). This dossier adds proposed longitudinal assessments and a blog evidence plan; it does not activate them.
 
+## First participant feedback
+
+[D015 / O001](decisions.md#d015--o001--original-cards-welcomed-independent-term-lookups-13-september-2026):
+all original Review cards welcomed; external term lookups including ard. All ten
+Review items have recorded visits, with introductions distinguished from recall.
+Conversation snapshot `d0d5698b87862347` preserves the report.
+
 ## Current phone phase
 
 [Intensive practice v2](intensive-v2.md) expands the phone material to 76 items with

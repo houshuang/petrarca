@@ -5,6 +5,17 @@
 ---
 
 
+## 2026-09-13 — Positive original-card feedback and external term exposure
+
+Observation only; no intervention applied. User likes all original cards and
+reports independent lookups including ard. Read-only logs confirm visits to all
+ten original Review items, mixing introductions and recall; no original voice
+encounters at the check. Record ard as self-reported outside exposure with unknown
+source/time/duration, not an inferred app event or a scheduling grade.
+[Full attribution and interpretation](norway-reading-study/decisions.md#d015--o001--original-cards-welcomed-independent-term-lookups-13-september-2026).
+Optional visual/use-example enrichment is a candidate experiment, not implemented.
+
+
 ## 2026-09-13 — Intensive Norway practice v2 activated
 
 Implemented the previously registered expansion: 76 items, seven themes, exposure
