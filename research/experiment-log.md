@@ -4,6 +4,12 @@
 
 ---
 
+## 2026-09-13 — Phone-based study delivery using existing Petrarca mechanisms
+
+**User correction:** Consolidation/testing must happen in the Petrarca app away from the keyboard. The three chat prompts were not answered; they are not recall observations.
+**Inspection:** Remote main and deployed server are b7716e5. Native Review renders aspect, sequence, synchronic, cast, causal and microlearning cards. Voice offers guided recall, sweep, defender and commonplace. Read-only private mobile HTTPS health succeeded; curriculum list contains four Norway curricula beginning at 800 CE. The desktop Companion's prior-review-only selector is separate and is not the primary study route.
+**Revised implementation direction:** Reuse native cards, voice, scheduling and logging; introduce a curated pre-800 study subset, recognition/meaning targets and provenance-preserving source handling. A study scope and valid learning observations require work; a healthy API does not prove this subset is ready on the phone. No app change, deployment, grade, or production ingestion occurred in this audit. [Phone workflow](norway-reading-study/mobile-workflow.md).
+
 ## 2026-09-13 — Provenance correction, concept familiarity and conversation audit
 
 **User clarification before revision:** Spoken notes often read book sentences verbatim, including the book's own summaries. Summary-like wording does not establish reader synthesis. The user also explicitly values loose familiarity with concepts and specific terms to support future reading with less effort and more connections.

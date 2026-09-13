@@ -18,6 +18,22 @@ proposals remain proposals until tried or accepted. References resolve through
 | P003 | 2026-09-13 | Assistant implementation policy | Unverified open-book passages default to unresolved book/reader origin and exposure-only learning evidence | Implements D004; no claim every passage is a quotation |
 | P004 | 2026-09-13 | Assistant design proposal | Track recognition, rough meaning, contextual interpretation and optional explanation separately | Implements D005; not a deployed scoring model |
 
+## D007 and C002: phone delivery, 13 September
+
+**D007 — User requirement, active:** Use Petrarca's existing mechanisms away from
+the keyboard. Source: `codex-20260912-L842`. Native Review and Voice are the main delivery
+surfaces for this study. Chat prompts are not the required testing interface.
+
+**C002 — Assistant framing corrected:** The separate desktop Companion is narrower
+than the native app. Its selection constraints do not describe the full set of
+mobile mechanisms. Native cards, guided recall and other voice tools exist; the
+mobile API is healthy. The gap is the study content/introduction/scoping and
+provenance path, not absence of the original mobile mechanisms. See
+[mobile-workflow.md](mobile-workflow.md) for the verified audit and integration work.
+
+The three earlier chat prompts have no recorded response or grade. Preserve the
+questions as possible app prompts, with delivery marked superseded.
+
 ## C001: exact scope of the correction
 
 The original assistant response described farming s009 (03:26–04:03) as "explicitly

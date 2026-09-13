@@ -14,6 +14,10 @@ reader synthesis, comprehension or retention. Unknown authorship stays unknown.
 Recognition and a rough conceptual association can be a sufficient learning goal;
 precise definition recall is optional and should earn its extra effort.
 
+**Delivery:** testing and consolidation belong in the native Petrarca phone app.
+See [mobile workflow](mobile-workflow.md); the desktop/chat-first framing is
+superseded for this study (D007/C002).
+
 ## Find the record
 
 | Record | Where | Status / purpose |

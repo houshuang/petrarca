@@ -222,6 +222,13 @@ known context. Accept approximate placement when exact precision adds no value.
 
 ## Retrieval formats and Petrarca fit
 
+**13 September delivery correction:** Use Petrarca's native phone Review/Voice
+mechanisms, away from the keyboard. The desktop Companion described below is a
+separate interface; its prior-review-only selector is not the native selector.
+The live mobile gateway is healthy. The curated pre-800 study import, study focus
+and evidence handling remain to be integrated. See [mobile-workflow.md](mobile-workflow.md).
+
+
 The current published base is `b7716e5`, verified from origin on 12 September.
 Its [Companion restart](../restart-plan-2026-08-24.md) intentionally limits the
 recall screen to questions backed by prior review. `scripts/recall_engine.py`
