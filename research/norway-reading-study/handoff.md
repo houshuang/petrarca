@@ -10,7 +10,7 @@ Phone entries: **Fortell → Fortell oversikten · uten fasit** and **I dag → 
 
 Read [assessment release](assessment-release-v1.md), [learning aids](learning-aids-v1.md) and [intake/monthly/backup runbook](intake-v1.md). The latter supplies operator tooling, not an unattended collector. A new recording is still needed to verify the physical iPhone microphone and genuine new-source intake. The independent backup destination is pending. No pre-app observation, completed-volume observation or monthly result is fabricated.
 
-The earlier state below is retained as historical context where explicitly dated. Current learning-aid iOS update is `01a09b84-ef60-702a-a0f6-3803f00de779` from code `b6b3888`; subsequent backend/operator release identifiers are recorded in intake-v1.md. Reopen to download, leave open briefly, then quit/reopen to apply. Device adoption remains unconfirmed.
+The earlier state below is retained as historical context where explicitly dated. Current iOS update is `01a09b90-7e08-713b-9102-659bd174dcad` from code `61d0fcd`; all release identifiers and verification are recorded in intake-v1.md. Reopen to download, leave open briefly, then quit/reopen to apply. Device adoption remains unconfirmed.
 
 ## Immediate orientation
 
