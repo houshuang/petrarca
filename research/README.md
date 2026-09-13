@@ -1,3 +1,5 @@
+Latest Norway study operator release: [source intake, monthly sample and backup verification](norway-reading-study/intake-v1.md).
+
 # Petrarca Research Index
 
 Master index of all research documents. **Always update this file when adding new research.**

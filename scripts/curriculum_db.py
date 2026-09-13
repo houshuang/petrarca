@@ -29,6 +29,12 @@ def study_action(action, body=None, conn=None, **kwargs):
     if own:
         conn = get_connection()
     try:
+        if action == 'intake':
+            from study_intake import action as intake_action
+            return intake_action(conn, body)
+        if action == 'monthly':
+            from study_monthly import sample
+            return sample(conn, body or {})
         if action == 'summary':
             return study_engine.summary(conn)
         if action == 'status':

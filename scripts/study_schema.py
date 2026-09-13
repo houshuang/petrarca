@@ -60,3 +60,18 @@ CREATE TABLE IF NOT EXISTS study_assessments (
  protocol_version TEXT NOT NULL, created_at INTEGER NOT NULL
 );
 """
+
+SCHEMA += """
+CREATE TABLE IF NOT EXISTS study_intake (
+ source_id TEXT PRIMARY KEY, audio_sha256 TEXT NOT NULL UNIQUE,
+ state TEXT NOT NULL, source TEXT NOT NULL, draft TEXT,
+ created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS study_intake_events (
+ id INTEGER PRIMARY KEY AUTOINCREMENT, source_id TEXT NOT NULL REFERENCES study_intake(source_id),
+ state TEXT NOT NULL, created_at INTEGER NOT NULL, payload TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS study_monthly_samples (
+ month TEXT PRIMARY KEY, created_at INTEGER NOT NULL, payload TEXT NOT NULL
+);
+"""

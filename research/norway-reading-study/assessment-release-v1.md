@@ -20,7 +20,7 @@ It aligns actual recorded/transcribed answers by volume and prompt. It produces 
 
 Reading recordings may include verbatim book text: keep them and their source excerpts private; publication requires separately selected permissible excerpts. The user's own assessment material still needs a publication selection/privacy pass. No raw recording is made public by this release.
 
-Still separate work: fresh-context application, independent backup destination/restore, visual grounding and the incremental intake loop. No reminder is activated by this document.
+Follow-on releases: [visual grounding and near application](learning-aids-v1.md) and [operator intake/monthly sampling](intake-v1.md). Independent backup still needs a destination. No reminder is activated by these documents.
 
 Validation before release: 28 isolated Python study checks, 11 focused client checks and TypeScript passed. At 390×844, local browser verified narrative-first navigation, explicit missingness, confidence before recording and no answer reveal. Real iPhone microphone/upload remains to be verified by a genuine recording.
 

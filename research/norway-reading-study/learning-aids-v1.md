@@ -11,3 +11,5 @@ From the reference menu, “Prøv et nytt eksempel først” withholds the expla
 The timeline shares one proportional axis across regional archaeology, the geological Holocene epoch, Oslofjord farming evidence and northern early metal terminology. Northern/southern labels overlap intentionally. Holocene continues beyond the chart. Approximate dates and the later western adoption of farming are explained rather than assigned false universal boundaries.
 
 Validation: 29 isolated study tests, TypeScript and 11 focused client checks passed. A 390×844 browser check loaded both ard diagram assets successfully from the local bundle and confirmed the reference flow. Native rendering uses bundled PNGs; no new native dependency or runtime change.
+
+Published code `b6b3888945bb3a4ad8454fdedd4ef33692907b3f`, iOS update `01a09b84-ef60-702a-a0f6-3803f00de779`, EAS group `f763c1e3-ed0d-410d-8aad-d80c15a06213`, preview runtime `1.0.0`.

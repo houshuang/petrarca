@@ -1,3 +1,5 @@
+Latest Norway study operator release: [source intake, monthly sample and backup verification](norway-reading-study/intake-v1.md).
+
 # Petrarca: Current System State
 
 **Phone overview assessment (13 September 2026):** Fortell adds a frozen unaided-first assessment outside FSRS, with per-run coverage/help context, confidence before cues, stable audio attempt/server IDs and a private comparison exporter. Term familiarity now precedes first introduction. See [assessment release](norway-reading-study/assessment-release-v1.md).

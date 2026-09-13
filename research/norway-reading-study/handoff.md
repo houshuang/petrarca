@@ -1,8 +1,16 @@
 # Continue the Norwegian-history experiment
 
-Handoff prepared 13 September 2026 at the user's explicit request. Read this first.
+Handoff prepared 13 September 2026 at the user's explicit request. Read this first. Updated after the approved assessment/learning implementation on 13 September.
 It consolidates the current state; earlier protocol and release freezes remain
 historical evidence. No separate agent has been started and no review is claimed.
+
+## Current release addendum — assessment, learning aids and intake
+
+Phone entries: **Fortell → Fortell oversikten · uten fasit** and **I dag → Se og forstå · bilder og tidslinje**. Assessment freezes narrative + five cues, confidence, context, original-question pairs at volume end and a three-axis rubric. It never reveals answers or changes memory schedules. Term familiarity is now captured before the initial definition. Ard/åkerrein illustrations, near-application examples and a shared-axis timeline are live. Existing 76 practice items are preserved.
+
+Read [assessment release](assessment-release-v1.md), [learning aids](learning-aids-v1.md) and [intake/monthly/backup runbook](intake-v1.md). The latter supplies operator tooling, not an unattended collector. A new recording is still needed to verify the physical iPhone microphone and genuine new-source intake. The independent backup destination is pending. No pre-app observation, completed-volume observation or monthly result is fabricated.
+
+The earlier state below is retained as historical context where explicitly dated. Current learning-aid iOS update is `01a09b84-ef60-702a-a0f6-3803f00de779` from code `b6b3888`; subsequent backend/operator release identifiers are recorded in intake-v1.md. Reopen to download, leave open briefly, then quit/reopen to apply. Device adoption remains unconfirmed.
 
 ## Immediate orientation
 
@@ -43,8 +51,7 @@ Do not turn every book detail or uncertain argument into a memory obligation.
 
 The eventual comprehensive blog should compare pre-reading, post-reading and
 months-later understanding with credible time/exposure data and transparent design
-iterations. Working three-month criteria and 1/3/6-month observations are proposals,
-not an operating assessment system. Continue reading should also elicit justified
+iterations. The fixed assessment instrument now operates; monthly selection is operator-run and waits for completed-volume observations. Continue reading should also elicit justified
 connections to previous reading. No background reminder or collector is active.
 
 Tana recording is continuous **during book-open reading**. The user often reads
@@ -60,7 +67,7 @@ is a self-report about the attempted answer, not proof of visual or transferable
 understanding. Do not manufacture telemetry or retrospectively change grades from
 this conversation.
 
-## Exact live state
+## Earlier live state before the assessment release
 
 - Deployed server study code: `d21ba9f0e5d239ac2e6047fa51540ada5e282b67`.
 - Deployed mobile interface code: `e985e4ec47143186b497d3efabaf40d5a610c2d8`.
@@ -94,8 +101,7 @@ others. Extra practice and related cues contaminate an otherwise delayed test;
 measure elapsed time since all relevant exposure, not just the last scheduled grade.
 
 Event/audio retries are durable, but loading and advancing need connectivity.
-There is no complete offline train workflow. No visual enrichment feature has been
-built yet; v2 adds a textual ard/plow comparison, which does not close the image gap.
+There is no complete offline train workflow. Visual enrichment has since shipped in learning-aids-v1; this provides original explanatory diagrams and optional near application, not a broad transfer result.
 
 ## Latest participant evidence
 
