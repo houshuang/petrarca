@@ -39,6 +39,7 @@ interface PositionResult {
 interface Props {
   card: SequenceCardData;
   onComplete: (results: PositionResult[]) => void;
+  onInteraction?: (event: string, detail: Record<string, unknown>) => void;
 }
 
 type SlotState = 'anchor' | 'blank' | 'revealed' | 'knew' | 'missed';
@@ -75,7 +76,7 @@ function formatGap(yearA?: number, yearB?: number): string | null {
   return `${gap} years`;
 }
 
-export default function SequenceCard({ card, onComplete }: Props) {
+export default function SequenceCard({ card, onComplete, onInteraction }: Props) {
   const positions = useMemo(
     () => [...card.positions].sort((a, b) => a.position - b.position),
     [card.positions],
@@ -126,6 +127,7 @@ export default function SequenceCard({ card, onComplete }: Props) {
   };
 
   const revealOne = (positionId: string) => {
+    onInteraction?.('position_revealed', { position_id: positionId });
     setStates(prev => ({ ...prev, [positionId]: 'revealed' }));
     setRevealTimes(prev => ({ ...prev, [positionId]: Date.now() }));
     animateReveal(positionId);
@@ -137,6 +139,7 @@ export default function SequenceCard({ card, onComplete }: Props) {
     const times: Record<string, number> = {};
     for (const p of blanks) {
       if (states[p.position_id] === 'blank') {
+        onInteraction?.('position_revealed', { position_id: p.position_id, reveal_all: true });
         updates[p.position_id] = 'revealed';
         times[p.position_id] = now;
         animateReveal(p.position_id);
@@ -147,6 +150,7 @@ export default function SequenceCard({ card, onComplete }: Props) {
   };
 
   const grade = (positionId: string, score: 'knew' | 'missed') => {
+    onInteraction?.('position_graded', { position_id: positionId, score });
     setStates(prev => ({ ...prev, [positionId]: score }));
   };
 
@@ -184,7 +188,7 @@ export default function SequenceCard({ card, onComplete }: Props) {
         <View style={st.promptRow}>
           <Text style={st.prompt}>Fill in the timeline</Text>
           <Pressable style={st.knowAllBtn} onPress={revealAll}>
-            <Text style={st.knowAllText}>Know All</Text>
+            <Text style={st.knowAllText}>{onInteraction ? "Vis alle svar" : "Know All"}</Text>
           </Pressable>
         </View>
       )}

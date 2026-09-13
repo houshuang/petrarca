@@ -1037,6 +1037,8 @@ def init_db():
     """Create all tables if they don't exist, apply migrations."""
     conn = get_connection()
     conn.executescript(SCHEMA)
+    from study_schema import SCHEMA as STUDY_SCHEMA
+    conn.executescript(STUDY_SCHEMA)
     for migration in MIGRATIONS:
         try:
             conn.execute(migration)

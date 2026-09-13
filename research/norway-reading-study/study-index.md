@@ -26,6 +26,7 @@ superseded for this study (D007/C002).
 | Decisions and corrections | [decisions.md](decisions.md) | Dated entries; distinguish user decisions from assistant proposals |
 | Concepts and terms | [concepts.md](concepts.md) | Recognition-oriented goals, candidate terms and evidence rules |
 | Analysis of baseline/notes | [analysis-2026-09-12.md](analysis-2026-09-12.md) | Claims audited after the quotation clarification |
+| Phone pilot and analytics | [analytics-v1.md](analytics-v1.md) | Content, observation schema, interpretation limits, iteration and release procedure |
 | Prospective interventions | [experiment-log.md](../experiment-log.md) | Append-only; register changes before applying them |
 | Initial audio batch | [first-batch.md](first-batch.md) | Durations, ASR versions, disputes and target proposals |
 | Private study hub | [Private README](/Users/stian/.agents/research/petrarca-norway-study/README.md) | Audio, conversations, source annotations and current local paths |
@@ -41,9 +42,9 @@ session. This is bounded discovery, not proof that no other discussion exists.
 Claude web, other devices, other task histories and forum publication are not
 verified as covered. Do not claim that every historical or future chat is saved.
 
-Snapshot `d18f4c30d8690197` contains 73 user/assistant message records (38 Claude,
-35 Codex), through the user's 13 September clarification and
-progress replies before this turn's final response.
+Snapshot `da1ec4633b9271b1` contains 91 user/assistant message records (38 Claude,
+53 Codex), including the September 13 authorization to pause other cards and the
+requirement for detailed analytics and versioned research designs.
 It preserves the earlier analysis at `codex-20260912-L653` and the correction
 request at `codex-20260912-L663`. Original log timestamps are UTC; audio offsets
 and local dates are distinct. Source-line IDs refer to registered append-only

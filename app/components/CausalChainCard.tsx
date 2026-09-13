@@ -41,11 +41,12 @@ interface PositionResult {
 interface Props {
   card: CausalChainCardData;
   onComplete: (results: PositionResult[]) => void;
+  onInteraction?: (event: string, detail: Record<string, unknown>) => void;
 }
 
 type PositionState = 'anchor' | 'hidden' | 'revealed' | 'knew' | 'missed';
 
-export default function CausalChainCard({ card, onComplete }: Props) {
+export default function CausalChainCard({ card, onComplete, onInteraction }: Props) {
   const positions = [...card.positions].sort((a, b) => a.position - b.position);
 
   // First link is always anchor (context), pick 2 blanks by urgency from the rest
@@ -100,12 +101,14 @@ export default function CausalChainCard({ card, onComplete }: Props) {
   };
 
   const revealOne = (positionId: string) => {
+    onInteraction?.('position_revealed', { position_id: positionId });
     setStates(prev => ({ ...prev, [positionId]: 'revealed' }));
     setRevealTimes(prev => ({ ...prev, [positionId]: Date.now() }));
     animateReveal(positionId);
   };
 
   const grade = (positionId: string, score: 'knew' | 'missed') => {
+    onInteraction?.('position_graded', { position_id: positionId, score });
     setStates(prev => ({ ...prev, [positionId]: score }));
   };
 

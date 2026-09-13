@@ -1,13 +1,15 @@
 # Norway history: a twelve-volume reading study
 
 Started 12 September 2026. Owner/participant: Stian. Current phase: volume 1,
-*Fra jeger til bonde*. This is an active project protocol and handoff, not an
-assertion that the study pipeline is already integrated into the app.
+*Fra jeger til bonde*. The phone implementation and measurement contract are in
+[analytics-v1.md](analytics-v1.md); see its release record for deployment status.
 
 Start with the [study index](study-index.md) for conversations, sources and coverage.
 The [decision/correction ledger](decisions.md) records changes in user goals and
-interpretation. Latest clarification: 13 September, verbatim book reading
-(including summaries) and concept/term familiarity as a core outcome.
+interpretation. Latest instructions: keep all other cards paused while rapidly iterating on this
+phone pilot, with detailed source-linked analytics and versioned research changes.
+Verbatim book reading (including summaries) remains exposure rather than evidence
+of reader integration; concept familiarity remains a core outcome.
 
 ## The question
 

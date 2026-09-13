@@ -1,3 +1,4 @@
+import StudyGate from '../../components/study/StudyGate';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, Animated, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView,
@@ -1285,7 +1286,7 @@ function EntityIntroCard({
 
 // ── Main Screen ─────────────────────────────────────────────────────
 
-export default function ReviewScreen() {
+function LegacyReviewScreen() {
   const router = useRouter();
   const [items, setItems] = useState<ResurfacingItem[]>([]);
   const [streamMeta, setStreamMeta] = useState<Partial<ReviewStreamResponse>>({});
@@ -2062,3 +2063,7 @@ const fim = StyleSheet.create({
   btnFlagText: { fontFamily: fonts.uiMedium, fontSize: 14, color: '#fff',
     ...(Platform.OS === 'web' ? { fontWeight: '500' as const } : {}) },
 });
+
+export default function ReviewScreen() {
+  return <StudyGate mode="review"><LegacyReviewScreen /></StudyGate>;
+}

@@ -1,0 +1,939 @@
+{
+  "study_id": "norway-reading-2026",
+  "version": "pilot-v1",
+  "items": [
+    {
+      "id": "no-p1-marin",
+      "kind": "term",
+      "card_id": "no-p1-marin",
+      "card_type": "term",
+      "ordinal": 0,
+      "title": "Marin grense",
+      "description": "Omtrentlige holdepunkter, med rom for usikkerhet.",
+      "domain_id": "norway-reading-2026",
+      "domain_title": "Norgeshistorie · bind 1",
+      "node_id": "no-p1-marin",
+      "intended_depth": "recognition_and_rough_meaning",
+      "sources": [
+        {
+          "recording": "hunters",
+          "segment": "s010",
+          "version": "editorial-v1",
+          "start_ms": 248550,
+          "end_ms": 279330,
+          "tana_link": "https://app.tana.inc/?nodeid=gi9oYzu422Pf",
+          "source_id": "reading-20260912-hunters",
+          "authorship": "unresolved_book_or_reader",
+          "evidence_type": "exposure_only"
+        }
+      ],
+      "references": [
+        {
+          "title": "NGU · marin grense",
+          "url": "https://www.ngu.no/om-geologi/om-kart-over-marin-grense"
+        }
+      ],
+      "content_authorship": "assistant_curated_source_checked",
+      "historical_verification_date": "2026-09-13",
+      "positions": [
+        {
+          "position_id": "no-p1-marin-p0",
+          "position": 0,
+          "question_text": "Når du møter «marin grense» i en historisk tekst: hva slags ting eller prosess er det? En omtrentlig forklaring er nok.",
+          "answer_text": "Det høyeste nivået havet nådde på et bestemt sted etter siste istid. Grensen varierer fra sted til sted; den hjelper oss å forstå hvor tidligere havbunn kan ligge.",
+          "hook_type": "concept",
+          "fact_type": "concept",
+          "testable": true,
+          "question_variants": {
+            "event": "Det høyeste nivået havet nådde på et bestemt sted etter siste istid. Grensen varierer fra sted til sted; den hjelper oss å forstå hvor tidligere havbunn kan ligge.",
+            "year_display": "",
+            "connection_to_next": null
+          }
+        }
+      ],
+      "introduction": "Det høyeste nivået havet nådde på et bestemt sted etter siste istid. Grensen varierer fra sted til sted; den hjelper oss å forstå hvor tidligere havbunn kan ligge.",
+      "target_ids": [
+        "concept-001"
+      ]
+    },
+    {
+      "id": "no-p1-ard",
+      "kind": "term",
+      "card_id": "no-p1-ard",
+      "card_type": "term",
+      "ordinal": 3,
+      "title": "Ard",
+      "description": "Omtrentlige holdepunkter, med rom for usikkerhet.",
+      "domain_id": "norway-reading-2026",
+      "domain_title": "Norgeshistorie · bind 1",
+      "node_id": "no-p1-ard",
+      "intended_depth": "recognition_and_rough_meaning",
+      "sources": [
+        {
+          "recording": "bronze",
+          "segment": "s028",
+          "version": "editorial-v1",
+          "start_ms": 1063650,
+          "end_ms": 1071810,
+          "tana_link": "https://app.tana.inc/?nodeid=VlbnpbwlxQNw",
+          "source_id": "reading-20260912-bronze",
+          "authorship": "unresolved_book_or_reader",
+          "evidence_type": "exposure_only"
+        }
+      ],
+      "references": [
+        {
+          "title": "Bokmålsordboka · ard",
+          "url": "https://ordbokene.no/bm/2611"
+        }
+      ],
+      "content_authorship": "assistant_curated_source_checked",
+      "historical_verification_date": "2026-09-13",
+      "positions": [
+        {
+          "position_id": "no-p1-ard-p0",
+          "position": 0,
+          "question_text": "Når du møter «ard» i en historisk tekst: hva slags ting eller prosess er det? En omtrentlig forklaring er nok.",
+          "answer_text": "Et enkelt pløyingsredskap som risser eller furer jorda. Det mangler veltefjøla som vender jorda på en plog.",
+          "hook_type": "concept",
+          "fact_type": "concept",
+          "testable": true,
+          "question_variants": {
+            "event": "Et enkelt pløyingsredskap som risser eller furer jorda. Det mangler veltefjøla som vender jorda på en plog.",
+            "year_display": "",
+            "connection_to_next": null
+          }
+        }
+      ],
+      "introduction": "Et enkelt pløyingsredskap som risser eller furer jorda. Det mangler veltefjøla som vender jorda på en plog.",
+      "target_ids": [
+        "concept-018"
+      ]
+    },
+    {
+      "id": "no-p1-morene",
+      "kind": "term",
+      "card_id": "no-p1-morene",
+      "card_type": "term",
+      "ordinal": 5,
+      "title": "Morenejord",
+      "description": "Omtrentlige holdepunkter, med rom for usikkerhet.",
+      "domain_id": "norway-reading-2026",
+      "domain_title": "Norgeshistorie · bind 1",
+      "node_id": "no-p1-morene",
+      "intended_depth": "recognition_and_rough_meaning",
+      "sources": [
+        {
+          "recording": "hunters",
+          "segment": "s012",
+          "version": "editorial-v1",
+          "start_ms": 343050,
+          "end_ms": 355350,
+          "tana_link": "https://app.tana.inc/?nodeid=gi9oYzu422Pf",
+          "source_id": "reading-20260912-hunters",
+          "authorship": "unresolved_book_or_reader",
+          "evidence_type": "exposure_only"
+        }
+      ],
+      "references": [
+        {
+          "title": "NGU · løsmasser og istid",
+          "url": "https://static.ngu.no/upload/Publikasjoner/Rapporter/2015/2015_068.pdf"
+        }
+      ],
+      "content_authorship": "assistant_curated_source_checked",
+      "historical_verification_date": "2026-09-13",
+      "positions": [
+        {
+          "position_id": "no-p1-morene-p0",
+          "position": 0,
+          "question_text": "Når du møter «morenejord» i en historisk tekst: hva slags ting eller prosess er det? En omtrentlig forklaring er nok.",
+          "answer_text": "Jord og steinmateriale som isen har fraktet og lagt igjen. Blandingen kan være usortert, fra fine partikler til store steiner.",
+          "hook_type": "concept",
+          "fact_type": "concept",
+          "testable": true,
+          "question_variants": {
+            "event": "Jord og steinmateriale som isen har fraktet og lagt igjen. Blandingen kan være usortert, fra fine partikler til store steiner.",
+            "year_display": "",
+            "connection_to_next": null
+          }
+        }
+      ],
+      "introduction": "Jord og steinmateriale som isen har fraktet og lagt igjen. Blandingen kan være usortert, fra fine partikler til store steiner.",
+      "target_ids": [
+        "concept-002"
+      ]
+    },
+    {
+      "id": "no-p1-heller",
+      "kind": "term",
+      "card_id": "no-p1-heller",
+      "card_type": "term",
+      "ordinal": 7,
+      "title": "Heller",
+      "description": "Omtrentlige holdepunkter, med rom for usikkerhet.",
+      "domain_id": "norway-reading-2026",
+      "domain_title": "Norgeshistorie · bind 1",
+      "node_id": "no-p1-heller",
+      "intended_depth": "recognition_and_rough_meaning",
+      "sources": [
+        {
+          "recording": "farming",
+          "segment": "s008",
+          "version": "editorial-v1",
+          "start_ms": 178950,
+          "end_ms": 186090,
+          "tana_link": "https://app.tana.inc/?nodeid=gibRpJlrxEaD",
+          "source_id": "reading-20260912-farming",
+          "authorship": "unresolved_book_or_reader",
+          "evidence_type": "exposure_only"
+        }
+      ],
+      "references": [
+        {
+          "title": "Bokmålsordboka · heller",
+          "url": "https://ordbokene.no/bm/heller"
+        }
+      ],
+      "content_authorship": "assistant_curated_source_checked",
+      "historical_verification_date": "2026-09-13",
+      "positions": [
+        {
+          "position_id": "no-p1-heller-p0",
+          "position": 0,
+          "question_text": "Når du møter «heller» i en historisk tekst: hva slags ting eller prosess er det? En omtrentlig forklaring er nok.",
+          "answer_text": "Et berg som henger utover og gir ly, eller en berghule. Tenk naturlig tak eller skjermet sted når ordet dukker opp i en bosetningsbeskrivelse.",
+          "hook_type": "concept",
+          "fact_type": "concept",
+          "testable": true,
+          "question_variants": {
+            "event": "Et berg som henger utover og gir ly, eller en berghule. Tenk naturlig tak eller skjermet sted når ordet dukker opp i en bosetningsbeskrivelse.",
+            "year_display": "",
+            "connection_to_next": null
+          }
+        }
+      ],
+      "introduction": "Et berg som henger utover og gir ly, eller en berghule. Tenk naturlig tak eller skjermet sted når ordet dukker opp i en bosetningsbeskrivelse.",
+      "target_ids": [
+        "concept-006"
+      ]
+    },
+    {
+      "id": "no-p1-akerrein",
+      "kind": "term",
+      "card_id": "no-p1-akerrein",
+      "card_type": "term",
+      "ordinal": 8,
+      "title": "Åkerrein",
+      "description": "Omtrentlige holdepunkter, med rom for usikkerhet.",
+      "domain_id": "norway-reading-2026",
+      "domain_title": "Norgeshistorie · bind 1",
+      "node_id": "no-p1-akerrein",
+      "intended_depth": "recognition_and_rough_meaning",
+      "sources": [
+        {
+          "recording": "bronze",
+          "segment": "s031",
+          "version": "editorial-v1",
+          "start_ms": 1150470,
+          "end_ms": 1153770,
+          "tana_link": "https://app.tana.inc/?nodeid=VlbnpbwlxQNw",
+          "source_id": "reading-20260912-bronze",
+          "authorship": "unresolved_book_or_reader",
+          "evidence_type": "exposure_only"
+        }
+      ],
+      "references": [
+        {
+          "title": "Bokmålsordboka · åkerrein",
+          "url": "https://ordbokene.no/bm/%C3%A5kerrein"
+        }
+      ],
+      "content_authorship": "assistant_curated_source_checked",
+      "historical_verification_date": "2026-09-13",
+      "positions": [
+        {
+          "position_id": "no-p1-akerrein-p0",
+          "position": 0,
+          "question_text": "Når du møter «åkerrein» i en historisk tekst: hva slags ting eller prosess er det? En omtrentlig forklaring er nok.",
+          "answer_text": "En kant ved en åker; også en jordrygg som kan dannes nederst i en bratt åker. Knytt ordet til åkerens kant og spor etter jordbearbeiding.",
+          "hook_type": "concept",
+          "fact_type": "concept",
+          "testable": true,
+          "question_variants": {
+            "event": "En kant ved en åker; også en jordrygg som kan dannes nederst i en bratt åker. Knytt ordet til åkerens kant og spor etter jordbearbeiding.",
+            "year_display": "",
+            "connection_to_next": null
+          }
+        }
+      ],
+      "introduction": "En kant ved en åker; også en jordrygg som kan dannes nederst i en bratt åker. Knytt ordet til åkerens kant og spor etter jordbearbeiding.",
+      "target_ids": [
+        "concept-019"
+      ]
+    },
+    {
+      "id": "no-p1-svibruk",
+      "kind": "term",
+      "card_id": "no-p1-svibruk",
+      "card_type": "term",
+      "ordinal": 9,
+      "title": "Svibruk",
+      "description": "Omtrentlige holdepunkter, med rom for usikkerhet.",
+      "domain_id": "norway-reading-2026",
+      "domain_title": "Norgeshistorie · bind 1",
+      "node_id": "no-p1-svibruk",
+      "intended_depth": "recognition_and_rough_meaning",
+      "sources": [
+        {
+          "recording": "farming",
+          "segment": "s047",
+          "version": "editorial-v1",
+          "start_ms": 1239450,
+          "end_ms": 1245030,
+          "tana_link": "https://app.tana.inc/?nodeid=gibRpJlrxEaD",
+          "source_id": "reading-20260912-farming",
+          "authorship": "unresolved_book_or_reader",
+          "evidence_type": "exposure_only"
+        }
+      ],
+      "references": [
+        {
+          "title": "Bokmålsordboka · svedjebruk",
+          "url": "https://ordbokene.no/nno/bm/130898"
+        }
+      ],
+      "content_authorship": "assistant_curated_source_checked",
+      "historical_verification_date": "2026-09-13",
+      "positions": [
+        {
+          "position_id": "no-p1-svibruk-p0",
+          "position": 0,
+          "question_text": "Når du møter «svibruk» i en historisk tekst: hva slags ting eller prosess er det? En omtrentlig forklaring er nok.",
+          "answer_text": "Dyrking etter at skog er felt og rester brent, med såing i asken. Ordet brukes også som svedjebruk eller bråtebruk.",
+          "hook_type": "concept",
+          "fact_type": "concept",
+          "testable": true,
+          "question_variants": {
+            "event": "Dyrking etter at skog er felt og rester brent, med såing i asken. Ordet brukes også som svedjebruk eller bråtebruk.",
+            "year_display": "",
+            "connection_to_next": null
+          }
+        }
+      ],
+      "introduction": "Dyrking etter at skog er felt og rester brent, med såing i asken. Ordet brukes også som svedjebruk eller bråtebruk.",
+      "target_ids": [
+        "concept-010"
+      ]
+    },
+    {
+      "id": "no-p1-periods",
+      "kind": "sequence",
+      "card_id": "no-p1-periods",
+      "card_type": "sequence",
+      "ordinal": 1,
+      "title": "De store periodene",
+      "description": "Perioder er grove, regionale rammer. Årstallene vises her; oppgaven tester koblingen mellom tidspunkt og periode.",
+      "domain_id": "norway-reading-2026",
+      "domain_title": "Norgeshistorie · bind 1",
+      "node_id": "no-p1-periods",
+      "intended_depth": "period_name_given_approximate_date",
+      "sources": [
+        {
+          "recording": "hunters",
+          "transcript_version": "soniox-context-v1",
+          "segment": "s001",
+          "start_ms": 16410,
+          "end_ms": 20130,
+          "journal_node_id": "gi9oYzu422Pf",
+          "source_kind": "open_book_reading_capture",
+          "tana_link": "https://app.tana.inc/?nodeid=gi9oYzu422Pf",
+          "source_id": "reading-20260912-hunters",
+          "authorship": "unresolved_book_or_reader",
+          "evidence_type": "exposure_only"
+        },
+        {
+          "recording": "hunters",
+          "transcript_version": "soniox-context-v1",
+          "segment": "s035",
+          "start_ms": 1297350,
+          "end_ms": 1316970,
+          "journal_node_id": "gi9oYzu422Pf",
+          "source_kind": "open_book_reading_capture",
+          "tana_link": "https://app.tana.inc/?nodeid=gi9oYzu422Pf",
+          "source_id": "reading-20260912-hunters",
+          "authorship": "unresolved_book_or_reader",
+          "evidence_type": "exposure_only"
+        }
+      ],
+      "references": [
+        {
+          "title": "UiB · steinalder på Vestlandet",
+          "url": "https://steinalder.w.uib.no/"
+        },
+        {
+          "title": "Trøndelag fylkeskommune · bronsealder",
+          "url": "https://oos.trondelagfylke.no/vare-tjenester/kulturminnevern/trondelag-gjennom-tidene/bronsealder/"
+        }
+      ],
+      "content_authorship": "assistant_curated_source_checked",
+      "historical_verification_date": "2026-09-13",
+      "positions": [
+        {
+          "position_id": "no-p1-periods-p0",
+          "position": 0,
+          "question_text": "Hva kaller vi hovedperioden etter istiden, før omtrent 4000 f.Kr.?",
+          "answer_text": "Eldre steinalder: jakt, fiske og sanking.",
+          "hook_type": "concept",
+          "fact_type": "concept",
+          "testable": true,
+          "question_variants": {
+            "event": "Eldre steinalder: jakt, fiske og sanking.",
+            "year_display": "",
+            "connection_to_next": null
+          },
+          "year": -9300,
+          "year_display": "Etter istiden · ca. 9500–9300 f.Kr."
+        },
+        {
+          "position_id": "no-p1-periods-p1",
+          "position": 1,
+          "question_text": "Hvilken hovedperiode begynner omtrent 4000 f.Kr.?",
+          "answer_text": "Yngre steinalder. Jordbruk introduseres, men overgangen er lang og ujevn.",
+          "hook_type": "concept",
+          "fact_type": "concept",
+          "testable": true,
+          "question_variants": {
+            "event": "Yngre steinalder. Jordbruk introduseres, men overgangen er lang og ujevn.",
+            "year_display": "",
+            "connection_to_next": null
+          },
+          "year": -4000,
+          "year_display": "Omkring 4000 f.Kr."
+        },
+        {
+          "position_id": "no-p1-periods-p2",
+          "position": 2,
+          "question_text": "Hvilken hovedperiode begynner omtrent 1800–1700 f.Kr.?",
+          "answer_text": "Bronsealderen. Steinredskaper og eldre levemåter fortsetter også.",
+          "hook_type": "concept",
+          "fact_type": "concept",
+          "testable": true,
+          "question_variants": {
+            "event": "Bronsealderen. Steinredskaper og eldre levemåter fortsetter også.",
+            "year_display": "",
+            "connection_to_next": null
+          },
+          "year": -1700,
+          "year_display": "Omkring 1800–1700 f.Kr."
+        }
+      ],
+      "target_ids": [
+        "no-v1-periodization"
+      ]
+    },
+    {
+      "id": "no-p1-bronze",
+      "kind": "aspect",
+      "card_id": "no-p1-bronze",
+      "card_type": "aspect",
+      "ordinal": 2,
+      "title": "Hva betyr «bronsealder»?",
+      "description": "Omtrentlige holdepunkter, med rom for usikkerhet.",
+      "domain_id": "norway-reading-2026",
+      "domain_title": "Norgeshistorie · bind 1",
+      "node_id": "no-p1-bronze",
+      "intended_depth": "main_idea_self_assessment",
+      "sources": [
+        {
+          "recording": "bronze",
+          "transcript_version": "soniox-context-v1",
+          "segment": "s034",
+          "start_ms": 1554450,
+          "end_ms": 1587390,
+          "journal_node_id": "VlbnpbwlxQNw",
+          "source_kind": "open_book_reading_capture",
+          "tana_link": "https://app.tana.inc/?nodeid=VlbnpbwlxQNw",
+          "source_id": "reading-20260912-bronze",
+          "authorship": "unresolved_book_or_reader",
+          "evidence_type": "exposure_only"
+        },
+        {
+          "recording": "bronze",
+          "transcript_version": "soniox-context-v1",
+          "segment": "s035",
+          "start_ms": 1588410,
+          "end_ms": 1615770,
+          "journal_node_id": "VlbnpbwlxQNw",
+          "source_kind": "open_book_reading_capture",
+          "tana_link": "https://app.tana.inc/?nodeid=VlbnpbwlxQNw",
+          "source_id": "reading-20260912-bronze",
+          "authorship": "unresolved_book_or_reader",
+          "evidence_type": "exposure_only"
+        }
+      ],
+      "references": [
+        {
+          "title": "SNL · bronsealderen i Norge",
+          "url": "https://snl.no/bronsealderen_i_Norge"
+        },
+        {
+          "title": "Trøndelag fylkeskommune · bronsealder",
+          "url": "https://oos.trondelagfylke.no/vare-tjenester/kulturminnevern/trondelag-gjennom-tidene/bronsealder/"
+        }
+      ],
+      "content_authorship": "assistant_curated_source_checked",
+      "historical_verification_date": "2026-09-13",
+      "positions": [
+        {
+          "position_id": "no-p1-bronze-p0",
+          "position": 0,
+          "question_text": "Hvilke to metaller gir den vanlige bronselegeringen?",
+          "answer_text": "Kobber og tinn.",
+          "hook_type": "concept",
+          "fact_type": "concept",
+          "testable": true,
+          "question_variants": {
+            "event": "Kobber og tinn.",
+            "year_display": "",
+            "connection_to_next": null
+          }
+        },
+        {
+          "position_id": "no-p1-bronze-p1",
+          "position": 1,
+          "question_text": "Hvorfor var forbindelser over store avstander viktige?",
+          "answer_text": "Metallråstoff og gjenstander måtte skaffes gjennom utveksling og kontakt. Bronse kunne være kostbar og prestisjefylt.",
+          "hook_type": "concept",
+          "fact_type": "concept",
+          "testable": true,
+          "question_variants": {
+            "event": "Metallråstoff og gjenstander måtte skaffes gjennom utveksling og kontakt. Bronse kunne være kostbar og prestisjefylt.",
+            "year_display": "",
+            "connection_to_next": null
+          }
+        },
+        {
+          "position_id": "no-p1-bronze-p2",
+          "position": 2,
+          "question_text": "Forsvant steinredskapene da perioden begynte?",
+          "answer_text": "Nei. Navnet på perioden betyr ikke at alle brukte bronse; steinredskaper fortsatte.",
+          "hook_type": "concept",
+          "fact_type": "concept",
+          "testable": true,
+          "question_variants": {
+            "event": "Nei. Navnet på perioden betyr ikke at alle brukte bronse; steinredskaper fortsatte.",
+            "year_display": "",
+            "connection_to_next": null
+          }
+        }
+      ],
+      "target_ids": [
+        "no-v1-bronze_mechanism",
+        "no-v1-trade_networks"
+      ]
+    },
+    {
+      "id": "no-p1-land",
+      "kind": "causal",
+      "card_id": "no-p1-land",
+      "card_type": "causal",
+      "ordinal": 4,
+      "title": "Hvorfor ligger gammel havbunn på land?",
+      "description": "Omtrentlige holdepunkter, med rom for usikkerhet.",
+      "domain_id": "norway-reading-2026",
+      "domain_title": "Norgeshistorie · bind 1",
+      "node_id": "no-p1-land",
+      "intended_depth": "main_idea_self_assessment",
+      "sources": [
+        {
+          "recording": "hunters",
+          "transcript_version": "soniox-context-v1",
+          "segment": "s010",
+          "start_ms": 248550,
+          "end_ms": 279330,
+          "journal_node_id": "gi9oYzu422Pf",
+          "source_kind": "open_book_reading_capture",
+          "tana_link": "https://app.tana.inc/?nodeid=gi9oYzu422Pf",
+          "source_id": "reading-20260912-hunters",
+          "authorship": "unresolved_book_or_reader",
+          "evidence_type": "exposure_only"
+        },
+        {
+          "recording": "hunters",
+          "transcript_version": "soniox-context-v1",
+          "segment": "s014",
+          "start_ms": 387450,
+          "end_ms": 396390,
+          "journal_node_id": "gi9oYzu422Pf",
+          "source_kind": "open_book_reading_capture",
+          "tana_link": "https://app.tana.inc/?nodeid=gi9oYzu422Pf",
+          "source_id": "reading-20260912-hunters",
+          "authorship": "unresolved_book_or_reader",
+          "evidence_type": "exposure_only"
+        }
+      ],
+      "references": [
+        {
+          "title": "NGU · marin grense",
+          "url": "https://www.ngu.no/om-geologi/om-kart-over-marin-grense"
+        }
+      ],
+      "content_authorship": "assistant_curated_source_checked",
+      "historical_verification_date": "2026-09-13",
+      "positions": [
+        {
+          "position_id": "no-p1-land-p0",
+          "position": 0,
+          "question_text": "Utgangspunkt",
+          "answer_text": "Isen smelter, og vekten av innlandsisen forsvinner.",
+          "hook_type": "concept",
+          "fact_type": "concept",
+          "testable": false,
+          "question_variants": {
+            "event": "Isen smelter, og vekten av innlandsisen forsvinner.",
+            "year_display": "",
+            "connection_to_next": "Mindre belastning på jordskorpen"
+          }
+        },
+        {
+          "position_id": "no-p1-land-p1",
+          "position": 1,
+          "question_text": "Hva kan skje med landet når isens tyngde forsvinner?",
+          "answer_text": "Landet hever seg etter at isens belastning er borte.",
+          "hook_type": "concept",
+          "fact_type": "concept",
+          "testable": true,
+          "question_variants": {
+            "event": "Landet hever seg etter at isens belastning er borte.",
+            "year_display": "",
+            "connection_to_next": "Land og hav endrer høyde i forhold til hverandre"
+          }
+        },
+        {
+          "position_id": "no-p1-land-p2",
+          "position": 2,
+          "question_text": "Hva kan det gjøre med strandlinjen og tidligere havbunn?",
+          "answer_text": "Strandlinjen flytter seg. Områder som lå under havet, kan etter hvert bli tørt land.",
+          "hook_type": "concept",
+          "fact_type": "concept",
+          "testable": true,
+          "question_variants": {
+            "event": "Strandlinjen flytter seg. Områder som lå under havet, kan etter hvert bli tørt land.",
+            "year_display": "",
+            "connection_to_next": null
+          }
+        }
+      ],
+      "target_ids": [
+        "no-v1-landscape"
+      ]
+    },
+    {
+      "id": "no-p1-same-time",
+      "kind": "synchronic",
+      "card_id": "no-p1-same-time",
+      "card_type": "synchronic",
+      "ordinal": 6,
+      "title": "Norge og Hellas på samme tid",
+      "description": "Omtrentlige holdepunkter, med rom for usikkerhet.",
+      "domain_id": "norway-reading-2026",
+      "domain_title": "Norgeshistorie · bind 1",
+      "node_id": "no-p1-same-time",
+      "intended_depth": "cross_world_temporal_overlap",
+      "sources": [
+        {
+          "recording": "bronze",
+          "transcript_version": "soniox-context-v1",
+          "segment": "s022",
+          "start_ms": 848670,
+          "end_ms": 875370,
+          "journal_node_id": "VlbnpbwlxQNw",
+          "source_kind": "open_book_reading_capture",
+          "tana_link": "https://app.tana.inc/?nodeid=VlbnpbwlxQNw",
+          "source_id": "reading-20260912-bronze",
+          "authorship": "unresolved_book_or_reader",
+          "evidence_type": "exposure_only"
+        },
+        {
+          "recording": "bronze",
+          "transcript_version": "soniox-context-v1",
+          "segment": "s025",
+          "start_ms": 936390,
+          "end_ms": 946170,
+          "journal_node_id": "VlbnpbwlxQNw",
+          "source_kind": "open_book_reading_capture",
+          "tana_link": "https://app.tana.inc/?nodeid=VlbnpbwlxQNw",
+          "source_id": "reading-20260912-bronze",
+          "authorship": "unresolved_book_or_reader",
+          "evidence_type": "exposure_only"
+        }
+      ],
+      "references": [
+        {
+          "title": "Trøndelag fylkeskommune · bronsealder",
+          "url": "https://oos.trondelagfylke.no/vare-tjenester/kulturminnevern/trondelag-gjennom-tidene/bronsealder/"
+        },
+        {
+          "title": "UNESCO · Mykene og Tiryns",
+          "url": "https://whc.unesco.org/en/list/941"
+        }
+      ],
+      "content_authorship": "assistant_curated_source_checked",
+      "historical_verification_date": "2026-09-13",
+      "positions": [
+        {
+          "position_id": "no-p1-same-time-p0",
+          "position": 0,
+          "question_text": "Tidsanker",
+          "answer_text": "Mykensk kultur i Hellas · omtrent 1600–1100 f.Kr.",
+          "hook_type": "concept",
+          "fact_type": "concept",
+          "testable": false,
+          "question_variants": {
+            "event": "Mykensk kultur i Hellas · omtrent 1600–1100 f.Kr.",
+            "year_display": "",
+            "connection_to_next": null,
+            "domain": "Hellas"
+          }
+        },
+        {
+          "position_id": "no-p1-same-time-p1",
+          "position": 1,
+          "question_text": "Hvilken norsk hovedperiode overlapper dette?",
+          "answer_text": "Bronsealderen i Norge. Dette er en tidskobling, ikke en påstand om direkte kontakt.",
+          "hook_type": "concept",
+          "fact_type": "concept",
+          "testable": true,
+          "question_variants": {
+            "event": "Bronsealderen i Norge. Dette er en tidskobling, ikke en påstand om direkte kontakt.",
+            "year_display": "",
+            "connection_to_next": null,
+            "domain": "Norge"
+          }
+        }
+      ],
+      "introduction": "Et nytt tidsanker å prøve: mykensk kultur i Hellas, omtrent 1600–1100 f.Kr., overlapper norsk bronsealder. Vi starter med selve koblingen; navn og detaljer kan komme senere.",
+      "date_anchor": -1400,
+      "target_ids": [
+        "no-v1-world_connections"
+      ]
+    },
+    {
+      "id": "no-p1-voice-farming",
+      "kind": "voice",
+      "card_id": "no-p1-voice-farming",
+      "card_type": "voice",
+      "ordinal": 0,
+      "title": "En overgang som tok tid",
+      "description": "Omtrentlige holdepunkter, med rom for usikkerhet.",
+      "domain_id": "norway-reading-2026",
+      "domain_title": "Norgeshistorie · bind 1",
+      "node_id": "no-p1-voice-farming",
+      "intended_depth": "spoken_explanation_self_assessed",
+      "sources": [
+        {
+          "recording": "farming",
+          "transcript_version": "soniox-context-v1",
+          "segment": "s024",
+          "start_ms": 680970,
+          "end_ms": 685710,
+          "journal_node_id": "gibRpJlrxEaD",
+          "source_kind": "open_book_reading_capture",
+          "tana_link": "https://app.tana.inc/?nodeid=gibRpJlrxEaD",
+          "source_id": "reading-20260912-farming",
+          "authorship": "unresolved_book_or_reader",
+          "evidence_type": "exposure_only"
+        },
+        {
+          "recording": "farming",
+          "transcript_version": "soniox-context-v1",
+          "segment": "s028",
+          "start_ms": 747330,
+          "end_ms": 766650,
+          "journal_node_id": "gibRpJlrxEaD",
+          "source_kind": "open_book_reading_capture",
+          "tana_link": "https://app.tana.inc/?nodeid=gibRpJlrxEaD",
+          "source_id": "reading-20260912-farming",
+          "authorship": "unresolved_book_or_reader",
+          "evidence_type": "exposure_only"
+        }
+      ],
+      "references": [
+        {
+          "title": "UiB · steinalder på Vestlandet",
+          "url": "https://steinalder.w.uib.no/"
+        },
+        {
+          "title": "Trøndelag fylkeskommune · bronsealder",
+          "url": "https://oos.trondelagfylke.no/vare-tjenester/kulturminnevern/trondelag-gjennom-tidene/bronsealder/"
+        }
+      ],
+      "content_authorship": "assistant_curated_source_checked",
+      "historical_verification_date": "2026-09-13",
+      "positions": [
+        {
+          "position_id": "no-p1-voice-farming-p0",
+          "position": 0,
+          "question_text": "Forklar hvordan du nå forstår overgangen fra jakt og sanking til jordbruk. Hva endret seg, og hva kunne fortsette? Skill gjerne mellom det du husker og det du er usikker på.",
+          "answer_text": "Holdepunkter: overgangen var lang og ujevn; dyrking og husdyrhold kunne kombineres med jakt, fiske og sanking. De første sporene etter jordbruk betyr ikke at alle straks levde som bønder. Vi tester hovedideen, ikke én bestemt teori om innvandring.",
+          "hook_type": "concept",
+          "fact_type": "concept",
+          "testable": true,
+          "question_variants": {
+            "event": "Holdepunkter: overgangen var lang og ujevn; dyrking og husdyrhold kunne kombineres med jakt, fiske og sanking. De første sporene etter jordbruk betyr ikke at alle straks levde som bønder. Vi tester hovedideen, ikke én bestemt teori om innvandring.",
+            "year_display": "",
+            "connection_to_next": null
+          }
+        }
+      ],
+      "target_ids": [
+        "no-v1-farming_transition"
+      ]
+    },
+    {
+      "id": "no-p1-voice-trade",
+      "kind": "voice",
+      "card_id": "no-p1-voice-trade",
+      "card_type": "voice",
+      "ordinal": 1,
+      "title": "Metall og forbindelser",
+      "description": "Omtrentlige holdepunkter, med rom for usikkerhet.",
+      "domain_id": "norway-reading-2026",
+      "domain_title": "Norgeshistorie · bind 1",
+      "node_id": "no-p1-voice-trade",
+      "intended_depth": "spoken_explanation_self_assessed",
+      "sources": [
+        {
+          "recording": "bronze",
+          "transcript_version": "soniox-context-v1",
+          "segment": "s036",
+          "start_ms": 1628730,
+          "end_ms": 1661490,
+          "journal_node_id": "VlbnpbwlxQNw",
+          "source_kind": "open_book_reading_capture",
+          "tana_link": "https://app.tana.inc/?nodeid=VlbnpbwlxQNw",
+          "source_id": "reading-20260912-bronze",
+          "authorship": "unresolved_book_or_reader",
+          "evidence_type": "exposure_only"
+        },
+        {
+          "recording": "bronze",
+          "transcript_version": "soniox-context-v1",
+          "segment": "s039",
+          "start_ms": 1677990,
+          "end_ms": 1683570,
+          "journal_node_id": "VlbnpbwlxQNw",
+          "source_kind": "open_book_reading_capture",
+          "tana_link": "https://app.tana.inc/?nodeid=VlbnpbwlxQNw",
+          "source_id": "reading-20260912-bronze",
+          "authorship": "unresolved_book_or_reader",
+          "evidence_type": "exposure_only"
+        }
+      ],
+      "references": [
+        {
+          "title": "SNL · bronsealderen i Norge",
+          "url": "https://snl.no/bronsealderen_i_Norge"
+        },
+        {
+          "title": "Trøndelag fylkeskommune · bronsealder",
+          "url": "https://oos.trondelagfylke.no/vare-tjenester/kulturminnevern/trondelag-gjennom-tidene/bronsealder/"
+        }
+      ],
+      "content_authorship": "assistant_curated_source_checked",
+      "historical_verification_date": "2026-09-13",
+      "positions": [
+        {
+          "position_id": "no-p1-voice-trade-p0",
+          "position": 0,
+          "question_text": "Fortell hvordan metallbruk kunne knytte mennesker i Norge til større nettverk. Hvilken del av forklaringen sitter best, og hva lurer du fortsatt på?",
+          "answer_text": "Holdepunkter: kobber og tinn; tilgang til råstoff eller ferdige gjenstander gjennom utveksling; kontakt over avstander og prestisje. Du trenger ikke navngi en bestemt rute eller gruve. En mulig sosial virkning er noe annet enn en bevist forklaring.",
+          "hook_type": "concept",
+          "fact_type": "concept",
+          "testable": true,
+          "question_variants": {
+            "event": "Holdepunkter: kobber og tinn; tilgang til råstoff eller ferdige gjenstander gjennom utveksling; kontakt over avstander og prestisje. Du trenger ikke navngi en bestemt rute eller gruve. En mulig sosial virkning er noe annet enn en bevist forklaring.",
+            "year_display": "",
+            "connection_to_next": null
+          }
+        }
+      ],
+      "target_ids": [
+        "no-v1-trade_networks"
+      ]
+    },
+    {
+      "id": "no-p1-voice-time",
+      "kind": "voice",
+      "card_id": "no-p1-voice-time",
+      "card_type": "voice",
+      "ordinal": 2,
+      "title": "Fortell den grove tidslinjen",
+      "description": "Omtrentlige holdepunkter, med rom for usikkerhet.",
+      "domain_id": "norway-reading-2026",
+      "domain_title": "Norgeshistorie · bind 1",
+      "node_id": "no-p1-voice-time",
+      "intended_depth": "spoken_approximate_chronology_self_assessed",
+      "sources": [
+        {
+          "recording": "hunters",
+          "transcript_version": "soniox-context-v1",
+          "segment": "s001",
+          "start_ms": 16410,
+          "end_ms": 20130,
+          "journal_node_id": "gi9oYzu422Pf",
+          "source_kind": "open_book_reading_capture",
+          "tana_link": "https://app.tana.inc/?nodeid=gi9oYzu422Pf",
+          "source_id": "reading-20260912-hunters",
+          "authorship": "unresolved_book_or_reader",
+          "evidence_type": "exposure_only"
+        },
+        {
+          "recording": "hunters",
+          "transcript_version": "soniox-context-v1",
+          "segment": "s035",
+          "start_ms": 1297350,
+          "end_ms": 1316970,
+          "journal_node_id": "gi9oYzu422Pf",
+          "source_kind": "open_book_reading_capture",
+          "tana_link": "https://app.tana.inc/?nodeid=gi9oYzu422Pf",
+          "source_id": "reading-20260912-hunters",
+          "authorship": "unresolved_book_or_reader",
+          "evidence_type": "exposure_only"
+        }
+      ],
+      "references": [
+        {
+          "title": "UiB · steinalder på Vestlandet",
+          "url": "https://steinalder.w.uib.no/"
+        },
+        {
+          "title": "Trøndelag fylkeskommune · bronsealder",
+          "url": "https://oos.trondelagfylke.no/vare-tjenester/kulturminnevern/trondelag-gjennom-tidene/bronsealder/"
+        }
+      ],
+      "content_authorship": "assistant_curated_source_checked",
+      "historical_verification_date": "2026-09-13",
+      "positions": [
+        {
+          "position_id": "no-p1-voice-time-p0",
+          "position": 0,
+          "question_text": "Uten å slå opp: fortell den grove rekkefølgen fra eldre steinalder via yngre steinalder til bronsealder. Hvilke omtrentlige tidsgrenser husker du? Hva betyr periodene for levemåten?",
+          "answer_text": "Holdepunkter: eldre steinalder etter istiden; yngre steinalder fra omtrent 4000 f.Kr.; bronsealder fra omtrent 1800–1700 f.Kr. Dateringer varierer regionalt og mellom framstillinger. Overgangene var ikke samtidige skifter for alle mennesker.",
+          "hook_type": "concept",
+          "fact_type": "concept",
+          "testable": true,
+          "question_variants": {
+            "event": "Holdepunkter: eldre steinalder etter istiden; yngre steinalder fra omtrent 4000 f.Kr.; bronsealder fra omtrent 1800–1700 f.Kr. Dateringer varierer regionalt og mellom framstillinger. Overgangene var ikke samtidige skifter for alle mennesker.",
+            "year_display": "",
+            "connection_to_next": null
+          }
+        }
+      ],
+      "target_ids": [
+        "no-v1-periodization"
+      ]
+    }
+  ]
+}

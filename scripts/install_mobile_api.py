@@ -15,6 +15,7 @@ CAPABILITY = re.compile(r'petrarca-mobile-[0-9a-f]{64}')
 ID = r'[A-Za-z0-9_:%.-]+'
 # Explicit native-app routes. Administrative/bulk-ingest routes are not exposed.
 GET = [
+    r'study/(status|summary)',
     r'health', r'api/(?:manifest|articles-meta|knowledge-index|clusters|syntheses)',
     rf'api/articles/{ID}/content', r'book/resurfacing/status',
     rf'book/(?:research|prescan)/{ID}',
@@ -29,6 +30,7 @@ GET = [
     rf'defender/sessions/{ID}', r'commonplace/events', rf'projects/{ID}',
 ]
 POST = [
+    r'study/(?:session|event|voice)',
     r'feedback', r'log/events',
     r'book/(?:identify|ocr-toc|ocr-page|upload-photo|photo-results|voice-note|research|chapter-insights|story-so-far|process-kindle)',
     r'book/resurfacing/(?:generate|respond|skip)',

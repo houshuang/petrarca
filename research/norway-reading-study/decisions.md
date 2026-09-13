@@ -60,3 +60,22 @@ analysis document identify this claim as withdrawn.
   chronology and mechanisms in the introduction-path design; no production import yet.
 - Q005: Are there relevant Claude web or forum discussions not in the local logs?
   Coverage remains explicit until independently located.
+
+### D008 — Isolate the phone pilot; preserve other curricula (13 September)
+
+User source `codex-20260912-L920`: proceed with implementation and temporarily
+suspend all other cards while finding what works here. Implement as a reversible
+global focus gate, preserving old cards, history and due dates. Native Review,
+Voice and Stats show the study; old selection/grading routes reject activity
+while focus is active. Broader curricula remain the eventual goal.
+
+### D009 — Detailed, versioned research observations (13 September)
+
+User source `codex-20260912-L974`: rapidly iterate, correlate reading recordings
+and wonderings with mobile interactions, and retain design changes for later
+analysis of interaction and changing understanding. Adopt immutable session
+snapshots, source/target links, exact app/backend/content/design versions, durable
+events and purpose-labelled original audio. Keep changes prospective in the
+experiment log and interpretations revisable. The measurement contract and
+limitations are in [analytics-v1.md](analytics-v1.md). No randomized comparison or
+automatic evaluation of comprehension has been authorized by these observations.

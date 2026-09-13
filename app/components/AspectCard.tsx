@@ -40,6 +40,7 @@ interface PositionResult {
 interface Props {
   card: AspectCardData;
   onComplete: (results: PositionResult[]) => void;
+  onInteraction?: (event: string, detail: Record<string, unknown>) => void;
 }
 
 type PositionState = 'hidden' | 'revealed' | 'knew' | 'missed';
@@ -56,7 +57,7 @@ function formatDueDate(dueMs: number): string {
   return `${diffDays}d`;
 }
 
-export default function AspectCard({ card, onComplete }: Props) {
+export default function AspectCard({ card, onComplete, onInteraction }: Props) {
   const [states, setStates] = useState<Record<string, PositionState>>(() => {
     const init: Record<string, PositionState> = {};
     for (const p of card.positions) init[p.position_id] = 'hidden';
@@ -112,6 +113,7 @@ export default function AspectCard({ card, onComplete }: Props) {
   };
 
   const revealOne = (positionId: string) => {
+    onInteraction?.('position_revealed', { position_id: positionId });
     setStates(prev => ({ ...prev, [positionId]: 'revealed' }));
     setRevealTimes(prev => ({ ...prev, [positionId]: Date.now() }));
     animateReveal(positionId);
@@ -123,6 +125,7 @@ export default function AspectCard({ card, onComplete }: Props) {
     const times: Record<string, number> = {};
     for (const p of positions) {
       if (states[p.position_id] === 'hidden') {
+        onInteraction?.('position_revealed', { position_id: p.position_id, reveal_all: true });
         updates[p.position_id] = 'revealed';
         times[p.position_id] = now;
         animateReveal(p.position_id);
@@ -133,6 +136,7 @@ export default function AspectCard({ card, onComplete }: Props) {
   };
 
   const grade = (positionId: string, score: 'knew' | 'missed') => {
+    onInteraction?.('position_graded', { position_id: positionId, score });
     setStates(prev => ({ ...prev, [positionId]: score }));
   };
 
@@ -185,7 +189,7 @@ export default function AspectCard({ card, onComplete }: Props) {
         <View style={st.promptRow}>
           <Text style={st.prompt}>What do you remember?</Text>
           <Pressable style={st.knowAllBtn} onPress={revealAll}>
-            <Text style={st.knowAllText}>Know All</Text>
+            <Text style={st.knowAllText}>{onInteraction ? "Vis alle svar" : "Know All"}</Text>
           </Pressable>
         </View>
       )}

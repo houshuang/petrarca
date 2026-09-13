@@ -545,3 +545,11 @@ must also be run through `scripts/mobile_api_preflight.py`.
 9. **3 curricula inactive** (AP European, AP World History Modern, Ancient & Classical World) — generated but no books mapped, 0 knowledge_items
 10. **Nexus cards not yet rendered in client** — `type: 'nexus'` cards returned in review stream but client review.tsx doesn't have a renderer for them yet
 11. **Book prescan not yet surfaced in UI** — endpoint works (`/book/prescan/:id`) but no client integration
+
+## 13 September 2026 — Norway phone pilot
+
+See [analytics-v1.md](norway-reading-study/analytics-v1.md) for the current study
+source/target schema, Review/Voice/Stats focus, event/audio/revision records,
+validation, release status and reversible restoration procedure. The study
+uses separate SQLite scheduling positions and does not infer knowledge from
+open-book quotations or automatically assess spoken answers.

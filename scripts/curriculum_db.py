@@ -21,6 +21,33 @@ from pathlib import Path
 
 from db import get_connection, init_db
 
+
+def study_action(action, body=None, conn=None, **kwargs):
+    """Canonical runtime boundary for the reading study."""
+    import study_engine
+    own = conn is None
+    if own:
+        conn = get_connection()
+    try:
+        if action == 'summary':
+            return study_engine.summary(conn)
+        if action == 'status':
+            return study_engine.status(conn)
+        if action == 'install':
+            return study_engine.install(conn, body, **kwargs)
+        if action == 'session':
+            return study_engine.session(conn, body)
+        if action == 'event':
+            return study_engine.event(conn, body)
+        if action == 'voice':
+            return study_engine.save_audio(conn, **kwargs)
+        if action == 'transcription':
+            return study_engine.transcription(conn, body)
+        raise ValueError('Unknown study operation')
+    finally:
+        if own:
+            conn.close()
+
 try:
     from claude_llm import call_claude_json
 except ImportError:
@@ -1308,6 +1335,10 @@ def generate_review_stream(domain_filter: str | None = None, limit: int = 20,
     if own:
         conn = get_connection()
     try:
+        focus = study_action('status', conn=conn)
+        if focus['active']:
+            return {'items': [], 'due_count': 0, 'total_candidates': 0,
+                    'domain_counts': {}, 'study': focus}
         now_ms = int(time.time() * 1000)
         soon = now_ms + 24 * 60 * 60 * 1000  # next 24h
 

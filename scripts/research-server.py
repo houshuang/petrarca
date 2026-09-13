@@ -7389,6 +7389,9 @@ JSON array only:"""
         self._serve_html_file('curriculum_timeline.html')
 
     def do_POST(self):
+        import study_http
+        if study_http.route(self, 'POST'):
+            return
         if koigen_adapter.post_route(self.path):
             return self._handle_koigen_post()
         if self.path == '/recall/select':
@@ -8128,6 +8131,9 @@ JSON array only:"""
         return self._send_json_response(404, {'error': 'Unknown API endpoint'})
 
     def do_GET(self):
+        import study_http
+        if study_http.route(self, 'GET'):
+            return
         if koigen_adapter.is_approve_get(self.path):
             return self._handle_koigen_get()
         if self.path in ('/companion', '/companion/'):
@@ -8484,8 +8490,28 @@ def _retry_failed_ml_cards():
             print(f'[ml-retry] {row["id"]} still failing: {e}', flush=True)
 
 
+def _study_transcription_worker():
+    from curriculum_db import study_action
+    while True:
+        try:
+            row = study_action('transcription', {'claim': True})
+            if row:
+                metadata = {'model':'stt-async-v4','pipeline':'existing-server-soniox-v1',
+                            'code_commit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=Path(__file__).resolve().parent,text=True).strip()}
+                try:
+                    transcript = transcribe_on_server(Path(row['audio_path']))
+                    study_action('transcription', {'audio_id':row['id'],
+                                 'status':'complete','transcript':transcript,'metadata':metadata})
+                except Exception:
+                    study_action('transcription', {'audio_id':row['id'],'status':'failed','metadata':metadata})
+        except Exception as exc:
+            print('[study-transcription]',type(exc).__name__,flush=True)
+        time.sleep(15)
+
+
 if __name__ == '__main__':
     init_db()
+    threading.Thread(target=_study_transcription_worker, daemon=True).start()
     migrate_kindle_json_to_sqlite()
     threading.Thread(target=_retry_failed_ml_cards, daemon=True).start()
     server = ThreadingHTTPServer((HOST, PORT), ResearchHandler)

@@ -1,3 +1,4 @@
+import StudyGate from '../../components/study/StudyGate';
 import { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator,
@@ -68,7 +69,7 @@ function shortDomain(title: string): string {
 
 // ── Main Component ────────────────────────────────────────────────────────
 
-export default function StatsTab() {
+function LegacyStatsTab() {
   const [stats, setStats] = useState<NativeStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -631,3 +632,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 });
+
+export default function StatsTab() {
+  return <StudyGate mode="stats"><LegacyStatsTab /></StudyGate>;
+}

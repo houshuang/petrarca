@@ -1,3 +1,4 @@
+import StudyGate from '../../components/study/StudyGate';
 import { useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Platform } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -6,7 +7,7 @@ import { logEvent } from '../../data/logger';
 import { setFeedbackContext } from '../../lib/feedback-context';
 import DoubleRule from '../../components/DoubleRule';
 
-export default function VoiceTab() {
+function LegacyVoiceTab() {
   const router = useRouter();
 
   useFocusEffect(
@@ -176,3 +177,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 });
+
+export default function VoiceTab() {
+  return <StudyGate mode="voice"><LegacyVoiceTab /></StudyGate>;
+}

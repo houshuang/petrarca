@@ -4,6 +4,21 @@
 
 ---
 
+## 2026-09-13 — Phone pilot v1 measurement contract, before production activation
+
+**User sources:** `codex-20260912-L920` (implement and suspend other cards), `codex-20260912-L974` (rapid iteration, detailed analytics, source/response/design correlation).
+**Intervention:** 13 curated source-linked items: six term introductions, four structural formats and three spoken prompts. All other card selection/grading paused without modifying prior schedules. New Stats reports observed activity.
+**Design:** Observational feasibility pilot; due-first selection, six items, ten-minute encounter cooldown. Concept and added-world-anchor introductions are exposure only. Closed-book self-assessment uses canonical FSRS for tested positions; open/unknown context and visible anchors receive no memory credit. No automated knowledge inference from reading or response transcription.
+**Measurements:** Immutable run snapshots bind source/target/prompt/answer/format/depth to design, backend commit and app OTA version. Durable events preserve occurrence and receipt times; voice keeps original audio and separate recall/wondering/correction/reflection purposes; ASR attempts are versioned. Log source opens, recognition, reveals, grades, skips, quality feedback, recording/upload status, scrolling and screen/app lifecycle. Visibility is a proxy, not measured attention.
+**Analysis/iteration:** Inspect real responses, usefulness and friction first. Compare like tasks and account for intervening exposures before inferring change. Register each later design/content change before activation; do not rewrite old evidence. See [measurement contract](norway-reading-study/analytics-v1.md).
+
+## 2026-09-13 — Activate a Norway-only native pilot
+
+**User authorization:** Implement the phone flow and suspend all other cards while testing this study before expanding to other curricula. Preserve existing histories/schedules and make the suspension reversible.
+**Before intervention:** No study cards or responses exist in production. First batch spans stated pages 13–146; 189 captured segments and 20 candidate terms. Quotations are not learner synthesis. Mobile HTTPS is healthy; old mobile review and the desktop Companion select from the larger corpus.
+**Implementation:** Persistent exclusive-study focus enforced server-side; dedicated curated study sources, versioned cues and observations in canonical SQLite. Reuse native structural cards and canonical FSRS; introductions and displayed anchors receive exposure records only. Native voice answers retained durably with exact cue binding and self-assessment; no fabricated automatic grade or mass-generation pipeline. Log actual shown/revealed/skipped/responded states, not presumed reading of all selected items.
+**Validation plan:** Isolated SQLite fixtures for focus, cue ownership/versioning, retry idempotency, no grading from exposure, voice durability and old-state preservation. Typecheck and mobile component/interaction checks. Deploy committed integrated code, back up production DB before activation, import only curated real study inputs and verify read-only API output. Never submit synthetic voice/text to production ingest.
+
 ## 2026-09-13 — Phone-based study delivery using existing Petrarca mechanisms
 
 **User correction:** Consolidation/testing must happen in the Petrarca app away from the keyboard. The three chat prompts were not answered; they are not recall observations.

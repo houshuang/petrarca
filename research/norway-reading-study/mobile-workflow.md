@@ -85,3 +85,10 @@ This is the implementation handoff, not a statement that Norway study cards are
 already available. A working gateway and preserved card components remove the
 need for a new standalone learning interface; content, selection and evidence
 handling are the immediate integration work.
+
+## Implementation update — 13 September
+
+The bounded pilot is now implemented; [analytics-v1.md](analytics-v1.md) supersedes
+the proposal above for current behavior and release status. Structural anchors
+receive **no** scheduling credit in this study. Broader mechanisms remain
+future options rather than being forced into the first pilot.
