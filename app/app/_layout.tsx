@@ -12,6 +12,7 @@ import { exploreCaptureQueue } from '../components/ExplorerCapture';
 import { colors } from '../design/tokens/colors';
 import FeedbackCapture from '../components/FeedbackCapture';
 import VoiceUploadToast from '../components/VoiceUploadToast';
+import AppUpdateToast from '../components/AppUpdateToast';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -93,6 +94,7 @@ export default function RootLayout() {
       </Stack>
       <FeedbackCapture />
       <VoiceUploadToast />
+      <AppUpdateToast />
     </SafeAreaView>
   );
 }

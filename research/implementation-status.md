@@ -1,3 +1,5 @@
+**App update notice:** Native launches show a small, dismissible “Petrarca er oppdatert” toast once per newly loaded OTA update, matching Alif. It closes after eight seconds, includes version/publication time, and does not restart the app or affect recordings. Local seen-update identity is a device UI preference.
+
 Latest Norway study operator release: [source intake, monthly sample and backup verification](norway-reading-study/intake-v1.md).
 
 # Petrarca: Current System State
