@@ -7,6 +7,7 @@ Master index of all research documents. **Always update this file when adding ne
 | When | Document | Why |
 |------|----------|-----|
 | **Norway intensive practice** | [Intensive practice v2](norway-reading-study/intensive-v2.md) | 76 items, selectable themes, short consolidation, extra practice and exposure dependencies |
+| **Continue Norway experiment** | [Continuation handoff](norway-reading-study/handoff.md) | Current deployment, all latest feedback, evidence snapshots, gaps and next bounded work |
 | **Every session** | [implementation-status.md](implementation-status.md) | Current system snapshot — architecture, all screens/scripts/endpoints, algorithm parameters |
 | **Norway retention criteria** | [Retention, connections and markers v1](norway-reading-study/retention-and-connections-v1.md) | Working three-month standard, assessment, links to previous reading and speech attribution |
 | **Norway pilot hypotheses** | [Engagement, hypotheses and decision rules](norway-reading-study/pilot-hypotheses.md) | Exact current phone workflow, competing predictions and interpretation of interaction/qualitative/outcome evidence |

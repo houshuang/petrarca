@@ -12,6 +12,8 @@ private archive outside Git, including conversations, transcripts and recordings
 
 Also review the latest [retention standard, connection evidence and spoken-marker proposal](retention-and-connections-v1.md). It adds provisional thresholds and attribution rules; no new assessment or parser is implemented.
 
+**Current-state addendum:** read [handoff.md](handoff.md) and [intensive-v2.md](intensive-v2.md) first. The original dossier describes v1; v2, original-card feedback and visual/comparative comprehension gaps now have explicit records. Use the fresh runtime/conversation freezes in the handoff.
+
 ## Read in this order
 
 1. [Experimental design](experimental-design-review.md): goals, current behavior,

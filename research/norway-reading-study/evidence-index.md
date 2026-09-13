@@ -1,5 +1,7 @@
 # Evidence index for the design review
 
+**Current continuation evidence:** [handoff.md](handoff.md) links the 142-message conversation freeze and the hash-verified 09:41:09.981 UTC runtime export (five runs, 96 events). The original review freeze below is preserved unchanged.
+
 Frozen evidence cutoff: **13 September 2026, 06:51:08.313 UTC** for runtime data. Conversation snapshot `0d97c5839fe5d55f` contains **97 messages (38 Claude, 59 Codex)** through the latest user request and the initial acknowledgment of this review task. Later work and this eventual final answer are outside that snapshot.
 
 ## Review documents

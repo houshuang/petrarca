@@ -4,6 +4,13 @@ Updated 13 September 2026. Start here when resuming this project. The latest use
 clarifications are in [decisions.md](decisions.md); historical assistant analyses
 are evidence of the conversation, not authoritative descriptions of the learner.
 
+## Continue here
+
+[Consolidated continuation handoff](handoff.md) is the current entry point: live v2,
+participant feedback, remaining work, code, deployment and fresh evidence snapshots.
+Latest conversation freeze: `01c7581bc6c044e8` (142 records), through this handoff
+request and initial acknowledgment; excludes the eventual final response.
+
 ## Independent design review
 
 [Full experimental design](experimental-design-review.md) · [evidence and transcript links](evidence-index.md) · [measurement gaps](measurement-gaps.md) · [reviewer brief](reviewer-brief.md). This dossier adds proposed longitudinal assessments and a blog evidence plan; it does not activate them.
@@ -15,7 +22,7 @@ all original Review cards welcomed; external term lookups including ard. All ten
 Review items have recorded visits, with introductions distinguished from recall.
 Conversation snapshot `d0d5698b87862347` preserves the report.
 Follow-up O002/C003 in [decisions.md](decisions.md) specifies the missing appearance
-and plow comparison for ard, and adds åkerrein as a named lookup. Latest conversation
+and plow comparison for ard, and adds åkerrein as a named lookup. Feedback conversation
 freeze: `51e5b432a976e876` (139 records).
 
 ## Current phone phase
@@ -51,7 +58,7 @@ superseded for this study (D007/C002).
 | Private study hub | [Private README](/Users/stian/.agents/research/petrarca-norway-study/README.md) | Audio, conversations, source annotations and current local paths |
 | Conversations | [Archive index](/Users/stian/.agents/research/petrarca-norway-study/conversations/README.md) | Searchable message text, stable source-line IDs, timestamps and hashes |
 
-## Latest retention clarification
+## Retention clarification archive
 
 [Retention and connections v1](retention-and-connections-v1.md) records the requested
 success criteria, measurements, real-reading connections and optional speech markers.
@@ -61,9 +68,9 @@ through this turn's initial acknowledgment. [Conversation text](/Users/stian/.ag
 This turn's eventual final answer is outside that cutoff; older freezes below remain
 historical and unchanged.
 
-## Latest conversation refresh
+## Earlier hypothesis conversation freeze
 
-Snapshot `dd4ad3dfc1727e4d` contains 112 messages (38 Claude, 74 Codex), including the local-review clarification, train/deployment question and request for explicit hypotheses (`codex-20260912-L1664`), through the hypothesis-writing progress update. [Latest conversation text](/Users/stian/.agents/research/petrarca-norway-study/conversations/snapshots/dd4ad3dfc1727e4d/codex-20260912.md). The original review packet retains its 97-message freeze; this turn’s eventual final explanation is outside the new cutoff. [Pilot workflow and hypotheses](pilot-hypotheses.md) record the requested explanation.
+Snapshot `dd4ad3dfc1727e4d` contains 112 messages (38 Claude, 74 Codex), including the local-review clarification, train/deployment question and request for explicit hypotheses (`codex-20260912-L1664`), through the hypothesis-writing progress update. [Historical conversation text](/Users/stian/.agents/research/petrarca-norway-study/conversations/snapshots/dd4ad3dfc1727e4d/codex-20260912.md). The original review packet retains its 97-message freeze; this turn’s eventual final explanation is outside the new cutoff. [Pilot workflow and hypotheses](pilot-hypotheses.md) record the requested explanation.
 
 ## Conversation coverage
 

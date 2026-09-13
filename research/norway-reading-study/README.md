@@ -1,6 +1,6 @@
 # Norway history: a twelve-volume reading study
 
-> Current status, 13 September: the 13-item phone pilot is deployed. Earlier “not imported/deployed” statements below describe historical stages. The comprehensive design review and its measurement gaps supersede broad promises of exact time or complete analytics; proposed follow-ups are not active.
+> Current status, 13 September: the 76-item intensive phone phase is deployed. Start with [handoff.md](handoff.md) for live behavior, latest feedback and fresh evidence. Older pilot statements below describe historical stages. Longitudinal assessments and visual enrichment are not deployed.
 
 
 Started 12 September 2026. Owner/participant: Stian. Current phase: volume 1,

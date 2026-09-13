@@ -5,6 +5,20 @@
 ---
 
 
+## 2026-09-13 — Continuation handoff frozen at user request
+
+[handoff.md](norway-reading-study/handoff.md) consolidates live intensive v2,
+participant feedback including ard/plow appearance and åkerrein lookup, code and
+release evidence, hypotheses, operational safeguards and remaining measurements.
+Conversation freeze `01c7581bc6c044e8` has 142 records through this handoff request
+and initial acknowledgment. A consistent 09:41:09.981 UTC export contains five
+study runs and 96 events; all nine copied table hashes match. Original audio and
+transcript versions remain in the linked private hub. Current entry points were
+updated to distinguish 76 live items from the historical thirteen-item pilot.
+No app/data intervention, automatic collector, independent review or new agent was
+started. Off-device backup coverage remains unverified.
+
+
 ## 2026-09-13 — Visual and comparative comprehension gap clarified
 
 Observation only. User could not picture ard or distinguish it from a plow and

@@ -27,3 +27,17 @@ The highest-value next implementation is reliable session/attempt/version linkag
 plus a small comparable assessment protocol. More card generation alone would not
 resolve these measurement gaps. Preserve the enjoyable reading method while
 reviewing measurement burden; “everything logged” is not itself an outcome model.
+
+## Status after intensive v2 and participant feedback — 13 September
+
+Read [handoff.md](handoff.md) for current evidence; this table retains its original
+audit context. M05 is partly addressed: run/event execution commit and scheduling
+policy are stamped, and pending v1 runs retain v1 policy. Complete attempt/schema
+version linkage is still missing. M14 now has real Review activity: all ten original
+Review items visited, five runs and 96 events at 09:41:09.981 UTC. There are zero
+study audio rows at that cutoff, so microphone/upload behavior remains unverified.
+The v2 OTA was published; physical-device adoption of that update is not confirmed.
+M11 now concerns 76 curated practice items, not thirteen; increased count does not
+establish representative coverage. M12 has concrete outside-exposure reports for
+ard and åkerrein, recorded in the decision ledger with unknown timing/source.
+M02–M04 and M06–M10 remain open. Visual enrichment is proposed, not implemented.
