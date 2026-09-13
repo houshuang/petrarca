@@ -5,6 +5,16 @@
 ---
 
 
+## 2026-09-13 — Visual and comparative comprehension gap clarified
+
+Observation only. User could not picture ard or distinguish it from a plow and
+also looked up åkerrein. This sharpens the earlier curiosity interpretation into
+an explicit comprehension need for ard. Preserve existing grades as self-report;
+record the two named outside exposures without invented times or sources.
+[O002/C003 and revised enrichment proposal](norway-reading-study/decisions.md)
+specify visual grounding plus later recognition/application. No runtime change.
+
+
 ## 2026-09-13 — Positive original-card feedback and external term exposure
 
 Observation only; no intervention applied. User likes all original cards and

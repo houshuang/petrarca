@@ -170,3 +170,42 @@ Read-only telemetry evidence:
 [original-feedback-check.json](/Users/stian/.agents/research/petrarca-norway-study/phone-practice-v2/original-feedback-check.json).
 This archive cutoff includes the report and initial acknowledgment, not this turn's
 eventual final response. No content, scheduling or production data changed.
+
+## O002 / C003 — Ard lacked a visual model and comparison; åkerrein also looked up
+
+13 September 2026. User clarification, `codex-20260912-L2275`,
+2026-09-13T09:34:37.878Z: “I didn't know what it looked like at all, or how it was
+different from a plow. I also had to look up åkerrein etc.”
+Conversation freeze `51e5b432a976e876` contains 139 records (38 Claude, 101 Codex).
+
+**Correction to O001 interpretation:** the ard lookup addressed a specific
+comprehension gap: appearance and contrast with a familiar tool. Do not treat this
+only as optional curiosity or a need to memorize a more exact definition. Liking
+the card and reporting its main idea can coexist with this gap. Prior valid grades
+remain self-report; do not retroactively erase them or equate them with comprehensive
+understanding. The new explicit comparison cue in intensive v2 is relevant, but
+it still lacks a visual depiction, and has not been shown to resolve the gap.
+
+**Additional exposure:** åkerrein is now a second explicitly named external lookup.
+The reason and outcome of that lookup, other terms implied by “etc.”, source URLs,
+lookup modalities/durations and timing relative to review are unspecified. No
+external browsing activity is inferred from app background events. No synthetic
+lookup events or automatic schedule changes were created.
+
+**Revised next experiment (proposal, not deployed):** concrete object/landscape
+terms need a compact grounding step: a verified photograph or diagram, the relevant
+part indicated, a plain account of use or formation, and a contrast with a familiar
+nearby concept when helpful. Start with ard and åkerrein. For ard, directly address
+appearance and the plow comparison. For åkerrein, establish what feature the word
+refers to; do not assume the user's exact difficulty before further evidence.
+Then test recognition in a different image/example and rough functional explanation,
+not exact wording or detailed technical labels. Keep enrichment optional to access
+from the quick card, but available before asking for a memory judgment.
+
+Record enrichment exposure, source/image revision, recognition/application attempt
+and volunteered feedback when implemented. The hypothesis is that grounding makes
+the historical term usable in later reading; alternatives include extra friction,
+picture-specific memorization or no benefit beyond the existing text. This report
+provides rationale for that comparison, not evidence of its outcome.
+
+This is a documentation update only. No image feature or new assessment is deployed.

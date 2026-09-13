@@ -14,6 +14,9 @@ are evidence of the conversation, not authoritative descriptions of the learner.
 all original Review cards welcomed; external term lookups including ard. All ten
 Review items have recorded visits, with introductions distinguished from recall.
 Conversation snapshot `d0d5698b87862347` preserves the report.
+Follow-up O002/C003 in [decisions.md](decisions.md) specifies the missing appearance
+and plow comparison for ard, and adds åkerrein as a named lookup. Latest conversation
+freeze: `51e5b432a976e876` (139 records).
 
 ## Current phone phase
 
