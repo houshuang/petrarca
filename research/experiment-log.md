@@ -5,6 +5,19 @@
 ---
 
 
+## 2026-09-13 — Intensive Norway practice v2 activated
+
+Implemented the previously registered expansion: 76 items, seven themes, exposure
+prerequisites, short study FSRS learning steps and optional extra practice without
+schedule mutation. Code `d21ba9f`, study revision `7cd0fa3244e5613db93a5480e38ff2559feea4aa03f350dc5f6d1f2143bcb698`,
+iOS update `01a09a19-423a-7eb7-b8e5-1870f756e28a`. All 24 isolated Python and
+six client tests pass; TypeScript and phone-sized UI checks pass. Backup and exact
+release/preservation evidence are in [intensive-v2.md](norway-reading-study/intensive-v2.md).
+Five prior runs and 96 prior events preserved; other curricula remain paused and
+their eight checked data tables unchanged. No retention or engagement outcome
+claimed from deployment. Physical iPhone adoption remains unverified.
+
+
 ## 2026-09-13 — Expanded Norway practice v2, registered before implementation
 
 **User change:** substantial time for atomic practice over the coming days, little

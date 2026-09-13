@@ -139,3 +139,30 @@ advance and extra mode; it does not verify a physical iPhone microphone or offli
 Conversation freeze `1ee4a5ff8450be4a` contains 130 messages (38 Claude, 92 Codex),
 including this request and progress through the pre-release checks. It excludes the
 eventual final answer. [Searchable conversation archive](/Users/stian/.agents/research/petrarca-norway-study/conversations/README.md).
+
+## Release and preservation — 13 September 2026
+
+Code `d21ba9f0e5d239ac2e6047fa51540ada5e282b67` was committed, pushed, and
+deployed through the owned-checkout wrapper around the unchanged unified deploy.
+The server activation reports 76 active items and other curricula paused.
+Study revision: `7cd0fa3244e5613db93a5480e38ff2559feea4aa03f350dc5f6d1f2143bcb698`.
+
+iOS preview update `01a09a19-423a-7eb7-b8e5-1870f756e28a`, group
+`d077bbb0-01a4-41a2-958e-93a598483049`, runtime `1.0.0`, published at
+2026-09-13T09:29:01.754Z. The public update manifest resolves to this update and
+contains the expected private API configuration; health/status/summary return HTTP
+200. No private capability is stored in this document. Native installation/adoption
+is not confirmed: open the app to download, leave it open briefly, then quit/reopen
+to apply. The visible “Velg øving og tema” control identifies the new practice UI.
+
+Pre-activation backup: `/opt/petrarca/data/backups/norway-intensive-before-20260913T092725Z.db`,
+SHA-256 `c2917cdcdaf42c107e1339ddd90411aa4db1b89960a6106c9b5307d430b92cb0`.
+All eight checked legacy tables remain byte-for-value identical. The existing five
+study runs and 96 events, and prior audio/transcription rows, remain identical.
+These are real observed history counts, not synthetic test sessions. Read-only
+production selection confirms chronology foundations are available before their
+dependents without creating a live run.
+
+Private verification evidence and phone-sized screenshots:
+[phone-practice-v2](/Users/stian/.agents/research/petrarca-norway-study/phone-practice-v2).
+The local browser and fixture servers were stopped after checks.
