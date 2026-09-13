@@ -46,3 +46,17 @@ CREATE TABLE IF NOT EXISTS study_revisions (
  code_commit TEXT NOT NULL, design_version TEXT NOT NULL, payload TEXT NOT NULL
 );
 '''
+
+# Additive tables: existing audio and practice snapshots are never rewritten.
+SCHEMA += """
+CREATE TABLE IF NOT EXISTS study_audio_attempts (
+ id TEXT PRIMARY KEY, audio_id TEXT NOT NULL REFERENCES study_audio(id),
+ run_id TEXT NOT NULL, item_id TEXT NOT NULL, response_kind TEXT NOT NULL,
+ sha256 TEXT NOT NULL, created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS study_assessments (
+ run_id TEXT PRIMARY KEY REFERENCES study_runs(id), occasion TEXT NOT NULL,
+ volume INTEGER NOT NULL, coverage TEXT NOT NULL, help_state TEXT NOT NULL,
+ protocol_version TEXT NOT NULL, created_at INTEGER NOT NULL
+);
+"""

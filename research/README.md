@@ -198,3 +198,5 @@ Master index of all research documents. **Always update this file when adding ne
 | [implementation-status.md](implementation-status.md) | **V1 implementation log**: knowledge-aware reading system — all files, merge history, deployment, known issues, next steps | Active |
 | [user-journey-weeks.md](user-journey-weeks.md) | Detailed 4-week user journey narrative, grounded in interviews + design research | Done |
 | [user-guide.md](user-guide.md) | **User guide** — capture flows, reading modes, integrations, non-obvious features, hypotheses to test | Done |
+
+- [Phone assessment v1](norway-reading-study/assessment-release-v1.md): frozen unaided-first form, original questions, audio identity and descriptive comparison.

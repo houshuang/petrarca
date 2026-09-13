@@ -20,15 +20,21 @@ export default function StudyCard({item, run, onEvent, onComplete, onIntroduce, 
   function chooseRecognition(value: 'familiar' | 'unfamiliar') {
     if (recognition === value) return;
     setRecognition(value);
-    onEvent('feedback', {dimension: 'term_recognition', value});
+    onEvent('feedback', {dimension: 'term_recognition', value,...(item.needs_introduction ? {phase:'before_introduction'} : {})});
   }
 
   if (item.needs_introduction) return <View style={styles.panel}>
     <Text style={styles.eyebrow}>Ny idé · les for å forstå</Text>
     <Text accessibilityRole="header" style={styles.heading}>{item.title}</Text>
-    <Text style={styles.body}>{item.introduction}</Text>
-    <Text style={styles.caption}>Du skal ikke huske alt nå. En senere oppgave spør etter hovedideen.</Text>
-    <StudyButton variant="primary" onPress={onIntroduce}>Jeg har lest · fortsett</StudyButton>
+    {item.kind === 'term' && !recognition ? <>
+      <Text style={styles.caption}>Før forklaringen: Virker ordet kjent fra før?</Text>
+      <StudyButton onPress={() => chooseRecognition('familiar')}>Kjenner igjen ordet</StudyButton>
+      <StudyButton onPress={() => chooseRecognition('unfamiliar')}>Ukjent ord</StudyButton>
+    </> : <>
+      <Text style={styles.body}>{item.introduction}</Text>
+      <Text style={styles.caption}>Du skal ikke huske alt nå. En senere oppgave spør etter hovedideen.</Text>
+      <StudyButton variant="primary" onPress={onIntroduce}>Jeg har lest · fortsett</StudyButton>
+    </>}
   </View>;
   const props = {onComplete, onInteraction: onEvent};
   if (item.kind === 'aspect') return <View style={{gap: 8}}><Text style={styles.eyebrow}>Sammenheng · finn den manglende delen</Text><AspectCard card={item} {...props} /></View>;

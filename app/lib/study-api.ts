@@ -78,7 +78,7 @@ export function studyEvent(run: string, item: string, event: string, detail: Rec
   return locked(async () => {
     const queue: Event[] = JSON.parse(await AsyncStorage.getItem(EVENTS) || '[]');
     // Retrying a terminal action reuses its entire original payload, including time.
-    const id = ['complete','introduced','skip'].includes(event) ? `${run}_${item}_${event}` : requestId();
+    const id = ['complete','introduced','skip','assessment_advance'].includes(event) ? `${run}_${item}_${event}` : requestId();
     if (!queue.some(e => e.request_id === id)) {
       queue.push({request_id: id, run_id: run, item_id: item, event, detail, results,
         client_time: occurrenceTime, client_context: context});
@@ -94,8 +94,7 @@ export async function loadStudyRun(mode: string, fresh = false, practice: Practi
   return studyRequest('session', { request_id: id, mode, practice, topic, client_context: clientContext() });
 }
 export async function pendingAudio(): Promise<PendingAudio[]> { return JSON.parse(await AsyncStorage.getItem(AUDIO) || '[]'); }
-export async function preserveAudio(run: string, item: string, uri: string, kind: CaptureKind): Promise<PendingAudio> {
-  const id = requestId();
+export async function preserveAudio(run: string, item: string, uri: string, kind: CaptureKind, id = requestId()): Promise<PendingAudio> {
   const entry: PendingAudio = {id, run, item, uri, kind, mime: Platform.OS === 'web' ? 'audio/webm' : 'audio/mp4'};
   await locked(async () => {
     const all = await pendingAudio(); all.push(entry); await AsyncStorage.setItem(AUDIO, JSON.stringify(all));
@@ -113,20 +112,30 @@ export async function preserveAudio(run: string, item: string, uri: string, kind
   }
   return entry;
 }
-export async function uploadAudio(entry: PendingAudio): Promise<void> {
-  const url = `${getResearchServerUrl()}/study/voice?run=${encodeURIComponent(entry.run)}&item=${encodeURIComponent(entry.item)}&kind=${entry.kind}`;
+export type AudioReceipt = {saved: boolean; audio_id: string; sha256: string; attempt_id: string | null};
+export async function uploadAudio(entry: PendingAudio): Promise<AudioReceipt> {
+  const url = `${getResearchServerUrl()}/study/voice?run=${encodeURIComponent(entry.run)}&item=${encodeURIComponent(entry.item)}&kind=${entry.kind}&attempt=${encodeURIComponent(entry.id)}`;
   let status: number;
+  let body: string;
   if (Platform.OS === 'web') {
     const blob = await (await fetch(entry.uri)).blob();
-    status = (await fetch(url, {method: 'POST', headers: {'Content-Type': entry.mime}, body: blob})).status;
+    const response = await fetch(url, {method: 'POST', headers: {'Content-Type': entry.mime}, body: blob});
+    status = response.status; body = await response.text();
   } else {
-    status = (await FileSystem.uploadAsync(url, entry.uri, {httpMethod: 'POST',
-      uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT, headers: {'Content-Type': entry.mime}})).status;
+    const response = await FileSystem.uploadAsync(url, entry.uri, {httpMethod: 'POST',
+      uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT, headers: {'Content-Type': entry.mime}});
+    status = response.status; body = response.body;
   }
   if (status !== 200) throw new Error('Opptaket er bevart på telefonen. Prøv opplasting igjen.');
-  await studyEvent(entry.run, entry.item, 'audio_uploaded', { audio_local_id: entry.id, response_kind: entry.kind });
+  const receipt = JSON.parse(body) as AudioReceipt;
+  if (!receipt.saved || !receipt.audio_id || !receipt.sha256 || receipt.attempt_id !== entry.id) {
+    throw new Error('Lagringen kunne ikke bekreftes. Opptaket er bevart; prøv igjen.');
+  }
+  await studyEvent(entry.run, entry.item, 'audio_uploaded', { audio_local_id: entry.id, attempt_id: entry.id,
+    audio_id: receipt.audio_id, sha256: receipt.sha256, response_kind: entry.kind });
   await locked(async () => {
     const all = await pendingAudio(); await AsyncStorage.setItem(AUDIO, JSON.stringify(all.filter(a => a.id !== entry.id)));
   });
   if (Platform.OS !== 'web') await FileSystem.deleteAsync(entry.uri, {idempotent: true}).catch(() => undefined);
+  return receipt;
 }

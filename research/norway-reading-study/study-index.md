@@ -135,3 +135,5 @@ This is an implemented, manually invoked exporter and a documented handoff
 procedure. There is no background collector or guarantee that an unrelated future
 task follows it. Private evidence currently lives on this Mac; off-device backup
 has not been verified. Git commits preserve the protocol/tools, not raw speech.
+
+- [Phone assessment v1](assessment-release-v1.md): frozen unaided-first form, original questions, audio identity and descriptive comparison.

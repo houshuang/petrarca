@@ -1,0 +1,51 @@
+{
+  "version": "norway-assessment-v1",
+  "language": "no",
+  "scope": "Fixed generic core; scope is declared per run. First current observation follows reading, discussion and practice.",
+  "feedback": "withheld throughout",
+  "timing": "Same per-prompt limits before/after; stop early permitted. Pilot actual duration before estimating burden.",
+  "core": [
+    {
+      "id": "narrative",
+      "title": "Fortell historien",
+      "text": "Fortell historien om perioden slik du forstår den nå. Velg selv hva som er viktig. Si gjerne hva du er usikker på.",
+      "max_seconds": 180,
+      "confidence": false
+    },
+    {
+      "id": "chronology",
+      "title": "Tid og perioder",
+      "text": "Omtrent når begynner og slutter perioden du har lest om? Hva markerer grensene?",
+      "max_seconds": 45,
+      "confidence": true
+    },
+    {
+      "id": "elsewhere",
+      "title": "Andre steder",
+      "text": "Hva foregikk ett eller to andre steder du kjenner til omtrent samtidig? Forklar en forbindelse eller forskjell, hvis du ser en.",
+      "max_seconds": 45,
+      "confidence": true
+    },
+    {
+      "id": "mechanism",
+      "title": "En viktig endring",
+      "text": "Velg én viktig endring. Hvordan og hvorfor skjedde den? Hva er forklaring, og hva er usikkert?",
+      "max_seconds": 45,
+      "confidence": true
+    },
+    {
+      "id": "everyday",
+      "title": "Hverdagsliv",
+      "text": "Hvordan kunne folk leve i denne perioden? Hva endret seg, og hva fortsatte fra tiden før?",
+      "max_seconds": 45,
+      "confidence": true
+    },
+    {
+      "id": "identity",
+      "title": "Språk, identitet eller handel",
+      "text": "Velg språk, identitet eller handel: Hva forstår du om det nå, og hva kan kildene ikke fortelle oss?",
+      "max_seconds": 45,
+      "confidence": true
+    }
+  ]
+}

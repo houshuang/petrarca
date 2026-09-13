@@ -209,3 +209,9 @@ picture-specific memorization or no benefit beyond the existing text. This repor
 provides rationale for that comparison, not evidence of its outcome.
 
 This is a documentation update only. No image feature or new assessment is deployed.
+
+## D016 — Implement the reviewed learning and assessment changes (13 September 2026)
+
+User approved three bounded releases: phone assessment and audio identity; pre-introduction familiarity, ard/åkerrein visual grounding and shared-axis timeline; incremental recording intake, monthly sampling and independent backup verification. The request includes normal commit/push/deployment. Asked what could interrupt the flow: microphone/upload failures, unacknowledged taps and unclear next actions; a brief user report is enough.
+
+External second opinion was based on the earlier thirteen-item / zero-run snapshot. Current code already gates book state and stamps execution policy; v2 provides 76 items and short learning steps. The first new recording is after reading, discussion and practice. Do not reconstruct a pre-app baseline. Spoken markers stay optional. The backup destination is pending; no Time Machine destination or rclone remote was configured when inspected.

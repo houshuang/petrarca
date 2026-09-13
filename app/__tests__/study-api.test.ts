@@ -8,7 +8,7 @@ jest.mock('expo-constants', () => ({__esModule:true,default:{expoConfig:{version
 jest.mock('expo-updates', () => ({updateId:'test-update',runtimeVersion:'test-runtime'}));
 jest.mock('expo-file-system/legacy', () => ({
   documentDirectory:'file:///fixture/',makeDirectoryAsync:jest.fn(),copyAsync:jest.fn(),deleteAsync:jest.fn(async () => undefined),
-  uploadAsync:jest.fn(async () => ({status:200})),FileSystemUploadType:{BINARY_CONTENT:0},
+  uploadAsync:jest.fn(async (url:string) => ({status:200,body:JSON.stringify({saved:true,audio_id:'server_audio',sha256:'fixture_hash',attempt_id:new URL(url).searchParams.get('attempt')})})),FileSystemUploadType:{BINARY_CONTENT:0},
 }));
 jest.mock('../data/logger', () => ({logEvent:jest.fn()}));
 jest.mock('../lib/server-urls', () => ({getResearchServerUrl:()=>'http://fixture.invalid'}));
@@ -69,4 +69,19 @@ test('session retries preserve identity while practice modes and topics have sep
   expect(new Set([bodies[0].request_id,bodies[2].request_id,bodies[3].request_id]).size).toBe(3);
   expect(bodies[2]).toMatchObject({practice:'extra',topic:'chronology'});
   expect(bodies[3]).toMatchObject({practice:'extra',topic:'networks'});
+});
+
+
+test('audio acknowledgement links the stable attempt and server recording hash',async () => {
+  const saved=await preserveAudio('fixture_run_12345','fixture_card','file:///recording.m4a','recall','recording_attempt_12345');
+  const receipt=await uploadAudio(saved);
+  expect(receipt.audio_id).toBe('server_audio');
+  const event=fetchMock.mock.calls.map(c=>JSON.parse(c[1].body)).find(e=>e.event==='audio_uploaded');
+  expect(event.detail).toMatchObject({attempt_id:'recording_attempt_12345',audio_id:'server_audio',sha256:'fixture_hash'});
+});
+test('missing upload receipt retains the local recording',async () => {
+  const saved=await preserveAudio('fixture_run_12345','fixture_card','file:///recording.m4a','recall');
+  jest.mocked(FS.uploadAsync).mockResolvedValueOnce({status:200,headers:{},body:'{}',mimeType:null});
+  await expect(uploadAudio(saved)).rejects.toThrow();
+  expect(await pendingAudio()).toHaveLength(1);expect(FS.deleteAsync).not.toHaveBeenCalled();
 });

@@ -47,6 +47,7 @@ def status(conn):
         return {'active': False}
     return {'active': True, 'study_id': focus['study_id'], 'title': 'Norgeshistorie',
             'subtitle': 'Bind 1 · det du har lest', 'other_cards_suspended': True,
+            'assessment_protocol_version':'norway-assessment-v1',
             'paused_counts': json.loads(focus['prior_counts']),
             'items': conn.execute('SELECT count(*) FROM study_items WHERE study_id=? AND suspended=0',
                                   (focus['study_id'],)).fetchone()[0]}
@@ -105,6 +106,11 @@ def session(conn, body):
     try:
         result = _session(conn, body)
         conn.commit()
+        if body.get('mode') == 'assessment':
+            from study_assessment import completed
+            result['completed_ids'] = completed(conn,result['run_id'])
+            result['audio_item_ids'] = [r[0] for r in conn.execute("SELECT DISTINCT item_id FROM study_audio WHERE run_id=? AND response_kind='recall'", (result['run_id'],))]
+            return result
         result['completed_ids'] = [r[0] for r in conn.execute("SELECT DISTINCT item_id FROM study_events WHERE run_id=? AND event IN ('complete','introduced','skip')", (result['run_id'],))]
         result['audio_item_ids'] = [r[0] for r in conn.execute("SELECT DISTINCT item_id FROM study_audio WHERE run_id=? AND response_kind='recall'", (result['run_id'],))]
         return result
@@ -121,6 +127,9 @@ def _session(conn, body):
     if not re.fullmatch(r'[A-Za-z0-9_-]{12,100}', run_id):
         raise ValueError('A stable session request_id is required')
     mode = body.get('mode', 'review')
+    if mode == 'assessment':
+        from study_assessment import start
+        return start(conn,body)
     if mode not in ('review', 'voice'):
         raise ValueError('Unknown mode')
     practice = body.get('practice','scheduled')
@@ -203,6 +212,14 @@ def event(conn, body):
             return json.loads(prior['result'])
         item = bound_item(conn, body.get('run_id'), body.get('item_id'))
         action = body.get('event')
+        snapshot = json.loads(conn.execute('SELECT snapshot FROM study_runs WHERE id=?',(body['run_id'],)).fetchone()[0])
+        if 'assessment' in snapshot:
+            from study_assessment import handle_event
+            result = handle_event(conn,body,item,snapshot)
+            conn.execute('INSERT INTO study_events VALUES(?,?,?,?,?,?,?)',
+                         (event_id,body['run_id'],item['id'],action,now_ms(),serialized,encoded(result)))
+            conn.commit()
+            return result
         if action not in ('shown','revealed','introduced','skip','complete','position_revealed',
                           'position_graded','source_opened','feedback','recording_started',
                           'recording_stopped','recording_cancelled','audio_uploaded','audio_played',
@@ -257,16 +274,36 @@ def event(conn, body):
         raise
 
 
-def save_audio(conn, run_id, item_id, data, mime, audio_root, response_kind='recall'):
+def save_audio(conn, run_id, item_id, data, mime, audio_root, response_kind='recall', attempt_id=None):
+    conn.execute('BEGIN IMMEDIATE')
+    try:
+        return _save_audio(conn,run_id,item_id,data,mime,audio_root,response_kind,attempt_id)
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def _save_audio(conn, run_id, item_id, data, mime, audio_root, response_kind, attempt_id):
     item = bound_item(conn,run_id,item_id)
     if response_kind not in POLICY['capture_kinds']:
         raise ValueError('Unknown recording purpose')
     if (response_kind=='recall' and item['kind']!='voice') or not data or len(data)>25*1024*1024:
         raise ValueError('Invalid voice response')
+    if attempt_id is not None and not re.fullmatch(r'[A-Za-z0-9_-]{12,100}', attempt_id):
+        raise ValueError('Invalid recording attempt ID')
     suffix = '.webm' if mime.startswith('audio/webm') else '.m4a'
     if not (b'ftyp' in data[:64] or data.startswith(b'\x1aE\xdf\xa3')):
         raise ValueError('Unsupported audio container')
     digest = hashlib.sha256(data).hexdigest()
+    if attempt_id:
+        prior = conn.execute('SELECT * FROM study_audio_attempts WHERE id=?',(attempt_id,)).fetchone()
+        if prior and (prior['run_id'],prior['item_id'],prior['response_kind'],prior['sha256']) != (run_id,item_id,response_kind,digest):
+            raise ValueError('Recording retry changed input')
+    snapshot = json.loads(conn.execute('SELECT snapshot FROM study_runs WHERE id=?',(run_id,)).fetchone()[0])
+    existing = conn.execute('SELECT id FROM study_audio WHERE run_id=? AND item_id=? AND response_kind=? AND sha256=?',(run_id,item_id,response_kind,digest)).fetchone()
+    if 'assessment' in snapshot and not existing:
+        from study_assessment import validate_audio
+        validate_audio(conn,run_id,item,snapshot)
     audio_id = 'study_audio_' + hashlib.sha256((run_id+item_id+response_kind+digest).encode()).hexdigest()
     audio_root = Path(audio_root)
     audio_root.mkdir(parents=True,exist_ok=True,mode=0o700)
@@ -282,8 +319,11 @@ def save_audio(conn, run_id, item_id, data, mime, audio_root, response_kind='rec
         finally: os.close(directory)
     conn.execute('INSERT OR IGNORE INTO study_audio(id,run_id,item_id,audio_path,sha256,created_at,response_kind) VALUES(?,?,?,?,?,?,?)',
                  (audio_id,run_id,item_id,str(path),digest,now_ms(),response_kind))
+    if attempt_id:
+        conn.execute('INSERT OR IGNORE INTO study_audio_attempts VALUES(?,?,?,?,?,?,?)',
+                     (attempt_id,audio_id,run_id,item_id,response_kind,digest,now_ms()))
     conn.commit()
-    return {'saved': True,'audio_id':audio_id,'bytes':len(data)}
+    return {'saved': True,'audio_id':audio_id,'bytes':len(data),'sha256':digest,'attempt_id':attempt_id}
 
 
 def transcription(conn, body):

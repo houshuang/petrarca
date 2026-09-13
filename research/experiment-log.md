@@ -1,3 +1,13 @@
+## 2026-09-13 — Assessment core, visual grounding and sustainable intake (registered before implementation)
+
+User approved three small releases after external design feedback: phone overview assessment with durable audio linkage and frozen prompts/rubric; pre-introduction familiarity plus sourced ard/åkerrein visuals and parallel timeline; incremental recording intake, monthly sampling and independent backup verification. Implementation starts from f6ee974. This approval does not create synthetic participant data or backdate a pre-app baseline.
+
+Prediction: fixed unaided-first observations make changes in chronological, explanatory and connected understanding inspectable; visual explanations support use beyond word familiarity; an incremental source-linked queue keeps up with reading. Alternatives: repeated prompts rehearse answers, external lookups supply gains, visual opening does not establish comprehension, curated targets bias apparent coverage. Outcomes remain descriptive under observed maintenance.
+
+Freeze Norwegian narrative plus five neutral cues, confidence before cues, bounded durations, coverage/help state and immutable protocol/rubric snapshots. Terms/factual correctness remain explicit; missing observations are not zero. No assessment schedules FSRS or automatically grades knowledge. Transfer uses unfamiliar contextual application; unread-period text is comparison, not causal control. Pilot timings before committing to burden. Preserve original items, schedules, audio and all previous interpretations. Introductions record familiarity before displaying meaning, prospectively only.
+
+Validate against isolated SQLite and focused client interaction/retry tests; deploy committed integrated code through existing scripts and verify read-only live endpoints. Real device microphone verification needs the user's genuine recording. Investigate existing backup configuration before requesting a destination. Optional spoken markers remain optional. No recurring background collector is claimed until actually configured.
+
 # Experiment Log
 
 > Append-only. New entries at top. Never delete existing entries.

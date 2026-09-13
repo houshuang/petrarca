@@ -44,7 +44,7 @@ def main():
                 conn.execute('BEGIN')  # All export tables share one consistent SQLite snapshot.
                 manifest = {'created_at_ms':int(time.time()*1000),'files':{},'interpretation':
                   'Observational single-reader study. Shown is exposure, grades are self-report; raw speech is not verified understanding. Join events to runs.snapshot to items.sources and study_sources.'}
-                for table in ['study_focus','study_sources','study_revisions','study_items','study_positions','study_runs','study_events','study_audio','study_transcriptions']:
+                for table in ['study_focus','study_sources','study_revisions','study_items','study_positions','study_runs','study_events','study_audio','study_transcriptions','study_audio_attempts','study_assessments']:
                     rows = [dict(r) for r in conn.execute(f'SELECT * FROM {table} ORDER BY rowid')]
                     content = ''.join(json.dumps(row,ensure_ascii=False)+'\n' for row in rows)
                     path = out/(table+'.jsonl'); path.write_text(content); os.chmod(path,0o600)

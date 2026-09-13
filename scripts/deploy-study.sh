@@ -19,4 +19,4 @@ PY
 cmp "$HOME/src/expo/scripts/deploy.sh" "$DEPLOY_DIR/scripts/deploy.sh"
 bash "$DEPLOY_DIR/scripts/deploy.sh" petrarca
 bash "$REPO_DIR/scripts/deploy-mobile-api.sh"
-bash "$REPO_DIR/app/deploy-mobile.sh" "Norway intensive practice: 76 items, themes and early consolidation"
+bash "$REPO_DIR/app/deploy-mobile.sh" "${1:-Norway assessment: overview recordings and reliable audio identity}"

@@ -46,14 +46,14 @@ const termItem: StudyItem = {
   }],
 };
 
-function renderTermCard() {
+function renderTermCard(item=termItem) {
   const onEvent = jest.fn();
   const onComplete = jest.fn();
   let renderer: TestRenderer.ReactTestRenderer;
   act(() => {
     renderer = TestRenderer.create(
       <StudyCard
-        item={termItem}
+        item={item}
         run="fixture-run"
         onEvent={onEvent}
         onComplete={onComplete}
@@ -107,4 +107,14 @@ test('the answer is hidden until the primary reveal action and ends in a clear j
   expect(onComplete).toHaveBeenCalledWith([
     expect.objectContaining({position_id: 'ard-meaning', score: 'knew'}),
   ]);
+});
+
+
+test('first introduction withholds meaning until familiarity is captured',()=>{
+  const {renderer,onEvent}=renderTermCard({...termItem,needs_introduction:true,introduction:'Forklaringen som skal skjules.'});
+  expect(hasText(renderer.root,'Forklaringen som skal skjules.')).toBe(false);
+  expect(hasText(renderer.root,'Jeg har lest · fortsett')).toBe(false);
+  act(()=>button(renderer.root,'Ukjent ord').props.onPress());
+  expect(hasText(renderer.root,'Forklaringen som skal skjules.')).toBe(true);
+  expect(onEvent).toHaveBeenCalledWith('feedback',{dimension:'term_recognition',value:'unfamiliar',phase:'before_introduction'});
 });

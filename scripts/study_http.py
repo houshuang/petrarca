@@ -42,7 +42,7 @@ def route(handler, method):
                     raise ValueError('Incomplete audio upload; retry the saved recording')
                 result = study_action('voice',run_id=q.get('run',[''])[0],item_id=q.get('item',[''])[0],
                          data=data,mime=handler.headers.get('Content-Type','audio/mp4'),
-                         response_kind=q.get('kind',['recall'])[0],
+                         response_kind=q.get('kind',['recall'])[0], attempt_id=q.get('attempt',[None])[0],
                          audio_root=Path(os.environ.get('PETRARCA_DATA','/opt/petrarca/data'))/'audio/study')
             else:
                 handler._send_private_json_response(404,{'error':'Unknown study route'})

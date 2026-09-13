@@ -2,12 +2,13 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Text, View } from 'react-native';
 import { Audio } from 'expo-av';
 import { useFocusEffect } from 'expo-router';
-import { CaptureKind, PendingAudio, preserveAudio, studyEvent, uploadAudio } from '../../lib/study-api';
+import { CaptureKind, PendingAudio, preserveAudio, requestId, studyEvent, uploadAudio } from '../../lib/study-api';
 import { StudyButton, styles } from './StudyControls';
 
-export default function StudyRecorder({run, item, kind, onSaved, onBusy, disabled = false}: {
-  run: string; item: string; kind: CaptureKind; onSaved: () => void; onBusy: (busy: boolean) => void; disabled?: boolean;
+export default function StudyRecorder({run, item, kind, onSaved, onBusy, disabled = false, maxSeconds = 240, onRetained}: {
+  run: string; item: string; kind: CaptureKind; onSaved: () => void; onBusy: (busy: boolean) => void; disabled?: boolean; maxSeconds?: number; onRetained?: () => void;
 }) {
+  const attempt = useRef('');
   const recording = useRef<Audio.Recording | null>(null);
   const sound = useRef<Audio.Sound | null>(null);
   const [active, setActive] = useState(false);
@@ -16,7 +17,7 @@ export default function StudyRecorder({run, item, kind, onSaved, onBusy, disable
   const [error, setError] = useState('');
   const [seconds, setSeconds] = useState(0);
   const mounted = useRef(true);
-  const log = (event: string, detail = {}) => studyEvent(run,item,event,{response_kind:kind,...detail}).catch(() => undefined);
+  const log = (event: string, detail = {}) => studyEvent(run,item,event,{response_kind:kind,attempt_id:attempt.current,...detail}).catch(() => undefined);
   async function retainCurrent() {
     const current = recording.current;
     if (!current) return null;
@@ -25,7 +26,7 @@ export default function StudyRecorder({run, item, kind, onSaved, onBusy, disable
     const uri = current.getURI();
     if (!uri) throw new Error('Opptaket mangler en lydfil.');
     // Keep the original URI in storage as a fallback if copying fails.
-    const saved = await preserveAudio(run,item,uri,kind);
+    const saved = await preserveAudio(run,item,uri,kind,attempt.current);
     void log('recording_stopped', {duration_ms: (await current.getStatusAsync()).durationMillis});
     await Audio.setAudioModeAsync({allowsRecordingIOS: false});
     return saved;
@@ -47,7 +48,7 @@ export default function StudyRecorder({run, item, kind, onSaved, onBusy, disable
     const timer = setInterval(() => setSeconds(s => s + 1), 1000);
     return () => clearInterval(timer);
   }, [active]);
-  useEffect(() => { if (active && seconds >= 240) void stop(); }, [seconds, active]);
+  useEffect(() => { if (active && seconds >= maxSeconds) void stop(); }, [seconds, active, maxSeconds]);
   async function start() {
     setError(''); setBusy(true); onBusy(true);
     try {
@@ -55,6 +56,7 @@ export default function StudyRecorder({run, item, kind, onSaved, onBusy, disable
       if (!permission.granted) throw new Error('Tillat mikrofonen for å ta opp svaret.');
       await Audio.setAudioModeAsync({allowsRecordingIOS: true, playsInSilentModeIOS: true});
       const result = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      attempt.current = requestId();
       recording.current = result.recording; setSeconds(0); setActive(true); void log('recording_started');
     } catch (e) { setError(String(e)); onBusy(false); void log('recording_failed'); }
     finally { setBusy(false); }
@@ -62,7 +64,7 @@ export default function StudyRecorder({run, item, kind, onSaved, onBusy, disable
   async function stop() {
     if (!recording.current) return;
     setBusy(true);
-    try { const saved = await retainCurrent(); if (mounted.current) setPending(saved); }
+    try { const saved = await retainCurrent(); if (mounted.current) {setPending(saved); if (saved) onRetained?.();} }
     catch (e) { setError(String(e)); }
     finally { setActive(false); setBusy(false); onBusy(false); }
   }

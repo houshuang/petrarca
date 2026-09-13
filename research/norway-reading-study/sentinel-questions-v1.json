@@ -1,0 +1,56 @@
+{
+  "version": "sentinels-v1",
+  "source": "baseline / KI5-ip3G8xIh",
+  "interpretation": "Original ASR excerpts, including tentative or inaccurate ideas, preserved verbatim. Norwegian prompts are editorial adaptations. Unscored trajectories; two rotated per volume end, not seven required answers.",
+  "questions": [
+    {
+      "id": "sentinel-identity",
+      "label": "Norge og Sverige",
+      "prompt_no": "Hvorfor oppfatter vi Norge og Sverige som ulike, og hvor langt tilbake kan vi spore dette?",
+      "source_node": "P8ADU2_FIhlF",
+      "original_excerpt": "Why is it that Norway seems to have had a national identity much sooner than it was a country, way before it was unified?"
+    },
+    {
+      "id": "sentinel-language",
+      "label": "Språk",
+      "prompt_no": "Hva vet vi om likheter og forskjeller mellom språkene i Norge og Sverige?",
+      "source_node": "P8ADU2_FIhlF",
+      "original_excerpt": "Was the language of Norway and Sweden really different?"
+    },
+    {
+      "id": "sentinel-trade",
+      "label": "Jern og handelsnettverk",
+      "prompt_no": "Hvordan påvirket lokal jernproduksjon handelsnettverkene fra bronsealderen?",
+      "source_node": "lRePFiiMVx-F",
+      "original_excerpt": "Was that the Iron Age where we had all the elements to build it locally, and so actually a lot of the trade routes collapsed because they were not needed anymore?"
+    },
+    {
+      "id": "sentinel-rome",
+      "label": "Skandinavia og Roma",
+      "prompt_no": "Hva vet vi om skandinavers tjeneste i romerske hærer, og hva bygger vi det på?",
+      "source_node": "lRePFiiMVx-F",
+      "original_excerpt": "Swedish men had been serving in the Roman armies because they found Roman coins with them."
+    },
+    {
+      "id": "sentinel-climate",
+      "label": "Klima og fortellinger",
+      "prompt_no": "Hva forstår du nå om klimahendelsen du beskrev og mulige forbindelser til mytologi?",
+      "source_node": "LAGq76tnjBzZ",
+      "original_excerpt": "Maybe there was an Indonesian volcano that caused several years of darkened skies and failing harvests and cold weather"
+    },
+    {
+      "id": "sentinel-longhouses",
+      "label": "Langhus og makt",
+      "prompt_no": "Hva kan langhus fortelle oss om samfunn og makt?",
+      "source_node": "7F8TSakaFzic",
+      "original_excerpt": "They found these long houses, so they were talking about these long houses and these chieftains that you would attach to"
+    },
+    {
+      "id": "sentinel-evidence",
+      "label": "Hva kan kildene si?",
+      "prompt_no": "Hva kan vi vite om perioden uten samtidige skriftlige fortellinger fra Norge?",
+      "source_node": "7F8TSakaFzic",
+      "original_excerpt": "we have basically no written sources from Norway at that time"
+    }
+  ]
+}

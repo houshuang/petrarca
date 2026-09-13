@@ -1,0 +1,34 @@
+{
+  "version": "norway-rubric-v1",
+  "purpose": "Descriptive profile, not a validated knowledge score or causal effect",
+  "axes": {
+    "chronology": {
+      "0": "Substantially misplaced or explicitly unavailable under this cue",
+      "1": "Some correct ordering or anchors; important placement unclear",
+      "2": "Usable approximate order and placement, with boundaries qualified where appropriate"
+    },
+    "explanation": {
+      "0": "No available explanation, or central mechanism substantially mistaken",
+      "1": "Relevant facts or one plausible link; mechanism incomplete",
+      "2": "A historically defensible mechanism with relevant links and limits"
+    },
+    "connection": {
+      "0": "No connection available under the cue, or a false central connection",
+      "1": "Relevant juxtaposition; relationship or evidence remains vague",
+      "2": "A warranted relationship, contrast or revision, with appropriate uncertainty"
+    }
+  },
+  "examples": {
+    "chronology_1": "Correct Stone–Bronze ordering but unable to place farming relative to those labels",
+    "chronology_2": "Distinguishes broad chronological labels from gradual and regionally uneven economic changes",
+    "explanation_1": "Mentions imported metal and exchange without explaining the relation",
+    "explanation_2": "Explains a defensible resource constraint and resulting exchange, without claiming it describes every community",
+    "connection_1": "Names a contemporary elsewhere without explaining the relevance",
+    "connection_2": "Explains what a dated comparison clarifies, without inferring contact from simultaneity"
+  },
+  "correctness": "Every score cites response/audio spans and a source-checked reference judgment. Eloquence cannot offset a central factual error. Preserve misconception separately from unavailable response.",
+  "missingness": ["not_elicited", "skipped", "interrupted", "inaudible", "not_yet_read", "unscorable"],
+  "term_evidence": ["recognised", "rough_meaning", "used_in_new_context"],
+  "scoring": "Keep axes separate. Independently score shuffled transcripts with occasion metadata withheld (retain historical dates in speech). Record model, prompt, source checks and adjudication. No automatic score writes from this release.",
+  "confidence": "sure / unsure / unknown before response; inspect against adequacy without treating labels as probabilities"
+}
