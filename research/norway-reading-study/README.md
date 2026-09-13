@@ -14,6 +14,10 @@ phone pilot, with detailed source-linked analytics and versioned research change
 Verbatim book reading (including summaries) remains exposure rather than evidence
 of reader integration; concept familiarity remains a core outcome.
 
+## Review this experiment
+
+Start with [reviewer-brief.md](reviewer-brief.md), then the [full experimental design](experimental-design-review.md). The [evidence index](evidence-index.md) links directly to local conversations, transcripts, audio and the runtime snapshot. Review from this repository; no ZIP or extraction is needed.
+
 ## The question
 
 Can rapid reading of all twelve volumes of *Aschehougs Norgeshistorie*, supported
