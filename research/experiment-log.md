@@ -5,6 +5,27 @@
 ---
 
 
+## 2026-09-13 — Expanded Norway practice v2, registered before implementation
+
+**User change:** substantial time for atomic practice over the coming days, little
+new reading; expand what can be visited and revisited. The tiny pilot and first
+successful FSRS interval of about 26–32 days do not meet this need.
+**Planned intervention:** a substantially larger, source-linked set of short prompts,
+concept introductions, contextual applications and synthesis; preserve the thirteen
+original items/history. Early consolidation uses a study-specific FSRS policy via
+the canonical rescheduler. Add explicitly chosen extra practice, logged separately
+from scheduled evidence without using immediate repeats to extend long-term schedules.
+Prerequisites mean prior exposure to supporting material, not proven mastery; mix
+question families rather than adjacent paraphrases. Preserve old run snapshots/policy.
+**Hypotheses:** more breadth and short varied practice support sustained voluntary
+use; earlier checks reveal fragile recall. Alternatives include padding/recognition,
+excessive detail and fatigue. Full outcome assessments remain separately proposed.
+**Before deployment:** check source and prerequisite integrity, scheduler/extra-mode
+idempotency, old-run compatibility and preservation; isolate tests from live user data;
+back up DB and retain release/content/design versions. Counts and activated behavior
+will be recorded after implementation, without inventing participant outcomes.
+
+
 ## 2026-09-13 — Retention criteria, natural-reading connections and marker proposal
 
 **User source:** `codex-20260912-L1749`, preserved in snapshot `460adc66f7162632` (118 messages).

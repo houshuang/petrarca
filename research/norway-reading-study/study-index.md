@@ -8,6 +8,11 @@ are evidence of the conversation, not authoritative descriptions of the learner.
 
 [Full experimental design](experimental-design-review.md) · [evidence and transcript links](evidence-index.md) · [measurement gaps](measurement-gaps.md) · [reviewer brief](reviewer-brief.md). This dossier adds proposed longitudinal assessments and a blog evidence plan; it does not activate them.
 
+## Current phone phase
+
+[Intensive practice v2](intensive-v2.md) expands the phone material to 76 items with
+short learning intervals, theme selection and explicitly logged extra practice.
+
 ## Current understanding
 
 Read all twelve volumes for connected historical understanding, chronological

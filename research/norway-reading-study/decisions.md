@@ -120,3 +120,12 @@ mastery upgrade. User tentatively suggests “I think” / “I wonder” marker
 optional distinctive start/return phrases and bounded, uncertain attribution; it does
 not assume consistent adoption. Markers identify intended contribution, not independent
 recall or correctness. Unmarked recordings retain unresolved authorship.
+
+## D014 — Intensive practice while new reading is limited (13 September 2026)
+
+User requests substantially more material to visit and revisit over the coming days.
+Implement [intensive v2](intensive-v2.md): 76 items, thematic selection, exposure
+prerequisites, short initial FSRS steps, and optional extra practice recorded without
+postponing scheduled reviews. These choices are an observational design revision,
+not user evidence of mastery. Original recordings, items and events remain intact.
+“Too easy” feedback supports pruning and improving the expanded set.

@@ -1,5 +1,7 @@
 # Petrarca: Current System State
 
+**Norway intensive practice (13 September 2026):** [v2 phase](norway-reading-study/intensive-v2.md) expands to 76 source-linked items, themes, exposure dependencies and extra practice. Canonical study-only FSRS learning steps replace long first intervals for new scheduled encounters; old frozen runs retain v1.
+
 **Last rewritten**: April 4, 2026 (session 45)
 **Last updated**: August 31, 2026 (session 95: desktop recall Companion)
 **For session-by-session history**: see `research/session-changelog.md`

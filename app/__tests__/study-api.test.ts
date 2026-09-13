@@ -12,7 +12,7 @@ jest.mock('expo-file-system/legacy', () => ({
 }));
 jest.mock('../data/logger', () => ({logEvent:jest.fn()}));
 jest.mock('../lib/server-urls', () => ({getResearchServerUrl:()=>'http://fixture.invalid'}));
-import {flushStudyEvents, pendingAudio, preserveAudio, studyEvent, uploadAudio} from '../lib/study-api';
+import {flushStudyEvents, loadStudyRun, pendingAudio, preserveAudio, studyEvent, uploadAudio} from '../lib/study-api';
 import * as FS from 'expo-file-system/legacy';
 const fetchMock=jest.fn();
 global.fetch=fetchMock;
@@ -58,3 +58,15 @@ test('new events reach durable storage even while an earlier network request is 
   expect(JSON.parse(storageValue())).toHaveLength(0);
 });
 function storageValue(){return mockStorage.get('@petrarca/study/events-v1') || '[]';}
+
+test('session retries preserve identity while practice modes and topics have separate runs',async () => {
+  await loadStudyRun('review',false,'scheduled','chronology');
+  await loadStudyRun('review',false,'scheduled','chronology');
+  await loadStudyRun('review',false,'extra','chronology');
+  await loadStudyRun('review',false,'extra','networks');
+  const bodies=fetchMock.mock.calls.map(c=>JSON.parse(c[1].body));
+  expect(bodies[0].request_id).toBe(bodies[1].request_id);
+  expect(new Set([bodies[0].request_id,bodies[2].request_id,bodies[3].request_id]).size).toBe(3);
+  expect(bodies[2]).toMatchObject({practice:'extra',topic:'chronology'});
+  expect(bodies[3]).toMatchObject({practice:'extra',topic:'networks'});
+});

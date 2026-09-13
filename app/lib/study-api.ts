@@ -15,6 +15,7 @@ export type Grade = { position_id: string; score: 'knew' | 'missed'; reveal_time
 export type CaptureKind = 'recall' | 'wondering' | 'correction' | 'reflection';
 type BaseItem = {
   id: string; title: string; version: string; needs_introduction: boolean; introduction?: string;
+  topic?: string; cue_type?: string; evidence_note?: string;
   intended_depth: string; sources: { recording: string; segment?: string; start_ms?: number; tana_link: string }[];
   references: { title: string; url: string }[];
 };
@@ -23,9 +24,11 @@ export type StudyItem = BaseItem & (
   | ({ kind: 'sequence' } & SequenceCardData)
   | ({ kind: 'synchronic' } & SynchronicCardData)
   | ({ kind: 'causal' } & CausalChainCardData)
-  | { kind: 'term' | 'voice'; positions: {position_id: string; question_text: string; answer_text: string}[] }
+  | { kind: 'term' | 'voice' | 'prompt'; positions: {position_id: string; question_text: string; answer_text: string}[] }
 );
-export type StudyRun = { run_id: string; items: StudyItem[]; completed_ids: string[]; audio_item_ids: string[]; experiment: {id: string; design_version: string} };
+export type PracticeMode = 'scheduled' | 'extra';
+export type StudyRun = { practice?: PracticeMode; topic?: string; topics?: {id:string;label:string}[];
+  availability?: {due:number;new:number;total:number;next_due_at:number|null;waiting_for_foundation:number}; run_id: string; items: StudyItem[]; completed_ids: string[]; audio_item_ids: string[]; experiment: {id: string; design_version: string} };
 export type StudyStatus = { active: boolean; title?: string; items?: number };
 type Event = { request_id: string; run_id: string; item_id: string; event: string; client_time: number;
   detail: Record<string, unknown>; client_context: ReturnType<typeof clientContext>; results?: Grade[] };
@@ -83,12 +86,12 @@ export function studyEvent(run: string, item: string, event: string, detail: Rec
     }
   }).then(flushStudyEvents);
 }
-export async function loadStudyRun(mode: string, fresh = false): Promise<StudyRun> {
+export async function loadStudyRun(mode: string, fresh = false, practice: PracticeMode = 'scheduled', topic = 'all'): Promise<StudyRun> {
   await flushStudyEvents();
-  const key = `@petrarca/study/run-${mode}`;
+  const key = `@petrarca/study/run-v2-${mode}-${practice}-${topic}`;
   let id = fresh ? null : await AsyncStorage.getItem(key);
   if (!id) { id = requestId(); await AsyncStorage.setItem(key, id); }
-  return studyRequest('session', { request_id: id, mode, client_context: clientContext() });
+  return studyRequest('session', { request_id: id, mode, practice, topic, client_context: clientContext() });
 }
 export async function pendingAudio(): Promise<PendingAudio[]> { return JSON.parse(await AsyncStorage.getItem(AUDIO) || '[]'); }
 export async function preserveAudio(run: string, item: string, uri: string, kind: CaptureKind): Promise<PendingAudio> {

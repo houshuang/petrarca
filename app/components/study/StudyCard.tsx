@@ -17,7 +17,7 @@ export default function StudyCard({item, run, onEvent, onComplete, onIntroduce, 
   const [revealTime, setRevealTime] = useState(0);
   if (item.needs_introduction) return <View style={styles.panel}>
     <Text style={styles.heading}>{item.title}</Text><Text style={styles.body}>{item.introduction}</Text>
-    <Text style={styles.caption}>Et begrep å kjenne igjen. Neste gang prøver vi den omtrentlige betydningen.</Text>
+    <Text style={styles.caption}>Les for å forstå hovedideen. En senere oppgave lar deg prøve uten svaret foran deg.</Text>
     <StudyButton onPress={onIntroduce}>Lest · fortsett</StudyButton>
   </View>;
   const props = {onComplete, onInteraction: onEvent};
@@ -40,7 +40,7 @@ export default function StudyCard({item, run, onEvent, onComplete, onIntroduce, 
       <StudyRecorder run={run} item={item.id} kind="recall" disabled={recording} onBusy={onBusy} onSaved={() => setHasAudio(true)} />
     </>}
     {!revealed ? <StudyButton disabled={item.kind === 'voice' && !hasAudio} onPress={reveal}>
-      {item.kind === 'voice' ? 'Se holdepunkter for svaret' : 'Vis omtrentlige betydning'}
+      {item.kind === 'voice' ? 'Se holdepunkter for svaret' : item.kind === 'term' ? 'Vis omtrentlige betydning' : 'Vis svaret'}
     </StudyButton> : <>
       <Text style={styles.body}>{pos.answer_text}</Text>
       <Text style={styles.caption}>Sammenlign med det du tenkte eller sa før svaret kom fram.</Text>

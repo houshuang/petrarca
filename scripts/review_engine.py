@@ -59,7 +59,7 @@ BOOK_RESEARCH_DIR = SCRIPT_DIR / 'data' / 'book_research'
 
 
 # ── FSRS-6 scheduling (py-fsrs) ──────────────────────────────────────────────
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from fsrs import Scheduler as _FsrsScheduler, Card as FsrsCard, Rating as FsrsRating
 
 _fsrs_scheduler = _FsrsScheduler(
@@ -79,7 +79,13 @@ SCORE_TO_FSRS = {
 INITIAL_STABILITY_DAYS = 1.0
 
 
-def _fsrs_reschedule(item_id: str, score: str, conn, table: str = 'knowledge_items'):
+_study_consolidation_scheduler = _FsrsScheduler(
+    desired_retention=0.90, learning_steps=(timedelta(minutes=10),timedelta(minutes=20),timedelta(days=1)),
+    relearning_steps=(timedelta(minutes=10),timedelta(days=1)), enable_fuzzing=True, maximum_interval=3650,
+)
+
+
+def _fsrs_reschedule(item_id: str, score: str, conn, table: str = 'knowledge_items', policy=None):
     """Apply FSRS scheduling to an item. Used by voice elicitation and capture
     paths to ensure scheduling stays consistent with record_answer()."""
     row = conn.execute(f'SELECT fsrs_card_json FROM {table} WHERE id=?', (item_id,)).fetchone()
@@ -92,9 +98,15 @@ def _fsrs_reschedule(item_id: str, score: str, conn, table: str = 'knowledge_ite
     else:
         card = FsrsCard()
 
+    scheduler = _fsrs_scheduler
     fsrs_rating = SCORE_TO_FSRS.get(score, FsrsRating.Again)
+    if policy is not None:
+        if policy != 'study-consolidation-v2' or table != 'study_positions':
+            raise ValueError('Unknown scheduling policy')
+        scheduler = _study_consolidation_scheduler
+        fsrs_rating = FsrsRating.Good if score == 'knew' else FsrsRating.Again
     now_dt = datetime.now(timezone.utc)
-    new_card, _ = _fsrs_scheduler.review_card(card, fsrs_rating, now_dt)
+    new_card, _ = scheduler.review_card(card, fsrs_rating, now_dt)
     new_stability = new_card.stability or 1.0
     next_due = int(new_card.due.timestamp() * 1000)
     now_ms = int(time.time() * 1000)

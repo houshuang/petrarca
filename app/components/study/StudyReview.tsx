@@ -2,8 +2,9 @@ import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {ActivityIndicator, AppState, Linking, ScrollView, Text, View} from 'react-native';
 import {useFocusEffect} from 'expo-router';
 import {setFeedbackContext} from '../../lib/feedback-context';
-import {CaptureKind, Grade, loadStudyRun, pendingAudio, PendingAudio, StudyRun, studyEvent, uploadAudio} from '../../lib/study-api';
+import {CaptureKind, Grade, PracticeMode, loadStudyRun, pendingAudio, PendingAudio, StudyRun, studyEvent, uploadAudio} from '../../lib/study-api';
 import StudyCard from './StudyCard';
+import StudyPracticeOptions from './StudyPracticeOptions';
 import StudyRecorder from './StudyRecorder';
 import {StudyButton, styles} from './StudyControls';
 
@@ -30,11 +31,11 @@ export default function StudyReview({mode}: {mode: 'review' | 'voice'}) {
     void studyEvent(c.run,c.item,event,{...detail,book_state:c.bookState,
       elapsed_since_appearance_ms: Math.round(performance.now()-appeared.current)}).catch(() => setError('Hendelser er lagret på telefonen. Trykk «Prøv igjen» når du har nett.'));
   }, []);
-  async function load(fresh = false) {
+  async function load(fresh = false, practice: PracticeMode = run?.practice || 'scheduled', topic = run?.topic || 'all') {
     setBusy(true); setError('');
     try {
-      const next = await loadStudyRun(mode,fresh);
-      setRun(next); setIndex(next.items.findIndex(i => !next.completed_ids.includes(i.id)) < 0 ? next.items.length : next.items.findIndex(i => !next.completed_ids.includes(i.id)));
+      const next = await loadStudyRun(mode,fresh,practice,topic);
+      setRun(next); setCapture(null); setBookState('unknown'); setIndex(next.items.findIndex(i => !next.completed_ids.includes(i.id)) < 0 ? next.items.length : next.items.findIndex(i => !next.completed_ids.includes(i.id)));
       setPending(await pendingAudio()); setAudioSaved(new Set(next.audio_item_ids || []));
     } catch (e) { setError(String(e)); }
     finally { setBusy(false); }
@@ -90,6 +91,8 @@ export default function StudyReview({mode}: {mode: 'review' | 'voice'}) {
       {pending.map(p => <StudyButton key={p.id} disabled={busy} onPress={() => void retryAudio(p)}>Lagre {p.kind} · {p.item.replace('no-p1-','')}</StudyButton>)}
     </View>}
     {busy && <ActivityIndicator />}
+    {run && <StudyPracticeOptions run={run} disabled={busy || recording}
+      onChoose={(practice,topic)=>{log('feedback',{dimension:'practice_selection',practice,topic});void load(true,practice,topic);}} />}
     {item && run ? <>
       <Text style={styles.caption}>{index + 1} av {run.items.length} · du kan stoppe når du vil</Text>
       <View style={styles.row}>
@@ -97,7 +100,7 @@ export default function StudyReview({mode}: {mode: 'review' | 'voice'}) {
         <StudyButton disabled={busy} onPress={() => {setBookState('open'); log('feedback',{dimension:'book_state',value:'open'});}}>Boken åpen {bookState==='open'?'✓':''}</StudyButton>
       </View>
       <View pointerEvents={busy ? 'none' : 'auto'}>
-        <StudyCard key={`${item.id}-${audioSaved.has(item.id)}`} item={item} run={run.run_id} onEvent={log}
+        <StudyCard key={`${run.run_id}-${item.id}-${audioSaved.has(item.id)}`} item={item} run={run.run_id} onEvent={log}
           onComplete={results => void finish('complete',results)} onIntroduce={() => void finish('introduced')}
           onBusy={setRecording} recording={recording} audioSaved={audioSaved.has(item.id)} />
       </View>
@@ -114,10 +117,12 @@ export default function StudyReview({mode}: {mode: 'review' | 'voice'}) {
           <StudyButton onPress={() => log('feedback',{dimension:'card_quality',value:'useful'})}>Nyttig</StudyButton>
           <StudyButton onPress={() => log('feedback',{dimension:'card_quality',value:'confusing'})}>Uklart</StudyButton>
           <StudyButton onPress={() => log('feedback',{dimension:'card_quality',value:'too_detailed'})}>For detaljert</StudyButton>
+          <StudyButton onPress={() => log('feedback',{dimension:'card_quality',value:'too_easy'})}>For lett</StudyButton>
         </View>
       </View>
       <View style={{gap:8}}>
         <Text style={styles.caption}>Fra lesingen din · opplest tekst kan være sitater</Text>
+        {item.evidence_note && <Text style={styles.caption}>{item.evidence_note}</Text>}
         {item.sources.map((source,i) => <StudyButton key={i} onPress={() => {
           log('source_opened',{recording:source.recording,segment:source.segment});
           void Linking.openURL(source.tana_link).catch(() => setError('Kunne ikke åpne Tana.'));
@@ -126,8 +131,11 @@ export default function StudyReview({mode}: {mode: 'review' | 'voice'}) {
       </View>
     </> : !busy && run && <View style={styles.panel}>
       <Text style={styles.heading}>Fint sted å stoppe</Text>
-      <Text style={styles.body}>Fortsett gjerne å lese. Vi henter fram hovedideene igjen senere.</Text>
-      <StudyButton onPress={() => void load(true)}>Se om det er flere kort</StudyButton>
+      <Text style={styles.body}>Du kan stoppe her eller fortsette med flere oppgaver.</Text>
+      {run.availability?.next_due_at && <Text style={styles.caption}>Neste planlagte repetisjon: {new Date(run.availability.next_due_at).toLocaleString('nb-NO',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</Text>}
+      {!run.items.length && <Text style={styles.caption}>Ingen oppgaver klare i dette utvalget akkurat nå. Velg et annet tema eller prøv igjen litt senere.</Text>}
+      <StudyButton onPress={() => void load(true)}>Neste runde</StudyButton>
+      {run.practice !== 'extra' && <StudyButton onPress={()=>void load(true,'extra')}>Øv videre selv om ingenting er forfalt</StudyButton>}
     </View>}
   </ScrollView>;
 }

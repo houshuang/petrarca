@@ -8,6 +8,13 @@ import time
 import uuid
 
 from study_schema import SCHEMA
+from study_selection import V2, POLICY_V2, TOPICS, choose, validate_seed
+import subprocess
+
+try:
+    EXECUTION_COMMIT = subprocess.check_output(["git","rev-parse","HEAD"],cwd=Path(__file__).parent,text=True,stderr=subprocess.DEVNULL).strip()
+except (OSError,subprocess.SubprocessError):
+    EXECUTION_COMMIT = "unknown"
 
 STUDY_ID = 'norway-reading-2026'
 DESIGN_VERSION = 'norway-phone-pilot-v1'
@@ -47,6 +54,7 @@ def status(conn):
 
 def install(conn, seed, sources=None, code_commit='unknown'):
     """Idempotent, explicit administrative import. Does not change prior schedules."""
+    validate_seed(seed)
     conn.executescript(SCHEMA)
     if seed['study_id'] != STUDY_ID:
         raise ValueError('Unexpected study')
@@ -79,10 +87,12 @@ def install(conn, seed, sources=None, code_commit='unknown'):
         conn.execute('INSERT OR IGNORE INTO study_focus VALUES(1,?,1,?,?)',
                      (STUDY_ID, now_ms(), encoded(counts)))
         conn.execute('UPDATE study_focus SET active=1,study_id=? WHERE id=1', (STUDY_ID,))
-        revision = {'seed':seed,'policy':POLICY,'source_ids':[s['id'] for s in sources or []]}
+        design_version = V2 if seed.get('version') == 'intensive-v2' else DESIGN_VERSION
+        policy = POLICY_V2 if design_version == V2 else POLICY
+        revision = {'seed':seed,'policy':policy,'source_ids':[s['id'] for s in sources or []]}
         revision_id = hashlib.sha256((code_commit+encoded(revision)).encode()).hexdigest()
         conn.execute('INSERT OR IGNORE INTO study_revisions VALUES(?,?,?,?,?,?)',
-                     (revision_id,STUDY_ID,now_ms(),code_commit,DESIGN_VERSION,encoded(revision)))
+                     (revision_id,STUDY_ID,now_ms(),code_commit,design_version,encoded(revision)))
         conn.commit()
     except Exception:
         conn.rollback()
@@ -113,11 +123,22 @@ def _session(conn, body):
     mode = body.get('mode', 'review')
     if mode not in ('review', 'voice'):
         raise ValueError('Unknown mode')
+    practice = body.get('practice','scheduled')
+    topic = body.get('topic','all')
+    if practice not in ('scheduled','extra') or topic not in TOPICS:
+        raise ValueError('Unknown practice mode or topic')
     prior = conn.execute('SELECT * FROM study_runs WHERE id=?', (run_id,)).fetchone()
     if prior:
         if prior['mode'] != mode or prior['study_id'] != focus['study_id']:
             raise ValueError('Session retry changed input')
-        return json.loads(prior['snapshot'])
+        snapshot = json.loads(prior['snapshot'])
+        if snapshot.get('practice','scheduled') != practice or snapshot.get('topic','all') != topic:
+            raise ValueError('Session retry changed practice selection')
+        return snapshot
+    revision = conn.execute('SELECT id,code_commit,design_version,payload FROM study_revisions WHERE study_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1', (focus['study_id'],)).fetchone()
+    intensive = bool(revision and revision['design_version'] == V2)
+    if practice == 'extra' and not intensive:
+        raise ValueError('Extra practice requires the intensive study revision')
     now = now_ms()
     rows = conn.execute('''SELECT i.*, COALESCE(MIN(p.due_at),0) AS next_due,
         COALESCE(SUM(p.review_count),0) AS reviews,
@@ -131,6 +152,9 @@ def _session(conn, body):
                 and (r['reviews'] == 0 or r['next_due'] <= now)]
     # Curated ordinal interleaves formats; due reviewed items take precedence.
     eligible.sort(key=lambda r: (0 if r['reviews'] else 1, r['next_due'], r['ordinal']))
+    availability = None
+    if intensive:
+        eligible, availability = choose(conn,rows,mode,practice,topic,now)
     chosen = []
     for r in eligible[:6]:
         item = json.loads(r['payload'])
@@ -141,11 +165,12 @@ def _session(conn, body):
             pos.update({k: stats[pos['position_id']][k] for k in
                         ['stability_days','due_at','review_count','last_score']})
         chosen.append(item)
-    revision = conn.execute('SELECT id,code_commit,design_version FROM study_revisions WHERE study_id=? ORDER BY created_at DESC LIMIT 1',
-                            (focus['study_id'],)).fetchone()
     result = {'run_id': run_id, 'items': chosen, 'study': status(conn),
-              'experiment':dict(revision) if revision else {'design_version':DESIGN_VERSION},
-              'policy':POLICY, 'client_context':body.get('client_context',{})}
+              'experiment':{k:revision[k] for k in ('id','code_commit','design_version')} if revision else {'design_version':DESIGN_VERSION},
+              'policy':POLICY_V2 if intensive else POLICY,
+              'practice':practice, 'topic':topic, 'availability':availability,
+              'topics':[{'id':k,'label':v} for k,v in TOPICS.items()],
+              'execution_commit':EXECUTION_COMMIT, 'client_context':body.get('client_context',{})}
     conn.execute('INSERT INTO study_runs VALUES(?,?,?,?,?)',
                  (run_id, focus['study_id'], now, mode, encoded(result)))
     conn.commit()
@@ -188,7 +213,12 @@ def event(conn, body):
                 'SELECT 1 FROM study_events WHERE run_id=? AND item_id=? AND event=?',
                 (body['run_id'],item['id'],action)).fetchone():
             raise ValueError('This item was already completed in this session')
-        result = {'saved': True, 'scheduled': False}
+        snapshot = json.loads(conn.execute('SELECT snapshot FROM study_runs WHERE id=?',(body['run_id'],)).fetchone()[0])
+        intensive = snapshot.get('experiment',{}).get('design_version') == V2
+        extra = snapshot.get('practice') == 'extra'
+        result = {'saved': True, 'scheduled': False, 'practice': 'extra' if extra else 'scheduled',
+                  'execution_commit':EXECUTION_COMMIT,
+                  'scheduling_policy':'study-consolidation-v2' if intensive else 'legacy-fsrs'}
         if action == 'introduced':
             if not item['needs_introduction']:
                 raise ValueError('This encounter is not an introduction')
@@ -212,9 +242,10 @@ def event(conn, body):
             if not set(ids) <= revealed:
                 raise ValueError('Reveal each tested answer before self-assessment')
             from review_engine import _fsrs_reschedule
-            if body.get('detail', {}).get('book_state') == 'closed':
+            if body.get('detail', {}).get('book_state') == 'closed' and not extra and item.get('scheduling_eligible', True):
                 for r in results:
-                    _fsrs_reschedule(r['position_id'],r['score'],conn,table='study_positions')
+                    _fsrs_reschedule(r['position_id'],r['score'],conn,table='study_positions',
+                                     policy='study-consolidation-v2' if intensive else None)
                 result['scheduled'] = True
             # Visible anchors and open-book/unknown-context responses get no memory credit.
         conn.execute('INSERT INTO study_events VALUES(?,?,?,?,?,?,?)',

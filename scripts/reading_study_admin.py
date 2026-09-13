@@ -12,7 +12,7 @@ import time
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('action', choices=['activate','restore','export','status','retry-transcription'])
-    p.add_argument('--seed', default='research/norway-reading-study/pilot-v1.json')
+    p.add_argument('--seed', default='research/norway-reading-study/intensive-v2.json')
     p.add_argument('--sources', default='research/norway-reading-study/sources-v1.json')
     p.add_argument('--output', help='New private export directory; never overwrite a prior export')
     args = p.parse_args()
