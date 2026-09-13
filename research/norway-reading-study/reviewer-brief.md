@@ -16,7 +16,7 @@ private archive outside Git, including conversations, transcripts and recordings
    outcome definitions, proposed assessments and timing, analysis and publication.
 2. [Evidence index](evidence-index.md): complete available user/assistant exchanges,
    original baseline, full reading transcripts, recording links and source limits.
-3. [Measurement gaps](measurement-gaps.md) and [pilot analytics](analytics-v1.md).
+3. [Pilot engagement and hypotheses](pilot-hypotheses.md), [measurement gaps](measurement-gaps.md) and [pilot analytics](analytics-v1.md).
 4. [Decisions/corrections](decisions.md), [baseline/notes analysis](analysis-2026-09-12.md),
    [pilot content](pilot-v1.json) and [source registry](sources-v1.json).
 5. The local runtime export and deployed code linked in the evidence index, to

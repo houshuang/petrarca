@@ -18,6 +18,8 @@ of reader integration; concept familiarity remains a core outcome.
 
 Start with [reviewer-brief.md](reviewer-brief.md), then the [full experimental design](experimental-design-review.md). The [evidence index](evidence-index.md) links directly to local conversations, transcripts, audio and the runtime snapshot. Review from this repository; no ZIP or extraction is needed.
 
+For the current interaction loop and competing predictions, read [pilot hypotheses](pilot-hypotheses.md).
+
 ## The question
 
 Can rapid reading of all twelve volumes of *Aschehougs Norgeshistorie*, supported

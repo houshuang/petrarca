@@ -98,3 +98,7 @@ this proposal does not activate assessments, reminders, an RCT or publication.
 “no production import yet” describes an earlier state. **Qualification to D009:**
 immutable selection snapshots and client update IDs are implemented, but execution
 backend/policy stamps and some capture/timing joins remain incomplete (M02–M05).
+
+### D011 — Explain and examine the pilot hypotheses (13 September)
+
+User source `codex-20260912-L1664`: specify actual engagement, expected outcomes, competing hypotheses, and how interaction/qualitative feedback can challenge the design. [Pilot hypotheses](pilot-hypotheses.md) documents the current loop and proposed H1–H6 interpretation rules. Predictions are not findings; formal outcome probes and automatic monitoring remain unimplemented. Conversation snapshot `dd4ad3dfc1727e4d` preserves this request.

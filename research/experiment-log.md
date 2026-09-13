@@ -5,6 +5,19 @@
 ---
 
 
+## 2026-09-13 — Explicit pilot hypotheses and participant workflow
+
+**User request:** Explain exactly how to engage, expected outcomes, hypotheses and
+alternatives, and how interaction/qualitative feedback supports or challenges them.
+**Proposal recorded:** [H1–H6 and decision rules](norway-reading-study/pilot-hypotheses.md)
+cover selective coverage, terms, structural formats, voice, sustainable practice and
+responsive feedback. Distinguish usability, perceived usefulness, self-grades and
+independent delayed application. Train/network/speaking constraints are alternative
+explanations for missing activity. First-visit burden is a suggestion, not a quota.
+**Scope:** Documentation only; no new app behavior, formal probe, automated monitoring
+or schedule activation. No claim these elaborated predictions preceded all exposure.
+
+
 ## 2026-09-13 — Comprehensive design-review proposal; no intervention change
 
 **User source:** `codex-20260912-L1438`: connected historical overview, detailed

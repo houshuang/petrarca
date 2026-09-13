@@ -36,6 +36,10 @@ superseded for this study (D007/C002).
 | Private study hub | [Private README](/Users/stian/.agents/research/petrarca-norway-study/README.md) | Audio, conversations, source annotations and current local paths |
 | Conversations | [Archive index](/Users/stian/.agents/research/petrarca-norway-study/conversations/README.md) | Searchable message text, stable source-line IDs, timestamps and hashes |
 
+## Latest conversation refresh
+
+Snapshot `dd4ad3dfc1727e4d` contains 112 messages (38 Claude, 74 Codex), including the local-review clarification, train/deployment question and request for explicit hypotheses (`codex-20260912-L1664`), through the hypothesis-writing progress update. [Latest conversation text](/Users/stian/.agents/research/petrarca-norway-study/conversations/snapshots/dd4ad3dfc1727e4d/codex-20260912.md). The original review packet retains its 97-message freeze; this turn’s eventual final explanation is outside the new cutoff. [Pilot workflow and hypotheses](pilot-hypotheses.md) record the requested explanation.
+
 ## Conversation coverage
 
 The registered sources are Claude session `2a532c86-bc04-48ca-a9d3-2a0b123545fb`
