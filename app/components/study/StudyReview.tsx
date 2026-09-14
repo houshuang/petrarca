@@ -8,7 +8,9 @@ import StudyPracticeOptions from './StudyPracticeOptions';
 import StudyRecorder from './StudyRecorder';
 import {StudyButton, styles} from './StudyControls';
 
-export default function StudyReview({mode}: {mode: 'review' | 'voice'}) {
+export default function StudyReview({mode, onOpenAids, onOpenAssessment}: {
+  mode: 'review' | 'voice'; onOpenAids?: () => void; onOpenAssessment?: () => void;
+}) {
   const [run, setRun] = useState<StudyRun | null>(null);
   const [index, setIndex] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -17,8 +19,10 @@ export default function StudyReview({mode}: {mode: 'review' | 'voice'}) {
   const [error, setError] = useState('');
   const [capture, setCapture] = useState<CaptureKind | null>(null);
   const [pending, setPending] = useState<PendingAudio[]>([]);
-  const [bookState, setBookState] = useState('unknown');
+  // Stian's declared practice policy: these answers are always from memory.
+  const bookState = 'closed';
   const [audioSaved, setAudioSaved] = useState<Set<string>>(new Set());
+  const [optionsExpanded, setOptionsExpanded] = useState(false);
   const [moreExpanded, setMoreExpanded] = useState(false);
   const [qualityFeedback, setQualityFeedback] = useState<Set<string>>(new Set());
   const appeared = useRef(0);
@@ -30,14 +34,14 @@ export default function StudyReview({mode}: {mode: 'review' | 'voice'}) {
   const log = useCallback((event: string, detail: Record<string, unknown> = {}) => {
     const c = current.current;
     if (!c.item) return;
-    void studyEvent(c.run,c.item,event,{...detail,book_state:c.bookState,
+    void studyEvent(c.run,c.item,event,{book_state:c.bookState,book_state_basis:'participant_policy_2026-09-14',...detail,
       elapsed_since_appearance_ms: Math.round(performance.now()-appeared.current)}).catch(() => setError('Hendelser er lagret på telefonen. Trykk «Prøv igjen» når du har nett.'));
   }, []);
   async function load(fresh = false, practice: PracticeMode = run?.practice || 'scheduled', topic = run?.topic || 'all') {
     setBusy(true); setError('');
     try {
       const next = await loadStudyRun(mode,fresh,practice,topic);
-      setRun(next); setCapture(null); setBookState('unknown'); setIndex(next.items.findIndex(i => !next.completed_ids.includes(i.id)) < 0 ? next.items.length : next.items.findIndex(i => !next.completed_ids.includes(i.id)));
+      setRun(next); setCapture(null); setOptionsExpanded(false); setIndex(next.items.findIndex(i => !next.completed_ids.includes(i.id)) < 0 ? next.items.length : next.items.findIndex(i => !next.completed_ids.includes(i.id)));
       setPending(await pendingAudio()); setAudioSaved(new Set(next.audio_item_ids || []));
     } catch (e) { setError(String(e)); }
     finally { setBusy(false); }
@@ -50,14 +54,16 @@ export default function StudyReview({mode}: {mode: 'review' | 'voice'}) {
     return () => { log('session_left', {reason:'screen_blur'}); visible.current = false; setFocused(false); };
   }, [mode, log]));
   useEffect(() => {
-    if (!item || !focused) return;
+    if (!item || !focused || optionsExpanded) return;
     appeared.current = performance.now();
-    log(item.needs_introduction ? 'introduction_shown' : 'shown', {
+    log('shown', {
+      exposure_version:'visible-card-v2',
+      visible_content:'card',
       format:item.kind, content_version:item.version,
       visible_anchor_rule: ['causal','synchronic'].includes(item.kind) ? 'first position shown' : item.kind==='sequence' ? 'all except two most-due shown' : 'none',
     });
     scroll.current?.scrollTo({y: 0, animated:false});
-  }, [item?.id, focused, log]);
+  }, [run?.run_id, item?.id, focused, optionsExpanded, log]);
   useEffect(() => {
     setMoreExpanded(false);
     setQualityFeedback(new Set());
@@ -75,7 +81,7 @@ export default function StudyReview({mode}: {mode: 'review' | 'voice'}) {
     if (!run || !item || busy || recording) return;
     setBusy(true); setError('');
     try {
-      await studyEvent(run.run_id,item.id,event,{book_state:bookState,
+      await studyEvent(run.run_id,item.id,event,{book_state:bookState,book_state_basis:'participant_policy_2026-09-14',
         elapsed_since_appearance_ms:Math.round(performance.now()-appeared.current),assessment:'self_report'},results);
       setCapture(null); setIndex(i => i + 1);
     } catch (e) { setError(String(e)); }
@@ -99,38 +105,25 @@ export default function StudyReview({mode}: {mode: 'review' | 'voice'}) {
   return <ScrollView ref={scroll} style={styles.page} contentContainerStyle={styles.content}
     contentInsetAdjustmentBehavior="automatic"
     onScrollEndDrag={e => log('scroll',{offset_y:e.nativeEvent.contentOffset.y,viewport_height:e.nativeEvent.layoutMeasurement.height,content_height:e.nativeEvent.contentSize.height})}>
-    <View style={styles.screenHeader}>
-      <Text accessibilityRole="header" style={styles.title}>Norgeshistorie</Text>
-      <Text style={styles.caption}>Bind 1 · {mode==='voice' ? 'Fortell fra hukommelsen' : 'Begreper og sammenhenger'}</Text>
-      <Text style={styles.caption}>Ett kort om gangen. Tenk først, vis svaret og vurder deretter om du hadde hovedideen.</Text>
+    <View style={styles.compactRow}>
+      <Text accessibilityRole="header" style={styles.eyebrow}>Norgeshistorie{item ? ` · ${index + 1} / ${run?.items.length}` : ''}</Text>
+      <StudyButton variant="quiet" compact disabled={busy || recording} onPress={()=>{setOptionsExpanded(value=>!value);log('feedback',{dimension:'practice_options',value:!optionsExpanded});}}>{optionsExpanded ? 'Tilbake' : 'Valg'}</StudyButton>
     </View>
     {!!error && <View style={styles.panel}><Text style={styles.error}>{error}</Text><StudyButton disabled={busy} onPress={() => void load()}>Prøv igjen</StudyButton></View>}
     {pending.length > 0 && <View style={styles.panel}><Text style={styles.caption}>Opptak som venter på lagring</Text>
       {pending.map(p => <StudyButton key={p.id} disabled={busy} onPress={() => void retryAudio(p)}>Lagre {p.kind} · {p.item.replace('no-p1-','')}</StudyButton>)}
     </View>}
     {busy && <ActivityIndicator />}
-    {run && <StudyPracticeOptions run={run} disabled={busy || recording}
-      onChoose={(practice,topic)=>{log('feedback',{dimension:'practice_selection',practice,topic});void load(true,practice,topic);}} />}
+    {optionsExpanded && <View style={styles.detailsPanel}>
+      {run && <StudyPracticeOptions run={run} disabled={busy || recording}
+        onChoose={(practice,topic)=>{log('feedback',{dimension:'practice_selection',practice,topic});void load(true,practice,topic);}} />}
+      {onOpenAids && <StudyButton onPress={onOpenAids}>Bilder og tidslinje</StudyButton>}
+      {onOpenAssessment && <StudyButton onPress={onOpenAssessment}>Fortell oversikten · uten fasit</StudyButton>}
+    </View>}
+    <View style={optionsExpanded ? {display:'none'} : {gap:14}}>
     {item && run ? <>
-      <Text style={styles.progressText}>Kort {index + 1} av {run.items.length} · stopp når du vil</Text>
-      {bookState === 'unknown' ? <View style={styles.setupPanel}>
-        <Text style={styles.eyebrow}>Før du begynner</Text>
-        <Text style={styles.heading}>Hvordan øver du nå?</Text>
-        <Text style={styles.caption}>Velg én gang for denne økten. Det avgjør om svaret planlegger en senere repetisjon.</Text>
-        <StudyButton variant="primary" disabled={busy} onPress={() => {setBookState('closed'); log('feedback',{dimension:'book_state',value:'closed'});}}>Fra hukommelsen · boken lukket</StudyButton>
-        <Text style={styles.caption}>Svarene kan brukes til å planlegge neste repetisjon.</Text>
-        <StudyButton disabled={busy} onPress={() => {setBookState('open'); log('feedback',{dimension:'book_state',value:'open'});}}>Med støtte · boken åpen</StudyButton>
-        <Text style={styles.caption}>Du får øving, men dette flytter ikke neste repetisjon.</Text>
-      </View> : <>
-        <View style={styles.modeSummary}>
-          <View style={{flex:1}}>
-            <Text style={styles.eyebrow}>Svarmåte</Text>
-            <Text style={styles.caption}>{bookState === 'closed' ? 'Fra hukommelsen · svar kan planlegges' : 'Med boken · øving uten ny planlegging'}</Text>
-          </View>
-          <StudyButton variant="quiet" compact disabled={busy || recording} onPress={() => setBookState('unknown')}>Endre</StudyButton>
-        </View>
         <View pointerEvents={busy ? 'none' : 'auto'}>
-          <StudyCard key={`${run.run_id}-${item.id}-${audioSaved.has(item.id)}`} item={item} run={run.run_id} onEvent={log}
+          <StudyCard key={`${run.run_id}-${item.id}-${audioSaved.has(item.id)}`} visible={focused && !optionsExpanded} item={item} run={run.run_id} onEvent={log}
             onComplete={results => void finish('complete',results)} onIntroduce={() => void finish('introduced')}
             onBusy={setRecording} recording={recording} audioSaved={audioSaved.has(item.id)} />
         </View>
@@ -171,7 +164,6 @@ export default function StudyReview({mode}: {mode: 'review' | 'voice'}) {
             {item.references.map(ref => <StudyButton variant="link" key={ref.url} onPress={() => {log('source_opened',{reference_url:ref.url}); void Linking.openURL(ref.url).catch(() => setError('Kunne ikke åpne kilden.'));}}>{ref.title}</StudyButton>)}
           </>}
         </View>}
-      </>}
     </> : !busy && run && <View style={styles.panel}>
       <Text style={styles.heading}>Fint sted å stoppe</Text>
       <Text style={styles.body}>Du kan stoppe her eller fortsette med flere oppgaver.</Text>
@@ -180,5 +172,6 @@ export default function StudyReview({mode}: {mode: 'review' | 'voice'}) {
       <StudyButton variant="primary" onPress={() => void load(true)}>Neste runde</StudyButton>
       {run.practice !== 'extra' && <StudyButton onPress={()=>void load(true,'extra')}>Øv videre selv om ingenting er forfalt</StudyButton>}
     </View>}
+    </View>
   </ScrollView>;
 }

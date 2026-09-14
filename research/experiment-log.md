@@ -1,3 +1,15 @@
+## 2026-09-14 — Participant context policy clarification
+
+Stian explicitly states that all practice questions are answered without the book. Normal Tana reading recordings are open-book unless specifically intended as recall. Remove the practice mode question and assessment help selector; stamp new practice events as closed with participant_policy_2026-09-14 as the basis. This supersedes the proposed setup gate below. Preserve all historical context stamps. Validate immediate card display, hidden definition exposure, options/resume and completion context.
+
+## 2026-09-14 — Focused practice screen and exposure audit (registered before changes)
+
+User supplied a physical iPhone screenshot: setup and active review remain crowded. Reduce review to a compact progress/header row and the current card; move learning aids, practice/topic selection and answer-mode controls into explicit options. Keep answer-mode declaration before the first card and carry it across consecutive batches during the mounted practice session. No inferred declaration after relaunch. Preserve card content, historical responses and schedules.
+
+Audit the immutable 239-event export before changes. Existing client logs shown/introduction_shown while answer-mode setup still hides the card, and term introductions before familiarity unveils the definition. These are uncertain historical exposure signals, not proof of viewing. New client must log only visible card stages, distinguish term-only presentation from definition exposure, and stamp the visibility revision. No synthetic events or retroactive grades.
+
+Validate client setup → choice → card → options/resume behavior and scheduling/event invariants against isolated fixtures, inspect a phone-width browser rendering, deploy, then verify live read-only status. Raw participant export and full audit stay private.
+
 ## 2026-09-13 — Assessment core, visual grounding and sustainable intake (registered before implementation)
 
 User approved three small releases after external design feedback: phone overview assessment with durable audio linkage and frozen prompts/rubric; pre-introduction familiarity plus sourced ard/åkerrein visuals and parallel timeline; incremental recording intake, monthly sampling and independent backup verification. Implementation starts from f6ee974. This approval does not create synthetic participant data or backdate a pre-app baseline.

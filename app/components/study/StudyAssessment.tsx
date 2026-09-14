@@ -83,8 +83,7 @@ export default function StudyAssessment({onBack}: {onBack:()=>void}) {
       <TextInput accessibilityLabel="Bind" keyboardType="number-pad" style={styles.body} value={String(context.volume)} onChangeText={v=>setContext({...context,volume:Number(v)})} />
       <Text style={styles.caption}>Sider eller kapitler du har lest</Text>
       <TextInput accessibilityLabel="Lest dekning" placeholder="For eksempel s. 13–146, noen detaljer hoppet over" style={styles.body} value={context.coverage} maxLength={200} onChangeText={v=>setContext({...context,coverage:v})} />
-      <StudyButton variant="choice" selected={context.help_state==='closed'} onPress={()=>setContext({...context,help_state:'closed'})}>Bok og notater lukket</StudyButton>
-      <StudyButton variant="choice" selected={context.help_state==='supported'} onPress={()=>setContext({...context,help_state:'supported'})}>Jeg bruker støtte</StudyButton>
+      <Text style={styles.caption}>Fortell fra hukommelsen, uten bok eller notater.</Text>
       <StudyButton variant="primary" disabled={busy || !context.coverage.trim() || context.volume<1 || context.volume>12} onPress={()=>void open(context,true)}>Start ny oversikt</StudyButton>
     </View> : item ? <View style={styles.panel}>
       <Text style={styles.eyebrow}>{run.completed_ids.length+1} av {run.items.length} · bind {run.assessment.volume}</Text>

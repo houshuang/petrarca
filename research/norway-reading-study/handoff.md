@@ -4,6 +4,12 @@ Handoff prepared 13 September 2026 at the user's explicit request. Read this fir
 It consolidates the current state; earlier protocol and release freezes remain
 historical evidence. No separate agent has been started and no review is claimed.
 
+## Current update — 14 September: focused practice and real-data audit
+
+See [practice audit](practice-audit-20260914.md) and decisions D017–D018. Practice starts directly without an open-book question, under the participant's explicit closed-book practice policy. Normal reading recordings stay open-book unless explicitly recall. Learning aids are now **I dag → Valg → Bilder og tidslinje**; overview is **Fortell → Valg → Fortell oversikten**. Session choices are also inside Valg.
+
+The 09:02 audit confirms 20 completions, 25 graded parts and 15 introductions with consistent saved scheduling. Self-reports apply only to tested questions; Traktbegerkulturen dates remain untested. Old exposure events and timing have documented limits. Latest deployed app adoption before this patch is confirmed by real events from 01a09bca (the update-notice release); earlier claims below that adoption was unconfirmed are historical. No new overview or study response audio exists in this export.
+
 ## Current release addendum — assessment, learning aids and intake
 
 Phone entries: **Fortell → Fortell oversikten · uten fasit** and **I dag → Se og forstå · bilder og tidslinje**. Assessment freezes narrative + five cues, confidence, context, original-question pairs at volume end and a three-axis rubric. It never reveals answers or changes memory schedules. Term familiarity is now captured before the initial definition. Ard/åkerrein illustrations, near-application examples and a shared-axis timeline are live. Existing 76 practice items are preserved.

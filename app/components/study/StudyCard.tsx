@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {Text, View} from 'react-native';
 import AspectCard from '../AspectCard';
 import SequenceCard from '../SequenceCard';
@@ -8,7 +8,8 @@ import {StudyItem, Grade} from '../../lib/study-api';
 import StudyRecorder from './StudyRecorder';
 import {StudyButton, styles} from './StudyControls';
 
-export default function StudyCard({item, run, onEvent, onComplete, onIntroduce, onBusy, audioSaved, recording}: {
+export default function StudyCard({item, run, onEvent, onComplete, onIntroduce, onBusy, audioSaved, recording, visible = true}: {
+  visible?: boolean;
   item: StudyItem; run: string; onEvent: (event: string, detail?: Record<string, unknown>) => void;
   onComplete: (results: Grade[]) => void; onIntroduce: () => void; onBusy: (busy: boolean) => void; audioSaved: boolean; recording: boolean;
 }) {
@@ -16,6 +17,12 @@ export default function StudyCard({item, run, onEvent, onComplete, onIntroduce, 
   const [hasAudio, setHasAudio] = useState(audioSaved);
   const [revealTime, setRevealTime] = useState(0);
   const [recognition, setRecognition] = useState<'familiar' | 'unfamiliar' | null>(null);
+
+  useEffect(() => {
+    if (visible && item.needs_introduction && (item.kind !== 'term' || recognition)) {
+      onEvent('introduction_shown', {exposure_version:'visible-card-v2',visible_content:'introduction'});
+    }
+  }, [visible, item.id, item.needs_introduction, item.kind, recognition, onEvent]);
 
   function chooseRecognition(value: 'familiar' | 'unfamiliar') {
     if (recognition === value) return;
@@ -78,7 +85,7 @@ export default function StudyCard({item, run, onEvent, onComplete, onIntroduce, 
     </StudyButton> : <>
       <Text style={styles.eyebrow}>Det viktigste</Text>
       <Text style={styles.body}>{pos.answer_text}</Text>
-      <Text style={styles.caption}>Sammenlign med det du tenkte eller sa før svaret kom fram.</Text>
+      <Text style={styles.caption}>Vurder bare dette spørsmålet, ut fra det du tenkte før svaret kom fram.</Text>
       <StudyButton variant="primary" onPress={() => onComplete([{position_id:pos.position_id,score:'knew',reveal_time_ms:Date.now()-revealTime}])}>Jeg hadde hovedideen</StudyButton>
       <StudyButton onPress={() => onComplete([{position_id:pos.position_id,score:'missed',reveal_time_ms:Date.now()-revealTime}])}>Jeg trengte svaret</StudyButton>
     </>}

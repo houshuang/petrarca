@@ -215,3 +215,13 @@ This is a documentation update only. No image feature or new assessment is deplo
 User approved three bounded releases: phone assessment and audio identity; pre-introduction familiarity, ard/åkerrein visual grounding and shared-axis timeline; incremental recording intake, monthly sampling and independent backup verification. The request includes normal commit/push/deployment. Asked what could interrupt the flow: microphone/upload failures, unacknowledged taps and unclear next actions; a brief user report is enough.
 
 External second opinion was based on the earlier thirteen-item / zero-run snapshot. Current code already gates book state and stamps execution policy; v2 provides 76 items and short learning steps. The first new recording is after reading, discussion and practice. Do not reconstruct a pre-app baseline. Spoken markers stay optional. The backup destination is pending; no Time Machine destination or rclone remote was configured when inspected.
+
+## D017 — Recording and practice context (14 September 2026)
+
+Explicit user policy: regular reading recordings are made with the book open unless specifically for recall. Practice questions are always answered without the book. Remove repeated mode questions; new practice events record closed context with `book_state_basis=participant_policy_2026-09-14`. Explicit overview recall defaults to closed, with a short instruction rather than a help selector. Historical declarations are unchanged.
+
+## D018 / O003 — Expected depth and separate aspects (14 September 2026)
+
+The user asks that expectations be explicit and distinct aspects be assessed independently, as in old Petrarca: knowing participants does not demonstrate knowing a date. Existing structural positions already support independent scheduling, but Norway's culture prompts underuse that capability. Current Traktbegerkulturen observations distinguish word familiarity from one Oslofjord/material-evidence connection. There is no separate date observation. Do not report an entity-level known/unknown score or infer missing dimensions from one response.
+
+A useful content extension should specify selected rough identity, time, place and significance targets, with separate positions and evidence. Not every possible aspect becomes required trivia. New questions must be source-checked, versioned and introduced normally; old scores must not be copied to new aspects. This is the next content-design step, not a claim that all aspects are already implemented.

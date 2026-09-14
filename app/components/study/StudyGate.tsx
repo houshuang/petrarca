@@ -27,14 +27,8 @@ export default function StudyGate({ mode, children }: { mode: 'review' | 'voice'
   </View>;
   if (!status.active) return <>{children}</>;
   if (mode==='review' && aids) return <StudyLearningAids onBack={()=>setAids(false)} />;
-  if (mode==='review') return <View style={{flex:1,backgroundColor:colors.parchment}}>
-    <View style={{paddingHorizontal:20,paddingTop:12}}><StudyButton onPress={()=>{logEvent('study_learning_aids_entry');setAids(true);}}>Se og forstå · bilder og tidslinje</StudyButton></View>
-    <StudyReview mode="review" />
-  </View>;
+  if (mode==='review') return <StudyReview mode="review" onOpenAids={()=>{logEvent('study_learning_aids_entry');setAids(true);}} />;
   if (mode==='voice' && assessment) return <StudyAssessment onBack={()=>setAssessment(false)} />;
-  if (mode==='voice') return <View style={{flex:1,backgroundColor:colors.parchment}}>
-    <View style={{paddingHorizontal:20,paddingTop:12}}><StudyButton onPress={()=>{logEvent('study_assessment_entry');setAssessment(true);}}>Fortell oversikten · uten fasit</StudyButton></View>
-    <StudyReview mode="voice" />
-  </View>;
+  if (mode==='voice') return <StudyReview mode="voice" onOpenAssessment={()=>{logEvent('study_assessment_entry');setAssessment(true);}} />;
   return mode === 'stats' ? <StudyStats /> : <StudyReview mode={mode} />;
 }
