@@ -4,6 +4,8 @@ Handoff prepared 13 September 2026 at the user's explicit request. Read this fir
 It consolidates the current state; earlier protocol and release freezes remain
 historical evidence. No separate agent has been started and no review is claimed.
 
+See the [running record](running-record.md) for consolidated status, latest release identifiers, conversation coverage and explicit open work.
+
 ## Current update — 14 September: focused practice and real-data audit
 
 See [practice audit](practice-audit-20260914.md) and decisions D017–D018. Practice starts directly without an open-book question, under the participant's explicit closed-book practice policy. Normal reading recordings stay open-book unless explicitly recall. Learning aids are now **I dag → Valg → Bilder og tidslinje**; overview is **Fortell → Valg → Fortell oversikten**. Session choices are also inside Valg.

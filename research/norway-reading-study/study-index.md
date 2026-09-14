@@ -1,6 +1,6 @@
 # Norway study: documentation and evidence index
 
-Updated 13 September 2026. Start here when resuming this project. The latest user
+Updated 14 September 2026. Start here when resuming this project. The latest user
 clarifications are in [decisions.md](decisions.md); historical assistant analyses
 are evidence of the conversation, not authoritative descriptions of the learner.
 
@@ -8,8 +8,8 @@ are evidence of the conversation, not authoritative descriptions of the learner.
 
 [Consolidated continuation handoff](handoff.md) is the current entry point: live v2,
 participant feedback, remaining work, code, deployment and fresh evidence snapshots.
-Latest conversation freeze: `01c7581bc6c044e8` (142 records), through this handoff
-request and initial acknowledgment; excludes the eventual final response.
+Current status: [running record](running-record.md), including participant decisions, released changes, observations and remaining work.
+Latest conversation freeze: `4ea49a84dd64420c` (189 records), including this follow-up task through the latest tracking request and initial acknowledgment; excludes the eventual final response. Earlier freezes below remain historical.
 
 ## Independent design review
 

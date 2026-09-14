@@ -1,3 +1,5 @@
+Norway study current status and open work: [running record](norway-reading-study/running-record.md).
+
 Latest Norway practice release: [focused practice screen and actual-data audit](norway-reading-study/practice-audit-20260914.md).
 
 Latest Norway study operator release: [source intake, monthly sample and backup verification](norway-reading-study/intake-v1.md).
