@@ -229,3 +229,12 @@ A useful content extension should specify selected rough identity, time, place a
 ## D019 — Keep the complete study record (14 September 2026)
 
 User: “keep track of everything” (`codex-20260913-review-followup-L1289`). Maintain decisions, corrections, experiments, actual response evidence, code/content versions, test and deployment results, source attachments and unfinished work together. [Running record](running-record.md) is the consolidated status; the study index links detailed evidence. Refresh registered conversation archives at study handoffs. Preserve originals and qualification/correction history. This request does not make unobserved knowledge known or imply that unrelated future conversations are automatically captured.
+
+
+## D020 — New intake, delegated execution and bounded explanations (21 September 2026)
+
+User asks to search the Tana tag, process the new Norway reading entries and create more questions, with Astra assessing structures/processes/UX and a 5.6 agent performing ingestion. User also proposes short readings tied to what was recorded, especially desired quiz topics or explicit wonderings, constrained to one degree so the app reinforces book reading. This is not authorization to reopen an unlimited discovery feed.
+
+The source search finds six new relevant entries. GPT-5.6 Sol owns the bounded intake and source verification; Astra owns design and final content review. Preserve explicit recall separately from open-book reading and unresolved book/reader attribution. No new grades or standardized assessment are inferred from the reflection.
+
+[Bounded reading assessment](bounded-readings-20260921.md) records the inspected current code, actual note anchors, proposed server-enforced parent restriction, opt-in quizzes, incremental Limbic adoption, and future acceptance criteria. Word/queue/question caps are assistant proposals. Short-reading UX and its new records are not yet implemented. Existing source intake can publish reviewed questions without a mobile release.

@@ -1,3 +1,13 @@
+## 2026-09-21 — Genuine Tana intake and bounded reading design (registered before publication)
+
+User requests tag-based discovery, processing and more Norway-study questions, with Astra assessing structures/process/UX and a GPT-5.6 worker executing intake. Full journal-tag search in workspace VSazTvUjtQ returns twelve nodes: four registered study sources, six new study entries dated September 18–20, and two old demo nodes. Five new entries document ongoing book-open reading; one explicitly starts an informal recall. Preserve that distinction without inventing assessment conditions or grades.
+
+Publish reviewed, source-bound candidates through existing study intake, preserving prior items, positions, schedules, observations and frozen runs. Archive original source text/audio and retain uncertainty, ASR errors and book/reader attribution. Compare candidates across new and existing material; a new source is not by itself a new learning target. Check factual sources independently. GPT-5.6 Sol owns private intake evidence and canonical intake operations; Astra reviews before publication.
+
+The requested one-degree short-reading limit is a product constraint. Assess a finite reference linked to an original voice-note question/interest, with explicit quiz selection and no generated descendants. Numeric limits, schema and UX remain proposals, not deployed behavior. Do not reopen the legacy recursive microlearning stream. Content exposure is not mastery; no researched answer becomes a scheduled obligation merely because it was generated.
+
+Verification: archive hashes, exact transcript quotes, draft hashes, factual review, idempotence and before/after preservation evidence, followed by read-only live availability. No synthetic learner events, background collector, automatic backup or mobile feature release is implied.
+
 ## 2026-09-14 — Participant context policy clarification
 
 Stian explicitly states that all practice questions are answered without the book. Normal Tana reading recordings are open-book unless specifically intended as recall. Remove the practice mode question and assessment help selector; stamp new practice events as closed with participant_policy_2026-09-14 as the basis. This supersedes the proposed setup gate below. Preserve all historical context stamps. Validate immediate card display, hidden definition exposure, options/resume and completion context.

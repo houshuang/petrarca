@@ -1,3 +1,5 @@
+Latest continuation (21 September): [bounded readings and intake assessment](bounded-readings-20260921.md). New-source publication evidence is recorded separately; the short-reading feature is proposed.
+
 # Norway study: documentation and evidence index
 
 Updated 14 September 2026. Start here when resuming this project. The latest user
