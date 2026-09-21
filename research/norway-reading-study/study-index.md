@@ -1,3 +1,7 @@
+Latest conversation freeze: `e6e4652147b3cde0`, 210 user/assistant text records across four registered local sources, through the publication-verification update. This task’s eventual final answer is outside the cutoff; earlier freezes below remain historical.
+
+Published 21 September: [six new Tana sources and 23 questions](intake-20260921.md); 99 total study items. Existing history preserved.
+
 Latest continuation (21 September): [bounded readings and intake assessment](bounded-readings-20260921.md). New-source publication evidence is recorded separately; the short-reading feature is proposed.
 
 # Norway study: documentation and evidence index

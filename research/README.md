@@ -1,3 +1,5 @@
+Norway study intake published 21 September: [23 new questions from six new Tana sources](norway-reading-study/intake-20260921.md); 99 items total.
+
 Norway study, 21 September: [one-degree short readings, data/process/UX assessment and Limbic fit](norway-reading-study/bounded-readings-20260921.md). Feature proposal; new question intake is a separate operation.
 
 Norway study current status and open work: [running record](norway-reading-study/running-record.md).

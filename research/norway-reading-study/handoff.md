@@ -1,3 +1,8 @@
+Latest continuation, 21 September 2026: [new Tana intake published](intake-20260921.md)
+(23 questions, 99 items total) and [bounded reading design](bounded-readings-20260921.md)
+(proposal). Read these and the top of the running record before the historical handoff
+below. Current source correction/queue limitations are explicit in the batch report.
+
 # Continue the Norwegian-history experiment
 
 Handoff prepared 13 September 2026 at the user's explicit request. Read this first. Updated after the approved assessment/learning implementation on 13 September.

@@ -1,3 +1,18 @@
+## 2026-09-21 — New-source question intake published
+
+The registered batch completed: six new Tana sources, 23 reviewed questions,
+99 total study items and 106 positions. Source acquisition/drafting by GPT-5.6 Sol;
+exact final drafts reviewed by Astra. Canonical publication retries were idempotent.
+Independent pre/post checks preserved all prior item, schedule, run, event, source
+and revision rows. No new learner event or memory grade. See
+[batch evidence](norway-reading-study/intake-20260921.md).
+
+The isolated selection replay puts older due cards first, so publication does not
+mean immediate first-session display. A source label overstating unaided recall
+has a preserved correction sidecar; the runtime field still needs an audited
+metadata-correction path. One-degree readings remain a proposal, not a deployed
+intervention. No UI or server-code release was needed for this content operation.
+
 ## 2026-09-21 — Genuine Tana intake and bounded reading design (registered before publication)
 
 User requests tag-based discovery, processing and more Norway-study questions, with Astra assessing structures/process/UX and a GPT-5.6 worker executing intake. Full journal-tag search in workspace VSazTvUjtQ returns twelve nodes: four registered study sources, six new study entries dated September 18–20, and two old demo nodes. Five new entries document ongoing book-open reading; one explicitly starts an informal recall. Preserve that distinction without inventing assessment conditions or grades.

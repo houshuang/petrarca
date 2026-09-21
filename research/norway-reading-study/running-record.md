@@ -1,3 +1,24 @@
+## 21 September 2026 — six new sources, 23 new questions
+
+Tag-based Tana discovery and GPT-5.6 Sol ingestion are complete, with Astra review.
+The study now has **99 items / 106 positions / 10 sources**. All original 76 items,
+83 scheduling rows, 14 frozen runs and 355 learner events were preserved exactly.
+No new app code or mobile release. See [batch report](intake-20260921.md) for exact
+draft hashes, factual review, publication retries, before/after exports and source
+metadata limitations. The new items follow due and older unseen items in selection.
+
+[Bounded short readings](bounded-readings-20260921.md) is the current design
+proposal: one explanation rooted in original voice material, no generated descendants,
+and explicitly selected quiz targets. Seven wonderings are preserved privately.
+This feature is not yet implemented. A metadata correction sidecar qualifies the
+new reflection as explicit informal recall with unknown aid conditions; the runtime
+capture-mode label still overstates unaided status and needs an audited correction
+path. Do not use it as proof of unaided assessment or mastery.
+
+The older record below is preserved as the September 14 snapshot.
+
+---
+
 # Norway study running record
 
 Updated 14 September 2026 after “keep track of everything” (`codex-20260913-review-followup-L1289`). Start here for status; use [study-index.md](study-index.md) for the complete evidence map and [decisions.md](decisions.md) for dated reasoning and corrections.
