@@ -1,3 +1,9 @@
+## 2026-09-22 — Bounded reading implementation, review complete
+
+Following explicit approval to implement the September 21 proposal, GPT-5.6 Sol implemented three source-bound readings and optional quiz selection; Astra reviewed sources, structures, transactions and UX. The fixed pilot has no recursive generation or automatic question selection. Server-owned original-source provenance, immutable versions, one-degree validation and an explicit target-selection transaction enforce the scope. Reading exposure is distinguished from successful unaided retrieval. See [implementation and release evidence](norway-reading-study/readings-v1.md).
+
+Affected Python, client, gateway and TypeScript checks pass. Independent phone-width browser checks against a private database verified zero additions from reading, one addition from one selected target, retry idempotence, preservation of the current card and no scheduling credit after reading help. Review fixed the private gateway routes and return navigation. Production publication and preservation checks follow; this entry records completed implementation, not a retrospective preregistration.
+
 ## 2026-09-21 — New-source question intake published
 
 The registered batch completed: six new Tana sources, 23 reviewed questions,
