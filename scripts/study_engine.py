@@ -264,7 +264,11 @@ def event(conn, body):
             if not set(ids) <= revealed:
                 raise ValueError('Reveal each tested answer before self-assessment')
             from review_engine import _fsrs_reschedule
-            if body.get('detail', {}).get('book_state') == 'closed' and not extra and item.get('scheduling_eligible', True):
+            helped = any(json.loads(r[0]).get('detail',{}).get('dimension') == 'reading_help'
+                         for r in conn.execute("SELECT payload FROM study_events WHERE run_id=? AND item_id=? AND event='feedback'",
+                                               (body['run_id'],item['id'])))
+            result['reading_help'] = helped
+            if body.get('detail', {}).get('book_state') == 'closed' and not extra and not helped and item.get('scheduling_eligible', True):
                 for r in results:
                     _fsrs_reschedule(r['position_id'],r['score'],conn,table='study_positions',
                                      policy='study-consolidation-v2' if intensive else None)

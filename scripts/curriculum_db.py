@@ -32,6 +32,15 @@ def study_action(action, body=None, conn=None, **kwargs):
         if action == 'intake':
             from study_intake import action as intake_action
             return intake_action(conn, body)
+        if action == 'readings-import':
+            from study_readings import import_reviewed
+            return import_reviewed(conn, body)
+        if action == 'readings':
+            from study_readings import catalogue
+            return catalogue(conn)
+        if action == 'readings-select':
+            from study_readings import select
+            return select(conn, body)
         if action == 'monthly':
             from study_monthly import sample
             return sample(conn, body or {})

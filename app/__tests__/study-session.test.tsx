@@ -6,7 +6,7 @@ jest.mock('react-native',()=>({Text:'Text',View:'View',Pressable:'Pressable',Scr
   AppState:{addEventListener:()=>({remove:jest.fn()})},Linking:{openURL:jest.fn()}}));
 jest.mock('expo-router',()=>({useFocusEffect:(callback:()=>void)=>{jest.requireActual('react').useEffect(callback,[callback]);}}));
 jest.mock('../lib/feedback-context',()=>({setFeedbackContext:jest.fn()}));
-jest.mock('../lib/study-api',()=>({loadStudyRun:jest.fn(),pendingAudio:jest.fn().mockResolvedValue([]),studyEvent:jest.fn().mockResolvedValue({saved:true}),uploadAudio:jest.fn()}));
+jest.mock('../lib/study-api',()=>({loadStudyRun:jest.fn(),pendingAudio:jest.fn().mockResolvedValue([]),studyEvent:jest.fn().mockResolvedValue({saved:true}),studyRequest:jest.fn().mockResolvedValue({readings:[]}),uploadAudio:jest.fn()}));
 jest.mock('../components/study/StudyRecorder',()=>()=>null);
 jest.mock('../components/AspectCard',()=>()=>null);
 jest.mock('../components/SequenceCard',()=>()=>null);

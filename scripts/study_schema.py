@@ -75,3 +75,35 @@ CREATE TABLE IF NOT EXISTS study_monthly_samples (
  month TEXT PRIMARY KEY, created_at INTEGER NOT NULL, payload TEXT NOT NULL
 );
 """
+
+# Original recording -> one bounded, reviewed explanation -> optional targets.
+# These records do not enter scheduling until a target is selected explicitly.
+SCHEMA += """
+CREATE TABLE IF NOT EXISTS study_reading_intents (
+ id TEXT PRIMARY KEY, study_id TEXT NOT NULL, source_id TEXT NOT NULL,
+ audio_sha256 TEXT NOT NULL, transcript_sha256 TEXT NOT NULL, source_quote TEXT NOT NULL,
+ source_start INTEGER NOT NULL, source_end INTEGER NOT NULL,
+ question TEXT NOT NULL, basis TEXT NOT NULL CHECK(basis IN ('explicit','inferred')),
+ created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS study_reading_briefs (
+ id TEXT PRIMARY KEY, intent_id TEXT NOT NULL REFERENCES study_reading_intents(id),
+ payload TEXT NOT NULL, content_sha256 TEXT NOT NULL,
+ active INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS study_reading_active_intent
+ ON study_reading_briefs(intent_id) WHERE active=1;
+CREATE TABLE IF NOT EXISTS study_reading_targets (
+ id TEXT PRIMARY KEY, payload TEXT NOT NULL, content_sha256 TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS study_reading_brief_targets (
+ brief_id TEXT NOT NULL REFERENCES study_reading_briefs(id),
+ target_id TEXT NOT NULL REFERENCES study_reading_targets(id),
+ PRIMARY KEY(brief_id,target_id)
+);
+CREATE TABLE IF NOT EXISTS study_reading_selections (
+ target_id TEXT PRIMARY KEY REFERENCES study_reading_targets(id),
+ item_id TEXT NOT NULL UNIQUE REFERENCES study_items(id),
+ selected_at INTEGER NOT NULL
+);
+"""

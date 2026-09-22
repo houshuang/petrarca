@@ -1,0 +1,130 @@
+{
+  "readings": [
+    {
+      "intent_id": "no-wonder-rock-art",
+      "source_id": "reading-20260918-reflection-stone-bronze",
+      "source_quote": "Then there was a lot about different cave paintings, and I need to look this up, because they were talking about different styles of cutting or polishing, and I don't really understand. There was one place in northern Norway with multiple kilometers, many thousand drawings over millennia. But they say that these styles didn't overlap, and there was quite a big gap between them. And there's also a difference between the very realistic depictions and the more symbolic, and also between the hunting drawings and the later kind of agriculture drawings.",
+      "question": "Hva betyr det at bergkunst er hugget, slipt eller malt?",
+      "basis": "explicit",
+      "brief_id": "no-brief-rock-art-v1",
+      "title": "Hugget, slipt eller malt?",
+      "text": "Når boka viser bergkunst, skill først mellom hvordan bildet ble laget og hva det forestiller. En hugget helleristning består av spor slått inn i bergflaten. En slipt ristning er laget ved sliping av berget. Et hellemaleri består derimot av påført farge. «Ristning» betyr altså ikke at alle bildene ble laget med samme arbeidsmåte.\n\nPå Fykan og Åmøy i Nordland finnes slipte dyrefigurer, beskrevet av Meløy kommune som naturtro og nær dyrenes virkelige størrelse. Dette gir et konkret holdepunkt for ordet «slipt». Det er en annen teknikk enn hoggingen som har etterlatt slagspor i Alta. Teknikk, motiv og stil er tre forskjellige ting å legge merke til: Hvordan er sporet laget? Hva viser figuren? Hvordan er dyret eller mennesket fremstilt?\n\nRødfargen på fotografier kan også villede. Mange ristninger i Alta ble malt opp i moderne tid for å gjøre dem synlige. Den røde streken er derfor ikke i seg selv bevis for forhistorisk maling. Et moderne oppmalt hoggespor blir ikke dermed et hellemaleri.\n\nNår du vender tilbake til bildet i boka, se etter spor i overflaten før du tolker motivet. Denne forskjellen forklarer teknikkordene; den avgjør ikke alene når bildet ble laget eller hva det betydde.",
+      "citations": [
+        {
+          "title": "Alta Museum: moderne oppmaling og hoggespor",
+          "url": "https://www.altamuseum.no/no/bergkunst/de-rodmalte-helleristningene"
+        },
+        {
+          "title": "Meløy kommune: slipte ristninger på Fykan og Åmøy",
+          "url": "https://www.meloy.kommune.no/innhold/kultur-og-fritid/kulturminner-i-meloy/"
+        },
+        {
+          "title": "Alta Museum: hellemaleri",
+          "url": "https://www.altamuseum.no/no/bergkunst/bergkunstfigurer/hellemaleri"
+        }
+      ],
+      "reviewer": "astra-source-review-20260922",
+      "targets": [
+        {
+          "id": "no-target-rock-art-modern-red",
+          "topic": "evidence",
+          "question": "Hvorfor beviser ikke rødfargen på et bilde av helleristninger i Alta at de var malt i forhistorisk tid?",
+          "answer": "Mange av ristningene ble malt røde i moderne tid for å gjøre dem synlige. Fargen på fotografiet kan derfor være en senere oppmaling.",
+          "supporting_claim": "Mange ristninger i Alta ble malt opp i moderne tid for å gjøre dem synlige.",
+          "citation_url": "https://www.altamuseum.no/no/bergkunst/de-rodmalte-helleristningene"
+        },
+        {
+          "id": "no-target-rock-art-polished",
+          "topic": "concepts",
+          "question": "Hva betyr «slipt» når boka omtaler en slipt helleristning?",
+          "answer": "At bildet er laget ved sliping av bergflaten, ikke ved å påføre maling.",
+          "supporting_claim": "En slipt ristning er laget ved sliping av berget.",
+          "citation_url": "https://www.meloy.kommune.no/innhold/kultur-og-fritid/kulturminner-i-meloy/"
+        }
+      ]
+    },
+    {
+      "intent_id": "no-wonder-1177",
+      "source_id": "reading-20260918-iron-chieftains",
+      "source_quote": "I wonder if they mention the \"Bronze Age collapse.\" It might be interesting to read that book after this, and about which areas experienced the \"Bronze Age collapse.\" Was it 1177? I don't know why Eric Klein used that exact date. Was it just around the Mediterranean, or were there other societies too?",
+      "question": "Hvorfor 1177, og hvilke områder gjelder sammenbruddet?",
+      "basis": "explicit",
+      "brief_id": "no-brief-1177-v1",
+      "title": "1177: ett holdepunkt, flere tidslinjer",
+      "text": "1177 f.Kr. er Eric Clines valgte holdepunkt for sammenbruddet i sen bronsealder. Han knytter året til et angrep fra de såkalte havfolkene mot Egypt under Ramses III. Årstallet i boktittelen gir hendelsesforløpet et huskbart feste; Cline sier selv at sammenbruddet strakte seg over omtrent et århundre.\n\nKartet du bør ha i tankene, er først og fremst det østlige Middelhavet og deler av Midtøsten: Hellas og Egeerhavet, Anatolia, Levanten og Egypt. Det var et område med forbundne hoff, byer og handelsruter. Mange byer i Hellas, Anatolia og Kanaan var allerede svekket eller ødelagt da angrepet på Egypt fant sted. Et valgt årstall samler dermed en fortelling om endringer som inntraff til ulik tid på ulike steder.\n\nDette er heller ikke sluttdatoen for bronsealderen i Norge. I Sør- og Midt-Norge settes perioden vanligvis til omtrent 1700–500 f.Kr. Da 1177-hendelsen fant sted i Egypt, var disse områdene fortsatt i bronsealderen. Periodenavn beskriver regionale arkeologiske forløp; de skifter ikke samtidig over hele verden.\n\nFor lesingen din er den nyttige forbindelsen derfor to tidslinjer ved siden av hverandre. Du kan plassere Clines fortelling innenfor norsk bronsealder uten å gjøre den til forklaringen på enhver norsk endring.",
+      "citations": [
+        {
+          "title": "Eric Cline forklarer årstallet og området (intervju)",
+          "url": "https://www.worldhistory.org/article/1446/interview-the-mysterious-bronze-age-collapse-with/"
+        },
+        {
+          "title": "Store norske leksikon: bronsealderen i Norge",
+          "url": "https://snl.no/bronsealderen_i_Norge"
+        }
+      ],
+      "reviewer": "astra-source-review-20260922",
+      "targets": [
+        {
+          "id": "no-target-1177-anchor-egypt",
+          "topic": "chronology",
+          "question": "Hva er det konkrete holdepunktet bak årstallet 1177 i Eric Clines boktittel?",
+          "answer": "Cline knytter det til et angrep fra havfolkene mot Egypt under Ramses III. Året står som holdepunkt for et lengre regionalt sammenbrudd.",
+          "supporting_claim": "Han knytter året til et angrep fra de såkalte havfolkene mot Egypt under Ramses III.",
+          "citation_url": "https://www.worldhistory.org/article/1446/interview-the-mysterious-bronze-age-collapse-with/"
+        },
+        {
+          "id": "no-target-1177-norway-comparison",
+          "topic": "connections",
+          "question": "Var 1177 f.Kr. også slutten på bronsealderen i Sør- og Midt-Norge?",
+          "answer": "Nei. Der regnes bronsealderen vanligvis til omtrent 500 f.Kr. Periodene avgrenses regionalt, så 1177 ligger innenfor norsk bronsealder.",
+          "supporting_claim": "I Sør- og Midt-Norge settes perioden vanligvis til omtrent 1700–500 f.Kr.",
+          "citation_url": "https://snl.no/bronsealderen_i_Norge"
+        }
+      ]
+    },
+    {
+      "intent_id": "no-wonder-karveskurd",
+      "source_id": "reading-20260920-migration-period",
+      "source_quote": "De hentet også karveskurden, som opprinnelig var treskurd. Det vet jeg ikke hva er.",
+      "question": "Hva er karveskurd, og hvorfor brukes ordet om en metallspenne?",
+      "basis": "explicit",
+      "brief_id": "no-brief-karveskurd-v1",
+      "title": "Karveskurd: se formen i overflaten",
+      "text": "Karveskurd er en måte å lage mønster i en overflate på. I tre skjæres motivet ned i flaten, ofte med V-formede snitt. Forestill deg et bord sett fra siden: snittet er en liten fordypning med skrå sider. Sett ovenfra kan slike snitt danne trekanter, firkanter eller rosetter. Det er lys og skygge langs flatene som gjør mønsteret tydelig.\n\nDette skiller seg fra flatskurd, der treet rundt motivet fjernes slik at motivet blir stående frem. Ordene beskriver altså hvordan formen bygges opp, ikke bare hvilket motiv håndverkeren velger. En rose kan være et geometrisk mønster uten at hele gjenstanden er formet som en blomst.\n\nDu møtte ordet i en omtale av metallarbeid. Det kan også brukes om dekor på metallgjenstander: Arkeologen Bente Magnus viser for eksempel en relieffspenne fra Skerne på Falster og beskriver slike sølvspenners spiralornamentikk i karveskurd. Det gjør koblingen i boka lettere å se. Betegnelsen på dekoren betyr ikke at selve spennen er av tre.\n\nNår du ser en slik spenne i boka, prøv først å finne skrå flater, fordypninger og gjentatte mønstre. Du trenger ikke lære en hel rekke stilnavn for å få tak i poenget: overflaten er formet slik at mønsteret trer frem.",
+      "citations": [
+        {
+          "title": "Store norske leksikon: treskurd og V-formede snitt",
+          "url": "https://snl.no/treskurd"
+        },
+        {
+          "title": "Store norske leksikon: karveskurd og geometriske mønstre",
+          "url": "https://snl.no/karveskurd"
+        },
+        {
+          "title": "Bente Magnus: Ørnen flyr, Hikuin 29, s. 110, fig. 5",
+          "url": "https://tidsskrift.dk/Hikuin/article/download/111273/160319/"
+        }
+      ],
+      "reviewer": "astra-source-review-20260922",
+      "targets": [
+        {
+          "id": "no-target-karveskurd-v-cut",
+          "topic": "concepts",
+          "question": "Hvordan er motivet laget ved karveskurd i tre?",
+          "answer": "Det er skåret ned i flaten, ofte med V-formede snitt som kan danne geometriske mønstre.",
+          "supporting_claim": "I tre skjæres motivet ned i flaten, ofte med V-formede snitt.",
+          "citation_url": "https://snl.no/treskurd"
+        },
+        {
+          "id": "no-target-karveskurd-metal",
+          "topic": "connections",
+          "question": "Betyr «karveskurd» i en beskrivelse av en sølvspenne at spennen er laget av tre?",
+          "answer": "Nei. Ordet kan beskrive dekoren på en metallgjenstand; det angir ikke at gjenstanden er av tre.",
+          "supporting_claim": "Det kan også brukes om dekor på metallgjenstander: Arkeologen Bente Magnus viser for eksempel en relieffspenne fra Skerne på Falster og beskriver slike sølvspenners spiralornamentikk i karveskurd.",
+          "citation_url": "https://tidsskrift.dk/Hikuin/article/download/111273/160319/"
+        }
+      ],
+      "illustration": "karveskurd-diagram-v1"
+    }
+  ]
+}

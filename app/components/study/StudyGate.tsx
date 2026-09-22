@@ -5,6 +5,7 @@ import { studyRequest, StudyStatus } from '../../lib/study-api';
 import StudyReview from './StudyReview';
 import StudyAssessment from './StudyAssessment';
 import StudyLearningAids from './StudyLearningAids';
+import StudyReadings, {Reading} from './StudyReadings';
 import {logEvent} from '../../data/logger';
 import StudyStats from './StudyStats';
 import {StudyButton, styles} from './StudyControls';
@@ -15,6 +16,8 @@ import { setFeedbackContext } from '../../lib/feedback-context';
 export default function StudyGate({ mode, children }: { mode: 'review' | 'voice' | 'stats'; children: React.ReactNode }) {
   const [aids,setAids] = useState(false);
   const [assessment,setAssessment] = useState(false);
+  const [readings,setReadings] = useState<{sourceIds?:string[]}|null>(null);
+  const [readingExposure,setReadingExposure] = useState<{id:string;hash:string;sequence:number}|null>(null);
   const [status, setStatus] = useState<StudyStatus | null>(null);
   const [error, setError] = useState(false);
   const refresh = useCallback(() => {
@@ -26,8 +29,16 @@ export default function StudyGate({ mode, children }: { mode: 'review' | 'voice'
     {error ? <><Text style={styles.body}>Kunne ikke hente dagens oppgaver.</Text><Text style={styles.caption}>Sjekk nettet og prøv igjen. Ingenting er mistet.</Text><StudyButton variant="primary" onPress={refresh}>Prøv igjen</StudyButton></> : <><ActivityIndicator color={colors.rubric} /><Text style={[styles.caption,{textAlign:'center'}]}>Henter dagens oppgaver …</Text></>}
   </View>;
   if (!status.active) return <>{children}</>;
-  if (mode==='review' && aids) return <StudyLearningAids onBack={()=>setAids(false)} />;
-  if (mode==='review') return <StudyReview mode="review" onOpenAids={()=>{logEvent('study_learning_aids_entry');setAids(true);}} />;
+  if (mode==='review') return <View style={{flex:1}}>
+    <View style={readings || aids ? {display:'none'} : {flex:1}}>
+      <StudyReview mode="review" suspended={!!readings || aids} readingExposure={readingExposure}
+        onOpenReadings={sourceIds=>setReadings({sourceIds})}
+        onOpenAids={()=>{logEvent('study_learning_aids_entry');setAids(true);}} />
+    </View>
+    {aids && !readings && <StudyLearningAids onBack={()=>setAids(false)} onOpenReadings={()=>setReadings({})} />}
+    {readings && <StudyReadings sourceIds={readings.sourceIds} onBack={()=>setReadings(null)}
+      onShown={(reading:Reading)=>setReadingExposure(old=>({id:reading.id,hash:reading.content_sha256,sequence:(old?.sequence||0)+1}))} />}
+  </View>;
   if (mode==='voice' && assessment) return <StudyAssessment onBack={()=>setAssessment(false)} />;
   if (mode==='voice') return <StudyReview mode="voice" onOpenAssessment={()=>{logEvent('study_assessment_entry');setAssessment(true);}} />;
   return mode === 'stats' ? <StudyStats /> : <StudyReview mode={mode} />;

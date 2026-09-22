@@ -12,7 +12,7 @@ import PetrarcaDrawer from '../PetrarcaDrawer';
 type Aid = {id:string;title:string;text:string;application:string;version:string;sources:string[]};
 type ReferenceRun = {run_id:string;aid:string;items:Aid[];reference:{version:string;sources:{id:string;title:string;url:string}[]}};
 const choices=[['ard','Ard og plog'],['akerrein','Åkerrein i landskapet'],['timeline','Flere klokker på samme tidslinje']] as const;
-export default function StudyLearningAids({onBack}:{onBack:()=>void}) {
+export default function StudyLearningAids({onBack,onOpenReadings}:{onBack:()=>void;onOpenReadings?:()=>void}) {
   const [clarity,setClarity]=useState<string|null>(null);
   const [run,setRun]=useState<ReferenceRun|null>(null);
   const [application,setApplication]=useState(false);
@@ -45,6 +45,7 @@ export default function StudyLearningAids({onBack}:{onBack:()=>void}) {
     {busy && <ActivityIndicator />}
     {!run ? <View style={{gap:12}}>
       <Text style={styles.body}>Forklaringer du kan se på når et ord eller en tidslinje er vanskelig å forestille seg.</Text>
+      {onOpenReadings && <StudyButton onPress={()=>{logEvent('study_readings_from_learning_aids');onOpenReadings();}}>Det du lurte på · korte forklaringer</StudyButton>}
       {choices.map(([id,label])=><View key={id} style={styles.panel}>
         <StudyButton disabled={busy} onPress={()=>void choose(id)}>{label}</StudyButton>
         <StudyButton variant="quiet" disabled={busy} onPress={()=>void choose(id,true)}>Prøv et nytt eksempel først</StudyButton>

@@ -8,6 +8,6 @@ from db import init_db
 if __name__ == '__main__':
     init_db()
     request = json.load(sys.stdin)
-    if request.get('action') not in ('intake', 'monthly'):
-        raise ValueError('Only intake and monthly operator actions are allowed')
+    if request.get('action') not in ('intake', 'monthly', 'readings-import'):
+        raise ValueError('Only reviewed study operator actions are allowed')
     print(json.dumps(study_action(request['action'], request.get('body', {})), ensure_ascii=False))

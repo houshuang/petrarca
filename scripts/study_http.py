@@ -27,6 +27,13 @@ def route(handler, method):
         try:
             if method == 'GET' and path in ('/study/status','/study/summary'):
                 result = study_action(path.rsplit('/',1)[1])
+            elif method == 'GET' and path == '/study/readings':
+                result = study_action('readings')
+            elif method == 'POST' and path == '/study/readings/select':
+                body = handler._read_bounded_json_body(16*1024)
+                if body is None:
+                    return True
+                result = study_action('readings-select', body)
             elif method == 'POST' and path in ('/study/session','/study/event'):
                 body = handler._read_bounded_json_body(128*1024)
                 if body is None:

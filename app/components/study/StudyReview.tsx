@@ -2,14 +2,16 @@ import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {ActivityIndicator, AppState, Linking, ScrollView, Text, View} from 'react-native';
 import {useFocusEffect} from 'expo-router';
 import {setFeedbackContext} from '../../lib/feedback-context';
-import {CaptureKind, Grade, PracticeMode, loadStudyRun, pendingAudio, PendingAudio, StudyRun, studyEvent, uploadAudio} from '../../lib/study-api';
+import {CaptureKind, Grade, PracticeMode, loadStudyRun, pendingAudio, PendingAudio, StudyRun, studyEvent, studyRequest, uploadAudio} from '../../lib/study-api';
 import StudyCard from './StudyCard';
 import StudyPracticeOptions from './StudyPracticeOptions';
 import StudyRecorder from './StudyRecorder';
 import {StudyButton, styles} from './StudyControls';
 
-export default function StudyReview({mode, onOpenAids, onOpenAssessment}: {
+export default function StudyReview({mode, onOpenAids, onOpenAssessment, onOpenReadings, suspended=false, readingExposure}: {
   mode: 'review' | 'voice'; onOpenAids?: () => void; onOpenAssessment?: () => void;
+  onOpenReadings?: (sourceIds?:string[])=>void; suspended?:boolean;
+  readingExposure?:{id:string;hash:string;sequence:number}|null;
 }) {
   const [run, setRun] = useState<StudyRun | null>(null);
   const [index, setIndex] = useState(0);
@@ -25,6 +27,8 @@ export default function StudyReview({mode, onOpenAids, onOpenAssessment}: {
   const [optionsExpanded, setOptionsExpanded] = useState(false);
   const [moreExpanded, setMoreExpanded] = useState(false);
   const [qualityFeedback, setQualityFeedback] = useState<Set<string>>(new Set());
+  const [briefSources,setBriefSources] = useState<Set<string>>(new Set());
+  const [readingReady,setReadingReady] = useState<Set<string>>(new Set());
   const appeared = useRef(0);
   const visible = useRef(false);
   const current = useRef({run: '', item: '', bookState: 'unknown'});
@@ -34,6 +38,7 @@ export default function StudyReview({mode, onOpenAids, onOpenAssessment}: {
   const log = useCallback((event: string, detail: Record<string, unknown> = {}) => {
     const c = current.current;
     if (!c.item) return;
+    if (event==='position_revealed') setReadingReady(old=>new Set([...old,c.item]));
     void studyEvent(c.run,c.item,event,{book_state:c.bookState,book_state_basis:'participant_policy_2026-09-14',...detail,
       elapsed_since_appearance_ms: Math.round(performance.now()-appeared.current)}).catch(() => setError('Hendelser er lagret på telefonen. Trykk «Prøv igjen» når du har nett.'));
   }, []);
@@ -47,6 +52,18 @@ export default function StudyReview({mode, onOpenAids, onOpenAssessment}: {
     finally { setBusy(false); }
   }
   useEffect(() => { void load(); }, [mode]);
+  useEffect(() => {
+    if (mode!=='review') return;
+    void studyRequest<{readings:{source_id:string}[]}>('readings')
+      .then(result=>setBriefSources(new Set(result.readings.map(r=>r.source_id))))
+      .catch(()=>undefined);
+  },[mode]);
+  useEffect(()=>{
+    if (!readingExposure || !current.current.item) return;
+    log('feedback',{dimension:'reading_help',brief_id:readingExposure.id,
+      content_sha256:readingExposure.hash,exposure_only:true});
+  },[readingExposure?.sequence,log]);
+  useEffect(()=>{if (!suspended) setFeedbackContext({screen:`norway-study-${mode}`});},[suspended,mode]);
   useFocusEffect(useCallback(() => {
     visible.current = true; setFocused(true); setFeedbackContext({screen:`norway-study-${mode}`});
     appeared.current = performance.now(); log('foregrounded', {reason:'screen_focus'});
@@ -54,7 +71,7 @@ export default function StudyReview({mode, onOpenAids, onOpenAssessment}: {
     return () => { log('session_left', {reason:'screen_blur'}); visible.current = false; setFocused(false); };
   }, [mode, log]));
   useEffect(() => {
-    if (!item || !focused || optionsExpanded) return;
+    if (!item || !focused || optionsExpanded || suspended) return;
     appeared.current = performance.now();
     log('shown', {
       exposure_version:'visible-card-v2',
@@ -63,7 +80,7 @@ export default function StudyReview({mode, onOpenAids, onOpenAssessment}: {
       visible_anchor_rule: ['causal','synchronic'].includes(item.kind) ? 'first position shown' : item.kind==='sequence' ? 'all except two most-due shown' : 'none',
     });
     scroll.current?.scrollTo({y: 0, animated:false});
-  }, [run?.run_id, item?.id, focused, optionsExpanded, log]);
+  }, [run?.run_id, item?.id, focused, optionsExpanded, suspended, log]);
   useEffect(() => {
     setMoreExpanded(false);
     setQualityFeedback(new Set());
@@ -117,16 +134,19 @@ export default function StudyReview({mode, onOpenAids, onOpenAssessment}: {
     {optionsExpanded && <View style={styles.detailsPanel}>
       {run && <StudyPracticeOptions run={run} disabled={busy || recording}
         onChoose={(practice,topic)=>{log('feedback',{dimension:'practice_selection',practice,topic});void load(true,practice,topic);}} />}
-      {onOpenAids && <StudyButton onPress={onOpenAids}>Bilder og tidslinje</StudyButton>}
+      {onOpenAids && <StudyButton onPress={()=>{setOptionsExpanded(false);onOpenAids();}}>Bilder og tidslinje</StudyButton>}
+      {onOpenReadings && <StudyButton onPress={()=>{setOptionsExpanded(false);onOpenReadings();}}>Det du lurte på · korte forklaringer</StudyButton>}
       {onOpenAssessment && <StudyButton onPress={onOpenAssessment}>Fortell oversikten · uten fasit</StudyButton>}
     </View>}
     <View style={optionsExpanded ? {display:'none'} : {gap:14}}>
     {item && run ? <>
         <View pointerEvents={busy ? 'none' : 'auto'}>
-          <StudyCard key={`${run.run_id}-${item.id}-${audioSaved.has(item.id)}`} visible={focused && !optionsExpanded} item={item} run={run.run_id} onEvent={log}
+          <StudyCard key={`${run.run_id}-${item.id}-${audioSaved.has(item.id)}`} visible={focused && !optionsExpanded && !suspended} item={item} run={run.run_id} onEvent={log}
             onComplete={results => void finish('complete',results)} onIntroduce={() => void finish('introduced')}
             onBusy={setRecording} recording={recording} audioSaved={audioSaved.has(item.id)} />
         </View>
+        {onOpenReadings && readingReady.has(item.id) && item.sources.some(s=>briefSources.has(s.recording)) &&
+          <StudyButton onPress={()=>onOpenReadings(item.sources.map(s=>s.recording))}>Forklar kort</StudyButton>}
         <StudyButton variant="quiet" disabled={busy || recording} onPress={() => void finish('skip')}>Hopp over dette kortet</StudyButton>
         <StudyButton
           variant="quiet"
