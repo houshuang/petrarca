@@ -23,7 +23,8 @@ class MobileApiBoundaryTests(unittest.TestCase):
     def test_native_read_write_and_query_endpoints(self):
         for method, path in [('GET', 'health'), ('GET', 'book/sync'), ('POST', 'book/sync'),
                              ('POST', 'curriculum/review/generate'), ('POST', 'explore/capture'),
-                             ('POST', 'structural/grade'), ('GET', 'defender/sessions/abc-12')]:
+                             ('POST', 'structural/grade'), ('GET', 'defender/sessions/abc-12'),
+                             ('GET', 'study/readings'), ('POST', 'study/readings/select')]:
             with self.subTest(path=path):
                 self.assertTrue(self.allowed(method, '/' + self.capability + '/' + path))
         self.assertIn('$mobile_route$is_args$args', self.config)
@@ -40,6 +41,15 @@ class MobileApiBoundaryTests(unittest.TestCase):
                 self.assertFalse(self.allowed('POST', path))
         self.assertFalse(self.allowed('DELETE', '/' + self.capability + '/book/sync'))
         self.assertFalse(self.allowed('GET', '/' + self.capability + '/explore/capture'))
+
+    def test_study_readings_methods_remain_narrow(self):
+        for method, path in [('POST', 'study/readings'), ('GET', 'study/readings/select'),
+                             ('GET', 'study/readings-import'), ('POST', 'study/readings-import'),
+                             ('GET', 'study/readings/import'), ('POST', 'study/readings/import'),
+                             ('GET', 'study/readings/unknown'), ('POST', 'study/readings/unknown'),
+                             ('DELETE', 'study/readings/select')]:
+            with self.subTest(method=method,path=path):
+                self.assertFalse(self.allowed(method, '/' + self.capability + '/' + path))
 
     def test_secret_validation_and_nginx_logging(self):
         with self.assertRaises(ValueError):
