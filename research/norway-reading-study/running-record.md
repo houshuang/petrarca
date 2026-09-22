@@ -1,3 +1,11 @@
+## 22 September 2026 — bounded readings published
+
+GPT-5.6 Sol implemented and Astra reviewed the accepted one-degree reading feature. **Valg → Det du lurte på** contains three source-checked explanations (bergkunst techniques, 1177 BCE and karveskurd) with six optional quiz targets, initially unselected. There are no generated descendants or automatic quiz obligations. Returning restores the same practice card; using reading help prevents scheduling credit for the assisted answer.
+
+The study still has **99 items / 106 positions / 10 sources / 14 runs / 355 events**. All prior exported table hashes were preserved exactly; publication added only reading definitions. Live private API, import idempotence, client/server tests and isolated browser checks passed. Server/iOS release is `4f5b009`; EAS group `ece28250-1624-4d49-8ab9-51713e45e90a`. Device adoption remains unconfirmed. See [release evidence](readings-v1.md). The prior capture-mode correction remains pending and the older proposal/status statements below are historical.
+
+---
+
 ## 21 September 2026 — six new sources, 23 new questions
 
 Tag-based Tana discovery and GPT-5.6 Sol ingestion are complete, with Astra review.

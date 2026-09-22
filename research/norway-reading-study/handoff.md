@@ -1,3 +1,5 @@
+Latest continuation, 22 September 2026: [bounded readings are implemented and published](readings-v1.md). Read the newest [running record](running-record.md) entry first. The earlier proposal-only statements below are retained as dated history.
+
 Latest continuation, 21 September 2026: [new Tana intake published](intake-20260921.md)
 (23 questions, 99 items total) and [bounded reading design](bounded-readings-20260921.md)
 (proposal). Read these and the top of the running record before the historical handoff

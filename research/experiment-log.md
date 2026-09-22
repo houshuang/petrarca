@@ -1,3 +1,7 @@
+## 2026-09-22 — Bounded readings published, prior observations preserved
+
+Three reviewed readings and six unselected target definitions are live; no quiz was added automatically. Server and iOS preview update `4f5b009` published successfully. The canonical import retry was idempotent and the private mobile API returned all three readings. Independent manifest verification found all 14 prior exported tables byte-identical; the 99 items, 106 positions, 14 runs and 355 events are unchanged. See [release evidence](norway-reading-study/readings-v1.md) for update identifiers, deployment recovery and remaining limits. Physical-device adoption and learning outcomes are not yet observed.
+
 ## 2026-09-22 — Bounded reading implementation, review complete
 
 Following explicit approval to implement the September 21 proposal, GPT-5.6 Sol implemented three source-bound readings and optional quiz selection; Astra reviewed sources, structures, transactions and UX. The fixed pilot has no recursive generation or automatic question selection. Server-owned original-source provenance, immutable versions, one-degree validation and an explicit target-selection transaction enforce the scope. Reading exposure is distinguished from successful unaided retrieval. See [implementation and release evidence](norway-reading-study/readings-v1.md).

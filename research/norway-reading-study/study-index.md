@@ -1,3 +1,5 @@
+Published 22 September: [three bounded readings and six opt-in quiz targets](readings-v1.md), implemented by GPT-5.6 Sol and reviewed by Astra. Existing study data is unchanged.
+
 Latest conversation freeze: `e6e4652147b3cde0`, 210 user/assistant text records across four registered local sources, through the publication-verification update. This task’s eventual final answer is outside the cutoff; earlier freezes below remain historical.
 
 Published 21 September: [six new Tana sources and 23 questions](intake-20260921.md); 99 total study items. Existing history preserved.
