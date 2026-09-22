@@ -57,6 +57,7 @@ test('reading and learning aid overlays preserve the current review card state',
   act(()=>button(renderer!.root,'Bilder og tidslinje').props.onPress());
   act(()=>button(renderer!.root,'Read from aids').props.onPress());
   act(()=>button(renderer!.root,'Tilbake til øving').props.onPress());
-  act(()=>button(renderer!.root,'Back from aids').props.onPress());
+  expect(button(renderer!.root,'Back from aids')).toBeUndefined();
+  expect(button(renderer!.root,'Read from aids')).toBeUndefined();
   expect(shown(renderer!.root)).toBe(true);
 });

@@ -36,7 +36,7 @@ export default function StudyGate({ mode, children }: { mode: 'review' | 'voice'
         onOpenAids={()=>{logEvent('study_learning_aids_entry');setAids(true);}} />
     </View>
     {aids && !readings && <StudyLearningAids onBack={()=>setAids(false)} onOpenReadings={()=>setReadings({})} />}
-    {readings && <StudyReadings sourceIds={readings.sourceIds} onBack={()=>setReadings(null)}
+    {readings && <StudyReadings sourceIds={readings.sourceIds} onBack={()=>{setReadings(null);setAids(false);}}
       onShown={(reading:Reading)=>setReadingExposure(old=>({id:reading.id,hash:reading.content_sha256,sequence:(old?.sequence||0)+1}))} />}
   </View>;
   if (mode==='voice' && assessment) return <StudyAssessment onBack={()=>setAssessment(false)} />;
