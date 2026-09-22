@@ -1,5 +1,6 @@
 """Isolated recovery and fail-closed checks for the unified Norway operator."""
 import json
+from io import BytesIO
 from pathlib import Path
 import tempfile
 import unittest
@@ -8,7 +9,9 @@ from unittest.mock import patch
 from test_study import connect, engine, SEED, curriculum_db
 from study_intake import digest, corpus_snapshot, register
 from study_readings import import_reviewed
-from reading_study_batch import BatchHold, _question_work, _review, discover, run
+from reading_study_batch import (BatchHold, _extract_wonderings, _plain_reading,
+                                 _question_work, _review, _source_from_tana, discover, run)
+from reading_study_intake import register as register_archive
 from limbic.cerebellum.batch import StateStore
 
 
@@ -57,6 +60,76 @@ class BatchTests(unittest.TestCase):
                        (json.dumps({**SOURCE,'transcript':SOURCE['transcript']+' Revised.'}),SOURCE['id']))
         self.c.commit()
         self.assertNotEqual(snap['corpus_sha256'],corpus_snapshot(self.c)['corpus_sha256'])
+
+    def test_rotated_signed_url_resumes_registered_original_but_changed_transcript_holds(self):
+        class Outliner:
+            token='first'
+            child='I wonder about iron.'
+            def source(self,node):
+                url=f'https://example.org/audio?token={self.token}'
+                return {'journal_markdown':'- Norway reading note <!-- node-id: batch_node -->',
+                        'audio_markdown':f'- ![voice]({url})\n  - {self.child} <!-- node-id: child -->',
+                        'audio_node_id':'audio_node','audio_url':url}
+        class Relevance:
+            def call(self,*args,**kwargs):return {'relevant':True,'reason':'Norway note',
+                'source_quote':'Norway reading note'}
+        class Response(BytesIO):
+            headers={'Content-Length':'5'}
+        node={'id':'batch_node','name':'Norway reading note','created':'2026-09-22T00:00:00Z'}
+        with tempfile.TemporaryDirectory() as tmp,patch('reading_study_batch.urlopen',side_effect=lambda *a,**k:Response(b'bytes')):
+            outliner=Outliner()
+            first,_=_source_from_tana(node,outliner,Relevance(),tmp)
+            registered=register_archive(first,self.call)
+            outliner.token='rotated'
+            resumed,_=_source_from_tana(node,outliner,Relevance(),tmp)
+            self.assertEqual(first,resumed)
+            self.assertTrue(register_archive(resumed,self.call)['duplicate'])
+            self.assertEqual(self.call('intake',{'op':'source','source_id':registered['source_id']})['source']['audio_sha256'],first.name)
+            outliner.child='A materially changed transcript.'
+            with self.assertRaisesRegex(BatchHold,'transcript changed'):
+                _source_from_tana(node,outliner,Relevance(),tmp)
+
+    def test_wondering_inventory_exceeds_run_cap_and_holds_incomplete_or_saturated(self):
+        quotes=[f'I wonder about topic {i}.' for i in range(10)]
+        source={**SOURCE,'transcript':' '.join(quotes)}
+        class Inventory:
+            def __init__(self,complete=True,overflow=False,rows=10):
+                self.complete=complete;self.overflow=overflow;self.rows=rows
+            def call(self,*args,**kwargs):
+                return {'wonderings':[{'source_quote':q,'question':q} for q in quotes[:self.rows]],
+                        'complete':self.complete,'overflow':self.overflow,'coverage_note':''}
+        self.assertEqual(len(_extract_wonderings(SOURCE['id'],source,Inventory())),10)
+        with self.assertRaisesRegex(BatchHold,'incomplete or saturated'):
+            _extract_wonderings(SOURCE['id'],source,Inventory(complete=False))
+        with self.assertRaisesRegex(BatchHold,'incomplete or saturated'):
+            _extract_wonderings(SOURCE['id'],source,Inventory(overflow=True))
+
+    def test_citation_links_normalized_before_supporting_claim_review(self):
+        reading={'title':'Iron','text':'Bog iron forms in wet ground. [Museum](https://example.org/museum)\n\n'+
+                 'It is collected before smelting. [1](https://example.org/museum)',
+                 'citations':[{'title':'Museum','url':'https://example.org/museum'}],
+                 'targets':[{'id':'target','topic':'livelihood','question':'Where?',
+                    'answer':'Wet ground',
+                    'supporting_claim':'Bog iron forms in wet ground. [Museum](https://example.org/museum)',
+                    'citation_url':'https://example.org/museum'}]}
+        plain=_plain_reading(reading)
+        self.assertEqual(plain['text'],'Bog iron forms in wet ground.\n\nIt is collected before smelting.')
+        self.assertEqual(plain['targets'][0]['supporting_claim'],'Bog iron forms in wet ground.')
+        self.assertIn(plain['targets'][0]['supporting_claim'],plain['text'])
+        self.assertEqual(plain['citations'],reading['citations'])
+        embedded=_plain_reading({**reading,'text':'Bog iron forms in [wet ground](https://example.org/museum).',
+            'targets':[{**reading['targets'][0],
+                        'supporting_claim':'Bog iron forms in [wet ground](https://example.org/museum).'}]})
+        self.assertEqual(embedded['text'],'Bog iron forms in wet ground.')
+        self.assertEqual(embedded['targets'][0]['supporting_claim'],embedded['text'])
+        after_period=_plain_reading({**reading,
+            'text':'Anatolia. [Hattusa](https://example.org/museum) was the capital.',
+            'targets':[]})
+        self.assertEqual(after_period['text'],'Anatolia. Hattusa was the capital.')
+        with self.assertRaisesRegex(BatchHold,'unlisted inline citation'):
+            _plain_reading({**reading,'text':'Source [X](https://example.org/unknown).'})
+        with self.assertRaisesRegex(BatchHold,'residual Markdown'):
+            _plain_reading({**reading,'text':'**Bog iron** forms in wet ground.'})
 
     def test_reading_review_cannot_smuggle_unreviewed_target(self):
         seed_path=Path(__file__).resolve().parents[2]/'research/norway-reading-study/readings-seed-v1.json'

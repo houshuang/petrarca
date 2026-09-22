@@ -26,7 +26,7 @@ from limbic.cerebellum.codex_cli import codex_research
 from limbic.cerebellum.packet import text_quote_anchor
 from limbic.hippocampus.audit import blind_view, bucket_by_verdict, check_audit_coverage, apply_audit
 
-from reading_study_archive import archive, sha
+from reading_study_archive import archive, sha, verify
 from reading_study_intake import register, remote
 from study_intake import digest
 from study_selection import TOPICS
@@ -35,10 +35,11 @@ WORKSPACE='VSazTvUjtQ'
 TAG='0VhmSsp1En'
 AUTHOR='gpt-5.6-sol'
 REVIEWER='gpt-6-astra'
-PROMPT_VERSION='norway-unified-batch-v1'
+PROMPT_VERSION='norway-unified-batch-v2'
 MAX_SOURCES=20
 MAX_QUESTIONS=12
 MAX_READINGS=8
+MAX_WONDERING_INVENTORY=40
 MAX_CALLS=40
 
 
@@ -74,13 +75,14 @@ TOPIC={'type':'string','enum':sorted(t for t in TOPICS if t!='all')}
 QUESTION=S({'kind':{'type':'string','enum':['term','prompt','voice']},'topic':TOPIC,'title':STRING,'question':STRING,'answer':STRING,
             'source_quote':STRING,'references':{'type':'array','items':REF}})
 WONDERING=S({'source_quote':STRING,'question':STRING})
-AUTHOR_SCHEMA=S({'questions':{'type':'array','items':QUESTION},'wonderings':{'type':'array','items':WONDERING}})
+AUTHOR_SCHEMA=S({'questions':{'type':'array','items':QUESTION}})
 TARGET=S({'id':STRING,'topic':TOPIC,'question':STRING,'answer':STRING,
           'supporting_claim':STRING,'citation_url':STRING})
 READING=S({'title':STRING,'text':STRING,'citations':{'type':'array','items':REF},
            'targets':{'type':'array','items':TARGET}})
 READING_SCHEMA=S({'reading':READING})
-WONDERING_SCHEMA=S({'wonderings':{'type':'array','items':WONDERING}})
+WONDERING_SCHEMA=S({'wonderings':{'type':'array','maxItems':MAX_WONDERING_INVENTORY,'items':WONDERING},
+                    'complete':{'type':'boolean'},'overflow':{'type':'boolean'},'coverage_note':STRING})
 VERDICT=S({'id':STRING,'verdict':STRING,'reason':STRING,'match_ids':{'type':'array','items':STRING},
            'relation':STRING})
 REVIEW_SCHEMA=S({'decisions':{'type':'array','items':VERDICT},'omissions':{'type':'array','items':STRING}})
@@ -263,27 +265,43 @@ def _source_from_tana(node,outliner,model,workdir):
     private=Path(workdir)/'raw-sources'/node['id'];private.mkdir(parents=True,exist_ok=True,mode=0o700)
     _save(private/'tana-source.json',result)  # Private evidence; signed URL never leaves this folder.
     audio=private/'original.audio'
-    receipt=_load(private/'audio-download.json',{})
-    trusted_audio=(audio.exists() and receipt.get('audio_node_id')==result['audio_node_id']
-                   and receipt.get('bytes')==audio.stat().st_size
-                   and receipt.get('sha256')==sha(audio))
-    if not trusted_audio:
-        partial=private/'original.audio.part'
+    # A resumed source must be checked against the *current* original bytes;
+    # a completed local download alone cannot prove the Tana audio is unchanged.
+    partial=private/'original.audio.part'
+    try:
         try:
             with urlopen(url,timeout=90) as response, partial.open('wb') as output:
                 while block:=response.read(1024*1024):output.write(block)
                 expected=response.headers.get('Content-Length')
             if not partial.stat().st_size or expected and partial.stat().st_size!=int(expected):
                 raise BatchHold(f"{node['id']}: incomplete original audio download")
-            os.chmod(partial,0o600);partial.replace(audio)
-            _save(private/'audio-download.json',{'bytes':audio.stat().st_size,'sha256':sha(audio),
-                                                 'audio_node_id':result['audio_node_id']})
-        finally:
-            partial.unlink(missing_ok=True)
+        except BatchHold:raise
+        except Exception as error:
+            raise BatchHold(f"{node['id']}: original audio download failed ({type(error).__name__})") from None
+        os.chmod(partial,0o600);partial.replace(audio)
+        _save(private/'audio-download.json',{'bytes':audio.stat().st_size,'sha256':sha(audio),
+                                             'audio_node_id':result['audio_node_id']})
+    finally:
+        partial.unlink(missing_ok=True)
     text=private/'original-transcript.txt';text.write_text(transcript);os.chmod(text,0o600)
     source.pop('audio_url',None)
     source['archived_transcript_sha256']=hashlib.sha256(transcript.encode()).hexdigest()
-    archived,_=archive(source,audio,text,Path(workdir)/'source-archive')
+    archive_root=Path(workdir)/'source-archive'
+    prior=archive_root/sha(audio)
+    if prior.exists():
+        verify(prior)
+        old=json.loads((prior/'source.json').read_text())
+        stable={k:v for k,v in source.items() if k!='archived_transcript_sha256'}
+        if any(old.get(k)!=v for k,v in stable.items()):
+            raise BatchHold(f"{node['id']}: archived original metadata changed")
+        def without_signed_header(value):
+            return '\n'.join(line for line in value.splitlines()
+                             if 'token=' not in line and 'firebasestorage.' not in line)
+        if without_signed_header((prior/'original-transcript.txt').read_text())!=without_signed_header(transcript):
+            raise BatchHold(f"{node['id']}: archived original transcript changed")
+        archived=prior
+    else:
+        archived,_=archive(source,audio,text,archive_root)
     return archived,None
 
 
@@ -353,11 +371,11 @@ def _review(model, stage, candidates, corpus, source_hash, other):
 
 def _question_work(source_id,source,model,call,report,state,*,amend=False):
     transcript=source['transcript'];source_hash=_hash(source)
-    draft=model.call('questions',{'mission':f'Draft at most {MAX_QUESTIONS} Norwegian study questions and extract explicit original wonderings only. Every source_quote must be an exact unique substring. Preserve unresolved author/reader attribution. Return zero when no useful new material. Research factual answers with primary/authoritative citations. Kinds are term/prompt/voice; topics must be one of {sorted(t for t in TOPICS if t!="all")}. No Gemini. Do not assume content is unaided recall.',
-        'source':source,'max_questions':MAX_QUESTIONS,'max_wonderings':MAX_READINGS},AUTHOR_SCHEMA,AUTHOR,tools=True)
-    if len(draft.get('questions',[]))>MAX_QUESTIONS or len(draft.get('wonderings',[]))>MAX_READINGS:
+    draft=model.call('questions',{'mission':f'Draft at most {MAX_QUESTIONS} Norwegian study questions. Every source_quote must be an exact unique substring. Preserve unresolved author/reader attribution. Return zero when no useful new material. Research factual answers with primary/authoritative citations. Kinds are term/prompt/voice; topics must be one of {sorted(t for t in TOPICS if t!="all")}. No Gemini. Do not assume content is unaided recall.',
+        'source':source,'max_questions':MAX_QUESTIONS},AUTHOR_SCHEMA,AUTHOR,tools=True)
+    if len(draft.get('questions',[]))>MAX_QUESTIONS:
         raise BatchHold(f'{source_id}: author exceeded candidate cap')
-    for item in draft['questions']+draft['wonderings']:
+    for item in draft['questions']:
         _exact_quote(transcript,item['source_quote'],source_id)
     snapshot=_snapshot(call)
     questions=[{'id':f'q:{source_id}:{n}','candidate':q} for n,q in enumerate(draft['questions'])]
@@ -391,7 +409,51 @@ def _question_work(source_id,source,model,call,report,state,*,amend=False):
     report['questions'].append({'source_id':source_id,'drafted':len(questions),'added':publication.get('added',[]),
         'amendment':amend,'held':held,'rejected':[d for d in decisions if d['verdict']=='reject'],
         'omissions':omissions,'audit':audit_report})
-    return draft['wonderings']
+    return []
+
+
+_CITATION_LINK=re.compile(r'\[([^\]\n]+)\]\((https://[^\s)]+)\)')
+
+
+def _plain_reading(reading):
+    """Remove only recognized citation links before claims, IDs, or review are computed."""
+    allowed={citation['url'] for citation in reading['citations']}
+    titles={citation['title'].strip().casefold() for citation in reading['citations']}
+
+    def plain(value):
+        def replace(match):
+            label,url=match.groups()
+            if url not in allowed:
+                raise BatchHold('Reading contains an unlisted inline citation URL')
+            before=value[:match.start()].rstrip()
+            after=value[match.end():]
+            trailing=(re.match(r'^[ \t]*(?:\n[ \t]*\n|$)',after) is not None
+                      or re.match(r'^[ \t]*[.!?](?:\s|$)',after) is not None)
+            standalone=(label.strip().isdigit() or trailing and
+                        (before.endswith(('.', '!', '?')) or label.strip().casefold() in titles))
+            return '' if standalone else label
+        result=_CITATION_LINK.sub(replace,value)
+        result=re.sub(r'[ \t]+([,.;:!?])',r'\1',result)
+        result=re.sub(r'[ \t]+',' ',result)
+        result=re.sub(r'[ \t]*\n[ \t]*','\n',result)
+        result=re.sub(r'(?<!\n)\n(?!\n)',' ',result)
+        result=re.sub(r'\n{3,}','\n\n',result).strip()
+        if (re.search(r'https?://|\[[^\]]*\]|\]\(|\*\*|__|`|<[^>]+>',result)
+                or re.search(r'(?m)^\s*(?:#|[-*]\s)',result)
+                or re.search(r'(?<!\w)[*_][^*_\n]+[*_]',result)):
+            raise BatchHold('Reading prose contains residual Markdown or an inline URL')
+        return result
+
+    body=plain(reading['text'])
+    if not body or len(body.split('\n\n'))>4:
+        raise BatchHold('Reading must be at most four plain-prose paragraphs')
+    targets=[]
+    for target in reading['targets']:
+        claim=plain(target['supporting_claim'])
+        if not claim or body.count(claim)!=1:
+            raise BatchHold('Quiz target supporting claim is not a unique plain-text span')
+        targets.append({**target,'supporting_claim':claim})
+    return {**reading,'text':body,'targets':targets}
 
 
 def _reading_work(source_id,source,wondering,model,call,report,state):
@@ -405,10 +467,10 @@ def _reading_work(source_id,source,wondering,model,call,report,state):
         report['readings'].append({'source_id':source_id,'intent_id':existing[0]['id'],'state':'already_processed',
             'brief_ids':[r['id'] for r in snapshot['readings'] if r.get('intent_id')==existing[0]['id']]})
         return
-    authored=model.call('reading',{'mission':f'Answer this explicit original wondering in Norwegian, 150–300 words, one degree from source. Use two or three checked authoritative citations. No descendant questions. Up to three optional quiz targets, initially unselected; each supporting_claim must be an exact span of reading text. Quiz target topic must be one of {sorted(t for t in TOPICS if t!="all")}. Do not assume source claims are true. Do not repeat an existing reading.',
+    authored=model.call('reading',{'mission':f'Answer this explicit original wondering in Norwegian, 150–300 words, two to four short plain-prose paragraphs, one degree from source. Use two or three checked authoritative citations in the separate citations list: no Markdown formatting, citation links, footnote markers, or inline URLs in text. No descendant questions. Up to three optional quiz targets, initially unselected; each supporting_claim must be an exact span of reading text. Quiz target topic must be one of {sorted(t for t in TOPICS if t!="all")}. Do not assume source claims are true. Do not repeat an existing reading.',
        'source_id':source_id,'source_quote':quote,'question':wondering['question'],
        'source_hash':_hash(source),'existing_readings':snapshot['readings']},READING_SCHEMA,AUTHOR,tools=True)
-    reading=authored['reading']
+    reading=_plain_reading(authored['reading'])
     for target in reading['targets']:
         target['id']='no-target-'+hashlib.sha256((intent_id+'\0'+target['question']+'\0'+target['answer']).encode()).hexdigest()[:20]
     brief_id='no-brief-'+hashlib.sha256((intent_id+'\0'+_hash(reading)).encode()).hexdigest()[:20]
@@ -452,12 +514,14 @@ def _reading_work(source_id,source,wondering,model,call,report,state):
 
 
 def _extract_wonderings(source_id,source,model):
-    result=model.call('wonderings',{'mission':f'Extract ONLY explicit original reader questions or wonderings, at most {MAX_READINGS}. Preserve each as one bounded question. Never infer curiosity from an asserted fact, book quotation or later reading. Each source_quote must be an exact unique substring of the original transcript. An empty list is valid.',
+    result=model.call('wonderings',{'mission':f'Inventory ALL explicit original reader questions, wonderings, and explicit wishes to look up, watch, see, or read something later, up to {MAX_WONDERING_INVENTORY}. Preserve every distinct one as a bounded question; do not rank or stop after the first eight. Include concrete visual wishes such as what raw bog iron or a furnace looks like. Never infer curiosity from an asserted fact, book quotation or later reading. Each source_quote must be an exact unique substring of the original transcript. Set complete=false and overflow=true if more than the limit or if coverage is uncertain; give a short coverage_note. An empty list is valid only when the source has no explicit wonderings.',
         'source_id':source_id,'transcript':source['transcript'],'source_sha256':_hash(source)},
         WONDERING_SCHEMA,AUTHOR)
     rows=result.get('wonderings',[])
-    if not isinstance(rows,list) or len(rows)>MAX_READINGS:
+    if not isinstance(rows,list) or len(rows)>MAX_WONDERING_INVENTORY:
         raise BatchHold(f'{source_id}: unbounded wondering extraction')
+    if result.get('complete') is not True or result.get('overflow') is not False or len(rows)==MAX_WONDERING_INVENTORY:
+        raise BatchHold(f'{source_id}: explicit-wondering inventory incomplete or saturated ({len(rows)} found); segment source before publication')
     for row in rows:_exact_quote(source['transcript'],row['source_quote'],source_id)
     return [{**r,'source_id':source_id} for r in rows]
 
