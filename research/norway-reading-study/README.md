@@ -10,6 +10,8 @@ Started 12 September 2026. Owner/participant: Stian. Current phase: volume 1,
 Start with the [study index](study-index.md) for conversations, sources and coverage.
 The first [bounded short readings release](readings-v1.md) adds reviewed explanations
 from three explicit wonderings and optional quiz selection; publication is a separate operator step.
+The [unified batch operator](unified-batch.md) describes resumable source intake,
+reviewed question/readings publication, and its private evidence and failure reports.
 The [decision/correction ledger](decisions.md) records changes in user goals and
 interpretation. Latest instructions: keep all other cards paused while rapidly iterating on this
 phone pilot, with detailed source-linked analytics and versioned research changes.

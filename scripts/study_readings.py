@@ -35,7 +35,7 @@ def _https(url):
 
 
 def _validate(conn, data):
-    if not isinstance(data, dict) or not BRIEF_FIELDS <= set(data) or set(data) - BRIEF_FIELDS - {'illustration'}:
+    if not isinstance(data, dict) or not BRIEF_FIELDS <= set(data) or set(data) - BRIEF_FIELDS - {'illustration','review_packet_sha256'}:
         raise ValueError('Reading fields must match the reviewed source-bound contract; parent and depth are server-owned')
     illustration=data.get('illustration')
     if illustration is not None and illustration != 'karveskurd-diagram-v1':
@@ -95,6 +95,8 @@ def _validate(conn, data):
              'question':question,'targets':[t['id'] for t in targets],
              'content_origin':'reviewed_explanation','depth':1,
              'illustration':illustration}
+    if data.get('review_packet_sha256'):
+        brief['review_packet_sha256']=data['review_packet_sha256']
     return intent, brief, targets
 
 
@@ -105,6 +107,31 @@ def import_reviewed(conn, body):
         raise ValueError('Import requires a bounded readings list')
     conn.execute('BEGIN IMMEDIATE')
     try:
+        expected=body.get('expected_corpus_sha256')
+        if expected:
+            from study_intake import corpus_snapshot
+            if expected!=corpus_snapshot(conn)['corpus_sha256']:
+                raise ValueError('Canonical corpus changed since reading review')
+            candidates=body.get('review_candidate_ids')
+            decisions=body.get('review_decisions')
+            if (not isinstance(candidates,list) or not candidates or any(not isinstance(c,str) or not c for c in candidates)
+                or len(set(candidates))!=len(candidates) or not isinstance(decisions,list) or len(candidates)!=len(decisions)):
+                raise ValueError('Reviewed reading needs complete candidate verdicts')
+            by_id={d.get('id'):d for d in decisions if isinstance(d,dict)}
+            if len(by_id)!=len(decisions) or set(by_id)!=set(candidates):
+                raise ValueError('Missing or unknown reading reviewer verdict')
+            accepted={entry['brief_id'] for entry in entries}
+            accepted.update(t['id'] for entry in entries for t in entry['targets'])
+            if not accepted<=set(candidates):
+                raise ValueError('Reading import contains an unreviewed brief or target')
+            if any(d.get('verdict') not in ('accept','reject','hold') or not d.get('reason')
+                   or (d['id'] in accepted)!=(d['verdict']=='accept') for d in decisions):
+                raise ValueError('Reading publication disagrees with independent review')
+            from study_intake import digest
+            packet={'readings_sha256':digest([{k:v for k,v in e.items() if k!='review_packet_sha256'} for e in entries]),
+                    'corpus_sha256':expected,'candidate_ids':candidates,'decisions':decisions}
+            if any(e.get('review_packet_sha256')!=digest(packet) for e in entries):
+                raise ValueError('Reading review packet hash mismatch')
         added = []
         for data in entries:
             intent, brief, targets = _validate(conn, data)

@@ -9,6 +9,31 @@ from study_selection import V2, POLICY_V2, validate_seed, TOPICS
 def digest(value):return hashlib.sha256(encoded(value).encode()).hexdigest()
 
 
+def corpus_snapshot(conn):
+    """Current publication surface, without learner events or mutable schedules."""
+    own_transaction=not conn.in_transaction
+    if own_transaction:conn.execute('BEGIN')
+    try:
+        return _corpus_snapshot_rows(conn)
+    finally:
+        if own_transaction:conn.rollback()
+
+
+def _corpus_snapshot_rows(conn):
+    items=[json.loads(r[0]) for r in conn.execute('SELECT payload FROM study_items WHERE study_id=? ORDER BY id',(STUDY_ID,))]
+    readings=[dict(json.loads(r['payload']),active=bool(r['active']),content_sha256=r['content_sha256'])
+              for r in conn.execute('SELECT payload,active,content_sha256 FROM study_reading_briefs ORDER BY id')]
+    targets=[json.loads(r[0]) for r in conn.execute('SELECT payload FROM study_reading_targets ORDER BY id')]
+    sources=[json.loads(r[0]) for r in conn.execute('SELECT payload FROM study_sources WHERE study_id=? ORDER BY id',(STUDY_ID,))]
+    originals=[{'source_id':r['source_id'],'audio_sha256':r['audio_sha256'],
+                'source_sha256':digest(json.loads(r['source']))}
+               for r in conn.execute('SELECT source_id,audio_sha256,source FROM study_intake ORDER BY source_id')]
+    intents=[dict(r) for r in conn.execute('SELECT * FROM study_reading_intents ORDER BY id')]
+    payload={'items':items,'readings':readings,'targets':targets,'sources':sources,
+             'originals':originals,'intents':intents}
+    return {**payload,'corpus_sha256':digest(payload)}
+
+
 def log(conn,source_id,state,detail):
     conn.execute('INSERT INTO study_intake_events(source_id,state,created_at,payload) VALUES(?,?,?,?)',
                  (source_id,state,now_ms(),encoded(detail)))
@@ -28,6 +53,9 @@ def register(conn, source):
                            (source['audio_sha256'],source['id'])).fetchone()
         if prior:
             if prior['audio_sha256']!=source['audio_sha256']:raise ValueError('Source ID changed audio')
+            old=json.loads(prior['source'])
+            if {k:v for k,v in old.items() if k!='id'}!={k:v for k,v in source.items() if k!='id'}:
+                raise ValueError('Existing original metadata or transcript changed; reconcile as a revision')
             conn.rollback();return {'source_id':prior['source_id'],'state':prior['state'],'duplicate':True}
         # Existing published source registrations are recognised without generating duplicate cards.
         existing=[json.loads(r[0]) for r in conn.execute('SELECT payload FROM study_sources WHERE study_id=?',(STUDY_ID,))]
@@ -57,7 +85,16 @@ def _record_draft(conn, body):
     source_id=body['source_id'];draft=body['draft']
     row=conn.execute('SELECT * FROM study_intake WHERE source_id=?',(source_id,)).fetchone()
     if not row or row['state']=='published':raise ValueError('Source unavailable or already published')
-    source=json.loads(row['source']);transcript=source.get('transcript','')
+    source=json.loads(row['source'])
+    _validate_draft(source,draft)
+    signature=digest(draft)
+    conn.execute('UPDATE study_intake SET state=?,draft=?,updated_at=? WHERE source_id=?',('drafted',encoded(draft),now_ms(),source_id))
+    log(conn,source_id,'drafted',{'draft_sha256':signature,'candidates':len(draft['candidates']),'execution_commit':EXECUTION_COMMIT})
+    return {'source_id':source_id,'state':'drafted','draft_sha256':signature}
+
+
+def _validate_draft(source,draft):
+    transcript=source.get('transcript','')
     for candidate in draft.get('candidates',[]):
         if candidate.get('kind') not in ('term','prompt','voice'):raise ValueError('Unsupported draft kind')
         if candidate.get('topic') not in TOPICS:raise ValueError('Unknown topic')
@@ -68,28 +105,67 @@ def _record_draft(conn, body):
         if not candidate.get('references') or any(not r.get('url','').startswith('https://') for r in candidate['references']):
             raise ValueError('External reference required for review')
     if 'candidates' not in draft or len(draft['candidates'])>20:raise ValueError('Expected bounded candidate list')
-    signature=digest(draft)
-    conn.execute('UPDATE study_intake SET state=?,draft=?,updated_at=? WHERE source_id=?',('drafted',encoded(draft),now_ms(),source_id))
-    log(conn,source_id,'drafted',{'draft_sha256':signature,'candidates':len(draft['candidates']),'execution_commit':EXECUTION_COMMIT})
-    return {'source_id':source_id,'state':'drafted','draft_sha256':signature}
 
 
 def publish(conn, body):
     conn.execute('BEGIN IMMEDIATE')
     try:
         row=conn.execute('SELECT * FROM study_intake WHERE source_id=?',(body['source_id'],)).fetchone()
-        if not row or not row['draft']:raise ValueError('No draft to publish')
-        draft=json.loads(row['draft'])
+        amend=body.get('amend') is True
+        if not row or (not amend and not row['draft']):raise ValueError('No draft to publish')
+        if amend and row['state']!='published':raise ValueError('Only a published source can be amended')
+        draft=body.get('draft') if amend else json.loads(row['draft'])
+        if amend:_validate_draft(json.loads(row['source']),draft)
         if digest(draft)!=body.get('reviewed_sha256') or not body.get('reviewer'):
             raise ValueError('Exact reviewed draft hash and reviewer required')
-        if row['state']=='published':conn.rollback();return {'state':'published','duplicate':True}
-        if row['state']!='drafted':raise ValueError('Resolve failed processing before publishing')
+        if not amend and row['state'] not in ('drafted','published'):
+            raise ValueError('Resolve failed processing before publishing')
+        if amend and 'accepted_indices' not in body:
+            raise ValueError('Amendment requires explicit reviewed candidate selection')
+        candidates=draft['candidates']
+        if 'accepted_indices' in body:
+            accepted=body['accepted_indices']
+            if not isinstance(accepted,list) or any(type(i) is not int or i<0 or i>=len(candidates) for i in accepted) or len(set(accepted))!=len(accepted):
+                raise ValueError('Invalid reviewed candidate selection')
+            decisions=body.get('review_decisions')
+            if not isinstance(decisions,list) or len(decisions)!=len(candidates):
+                raise ValueError('Independent review must cover every candidate')
+            by_index={d.get('index'):d for d in decisions if isinstance(d,dict) and type(d.get('index')) is int}
+            if set(by_index)!=set(range(len(candidates))) or len(by_index)!=len(decisions):
+                raise ValueError('Missing or duplicated review verdict')
+            for i,decision in by_index.items():
+                if decision.get('verdict') not in ('accept','reject','hold') or not isinstance(decision.get('reason'),str) or not decision['reason'].strip():
+                    raise ValueError('Unknown or unexplained review verdict')
+                if (i in accepted)!=(decision['verdict']=='accept'):
+                    raise ValueError('Accepted selection disagrees with review')
+            if not body.get('review_packet_sha256') or not body.get('expected_corpus_sha256'):
+                raise ValueError('Reviewed packet and corpus binding required')
+            packet={'draft_sha256':digest(draft),'corpus_sha256':body['expected_corpus_sha256'],
+                    'decisions':decisions,'accepted_indices':accepted}
+            if body['review_packet_sha256']!=digest(packet):
+                raise ValueError('Review packet hash does not match verdicts')
+        else:
+            accepted=list(range(len(candidates)))  # Legacy exact-hash operator remains compatible.
+        if row['state']=='published' and not amend:
+            if 'accepted_indices' in body:
+                receipt=action(conn,{'op':'receipt','source_id':body['source_id'],
+                                     'review_packet_sha256':body['review_packet_sha256']})
+                if not receipt['found']:raise ValueError('Published source has a different review packet')
+            conn.rollback();return {'state':'published','duplicate':True}
+        if amend:
+            receipt=action(conn,{'op':'receipt','source_id':body['source_id'],
+                                 'review_packet_sha256':body['review_packet_sha256']})
+            if receipt['found']:
+                conn.rollback();return {'state':'published','duplicate':True,'added':[]}
+        if 'expected_corpus_sha256' in body and body['expected_corpus_sha256']!=corpus_snapshot(conn)['corpus_sha256']:
+            raise ValueError('Canonical corpus changed since review')
         source=json.loads(row['source'])
         prior=[json.loads(r[0]) for r in conn.execute('SELECT payload FROM study_items WHERE study_id=? AND suspended=0 ORDER BY ordinal',(STUDY_ID,))]
         ordinal=conn.execute('SELECT coalesce(max(ordinal),-1)+1 FROM study_items').fetchone()[0]
         existing={(i['title'].casefold(),p.get('question_text','').casefold()) for i in prior for p in i['positions']}
         added=[]
-        for n,c in enumerate(draft['candidates']):
+        for n in accepted:
+            c=candidates[n]
             key=(c['title'].casefold(),c['question'].casefold())
             if key in existing:continue
             existing.add(key);item_id='no-intake-'+digest(draft)[:12]+'-'+str(n)
@@ -108,10 +184,16 @@ def publish(conn, body):
         saved_source={k:v for k,v in source.items() if k!='transcript'}
         conn.execute('INSERT OR IGNORE INTO study_sources VALUES(?,?,?)',(source['id'],STUDY_ID,encoded(saved_source)))
         revision={'seed':seed,'policy':POLICY_V2,'intake_source':source['id'],'reviewed_sha256':digest(draft),'reviewer':body['reviewer']}
+        if amend:revision['amendment']=True
+        if 'accepted_indices' in body:
+            revision.update(accepted_indices=accepted,review_packet_sha256=body['review_packet_sha256'],
+                            prior_corpus_sha256=body['expected_corpus_sha256'],review_decisions=body['review_decisions'])
         conn.execute('INSERT OR IGNORE INTO study_revisions VALUES(?,?,?,?,?,?)',
                      (digest(revision),STUDY_ID,now_ms(),EXECUTION_COMMIT,V2,encoded(revision)))
-        conn.execute('UPDATE study_intake SET state=?,updated_at=? WHERE source_id=?',('published',now_ms(),source['id']))
-        log(conn,source['id'],'published',{'items':[i['id'] for i in added],'reviewer':body['reviewer'],'draft_sha256':digest(draft)})
+        if not amend:
+            conn.execute('UPDATE study_intake SET state=?,updated_at=? WHERE source_id=?',('published',now_ms(),source['id']))
+        log(conn,source['id'],'amended' if amend else 'published',{'items':[i['id'] for i in added],'reviewer':body['reviewer'],'draft_sha256':digest(draft),
+                                          'review_packet_sha256':body.get('review_packet_sha256')})
         conn.commit();return {'state':'published','added':[i['id'] for i in added]}
     except Exception:conn.rollback();raise
 
@@ -121,6 +203,7 @@ def action(conn, body):
     if op=='register':return register(conn,body['source'])
     if op=='draft':return record_draft(conn,body)
     if op=='publish':return publish(conn,body)
+    if op=='amend':return publish(conn,{**body,'amend':True})
     if op=='source':
         row=conn.execute('SELECT source,draft FROM study_intake WHERE source_id=?',(body['source_id'],)).fetchone()
         if not row:raise ValueError('Unknown source')
@@ -128,6 +211,14 @@ def action(conn, body):
     if op=='status':return [dict(r) for r in conn.execute('''SELECT source_id,state,created_at,updated_at,
         (SELECT payload FROM study_intake_events e WHERE e.source_id=study_intake.source_id ORDER BY e.id DESC LIMIT 1) AS last_event
         FROM study_intake ORDER BY created_at''' )]
+    if op=='snapshot':return corpus_snapshot(conn)
+    if op=='receipt':
+        source_id=body['source_id'];packet_sha=body['review_packet_sha256']
+        for row in conn.execute("SELECT state,payload FROM study_intake_events WHERE source_id=? AND state IN ('published','amended') ORDER BY id DESC",(source_id,)):
+            detail=json.loads(row['payload'])
+            if detail.get('review_packet_sha256')==packet_sha:
+                return {'found':True,'state':row['state'],'detail':detail}
+        return {'found':False}
     if op=='failed':
         row=conn.execute('SELECT state FROM study_intake WHERE source_id=?',(body['source_id'],)).fetchone()
         if not row:raise ValueError('Unknown source')

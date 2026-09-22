@@ -4,6 +4,8 @@ Norway study, 21 September: [one-degree short readings, data/process/UX assessme
 
 Norway study, 22 September: [bounded readings v1 implementation and private publication path](norway-reading-study/readings-v1.md). Three reviewed pilot briefs and six optional, initially unselected targets.
 
+Norway study operator: [unified resumable batch](norway-reading-study/unified-batch.md) for source discovery, original preservation, reviewed question/readings publication and explicit failure reports.
+
 Norway study current status and open work: [running record](norway-reading-study/running-record.md).
 
 Latest Norway practice release: [focused practice screen and actual-data audit](norway-reading-study/practice-audit-20260914.md).
