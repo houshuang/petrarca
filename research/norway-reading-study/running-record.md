@@ -1,3 +1,13 @@
+## 22 September 2026 — unified batch deployed and backlog processed
+
+The [unified Limbic-backed operator](unified-batch.md) is deployed at `108bad1`. GPT-5.6 Sol implemented and authored; Astra reviewed. Fresh Tana discovery found ten already registered sources and two old demos, with no new recording. Four genuine outstanding wonderings became short readings: domestic animals, Hittite geography, bog iron/furnaces and Rome’s Italian neighbors. There are now **seven active readings and twelve unselected targets**, six targets added in this batch. The Italy draft was held for a factual error, narrowed to the original question and reviewed again before publication. No automatic quiz selection.
+
+The interrupted batch resumed successfully; a final ordinary retry made zero author/reviewer calls and added nothing. All 54 affected tests passed. Independent pre/post export hashes preserve fifteen tables exactly, including **99 items, 106 positions, 15 runs and 394 events**. The private phone API returned seven plain-text readings. The participant replied **“Haven’t tried them yet”** about the pilot; usefulness on the iPhone remains unobserved. No new client release was needed.
+
+Conversation freeze `11ed81a9759108ce` contains 252 text records through the verification update, excluding this turn’s eventual final answer. Private batch evidence and remaining boundaries are recorded in the operator guide. Prior statements below are dated historical snapshots.
+
+---
+
 ## 22 September 2026 — bounded readings published
 
 GPT-5.6 Sol implemented and Astra reviewed the accepted one-degree reading feature. **Valg → Det du lurte på** contains three source-checked explanations (bergkunst techniques, 1177 BCE and karveskurd) with six optional quiz targets, initially unselected. There are no generated descendants or automatic quiz obligations. Returning restores the same practice card; using reading help prevents scheduling credit for the assisted answer.

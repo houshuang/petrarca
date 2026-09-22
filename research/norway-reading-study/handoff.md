@@ -1,3 +1,11 @@
+## Latest continuation — 22 September unified batch
+
+Start with [unified-batch.md](unified-batch.md). Server code `108bad1` is deployed; the real backlog run and zero-work retry passed. Run `python3 scripts/reading_study_batch.py --workdir PRIVATE_BATCH_DIRECTORY` from a fresh committed operator checkout, reusing the existing private batch directory for recovery/cache. Normal invocation performs fresh Tana discovery and inventories explicit original wonderings; the optional `--wonderings` inventory was used to keep this genuine batch to the four previously identified outstanding topics.
+
+Current canonical state: 99 items, 106 positions, ten sources, 15 runs, 394 events, seven active readings, twelve unselected target definitions, zero selections. Existing practice/source data was preserved byte-for-byte. Four new readings are live; no fresh recording was available to exercise complete new-source publication. Published-node edits need explicit revision reconciliation, held content needs review, and no recurring collector is configured. The participant has not tried the pilot readings; do not imply phone usefulness or learning effects have been established. Latest conversation freeze: `11ed81a9759108ce`, 252 records. Older release/status sections below remain historical.
+
+---
+
 Latest continuation, 22 September 2026: [bounded readings are implemented and published](readings-v1.md). Read the newest [running record](running-record.md) entry first. The earlier proposal-only statements below are retained as dated history.
 
 Latest continuation, 21 September 2026: [new Tana intake published](intake-20260921.md)

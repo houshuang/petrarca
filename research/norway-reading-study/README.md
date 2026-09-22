@@ -1,15 +1,15 @@
 # Norway history: a twelve-volume reading study
 
-> Current status, 13 September: the 76-item intensive phone phase is deployed. Start with [handoff.md](handoff.md) for live behavior, latest feedback and fresh evidence. Older pilot statements below describe historical stages. Longitudinal assessments and visual enrichment are not deployed.
+> Current status, 22 September: 99 practice items and seven bounded readings are live. The [unified batch operator](unified-batch.md) discovers Tana material, prepares and reviews candidates, publishes accepted content, and resumes interrupted work. Start with [handoff.md](handoff.md) for current evidence and remaining limits; older pilot statements below describe historical stages.
 
 
-Started 12 September 2026. Owner/participant: Stian. Current phase: volume 1,
+Started 12 September 2026. Owner/participant: Stian. Initial phase: volume 1,
 *Fra jeger til bonde*. The phone implementation and measurement contract are in
 [analytics-v1.md](analytics-v1.md); see its release record for deployment status.
 
 Start with the [study index](study-index.md) for conversations, sources and coverage.
 The first [bounded short readings release](readings-v1.md) adds reviewed explanations
-from three explicit wonderings and optional quiz selection; publication is a separate operator step.
+from three explicit wonderings and optional quiz selection. The [unified operator](unified-batch.md) now coordinates publication and added four more readings.
 The [unified batch operator](unified-batch.md) describes resumable source intake,
 reviewed question/readings publication, and its private evidence and failure reports.
 The [decision/correction ledger](decisions.md) records changes in user goals and

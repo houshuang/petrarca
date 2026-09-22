@@ -1,3 +1,5 @@
+Published 22 September: [unified resumable batch and four more genuine readings](unified-batch.md). Seven active readings, twelve unselected targets; 99 existing items and all prior practice history preserved. Code `108bad1`, 54 affected tests, real interruption/resume and zero-publication retry verified. The participant has not yet tried the pilot readings. Latest conversation freeze: `11ed81a9759108ce`, 252 user/assistant text records; this turn’s eventual final answer is outside its cutoff.
+
 Published 22 September: [three bounded readings and six opt-in quiz targets](readings-v1.md), implemented by GPT-5.6 Sol and reviewed by Astra. Existing study data is unchanged.
 
 Latest conversation freeze: `e6e4652147b3cde0`, 210 user/assistant text records across four registered local sources, through the publication-verification update. This task’s eventual final answer is outside the cutoff; earlier freezes below remain historical.

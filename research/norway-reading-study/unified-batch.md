@@ -4,8 +4,7 @@ Registered in the [22 September experiment log](../experiment-log.md) before imp
 
 ```sh
 python3 scripts/reading_study_batch.py \
-  --workdir PRIVATE_BATCH_DIRECTORY \
-  --wonderings PRIVATE_EXPLICIT_WONDERINGS_JSON
+  --workdir PRIVATE_BATCH_DIRECTORY
 ```
 
 The `--wonderings` inventory is optional. With it, the command processes those exact original-source quotes and extracts wonderings from any newly registered source. Without it, it extracts explicit wonderings from each registered source transcript and caches even zero-result extractions by source hash. A private `--discovery-snapshot` can replay a previously captured complete search for controlled tests; normal runs always query the authenticated Tana Outliner for the full journal tag in workspace `VSazTvUjtQ`. A full 100-result page is a hold, not proof of completion. The two verified 2023 template/demo IDs are reported as out of scope. All other new entries need a raw journal and audio match plus relevance evidence before registration.
@@ -19,3 +18,30 @@ Accepted questions go through the existing `study_action('intake', ...)` action,
 The private workdir holds a SQLite stage ledger, call cache, raw MCP and archive evidence, model packets, and per-run reports. Reuse the same workdir after interruption. A lost server response is reconciled against a canonical publication receipt or existing brief ID before any retry. Stale content snapshots force a fresh review; a source change invalidates cached authoring. Held reading targets remain visible in the durable plan and require a new reviewed brief version before they can be offered. Rejected material, caps, incomplete discovery, missing audio, model failures and unsatisfied review coverage are explicit report entries. The process exits nonzero while failures or deferred omissions remain.
 
 The command does not grade the reader, choose quiz targets, infer reading from page checkpoints, infer unaided recall from open-book notes, or change old runs and scheduling. The three existing pilot readings have not yet been tried by the reader, so no usefulness conclusion follows from their publication.
+
+## 22 September deployment and genuine batch
+
+GPT-5.6 Sol implemented the operator and authored content; Astra reviewed the code and content. Server code `108bad174b4390757b86b05fd0a48a5b124637a9` was committed, pushed and deployed through the unchanged unified deployment script with configuration pointing to the owned checkout. TypeScript and service health passed. There were no client changes or new mobile release. The deployment's 25 generated lockfile peer-flag removals were archived and verified before restoring only that attributable file.
+
+Fresh authenticated discovery returned twelve tagged nodes: ten already registered Norway sources and two verified old demos. There was no new recording. The genuine batch therefore used the seven previously preserved original wondering quotes with `--wonderings`: three pilot readings were already covered and four remained. The final catalogue has seven active readings and twelve unselected target definitions:
+
+| Added reading | Words | New optional targets |
+|---|---:|---:|
+| Husdyrene kom i etapper | 175 | 2 |
+| Hettittene lå i Anatolia, ikke ved Babylon | 166 | 2 |
+| Myrmalm og de første jernovnene i Norge | 193 | 2 |
+| Romerne og naboene deres rundt 500 f.Kr. | 186 | 0 |
+
+Review rejected a husbandry target that duplicated an existing learning aspect. It held the first Italy draft for confusing earlier Germanic settlement with later kingdoms; that draft was never published. The coordinator narrowed the broader inventory label to the original Italy question, supplied the review feedback, and obtained a fresh GPT-5.6 draft and Astra review through the same stage machinery. The corrected reading is explanation-only. Two early published briefs received immutable presentation revisions to remove inline citation markup for the existing plain-text phone renderer; original versions and target identities were preserved. No target was selected automatically.
+
+The real run was deliberately interrupted during authoring and resumed from the same workdir. A final ordinary CLI invocation, after fresh discovery, reported all seven intents already processed, zero author/reviewer calls, no publication, no failures, no omissions and no pending holds. Its run ID is `20260922T161409728260Z`. This establishes recovery and idempotence for this batch, not an unattended collection service.
+
+All 54 affected tests passed on the final code: 42 existing study tests and twelve batch regressions. Tests cover stale snapshots, incomplete review, an unreviewed target smuggled into an import, lost publication responses, unavailable originals, signed-URL rotation versus real source changes, complete inventories beyond the eight-reading run cap, and plain-text normalization. An actual Tana audio fetch produced 5,832,216 bytes whose SHA-256 exactly matched the registered iron-age recording. The live extraction probe inventoried eighteen explicit wonderings from that note, including bog-iron appearance and early furnaces; those additional inventory entries were not automatically published. Five semantic contrasts distinguished duplicate retrieval aspects from related material and the heller/helleristning false friend.
+
+Independent verification of both nineteen-file exports found fifteen tables byte-identical, including all existing items, positions, runs, events, sources, intake records and selections. Counts remain **99 items, 106 positions, 15 runs, 394 events, zero reading selections**. Only the four reading-definition tables changed: seven intents, nine immutable brief versions (seven active), twelve targets and sixteen version-target associations. The private phone API returned all seven active briefs as plain text with all targets unselected. The participant explicitly said the pilot readings had not yet been tried; native-device usefulness and learning effects remain unobserved.
+
+Private evidence is under `/Users/stian/.agents/research/petrarca-norway-study/batch-20260922/`: per-run reports and Limbic state/cache in `live-run/`, immutable pre/post exports, independent preservation and retry checks, content review outputs, formatting revision receipts, and source probes. Conversation freeze `11ed81a9759108ce` preserves 252 user/assistant text records across four registered sources through the publication-verification update; this turn's final answer is outside its cutoff.
+
+## Remaining boundaries
+
+The next genuinely new recording still needs a complete live discover–archive–question-publication run: none was available in this batch. Published sources are recognized by node identity and are not re-fetched on every run; editing an already published Tana note needs an explicit source-revision reconciliation. Original checks apply during acquisition/resume and review is bound to the canonical source revision. Semantic and extraction judgments remain model judgments, with holds and evidence for review. A held target on an already published reading needs a new reviewed brief version. Independent off-device audio backup and the earlier capture-mode metadata correction remain unresolved. No recurring collector is configured.
