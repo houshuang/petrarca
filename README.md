@@ -1,43 +1,48 @@
-# Petrarca — Intelligent Read-Later App
+<p align="center"><img src="design/assets/logo-combined.svg" width="320" alt="Petrarca" /></p>
 
-A mobile-first read-later app combining incremental reading, user knowledge modeling, and algorithmic article selection. Named after Francesco Petrarca, pioneer of systematic reading methods.
+# Petrarca — reading and memory companion
 
-> **This is a personal project shared as-is.** It was built for one power user's reading workflow using Claude Code. It is not a polished open-source product — there are hardcoded server addresses, personal deployment scripts, and opinionated design decisions throughout. It works well, but setting it up requires reading the code and adapting things to your own setup.
+A personal mobile app for remembering what you read in nonfiction books. You read physical books; Petrarca maps chapters onto LLM-generated curricula (people, events, periods), asks you to recall what you read by voice, and schedules quiz and "structural" cards (timelines, contemporaries, cause-and-effect chains) with FSRS. Named after Francesco Petrarca, pioneer of systematic reading methods.
 
-## What it does
+It started in March 2026 as an intelligent read-later app. In April it was redesigned around review and voice recall, and the article feed and ingestion pipeline were switched off (the code is still in the repo). Its current use is a self-study of a twelve-volume history of Norway ([`research/norway-reading-study/`](research/norway-reading-study/study-index.md)).
 
-- **Incremental reading** — articles are broken into atomic claims, tracked across sources
-- **Knowledge modeling** — the system maps what you know and surfaces articles at ~70% novelty (zone of proximal development)
-- **AI claim extraction** — LLM-powered extraction of claims from articles, books, and highlights
-- **Multi-source ingestion** — email web clipper, Twitter/X bookmarks with speech transcription, Kindle highlights, Chrome extension
-- **Curriculum-based organization** — Opus-generated curriculum nodes (50-80 per domain) connect books, articles, and review
-- **Microlearning cards** — review cards with primary sources, material evidence, and cultural artifacts
-- **Book companion** — structured reading support with chapter-level knowledge tracking
+Blog post: [Petrarca: an intelligent companion](https://networkedthought.substack.com/p/petrarca-an-intelligent-companion)
+
+## How it was built
+
+Built with Claude Code (recent work also with Codex) over about 600 commits and 90+ numbered agent sessions, steered by one person. The agent configuration is the most reusable part:
+
+- [`CLAUDE.md`](CLAUDE.md): design principles that override implementation convenience, a list of disabled subsystems agents must not build on, a "where to look" table per area, and production-data rules added after agents destroyed real data.
+- [`research/`](research/README.md): design documents, experiment log (append-only) and per-session changelog; agents read these before changing an area.
+- [`design/DESIGN_GUIDE.md`](design/DESIGN_GUIDE.md): the visual language every UI change must follow.
+- `SESSION_*_PROMPT.md`: handoff prompts from one agent session to the next.
+
+> **Shared as-is.** Built for one person's reading, not packaged as an open-source product. It contains the author's server references and deployment scripts.
 
 ## Architecture
 
-**Frontend**: Expo SDK 54 (React Native), 2-tab layout (Feed / Library) + drawer navigation.
+- **App** (`app/`): Expo SDK 54 (React Native), iOS standalone build with OTA updates, plus web.
+- **Server** (`scripts/research-server.py`): a single Python HTTP server on port 8090 behind nginx; runtime reads and writes go through `scripts/curriculum_db.py`, review logic in `scripts/review_engine.py`.
+- **Data**: SQLite (`petrarca.db`) as the only store; [limbic](https://github.com/houshuang/limbic) for embeddings, similarity and clustering; Wikidata for entity resolution.
+- **LLMs**: Claude via `claude -p` for batch work and curriculum generation (Opus). Older call sites still use Gemini Flash and are being migrated.
+- **Chrome extension** (`clipper/`): saves articles and Kindle highlights (part of the disabled read-later path).
 
-**Backend**: Hetzner VM — nginx reverse proxy, Python research server, 4-hour cron pipeline for article processing.
+## Running it
 
-**Data**: SQLite (canonical store), with [limbic](https://github.com/houshuang/limbic) for embeddings and semantic search.
+The server is written for one Linux host: data paths default to `/opt/petrarca/...` and are overridden by environment variables at the top of `scripts/research-server.py` (for example `PETRARCA_DB_PATH`).
 
-**Chrome extension** (`clipper/`): Save articles from the browser, capture Kindle highlights and notes.
+```bash
+pip install -r requirements.txt
+python3 scripts/research-server.py      # http://127.0.0.1:8090
 
-**Scripts** (`scripts/`): Data processing pipeline — article extraction, claim embedding, curriculum bootstrapping, book research agents.
+cd app && npm install
+npx expo start --web                    # the web build calls <host>:8090
+npm test                                # jest
+```
 
-## Tech highlights (for Claude Code users)
-
-This project demonstrates several patterns that may be interesting:
-
-- **Claude as sub-agent**: Uses `claude -p` for content generation, claim extraction, and curriculum research
-- **Multi-model orchestration**: Claude for complex reasoning, Gemini for vision and post-processing, local models for embeddings
-- **Systematic data processing**: Pipeline scripts that process hundreds of articles through LLM extraction
-- **Chrome Extension integration**: Browser clipper that feeds into the mobile app's reading queue
-- **[limbic](https://github.com/houshuang/limbic) integration**: Semantic search, novelty detection, and knowledge clustering
+Pipeline prompt/model regression tests: `python3 scripts/pipeline-tests/run.py`.
 
 ## Related
 
-- [Blog post on Substack](https://networkedthought.substack.com/)
-- [limbic](https://github.com/houshuang/limbic) — shared data curation backend
-- [Alif](https://github.com/houshuang/alif) — sister project for Arabic language learning, similar architecture
+- [Alif](https://github.com/houshuang/alif): Arabic reading trainer with the same stack (Expo, FSRS, `claude -p`)
+- [limbic](https://github.com/houshuang/limbic): shared embedding and data-curation library
